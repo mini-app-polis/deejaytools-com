@@ -1,3 +1,11 @@
+# 1.0.0 (2026-03-29)
+
+
+### Features
+
+* add Sentry error tracking to api ([7afc6fc](https://github.com/mini-app-polis/deejaytools-com/commit/7afc6fc6c34b974b80d69fff8cba14b86e52d095))
+* structured logger shape — CD-003 CD-009 ([48afd5b](https://github.com/mini-app-polis/deejaytools-com/commit/48afd5b49df2c0faf44ed93035578ed1345cafee))
+
 # 1.0.0 (2026-03-24)
 
 
