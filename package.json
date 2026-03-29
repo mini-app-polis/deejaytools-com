@@ -1,0 +1,29 @@
+{
+  "name": "deejaytools-com",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@9.0.0",
+  "type": "module",
+  "scripts": {
+    "dev:api": "pnpm --filter api dev",
+    "dev:app": "pnpm --filter app dev",
+    "build": "pnpm --filter ts-utils build && pnpm --filter api build && pnpm --filter app build",
+    "build:api": "pnpm --filter ts-utils build && pnpm --filter api build",
+    "build:app": "pnpm --filter app build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm --filter @deejaytools/ts-utils build && pnpm --filter api typecheck && pnpm --filter app typecheck"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.16.0",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^12.0.6",
+    "@semantic-release/release-notes-generator": "^14.1.0",
+    "eslint": "^9.16.0",
+    "semantic-release": "^24.2.9",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0"
+  }
+}
