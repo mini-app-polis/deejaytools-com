@@ -20,17 +20,45 @@ Monorepo for [deejaytools.com](https://deejaytools.com): a West Coast Swing rout
 | App | Vite 6, React 19, Tailwind 3, React Router 7, Clerk |
 | Release | semantic-release on `main` |
 
-## Getting started
+## Developer setup
 
+**Prerequisites**
+- Node.js 22+
+- pnpm 9 (`npm install -g pnpm`)
+
+**Install**
 ```bash
 pnpm install
+```
+
+**Environment**
+```bash
 cp apps/api/.env.example apps/api/.env
 cp apps/app/.env.example apps/app/.env
-# Fill DATABASE_URL, CLERK_JWKS_URL, VITE_CLERK_PUBLISHABLE_KEY, etc.
-pnpm --filter api db:generate
-pnpm --filter api db:migrate
+# Fill in DATABASE_URL, CLERK_JWKS_URL, VITE_CLERK_PUBLISHABLE_KEY at minimum
+```
+
+**Database**
+```bash
+pnpm --filter api db:generate   # generate migration files (first time only)
+pnpm --filter api db:migrate    # apply schema to database
+```
+
+**Run**
+```bash
 pnpm dev:api   # http://localhost:3001
 pnpm dev:app   # http://localhost:5173
+```
+
+**Test**
+```bash
+pnpm test
+```
+
+**Typecheck and lint**
+```bash
+pnpm typecheck
+pnpm lint
 ```
 
 Initialize shadcn/ui later (not part of this scaffold):
