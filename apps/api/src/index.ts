@@ -1,4 +1,5 @@
 import "dotenv/config";
+import * as Sentry from "@sentry/node";
 import { serve } from "@hono/node-server";
 import {
   CommonErrors,
@@ -18,6 +19,12 @@ import { sessionRoutes } from "./routes/sessions.js";
 import { slotRoutes } from "./routes/slots.js";
 import { songRoutes } from "./routes/songs.js";
 import { tickSessionStatuses } from "./services/cron.js";
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  environment: process.env.NODE_ENV ?? "development",
+  enabled: !!process.env.SENTRY_DSN,
+});
 
 const app = new Hono();
 
@@ -61,7 +68,11 @@ app.onError((err, c) => {
   if (err instanceof ZodError) {
     return c.json(CommonErrors.validationError(err.issues), 400);
   }
-  logger.error("Unhandled error", { err: String(err) });
+  Sentry.captureException(err);
+  logger.error("Unhandled error", {
+    error: err.message,
+    stack: err.stack,
+  });
   return c.json(CommonErrors.internalError(), 500);
 });
 
