@@ -1,8 +1,11 @@
+import { createLogger } from "@deejaytools/ts-utils";
 import { eq, inArray } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "../db/schema.js";
 
 type Db = PostgresJsDatabase<typeof schema>;
+
+const logger = createLogger("deejaytools-api");
 
 const ACTIVE: (typeof schema.sessions.$inferSelect.status)[] = [
   "scheduled",
@@ -39,6 +42,11 @@ export async function tickSessionStatuses(database: Db): Promise<number> {
         .set({ status: newStatus })
         .where(eq(schema.sessions.id, session.id));
       updated++;
+      logger.info({
+        event: "session_status_updated",
+        category: "infra",
+        context: { session_id: session.id, status: newStatus },
+      });
     }
   }
   return updated;

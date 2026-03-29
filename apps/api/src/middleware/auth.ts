@@ -2,6 +2,7 @@ import {
   verifyClerkToken,
   type ClerkPayload,
   CommonErrors,
+  createLogger,
   error,
 } from "@deejaytools/ts-utils";
 import type { Context } from "hono";
@@ -9,6 +10,8 @@ import { createMiddleware } from "hono/factory";
 import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
+
+const logger = createLogger("deejaytools-api");
 
 export type AuthUser = {
   userId: string;
@@ -37,12 +40,22 @@ export function bearerToken(c: Context): string | null {
 async function resolveAuthUser(c: Context): Promise<AuthUser | Response> {
   const token = bearerToken(c);
   if (!token) {
+    logger.warn({
+      event: "auth_failed",
+      category: "api",
+      context: { reason: "missing_token" as const },
+    });
     return c.json(CommonErrors.unauthorized(), 401);
   }
   let payload: ClerkPayload;
   try {
     payload = await verifyClerkToken(token, jwksUrl());
   } catch {
+    logger.warn({
+      event: "auth_failed",
+      category: "api",
+      context: { reason: "invalid_token" as const },
+    });
     return c.json(CommonErrors.unauthorized(), 401);
   }
 
@@ -70,6 +83,11 @@ export const requireAdmin = createMiddleware(async (c, next) => {
   const r = await resolveAuthUser(c);
   if (r instanceof Response) return r;
   if (r.role !== "admin") {
+    logger.warn({
+      event: "auth_forbidden",
+      category: "api",
+      context: { user_id: r.userId },
+    });
     return c.json(CommonErrors.forbidden(), 403);
   }
   c.set("user", r);

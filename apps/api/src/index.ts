@@ -3,7 +3,7 @@ import * as Sentry from "@sentry/node";
 import { serve } from "@hono/node-server";
 import {
   CommonErrors,
-  logger,
+  createLogger,
   success,
 } from "@deejaytools/ts-utils";
 import { Hono } from "hono";
@@ -19,6 +19,8 @@ import { sessionRoutes } from "./routes/sessions.js";
 import { slotRoutes } from "./routes/slots.js";
 import { songRoutes } from "./routes/songs.js";
 import { tickSessionStatuses } from "./services/cron.js";
+
+const logger = createLogger("deejaytools-api");
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
@@ -69,13 +71,14 @@ app.onError((err, c) => {
     return c.json(CommonErrors.validationError(err.issues), 400);
   }
   Sentry.captureException(err);
-  logger.error("Unhandled error", {
-    error: err.message,
-    stack: err.stack,
+  logger.error({
+    event: "unhandled_error",
+    category: "api",
+    error: err,
   });
   return c.json(CommonErrors.internalError(), 500);
 });
 
 const port = Number(process.env.PORT ?? "3001");
-logger.start(`API listening on :${port}`);
+logger.start("api_starting", { port });
 serve({ fetch: app.fetch, port });

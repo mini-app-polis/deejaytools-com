@@ -1,64 +1,155 @@
 const isProd = process.env.NODE_ENV === "production";
 
-type Level = "debug" | "info" | "warn" | "error";
+export type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR";
+export type LogCategory = "infra" | "pipeline" | "data" | "api";
 
-function ts() {
+export interface LogParams {
+  event: string;
+  category: LogCategory;
+  context?: Record<string, unknown>;
+}
+
+export interface Logger {
+  debug: (params: LogParams) => void;
+  info: (params: LogParams) => void;
+  warn: (params: LogParams) => void;
+  error: (params: LogParams & { error?: unknown }) => void;
+  start: (event: string, context?: Record<string, unknown>) => void;
+  success: (event: string, context?: Record<string, unknown>) => void;
+  failure: (event: string, context?: Record<string, unknown>) => void;
+}
+
+function isoTimestamp(): string {
   return new Date().toISOString();
 }
 
-function formatDev(level: Level, message: string, meta?: Record<string, unknown>) {
-  const prefix =
-    level === "debug"
-      ? "🔍 debug"
-      : level === "info"
-        ? "📋 info"
-        : level === "warn"
-          ? "⚠️ warn"
-          : "❌ error";
-  const extra = meta && Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : "";
-  return `${prefix} ${message}${extra}`;
+function mergeErrorContext(
+  context: Record<string, unknown> | undefined,
+  error?: unknown
+): Record<string, unknown> | undefined {
+  const out: Record<string, unknown> = context ? { ...context } : {};
+  if (error instanceof Error) {
+    out.error_message = error.message;
+    out.error_stack = error.stack;
+  } else if (error !== undefined) {
+    out.error = error;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
-function logLine(level: Level, message: string, meta?: Record<string, unknown>) {
-  if (isProd) {
-    const line = JSON.stringify({
-      level,
-      message,
-      timestamp: ts(),
-      ...meta,
-    });
-    if (level === "error") console.error(line);
-    else console.log(line);
-  } else {
-    const text = formatDev(level, message, meta);
-    if (level === "error") console.error(text);
-    else console.log(text);
+function emojiForLevel(level: LogLevel): string {
+  switch (level) {
+    case "DEBUG":
+      return "🔍";
+    case "INFO":
+      return "📋";
+    case "WARN":
+      return "⚠️";
+    case "ERROR":
+      return "❌";
+    default: {
+      const _exhaustive: never = level;
+      return _exhaustive;
+    }
   }
 }
 
-export const logger = {
-  debug(message: string, meta?: Record<string, unknown>) {
-    logLine("debug", message, meta);
-  },
-  info(message: string, meta?: Record<string, unknown>) {
-    logLine("info", message, meta);
-  },
-  warn(message: string, meta?: Record<string, unknown>) {
-    logLine("warn", message, meta);
-  },
-  error(message: string, meta?: Record<string, unknown>) {
-    logLine("error", message, meta);
-  },
-  start(message: string, meta?: Record<string, unknown>) {
-    if (isProd) logLine("info", message, { ...meta, lifecycle: "start" });
-    else console.log(`🚀 ${message}${meta ? ` ${JSON.stringify(meta)}` : ""}`);
-  },
-  success(message: string, meta?: Record<string, unknown>) {
-    if (isProd) logLine("info", message, { ...meta, lifecycle: "success" });
-    else console.log(`✅ ${message}${meta ? ` ${JSON.stringify(meta)}` : ""}`);
-  },
-  failure(message: string, meta?: Record<string, unknown>) {
-    if (isProd) logLine("error", message, { ...meta, lifecycle: "failure" });
-    else console.error(`❌ ${message}${meta ? ` ${JSON.stringify(meta)}` : ""}`);
-  },
-};
+function writeLine(level: LogLevel, line: string) {
+  if (level === "ERROR") console.error(line);
+  else console.log(line);
+}
+
+export function createLogger(service: string): Logger {
+  function emitProd(
+    level: LogLevel,
+    category: LogCategory,
+    event: string,
+    context?: Record<string, unknown>
+  ) {
+    const payload: Record<string, unknown> = {
+      timestamp: isoTimestamp(),
+      service,
+      level,
+      category,
+      event,
+    };
+    if (context && Object.keys(context).length > 0) {
+      payload.context = context;
+    }
+    const line = JSON.stringify(payload);
+    writeLine(level, line);
+  }
+
+  function emitDev(
+    level: LogLevel,
+    category: LogCategory,
+    event: string,
+    context?: Record<string, unknown>
+  ) {
+    const ctx =
+      context && Object.keys(context).length > 0
+        ? ` ${JSON.stringify(context)}`
+        : "";
+    const line = `${emojiForLevel(level)} [${level}] [${category}] ${event}${ctx}`;
+    writeLine(level, line);
+  }
+
+  function emit(
+    level: LogLevel,
+    category: LogCategory,
+    event: string,
+    context?: Record<string, unknown>
+  ) {
+    if (isProd) emitProd(level, category, event, context);
+    else emitDev(level, category, event, context);
+  }
+
+  return {
+    debug(params) {
+      emit("DEBUG", params.category, params.event, params.context);
+    },
+    info(params) {
+      emit("INFO", params.category, params.event, params.context);
+    },
+    warn(params) {
+      emit("WARN", params.category, params.event, params.context);
+    },
+    error(params) {
+      const ctx = mergeErrorContext(params.context, params.error);
+      emit("ERROR", params.category, params.event, ctx);
+    },
+    start(event, context) {
+      if (isProd) {
+        emitProd("INFO", "infra", event, context);
+      } else {
+        const ctx =
+          context && Object.keys(context).length > 0
+            ? ` ${JSON.stringify(context)}`
+            : "";
+        console.log(`🚀 ${event}${ctx}`);
+      }
+    },
+    success(event, context) {
+      if (isProd) {
+        emitProd("INFO", "infra", event, context);
+      } else {
+        const ctx =
+          context && Object.keys(context).length > 0
+            ? ` ${JSON.stringify(context)}`
+            : "";
+        console.log(`✅ ${event}${ctx}`);
+      }
+    },
+    failure(event, context) {
+      if (isProd) {
+        emitProd("ERROR", "infra", event, context);
+      } else {
+        const ctx =
+          context && Object.keys(context).length > 0
+            ? ` ${JSON.stringify(context)}`
+            : "";
+        console.error(`❌ ${event}${ctx}`);
+      }
+    },
+  };
+}
