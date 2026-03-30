@@ -108,6 +108,7 @@ export default function SongsPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -241,6 +242,7 @@ export default function SongsPage() {
   };
 
   const handleDelete = async (id: string) => {
+    setDeletingId(id);
     try {
       await api.del(`/v1/songs/${id}`);
       setSongs((prev) => prev.filter((s) => s.id !== id));
@@ -249,6 +251,8 @@ export default function SongsPage() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete song.");
       setPendingDeleteId(null);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -441,14 +445,16 @@ export default function SongsPage() {
                           size="sm"
                           variant="destructive"
                           onClick={() => void handleDelete(s.id)}
+                          disabled={deletingId === s.id}
                         >
-                          Yes
+                          {deletingId === s.id ? "Removing..." : "Yes"}
                         </Button>
                         <Button
                           type="button"
                           size="sm"
                           variant="outline"
                           onClick={() => setPendingDeleteId(null)}
+                          disabled={deletingId === s.id}
                         >
                           No
                         </Button>

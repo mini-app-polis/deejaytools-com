@@ -58,6 +58,8 @@ export default function PartnersPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<PartnerRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PartnerRow | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isFormSubmitting, setIsFormSubmitting] = useState(false);
 
   const form = useForm<PartnerForm>({
     resolver: zodResolver(partnerSchema),
@@ -94,6 +96,7 @@ export default function PartnersPage() {
   };
 
   const onSubmit = form.handleSubmit(async (values) => {
+    setIsFormSubmitting(true);
     try {
       if (editing) {
         const updated = await api.patch<PartnerRow>(`/v1/partners/${editing.id}`, {
@@ -115,18 +118,23 @@ export default function PartnersPage() {
       setFormOpen(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setIsFormSubmitting(false);
     }
   });
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
+    setIsDeleting(true);
     try {
       await api.del(`/v1/partners/${deleteTarget.id}`);
-      toast.success("Partner removed");
-      setPartners((prev) => prev?.filter((x) => x.id !== deleteTarget.id) ?? null);
+      setPartners((prev) => prev?.filter((p) => p.id !== deleteTarget.id) ?? null);
       setDeleteTarget(null);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Delete failed");
+      toast.success("Partner removed.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete partner.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -230,7 +238,13 @@ export default function PartnersPage() {
                 )}
               />
               <DialogFooter>
-                <Button type="submit">Save</Button>
+                <Button type="submit" disabled={isFormSubmitting}>
+                  {isFormSubmitting
+                    ? "Saving..."
+                    : editing
+                      ? "Save changes"
+                      : "Add partner"}
+                </Button>
               </DialogFooter>
             </form>
           </Form>
@@ -249,8 +263,12 @@ export default function PartnersPage() {
             <Button variant="secondary" onClick={() => setDeleteTarget(null)}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={confirmDelete}>
-              Delete
+            <Button
+              variant="destructive"
+              onClick={() => void confirmDelete()}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Removing..." : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>

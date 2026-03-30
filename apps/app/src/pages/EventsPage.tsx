@@ -87,6 +87,7 @@ export default function EventsPage() {
   const [events, setEvents] = useState<EventRow[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [isFormSubmitting, setIsFormSubmitting] = useState(false);
 
   const form = useForm<EventFormValues>({
     resolver: zodResolver(eventFormSchema),
@@ -107,6 +108,7 @@ export default function EventsPage() {
   }, [api]);
 
   const onCreate = form.handleSubmit(async (values) => {
+    setIsFormSubmitting(true);
     try {
       const created = await api.post<EventRow>("/v1/events", {
         name: values.name.trim(),
@@ -119,6 +121,8 @@ export default function EventsPage() {
       setEvents((prev) => (prev ? [created, ...prev] : [created]));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to create event");
+    } finally {
+      setIsFormSubmitting(false);
     }
   });
 
@@ -197,7 +201,9 @@ export default function EventsPage() {
                     )}
                   />
                   <DialogFooter>
-                    <Button type="submit">Create</Button>
+                    <Button type="submit" disabled={isFormSubmitting}>
+                      {isFormSubmitting ? "Creating..." : "Create"}
+                    </Button>
                   </DialogFooter>
                 </form>
               </Form>
