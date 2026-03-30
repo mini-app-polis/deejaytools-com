@@ -1,7 +1,3 @@
-[build]
-builder = "nixpacks"
-buildCommand = "npm install -g pnpm && pnpm install && pnpm --filter ts-utils build && pnpm --filter api build"
-
 [deploy]
 startCommand = "node dist/index.js"
 healthcheckPath = "/health"
