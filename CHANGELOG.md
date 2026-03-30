@@ -1,3 +1,10 @@
+## [1.0.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.0.2...v1.0.3) (2026-03-30)
+
+
+### Bug Fixes
+
+* use _routes.json and _headers for Cloudflare Pages SPA ([4b0bcf3](https://github.com/mini-app-polis/deejaytools-com/commit/4b0bcf3aa001a7dfa53fdf967cb3eb2eda427f98))
+
 ## [1.0.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.0.1...v1.0.2) (2026-03-30)
 
 
