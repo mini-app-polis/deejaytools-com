@@ -1,8 +1,0 @@
-[phases.install]
-cmds = ["npm install -g pnpm", "pnpm install"]
-
-[phases.build]
-cmds = ["pnpm --filter ts-utils build && pnpm --filter api build"]
-
-[start]
-cmd = "node apps/api/dist/index.js"
