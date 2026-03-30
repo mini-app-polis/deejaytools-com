@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.4.0...v1.5.0) (2026-03-30)
+
+
+### Features
+
+* full-process progress bar for song upload ([5f74897](https://github.com/mini-app-polis/deejaytools-com/commit/5f748974e982a2a7c707a3cf97aca72fc08818e2))
+
 # [1.4.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.3.5...v1.4.0) (2026-03-30)
 
 
