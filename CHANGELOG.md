@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.2.0...v1.2.1) (2026-03-30)
+
+
+### Bug Fixes
+
+* read version from root package.json for nav display ([eeb20db](https://github.com/mini-app-polis/deejaytools-com/commit/eeb20dbb26d5b69f581ff93d140cd67a653038cd))
+
 # [1.2.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.1.0...v1.2.0) (2026-03-30)
 
 
