@@ -56,6 +56,15 @@ const SOLO_PARTNER_VALUE = "__solo__";
 
 const apiBase = import.meta.env.VITE_API_URL ?? "";
 
+type UploadStage = "idle" | "creating" | "uploading" | "finishing";
+
+const stageLabel: Record<UploadStage, string> = {
+  idle: "",
+  creating: "Preparing...",
+  uploading: "Uploading file...",
+  finishing: "Saving...",
+};
+
 type Song = {
   id: string;
   partner_id: string | null;
@@ -95,6 +104,7 @@ export default function SongsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fileInputKey, setFileInputKey] = useState(0);
   const [formKey, setFormKey] = useState(0);
+  const [uploadStage, setUploadStage] = useState<UploadStage>("idle");
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -139,10 +149,11 @@ export default function SongsPage() {
     }
 
     setIsSubmitting(true);
-    setUploadProgress(0);
     let createdId: string | null = null;
 
     try {
+      setUploadStage("creating");
+      setUploadProgress(5);
       const created = await api.post<Song>("/v1/songs", {
         division,
         routine_name: routineName.trim() || null,
@@ -150,6 +161,9 @@ export default function SongsPage() {
         partner_id: selectedPartnerId || null,
       });
       createdId = created.id;
+
+      setUploadStage("uploading");
+      setUploadProgress(10);
 
       await new Promise<void>((resolve, reject) => {
         void (async () => {
@@ -162,7 +176,7 @@ export default function SongsPage() {
 
             xhr.upload.onprogress = (ev) => {
               if (ev.lengthComputable) {
-                setUploadProgress(Math.round((ev.loaded / ev.total) * 100));
+                setUploadProgress(10 + Math.round((ev.loaded / ev.total) * 80));
               }
             };
 
@@ -194,6 +208,14 @@ export default function SongsPage() {
         })();
       });
 
+      setUploadStage("finishing");
+      setUploadProgress(95);
+      const updated = await api.get<Song[]>("/v1/songs");
+      setSongs(updated);
+
+      setUploadProgress(100);
+      await new Promise((r) => setTimeout(r, 400));
+
       toast.success("Song uploaded successfully.");
       setFile(null);
       setDivision("");
@@ -202,12 +224,7 @@ export default function SongsPage() {
       setSelectedPartnerId("");
       setFileInputKey((k) => k + 1);
       setFormKey((k) => k + 1);
-      setUploadProgress(0);
-
-      const updated = await api.get<Song[]>("/v1/songs");
-      setSongs(updated);
     } catch (err) {
-      setUploadProgress(0);
       if (createdId) {
         try {
           await api.del(`/v1/songs/${createdId}`);
@@ -217,8 +234,9 @@ export default function SongsPage() {
       }
       toast.error(err instanceof Error ? err.message : "Upload failed.");
     } finally {
-      setIsSubmitting(false);
+      setUploadStage("idle");
       setUploadProgress(0);
+      setIsSubmitting(false);
     }
   };
 
@@ -356,20 +374,16 @@ export default function SongsPage() {
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Uploading…" : "Upload song"}
             </Button>
-            {isSubmitting && (
+            {uploadStage !== "idle" && (
               <div className="mt-3 space-y-1">
                 <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>
-                    {uploadProgress > 0 ? "Uploading file..." : "Creating record..."}
-                  </span>
-                  <span>{uploadProgress > 0 ? `${uploadProgress}%` : ""}</span>
+                  <span>{stageLabel[uploadStage]}</span>
+                  <span>{uploadProgress}%</span>
                 </div>
                 <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                   <div
-                    className="h-full bg-primary transition-all duration-200"
-                    style={{
-                      width: uploadProgress > 0 ? `${uploadProgress}%` : "10%",
-                    }}
+                    className="h-full bg-primary transition-all duration-300"
+                    style={{ width: `${uploadProgress}%` }}
                   />
                 </div>
               </div>
