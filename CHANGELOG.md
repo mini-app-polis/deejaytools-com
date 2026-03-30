@@ -1,3 +1,10 @@
+## [1.3.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.3.2...v1.3.3) (2026-03-30)
+
+
+### Bug Fixes
+
+* move build tools to dependencies in apps/app for Cloudflare Pages production build ([46f1355](https://github.com/mini-app-polis/deejaytools-com/commit/46f13558e8492513ef85f70dc25ae75e623457ad))
+
 ## [1.3.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.3.1...v1.3.2) (2026-03-30)
 
 
