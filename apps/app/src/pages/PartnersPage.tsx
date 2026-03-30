@@ -1,9 +1,11 @@
+import { PartnerRoleSchema, type PartnerRole } from "@deejaytools/ts-utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useApiClient } from "@/api/client";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,12 +17,20 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -31,16 +41,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-type PartnerRow = {
+export type PartnerRow = {
   id: string;
   first_name: string;
   last_name: string;
+  partner_role: PartnerRole;
   email: string | null;
 };
 
 const partnerSchema = z.object({
   first_name: z.string().min(1),
   last_name: z.string().min(1),
+  partner_role: PartnerRoleSchema,
   email: z
     .string()
     .optional()
@@ -63,7 +75,7 @@ export default function PartnersPage() {
 
   const form = useForm<PartnerForm>({
     resolver: zodResolver(partnerSchema),
-    defaultValues: { first_name: "", last_name: "", email: "" },
+    defaultValues: { first_name: "", last_name: "", partner_role: "follower", email: "" },
   });
 
   const load = () => {
@@ -81,7 +93,7 @@ export default function PartnersPage() {
 
   const openCreate = () => {
     setEditing(null);
-    form.reset({ first_name: "", last_name: "", email: "" });
+    form.reset({ first_name: "", last_name: "", partner_role: "follower", email: "" });
     setFormOpen(true);
   };
 
@@ -90,6 +102,7 @@ export default function PartnersPage() {
     form.reset({
       first_name: p.first_name,
       last_name: p.last_name,
+      partner_role: p.partner_role,
       email: p.email ?? "",
     });
     setFormOpen(true);
@@ -102,6 +115,7 @@ export default function PartnersPage() {
         const updated = await api.patch<PartnerRow>(`/v1/partners/${editing.id}`, {
           first_name: values.first_name.trim(),
           last_name: values.last_name.trim(),
+          partner_role: values.partner_role,
           email: values.email?.trim() ? values.email.trim() : null,
         });
         toast.success("Partner updated");
@@ -110,6 +124,7 @@ export default function PartnersPage() {
         const created = await api.post<PartnerRow>("/v1/partners", {
           first_name: values.first_name.trim(),
           last_name: values.last_name.trim(),
+          partner_role: values.partner_role,
           ...(values.email?.trim() ? { email: values.email.trim() } : {}),
         });
         toast.success("Partner added");
@@ -159,6 +174,7 @@ export default function PartnersPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
+              <TableHead>Role</TableHead>
               <TableHead>Email</TableHead>
               <TableHead className="w-[160px]">Actions</TableHead>
             </TableRow>
@@ -166,7 +182,7 @@ export default function PartnersPage() {
           <TableBody>
             {partners?.length === 0 && (
               <TableRow>
-                <TableCell colSpan={3} className="text-muted-foreground">
+                <TableCell colSpan={4} className="text-muted-foreground">
                   No partners yet.
                 </TableCell>
               </TableRow>
@@ -175,6 +191,13 @@ export default function PartnersPage() {
               <TableRow key={p.id}>
                 <TableCell className="font-medium">
                   {p.first_name} {p.last_name}
+                </TableCell>
+                <TableCell>
+                  {p.partner_role === "leader" ? (
+                    <Badge variant="default">Leader</Badge>
+                  ) : (
+                    <Badge variant="secondary">Follower</Badge>
+                  )}
                 </TableCell>
                 <TableCell>{p.email ?? "—"}</TableCell>
                 <TableCell className="space-x-2">
@@ -220,6 +243,28 @@ export default function PartnersPage() {
                     <FormControl>
                       <Input {...field} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="partner_role"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Their role</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select their role" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="leader">Leader</SelectItem>
+                        <SelectItem value="follower">Follower</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>Your role will be the opposite.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

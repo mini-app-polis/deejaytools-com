@@ -1,4 +1,13 @@
-import type { ErrorEnvelope, SuccessEnvelope } from "@deejaytools/ts-utils";
+import type { ErrorEnvelope, PartnerRole, SuccessEnvelope } from "@deejaytools/ts-utils";
+
+/** Partner record from `/v1/partners`. */
+export type Partner = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  partner_role: PartnerRole;
+  email: string | null;
+};
 import { useAuth } from "@clerk/clerk-react";
 import { useCallback, useMemo } from "react";
 

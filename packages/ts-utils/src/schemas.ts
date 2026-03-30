@@ -46,3 +46,6 @@ export const EventStatusSchema = z.enum([
   "completed",
   "cancelled",
 ]);
+
+export const PartnerRoleSchema = z.enum(["leader", "follower"]);
+export type PartnerRole = z.infer<typeof PartnerRoleSchema>;

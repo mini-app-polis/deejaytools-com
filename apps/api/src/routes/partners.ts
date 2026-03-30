@@ -1,4 +1,10 @@
-import { CommonErrors, error, success, successList } from "@deejaytools/ts-utils";
+import {
+  CommonErrors,
+  PartnerRoleSchema,
+  error,
+  success,
+  successList,
+} from "@deejaytools/ts-utils";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -10,12 +16,14 @@ import { requireAuth } from "../middleware/auth.js";
 const createBody = z.object({
   first_name: z.string().min(1),
   last_name: z.string().min(1),
+  partner_role: PartnerRoleSchema,
   email: z.string().email().optional(),
 });
 
 const patchBody = z.object({
   first_name: z.string().min(1).optional(),
   last_name: z.string().min(1).optional(),
+  partner_role: PartnerRoleSchema.optional(),
   email: z.string().email().nullable().optional(),
 });
 
@@ -31,6 +39,7 @@ function mapPartner(row: typeof partners.$inferSelect) {
     user_id: row.userId,
     first_name: row.firstName,
     last_name: row.lastName,
+    partner_role: row.partnerRole,
     email: row.email,
     linked_user_id: row.linkedUserId,
     created_at: row.createdAt,
@@ -61,6 +70,7 @@ partnerRoutes.post("/", requireAuth, zValidator("json", createBody), async (c) =
     userId,
     firstName,
     lastName,
+    partnerRole: body.partner_role,
     email: body.email?.trim() || null,
     createdAt: now,
     updatedAt: now,
@@ -109,9 +119,15 @@ partnerRoutes.patch("/:id", requireAuth, zValidator("json", patchBody), async (c
   const updates: Partial<typeof partners.$inferInsert> = { updatedAt: now };
   if (body.first_name !== undefined) updates.firstName = body.first_name.trim();
   if (body.last_name !== undefined) updates.lastName = body.last_name.trim();
+  if (body.partner_role !== undefined) updates.partnerRole = body.partner_role;
   if (body.email !== undefined) updates.email = body.email === null ? null : body.email.trim() || null;
 
-  if (body.first_name === undefined && body.last_name === undefined && body.email === undefined) {
+  if (
+    body.first_name === undefined &&
+    body.last_name === undefined &&
+    body.partner_role === undefined &&
+    body.email === undefined
+  ) {
     return c.json(success(mapPartner(existing)));
   }
 

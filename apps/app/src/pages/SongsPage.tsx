@@ -81,6 +81,7 @@ type Partner = {
   id: string;
   first_name: string;
   last_name: string;
+  partner_role: "leader" | "follower";
 };
 
 function partnerLabel(p: Partner) {

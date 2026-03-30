@@ -78,6 +78,7 @@ type PartnerRow = {
   id: string;
   first_name: string;
   last_name: string;
+  partner_role: "leader" | "follower";
 };
 
 type SongRow = {

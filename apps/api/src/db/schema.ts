@@ -32,6 +32,7 @@ export const checkinStatusEnum = pgEnum("checkin_status", [
   "withdrawn",
 ]);
 export const queueTypeEnum = pgEnum("queue_type", ["priority", "standard"]);
+export const partnerRoleEnum = pgEnum("partner_role", ["leader", "follower"]);
 
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
@@ -53,6 +54,7 @@ export const partners = pgTable(
       .references(() => users.id),
     firstName: text("first_name").notNull(),
     lastName: text("last_name").notNull(),
+    partnerRole: partnerRoleEnum("partner_role").notNull().default("follower"),
     email: text("email"),
     linkedUserId: text("linked_user_id").references(() => users.id),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),

@@ -45,30 +45,6 @@ function sanitizeSegment(input: string | null | undefined): string {
     .replace(/[^a-z0-9_-]/g, "");
 }
 
-/** Alphanumeric only, max 64 chars — for partnership name parts. */
-function sanitizeNamePart(raw: string | null | undefined): string {
-  if (!raw) return "";
-  return raw.replace(/[^a-zA-Z0-9]/g, "").slice(0, 64);
-}
-
-function buildPartnershipSegment(
-  userRow: typeof users.$inferSelect,
-  partnerRow: typeof partners.$inferSelect | null,
-  userId: string
-): string {
-  const uFirst = sanitizeNamePart(userRow.firstName);
-  const uLast = sanitizeNamePart(userRow.lastName);
-  const userPart = `${uFirst}${uLast}`;
-  if (!partnerRow) {
-    return userPart || sanitizeNamePart(userId) || "user";
-  }
-  const pFirst = sanitizeNamePart(partnerRow.firstName);
-  const pLast = sanitizeNamePart(partnerRow.lastName);
-  const partnerPart = `${pFirst}${pLast}`;
-  const withPartner = partnerPart ? `${userPart}_${partnerPart}` : userPart;
-  return withPartner || sanitizeNamePart(userId) || "user";
-}
-
 function splitNameAndExtension(filename: string): { base: string; ext: string } {
   const trimmed = filename.trim();
   const lastDot = trimmed.lastIndexOf(".");
@@ -424,10 +400,33 @@ songRoutes.post("/:id/upload", requireAuth, async (c) => {
 
   const version = (countRow?.c ?? 0) + 1;
 
+  const userName =
+    [userRow.firstName, userRow.lastName].filter(Boolean).join("") || userId;
+  const partnerName = partnerRow
+    ? [partnerRow.firstName, partnerRow.lastName].filter(Boolean).join("")
+    : null;
+
+  let leaderName: string;
+  let followerName: string | null;
+
+  if (!partnerRow) {
+    leaderName = userName;
+    followerName = null;
+  } else if (partnerRow.partnerRole === "leader") {
+    leaderName = partnerName ?? "";
+    followerName = userName;
+  } else {
+    leaderName = userName;
+    followerName = partnerName ?? "";
+  }
+
+  const partnershipSegment = followerName
+    ? `${sanitizeSegment(leaderName)}_${sanitizeSegment(followerName)}`
+    : sanitizeSegment(leaderName);
+
   const originalParts = splitNameAndExtension(originalName);
-  const partnership = buildPartnershipSegment(userRow, partnerRow, userId);
   const pathSegments = [
-    partnership,
+    partnershipSegment || sanitizeSegment(userId) || "user",
     sanitizeSegment(song.division),
     sanitizeSegment(seasonYearStr),
     sanitizeSegment(song.routineName),
@@ -438,16 +437,7 @@ songRoutes.post("/:id/upload", requireAuth, async (c) => {
   const extSegment = sanitizeSegment(originalParts.ext);
   const processedFilename = extSegment ? `${versionedStem}.${extSegment}` : versionedStem;
 
-  const userDisplayName =
-    [userRow.firstName, userRow.lastName].filter(Boolean).join(" ").trim() ||
-    userRow.displayName?.trim() ||
-    userId;
-  const partnerDisplayName = partnerRow
-    ? [partnerRow.firstName, partnerRow.lastName].filter(Boolean).join(" ").trim()
-    : null;
-  const newTitle = partnerDisplayName
-    ? `${userDisplayName} & ${partnerDisplayName}`
-    : userDisplayName;
+  const newTitle = followerName ? `${leaderName} & ${followerName}` : leaderName;
   const newArtist = [song.division, seasonYearStr, song.routineName].filter(Boolean).join(" - ");
 
   const taggedBytes = await tagSongBytes({
