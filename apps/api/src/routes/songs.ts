@@ -4,7 +4,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { and, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { checkins, partners, songs } from "../db/schema.js";
+import { checkins, partners, songs, users } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
 import { softDeleteOnDrive, uploadSongToDrive } from "../services/drive.js";
 import { tagSongBytes } from "../services/tagger.js";
@@ -17,7 +17,7 @@ const createBody = z.object({
   partner_id: z.string().nullable().optional(),
   display_name: z.string().optional(),
   original_filename: z.string().optional(),
-  division: z.string().optional(),
+  division: z.string().nullable().optional(),
   routine_name: z.string().nullable().optional(),
   personal_descriptor: z.string().nullable().optional(),
   season_year: z.string().optional(),
@@ -43,6 +43,30 @@ function sanitizeSegment(input: string | null | undefined): string {
     .trim()
     .replace(/\s+/g, "_")
     .replace(/[^a-z0-9_-]/g, "");
+}
+
+/** Alphanumeric only, max 64 chars — for partnership name parts. */
+function sanitizeNamePart(raw: string | null | undefined): string {
+  if (!raw) return "";
+  return raw.replace(/[^a-zA-Z0-9]/g, "").slice(0, 64);
+}
+
+function buildPartnershipSegment(
+  userRow: typeof users.$inferSelect,
+  partnerRow: typeof partners.$inferSelect | null,
+  userId: string
+): string {
+  const uFirst = sanitizeNamePart(userRow.firstName);
+  const uLast = sanitizeNamePart(userRow.lastName);
+  const userPart = `${uFirst}${uLast}`;
+  if (!partnerRow) {
+    return userPart || sanitizeNamePart(userId) || "user";
+  }
+  const pFirst = sanitizeNamePart(partnerRow.firstName);
+  const pLast = sanitizeNamePart(partnerRow.lastName);
+  const partnerPart = `${pFirst}${pLast}`;
+  const withPartner = partnerPart ? `${userPart}_${partnerPart}` : userPart;
+  return withPartner || sanitizeNamePart(userId) || "user";
 }
 
 function splitNameAndExtension(filename: string): { base: string; ext: string } {
@@ -351,6 +375,21 @@ songRoutes.post("/:id/upload", requireAuth, async (c) => {
     return c.json(CommonErrors.notFound("Song"), 404);
   }
 
+  const [userRow] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!userRow) {
+    return c.json(CommonErrors.notFound("User"), 404);
+  }
+
+  let partnerRow: typeof partners.$inferSelect | null = null;
+  if (song.partnerId) {
+    const [p] = await db
+      .select()
+      .from(partners)
+      .where(and(eq(partners.id, song.partnerId), eq(partners.userId, userId)))
+      .limit(1);
+    partnerRow = p ?? null;
+  }
+
   const body = await c.req.parseBody();
   const fileValue = body.file;
   const uploadedFile =
@@ -386,20 +425,35 @@ songRoutes.post("/:id/upload", requireAuth, async (c) => {
   const version = (countRow?.c ?? 0) + 1;
 
   const originalParts = splitNameAndExtension(originalName);
-  const processedBase = [
+  const partnership = buildPartnershipSegment(userRow, partnerRow, userId);
+  const pathSegments = [
+    partnership,
     sanitizeSegment(song.division),
-    sanitizeSegment(song.routineName),
     sanitizeSegment(seasonYearStr),
-    sanitizeSegment(originalParts.base),
-  ].join("_");
-  const versionedStem = `${processedBase}_v${version}`;
+    sanitizeSegment(song.routineName),
+    sanitizeSegment(song.personalDescriptor),
+  ].filter((s) => s.length > 0);
+  const baseWithoutVersion = pathSegments.join("_");
+  const versionedStem = `${baseWithoutVersion}_v${version}`;
   const extSegment = sanitizeSegment(originalParts.ext);
   const processedFilename = extSegment ? `${versionedStem}.${extSegment}` : versionedStem;
 
+  const userDisplayName =
+    [userRow.firstName, userRow.lastName].filter(Boolean).join(" ").trim() ||
+    userRow.displayName?.trim() ||
+    userId;
+  const partnerDisplayName = partnerRow
+    ? [partnerRow.firstName, partnerRow.lastName].filter(Boolean).join(" ").trim()
+    : null;
+  const newTitle = partnerDisplayName
+    ? `${userDisplayName} & ${partnerDisplayName}`
+    : userDisplayName;
+  const newArtist = [song.division, seasonYearStr, song.routineName].filter(Boolean).join(" - ");
+
   const taggedBytes = await tagSongBytes({
     bytes: inputBytes,
-    newTitle: versionedStem,
-    newArtist: song.displayName?.trim() || song.routineName?.trim() || "Unknown",
+    newTitle,
+    newArtist,
   });
 
   const uploadResult = await uploadSongToDrive(taggedBytes, {
