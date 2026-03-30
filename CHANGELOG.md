@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.6.0...v1.7.0) (2026-03-30)
+
+
+### Features
+
+* partner dance role — leader/follower ordering in song filenames ([63a5bb6](https://github.com/mini-app-polis/deejaytools-com/commit/63a5bb65578ae47d01b4910355c3fa4aaa966ee7))
+
 # [1.6.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.5.0...v1.6.0) (2026-03-30)
 
 
