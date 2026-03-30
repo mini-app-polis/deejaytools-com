@@ -1,3 +1,10 @@
+## [1.2.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.2.2...v1.2.3) (2026-03-30)
+
+
+### Bug Fixes
+
+* use env var for app version display ([daa1e64](https://github.com/mini-app-polis/deejaytools-com/commit/daa1e64fb85b16ef20777586f2019c940b857fc1))
+
 ## [1.2.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.2.1...v1.2.2) (2026-03-30)
 
 
