@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.1.0...v1.2.0) (2026-03-30)
+
+
+### Features
+
+* update site title and show version in nav ([e95df3d](https://github.com/mini-app-polis/deejaytools-com/commit/e95df3d4c787c08a980e1115fba2641c14d18a0d))
+
 # [1.1.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.0.5...v1.1.0) (2026-03-30)
 
 
