@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.0.0...v1.0.1) (2026-03-30)
+
+
+### Bug Fixes
+
+* add Cloudflare Pages redirects for SPA routing ([1d00cca](https://github.com/mini-app-polis/deejaytools-com/commit/1d00cca1a59180cae836341f2af37660b1b8671a))
+
 # 1.0.0 (2026-03-29)
 
 
