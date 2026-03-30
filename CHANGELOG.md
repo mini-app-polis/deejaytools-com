@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.0.5...v1.1.0) (2026-03-30)
+
+
+### Features
+
+* port Drive upload and ID3 tagging from routine-management-platform. ([4aed284](https://github.com/mini-app-polis/deejaytools-com/commit/4aed284bc376cef7aae77a2dc4ecf46920687d3c))
+
 ## [1.0.5](https://github.com/mini-app-polis/deejaytools-com/compare/v1.0.4...v1.0.5) (2026-03-30)
 
 
