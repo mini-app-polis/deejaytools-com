@@ -1,3 +1,10 @@
+## [1.0.5](https://github.com/mini-app-polis/deejaytools-com/compare/v1.0.4...v1.0.5) (2026-03-30)
+
+
+### Bug Fixes
+
+* uprev post ci fix ([cfec285](https://github.com/mini-app-polis/deejaytools-com/commit/cfec285d7856f2dc0682bb0aa2daa8498b554f43))
+
 ## [1.0.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.0.3...v1.0.4) (2026-03-30)
 
 
