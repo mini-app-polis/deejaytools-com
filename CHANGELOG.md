@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.0.1...v1.0.2) (2026-03-30)
+
+
+### Bug Fixes
+
+* force SPA redirect rule for Cloudflare Pages v3 ([115f25a](https://github.com/mini-app-polis/deejaytools-com/commit/115f25a0de30eb6db72deedc932569161f11d915))
+
 ## [1.0.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.0.0...v1.0.1) (2026-03-30)
 
 
