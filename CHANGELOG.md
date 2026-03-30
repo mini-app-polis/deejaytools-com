@@ -1,3 +1,10 @@
+## [1.2.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.2.3...v1.2.4) (2026-03-30)
+
+
+### Bug Fixes
+
+* read version from root package.json — will update after next semantic-release ([ccebb5e](https://github.com/mini-app-polis/deejaytools-com/commit/ccebb5e9ef8c54a7f4d32cd0c6b5ce3f7623ed58))
+
 ## [1.2.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.2.2...v1.2.3) (2026-03-30)
 
 
