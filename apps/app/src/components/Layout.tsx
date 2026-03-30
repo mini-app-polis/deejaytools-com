@@ -2,6 +2,7 @@ import { UserButton } from "@clerk/clerk-react";
 import { NavLink, Outlet } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuthMe } from "@/hooks/useAuthMe";
+import pkg from "../../../../package.json";
 
 const navClass = ({ isActive }: { isActive: boolean }) =>
   cn(
@@ -18,7 +19,7 @@ export default function Layout() {
         <div className="flex items-center gap-6 min-w-0">
           <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2 }}>
             <span className="font-semibold text-sm">DeejayTools.com</span>
-            <span className="text-xs text-muted-foreground">v{__APP_VERSION__}</span>
+            <span className="text-xs text-muted-foreground">v{pkg.version}</span>
           </div>
           <div className="flex items-center gap-4 flex-wrap">
             <NavLink to="/events" className={navClass}>
