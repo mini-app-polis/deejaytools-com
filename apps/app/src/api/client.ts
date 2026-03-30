@@ -51,6 +51,14 @@ export function useApiClient() {
     [withAuth]
   );
 
+  const postForm = useCallback(
+    async <T>(path: string, form: FormData) => {
+      const res = await fetch(`${base}${path}`, await withAuth({ method: "POST", body: form }));
+      return parseEnvelope<T>(res);
+    },
+    [withAuth]
+  );
+
   const patch = useCallback(
     async <T>(path: string, body: unknown) => {
       const res = await fetch(
@@ -79,9 +87,10 @@ export function useApiClient() {
     () => ({
       get,
       post,
+      postForm,
       patch,
       del,
     }),
-    [get, post, patch, del]
+    [get, post, postForm, patch, del]
   );
 }

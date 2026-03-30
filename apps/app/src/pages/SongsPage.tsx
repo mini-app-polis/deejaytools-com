@@ -1,27 +1,17 @@
-import { zodResolver } from "@hookform/resolvers/zod";
-import { DivisionSchema } from "@deejaytools/ts-utils";
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { z } from "zod";
 import { useApiClient } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -38,153 +28,158 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import type { AuthMe as MeResponse } from "@/hooks/useAuthMe";
 
-type SongRow = {
+const DIVISION_OPTIONS = [
+  "Classic",
+  "Showcase",
+  "Rising Star Classic",
+  "Rising Star Showcase",
+  "Sophisticated",
+  "Masters",
+  "Teams",
+  "ProAm LeaderAm",
+  "ProAm FollowerAm",
+  "NovInt Routines",
+  "Juniors",
+  "Young Adult",
+  "Exhibition",
+  "Superstar",
+  "My Division Is Not Listed",
+] as const;
+
+const SOLO_PARTNER_VALUE = "__solo__";
+
+type Song = {
   id: string;
-  display_name: string | null;
+  partner_id: string | null;
+  processed_filename: string | null;
   division: string | null;
   routine_name: string | null;
   personal_descriptor: string | null;
-  season_year: string | null;
+  created_at: number;
   partner_first_name?: string | null;
   partner_last_name?: string | null;
-  partner_id: string | null;
 };
 
-type PartnerRow = {
+type Partner = {
   id: string;
   first_name: string;
   last_name: string;
 };
 
-const songSchema = z.object({
-  display_name: z.string().min(1),
-  division: DivisionSchema,
-  routine_name: z.string().optional(),
-  personal_descriptor: z.string().optional(),
-  season_year: z.string().optional(),
-  partner_id: z.string().optional(),
-});
-
-type SongForm = z.infer<typeof songSchema>;
-
-function partnerLabel(p: PartnerRow) {
+function partnerLabel(p: Partner) {
   return `${p.first_name} ${p.last_name}`.trim();
 }
 
 export default function SongsPage() {
   const api = useApiClient();
-  const [songs, setSongs] = useState<SongRow[] | null>(null);
-  const [partners, setPartners] = useState<PartnerRow[]>([]);
+
+  const [songs, setSongs] = useState<Song[]>([]);
+  const [partners, setPartners] = useState<Partner[]>([]);
+  const [me, setMe] = useState<MeResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing] = useState<SongRow | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<SongRow | null>(null);
 
-  const form = useForm<SongForm>({
-    resolver: zodResolver(songSchema),
-    defaultValues: {
-      display_name: "",
-      division: "Other",
-      routine_name: "",
-      personal_descriptor: "",
-      season_year: "",
-      partner_id: "",
-    },
-  });
+  const [file, setFile] = useState<File | null>(null);
+  const [division, setDivision] = useState("");
+  const [routineName, setRoutineName] = useState("");
+  const [descriptor, setDescriptor] = useState("");
+  const [selectedPartnerId, setSelectedPartnerId] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fileInputKey, setFileInputKey] = useState(0);
 
-  const load = () => {
-    setLoading(true);
-    Promise.all([api.get<SongRow[]>("/v1/songs"), api.get<PartnerRow[]>("/v1/partners")])
-      .then(([s, p]) => {
-        setSongs(s);
-        setPartners(p);
-      })
-      .catch((e: Error) => toast.error(e.message))
-      .finally(() => setLoading(false));
-  };
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
-    load();
+    let cancelled = false;
+    setLoading(true);
+    Promise.all([
+      api.get<Song[]>("/v1/songs"),
+      api.get<Partner[]>("/v1/partners"),
+      api.get<MeResponse>("/v1/auth/me"),
+    ])
+      .then(([s, p, m]) => {
+        if (!cancelled) {
+          setSongs(s);
+          setPartners(p);
+          setMe(m);
+        }
+      })
+      .catch((e: Error) => toast.error(e.message))
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [api]);
 
-  const openCreate = () => {
-    setEditing(null);
-    form.reset({
-      display_name: "",
-      division: "Other",
-      routine_name: "",
-      personal_descriptor: "",
-      season_year: "",
-      partner_id: "",
-    });
-    setFormOpen(true);
-  };
+  const handleUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!file) {
+      toast.error("Please select an audio file.");
+      return;
+    }
+    if (!division) {
+      toast.error("Please select a division.");
+      return;
+    }
 
-  const openEdit = (song: SongRow) => {
-    setEditing(song);
-    const div = DivisionSchema.safeParse(song.division ?? "Other");
-    form.reset({
-      display_name: song.display_name ?? "",
-      division: div.success ? div.data : "Other",
-      routine_name: song.routine_name ?? "",
-      personal_descriptor: song.personal_descriptor ?? "",
-      season_year: song.season_year ?? "",
-      partner_id: song.partner_id ?? "",
-    });
-    setFormOpen(true);
-  };
+    setIsSubmitting(true);
+    let createdId: string | null = null;
 
-  const onSubmit = form.handleSubmit(async (values) => {
     try {
-      if (editing) {
-        const updated = await api.patch<SongRow>(`/v1/songs/${editing.id}`, {
-          display_name: values.display_name.trim(),
-          division: values.division,
-          routine_name: values.routine_name?.trim() || null,
-          personal_descriptor: values.personal_descriptor?.trim() || null,
-          season_year: values.season_year?.trim() || null,
-          partner_id:
-            values.partner_id && values.partner_id !== "none" && values.partner_id !== ""
-              ? values.partner_id
-              : null,
-        });
-        toast.success("Song updated");
-        setSongs((prev) => prev?.map((x) => (x.id === updated.id ? { ...x, ...updated } : x)) ?? null);
-      } else {
-        const created = await api.post<SongRow>("/v1/songs", {
-          display_name: values.display_name.trim(),
-          division: values.division,
-          routine_name: values.routine_name?.trim() || undefined,
-          personal_descriptor: values.personal_descriptor?.trim() || undefined,
-          season_year: values.season_year?.trim() || undefined,
-          ...(values.partner_id && values.partner_id !== "none"
-            ? { partner_id: values.partner_id }
-            : {}),
-        });
-        toast.success("Song created");
-        setSongs((prev) => (prev ? [created, ...prev] : [created]));
+      const created = await api.post<Song>("/v1/songs", {
+        division,
+        routine_name: routineName.trim() || null,
+        personal_descriptor: descriptor.trim() || null,
+        partner_id: selectedPartnerId || null,
+      });
+      createdId = created.id;
+
+      const form = new FormData();
+      form.set("file", file);
+      await api.postForm<Song>(`/v1/songs/${createdId}/upload`, form);
+
+      toast.success("Song uploaded successfully.");
+      setFile(null);
+      setDivision("");
+      setRoutineName("");
+      setDescriptor("");
+      setSelectedPartnerId("");
+      setFileInputKey((k) => k + 1);
+
+      const updated = await api.get<Song[]>("/v1/songs");
+      setSongs(updated);
+    } catch (err) {
+      if (createdId) {
+        try {
+          await api.del(`/v1/songs/${createdId}`);
+        } catch {
+          /* ignore rollback errors */
+        }
       }
-      setFormOpen(false);
-      await load();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Save failed");
-    }
-  });
-
-  const confirmDelete = async () => {
-    if (!deleteTarget) return;
-    try {
-      await api.del(`/v1/songs/${deleteTarget.id}`);
-      toast.success("Song deleted");
-      setSongs((prev) => prev?.filter((x) => x.id !== deleteTarget.id) ?? null);
-      setDeleteTarget(null);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Delete failed");
+      toast.error(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  if (loading && !songs) {
+  const handleDelete = async (id: string) => {
+    try {
+      await api.del(`/v1/songs/${id}`);
+      setSongs((prev) => prev.filter((s) => s.id !== id));
+      setPendingDeleteId(null);
+      toast.success("Song removed.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete song.");
+      setPendingDeleteId(null);
+    }
+  };
+
+  const hasFullName = Boolean(me?.first_name?.trim() && me?.last_name?.trim());
+
+  if (loading) {
     return (
       <div className="space-y-3">
         <Skeleton className="h-8 w-48" />
@@ -194,50 +189,190 @@ export default function SongsPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">Audio upload coming soon</p>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-xl font-semibold">Songs</h1>
-        <Button onClick={openCreate}>Add song</Button>
-      </div>
+    <div className="space-y-6">
+      <h1 className="text-xl font-semibold">Songs</h1>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Upload a song</CardTitle>
+          <CardDescription>
+            Create your song record and upload one audio file in a single step.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {hasFullName ? (
+            <p className="text-sm text-muted-foreground">
+              Uploading as:{" "}
+              <span className="font-medium text-foreground">
+                {me!.first_name} {me!.last_name}
+              </span>
+            </p>
+          ) : (
+            <p className="text-sm text-amber-600 dark:text-amber-500">
+              Set your first and last name on the{" "}
+              <Link to="/partners" className="underline font-medium">
+                Partners
+              </Link>{" "}
+              page so we can label your uploads correctly.
+            </p>
+          )}
+
+          <form onSubmit={(e) => void handleUpload(e)} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="song-partner">Partner</Label>
+              <Select
+                value={selectedPartnerId === "" ? SOLO_PARTNER_VALUE : selectedPartnerId}
+                onValueChange={(v) =>
+                  setSelectedPartnerId(v === SOLO_PARTNER_VALUE ? "" : v)
+                }
+              >
+                <SelectTrigger id="song-partner">
+                  <SelectValue placeholder="Solo / No partner" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SOLO_PARTNER_VALUE}>Solo / No partner</SelectItem>
+                  {partners.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {partnerLabel(p)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Add partners in the{" "}
+                <Link to="/partners" className="underline">
+                  Partners
+                </Link>{" "}
+                page.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="song-division">Division</Label>
+              <Select value={division || undefined} onValueChange={setDivision}>
+                <SelectTrigger id="song-division">
+                  <SelectValue placeholder="Select a division" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DIVISION_OPTIONS.map((d) => (
+                    <SelectItem key={d} value={d}>
+                      {d}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="song-routine">Routine / Song name</Label>
+              <Input
+                id="song-routine"
+                value={routineName}
+                onChange={(e) => setRoutineName(e.target.value)}
+                placeholder="Optional — recommended"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="song-descriptor">Personal descriptor</Label>
+              <Input
+                id="song-descriptor"
+                value={descriptor}
+                onChange={(e) => setDescriptor(e.target.value)}
+                placeholder="e.g. 98%, -2%, v3, 2026-02-01"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="song-file">Audio file</Label>
+              <Input
+                key={fileInputKey}
+                id="song-file"
+                type="file"
+                accept="audio/*"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                className="cursor-pointer"
+              />
+            </div>
+
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Uploading…" : "Upload song"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
       <div className={loading ? "opacity-60" : ""}>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Display name</TableHead>
+              <TableHead>Date</TableHead>
+              <TableHead>Processed filename</TableHead>
               <TableHead>Division</TableHead>
-              <TableHead>Season / year</TableHead>
+              <TableHead>Routine name</TableHead>
+              <TableHead>Descriptor</TableHead>
               <TableHead>Partner</TableHead>
-              <TableHead className="w-[160px]">Actions</TableHead>
+              <TableHead className="w-[200px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {songs?.length === 0 && (
+            {songs.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-muted-foreground">
+                <TableCell colSpan={7} className="text-muted-foreground">
                   No songs yet.
                 </TableCell>
               </TableRow>
             )}
-            {songs?.map((s) => {
-              const pName =
-                s.partner_first_name || s.partner_last_name
-                  ? `${s.partner_first_name ?? ""} ${s.partner_last_name ?? ""}`.trim()
-                  : "—";
+            {songs.map((s) => {
+              const partnerCell = !s.partner_id
+                ? "—"
+                : [s.partner_first_name, s.partner_last_name]
+                    .filter(Boolean)
+                    .join(" ")
+                    .trim() || "—";
               return (
                 <TableRow key={s.id}>
-                  <TableCell className="font-medium">{s.display_name ?? "—"}</TableCell>
+                  <TableCell>
+                    {new Date(s.created_at).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell className="font-mono text-sm">
+                    {s.processed_filename?.trim() ? s.processed_filename : "—"}
+                  </TableCell>
                   <TableCell>{s.division ?? "—"}</TableCell>
-                  <TableCell>{s.season_year ?? "—"}</TableCell>
-                  <TableCell>{pName}</TableCell>
-                  <TableCell className="space-x-2">
-                    <Button variant="outline" size="sm" onClick={() => openEdit(s)}>
-                      Edit
-                    </Button>
-                    <Button variant="destructive" size="sm" onClick={() => setDeleteTarget(s)}>
-                      Delete
-                    </Button>
+                  <TableCell>{s.routine_name ?? "—"}</TableCell>
+                  <TableCell>{s.personal_descriptor ?? "—"}</TableCell>
+                  <TableCell>{partnerCell}</TableCell>
+                  <TableCell>
+                    {pendingDeleteId === s.id ? (
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Delete?</span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => void handleDelete(s.id)}
+                        >
+                          Yes
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setPendingDeleteId(null)}
+                        >
+                          No
+                        </Button>
+                      </span>
+                    ) : (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => setPendingDeleteId(s.id)}
+                      >
+                        Delete
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               );
@@ -245,144 +380,6 @@ export default function SongsPage() {
           </TableBody>
         </Table>
       </div>
-
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editing ? "Edit song" : "Add song"}</DialogTitle>
-          </DialogHeader>
-          <Form {...form}>
-            <form onSubmit={onSubmit} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="display_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Display name</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="division"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Division</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {DivisionSchema.options.map((d) => (
-                          <SelectItem key={d} value={d}>
-                            {d}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="routine_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Routine name</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="personal_descriptor"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Personal descriptor</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="season_year"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Season year</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="partner_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Partner (optional)</FormLabel>
-                    <Select
-                      onValueChange={(v) => field.onChange(v === "none" ? "" : v)}
-                      value={field.value && field.value !== "" ? field.value : "none"}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="None" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {partners.map((p) => (
-                          <SelectItem key={p.id} value={p.id}>
-                            {partnerLabel(p)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <DialogFooter>
-                <Button type="submit">Save</Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete song?</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            {deleteTarget?.display_name ?? "This song"} will be permanently deleted.
-          </p>
-          <DialogFooter>
-            <Button variant="secondary" onClick={() => setDeleteTarget(null)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={confirmDelete}>
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

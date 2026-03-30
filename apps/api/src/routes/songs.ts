@@ -2,7 +2,7 @@ import { CommonErrors, createLogger, error, success, successList } from "@deejay
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
-import { and, desc, eq, inArray, or } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { checkins, partners, songs } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
@@ -59,6 +59,15 @@ function splitNameAndExtension(filename: string): { base: string; ext: string } 
 
 function inferMimeType(file: File): string {
   return file.type?.trim() || "audio/mpeg";
+}
+
+/** Calendar months 11–12 (Nov–Dec) map to the next calendar year’s season label. */
+function seasonYearFromTimestamp(ms: number): string {
+  const d = new Date(ms);
+  const calMonth = d.getMonth() + 1;
+  const year = d.getFullYear();
+  const seasonYear = calMonth >= 11 ? year + 1 : year;
+  return String(seasonYear);
 }
 
 function computedSongDisplayName(row: typeof songs.$inferSelect): string | null {
@@ -359,19 +368,37 @@ songRoutes.post("/:id/upload", requireAuth, async (c) => {
   const mimeType = inferMimeType(uploadedFile);
   const inputBytes = Buffer.from(await uploadedFile.arrayBuffer());
 
+  const seasonYearStr = seasonYearFromTimestamp(Date.now());
+
+  const [countRow] = await db
+    .select({ c: sql<number>`count(*)::int` })
+    .from(songs)
+    .where(
+      and(
+        eq(songs.userId, userId),
+        sql`coalesce(${songs.division}, '') = ${song.division ?? ""}`,
+        sql`coalesce(${songs.routineName}, '') = ${song.routineName ?? ""}`,
+        eq(songs.seasonYear, seasonYearStr),
+        ne(songs.id, id)
+      )
+    );
+
+  const version = (countRow?.c ?? 0) + 1;
+
   const originalParts = splitNameAndExtension(originalName);
   const processedBase = [
     sanitizeSegment(song.division),
     sanitizeSegment(song.routineName),
-    sanitizeSegment(song.seasonYear),
+    sanitizeSegment(seasonYearStr),
     sanitizeSegment(originalParts.base),
   ].join("_");
+  const versionedStem = `${processedBase}_v${version}`;
   const extSegment = sanitizeSegment(originalParts.ext);
-  const processedFilename = extSegment ? `${processedBase}.${extSegment}` : processedBase;
+  const processedFilename = extSegment ? `${versionedStem}.${extSegment}` : versionedStem;
 
   const taggedBytes = await tagSongBytes({
     bytes: inputBytes,
-    newTitle: processedBase,
+    newTitle: versionedStem,
     newArtist: song.displayName?.trim() || song.routineName?.trim() || "Unknown",
   });
 
@@ -386,6 +413,7 @@ songRoutes.post("/:id/upload", requireAuth, async (c) => {
     .set({
       originalFilename: originalName,
       processedFilename,
+      seasonYear: seasonYearStr,
       driveFileId: uploadResult.fileId,
       driveFolderId: uploadResult.folderId,
       updatedAt: now,
