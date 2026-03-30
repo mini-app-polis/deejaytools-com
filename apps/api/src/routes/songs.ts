@@ -1,4 +1,4 @@
-import { CommonErrors, error, success, successList } from "@deejaytools/ts-utils";
+import { CommonErrors, createLogger, error, success, successList } from "@deejaytools/ts-utils";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -6,6 +6,8 @@ import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { checkins, partners, songs } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
+import { softDeleteOnDrive, uploadSongToDrive } from "../services/drive.js";
+import { tagSongBytes } from "../services/tagger.js";
 
 const listQuery = z.object({
   partner_id: z.string().optional(),
@@ -32,6 +34,32 @@ const patchBody = z.object({
 });
 
 export const songRoutes = new Hono();
+const logger = createLogger("songs-routes");
+
+function sanitizeSegment(input: string | null | undefined): string {
+  if (!input) return "";
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z0-9_-]/g, "");
+}
+
+function splitNameAndExtension(filename: string): { base: string; ext: string } {
+  const trimmed = filename.trim();
+  const lastDot = trimmed.lastIndexOf(".");
+  if (lastDot <= 0 || lastDot === trimmed.length - 1) {
+    return { base: trimmed, ext: "" };
+  }
+  return {
+    base: trimmed.slice(0, lastDot),
+    ext: trimmed.slice(lastDot + 1),
+  };
+}
+
+function inferMimeType(file: File): string {
+  return file.type?.trim() || "audio/mpeg";
+}
 
 function computedSongDisplayName(row: typeof songs.$inferSelect): string | null {
   const d = row.displayName?.trim();
@@ -278,9 +306,110 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
     );
   }
 
+  if (existing.driveFileId && existing.driveFolderId) {
+    try {
+      await softDeleteOnDrive(existing.driveFileId, existing.driveFolderId);
+    } catch (err) {
+      logger.error({
+        event: "song_drive_soft_delete_failed",
+        category: "api",
+        context: {
+          songId: id,
+          driveFileId: existing.driveFileId,
+          driveFolderId: existing.driveFolderId,
+        },
+        error: err,
+      });
+    }
+  }
+
   await db.delete(songs).where(and(eq(songs.id, id), eq(songs.userId, userId)));
-  // TODO: move file to Drive _deprecated folder when Drive is integrated.
   return c.body(null, 204);
 });
 
-// TODO: POST /v1/songs/:id/upload — Drive integration
+// POST /v1/songs/:id/upload — multipart/form-data with file field
+songRoutes.post("/:id/upload", requireAuth, async (c) => {
+  const userId = c.get("user").userId;
+  const id = c.req.param("id");
+
+  const [song] = await db
+    .select()
+    .from(songs)
+    .where(and(eq(songs.id, id), eq(songs.userId, userId)))
+    .limit(1);
+
+  if (!song) {
+    return c.json(CommonErrors.notFound("Song"), 404);
+  }
+
+  const body = await c.req.parseBody();
+  const fileValue = body.file;
+  const uploadedFile =
+    fileValue instanceof File
+      ? fileValue
+      : Array.isArray(fileValue)
+        ? fileValue.find((entry): entry is File => entry instanceof File)
+        : null;
+
+  if (!uploadedFile) {
+    return c.json(CommonErrors.badRequest("Missing file upload field"), 400);
+  }
+
+  const originalName = uploadedFile.name?.trim() || "song.mp3";
+  const mimeType = inferMimeType(uploadedFile);
+  const inputBytes = Buffer.from(await uploadedFile.arrayBuffer());
+
+  const originalParts = splitNameAndExtension(originalName);
+  const processedBase = [
+    sanitizeSegment(song.division),
+    sanitizeSegment(song.routineName),
+    sanitizeSegment(song.seasonYear),
+    sanitizeSegment(originalParts.base),
+  ].join("_");
+  const extSegment = sanitizeSegment(originalParts.ext);
+  const processedFilename = extSegment ? `${processedBase}.${extSegment}` : processedBase;
+
+  const taggedBytes = await tagSongBytes({
+    bytes: inputBytes,
+    newTitle: processedBase,
+    newArtist: song.displayName?.trim() || song.routineName?.trim() || "Unknown",
+  });
+
+  const uploadResult = await uploadSongToDrive(taggedBytes, {
+    filename: processedFilename,
+    mimeType,
+  });
+
+  const now = Date.now();
+  await db
+    .update(songs)
+    .set({
+      originalFilename: originalName,
+      processedFilename,
+      driveFileId: uploadResult.fileId,
+      driveFolderId: uploadResult.folderId,
+      updatedAt: now,
+    })
+    .where(eq(songs.id, id));
+
+  const [r] = await db
+    .select({
+      song: songs,
+      partner_first_name: partners.firstName,
+      partner_last_name: partners.lastName,
+    })
+    .from(songs)
+    .leftJoin(partners, eq(partners.id, songs.partnerId))
+    .where(eq(songs.id, id))
+    .limit(1);
+
+  return c.json(
+    success(
+      mapSong({
+        ...r!.song,
+        partner_first_name: r!.partner_first_name,
+        partner_last_name: r!.partner_last_name,
+      })
+    )
+  );
+});
