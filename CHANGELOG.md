@@ -1,3 +1,10 @@
+## [1.3.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.3.1...v1.3.2) (2026-03-30)
+
+
+### Bug Fixes
+
+* move @types/node to dependencies in ts-utils for Cloudflare Pages build ([1004f50](https://github.com/mini-app-polis/deejaytools-com/commit/1004f50fcfbbc3b3960a258fc3d0d5506b2e2af2))
+
 ## [1.3.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.3.0...v1.3.1) (2026-03-30)
 
 
