@@ -1,3 +1,10 @@
+## [1.3.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.3.3...v1.3.4) (2026-03-30)
+
+
+### Bug Fixes
+
+* accept null values in song create body schema ([8c6cb80](https://github.com/mini-app-polis/deejaytools-com/commit/8c6cb80e5cddaa3c5d2d6c988b303841c47250b0))
+
 ## [1.3.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.3.2...v1.3.3) (2026-03-30)
 
 
