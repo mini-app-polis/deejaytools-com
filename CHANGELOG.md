@@ -1,3 +1,15 @@
+# [1.6.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.5.0...v1.6.0) (2026-03-30)
+
+
+### Bug Fixes
+
+* restore 404.html copy for Cloudflare Pages SPA routing ([f69307a](https://github.com/mini-app-polis/deejaytools-com/commit/f69307a68dd3aeed161ee7b92e0a9929bf9b8440))
+
+
+### Features
+
+* loading states on all mutation buttons ([047b5a4](https://github.com/mini-app-polis/deejaytools-com/commit/047b5a49f5605e185a1139755f55338803297214))
+
 # [1.5.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.4.0...v1.5.0) (2026-03-30)
 
 
