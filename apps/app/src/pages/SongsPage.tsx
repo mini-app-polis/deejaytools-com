@@ -1,3 +1,5 @@
+import type { ErrorEnvelope, SuccessEnvelope } from "@deejaytools/ts-utils";
+import { useAuth } from "@clerk/clerk-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -48,7 +50,11 @@ const DIVISION_OPTIONS = [
   "My Division Is Not Listed",
 ] as const;
 
+const SOLO_ALLOWED_DIVISIONS = new Set<string>(["Teams", "My Division Is Not Listed"]);
+
 const SOLO_PARTNER_VALUE = "__solo__";
+
+const apiBase = import.meta.env.VITE_API_URL ?? "";
 
 type Song = {
   id: string;
@@ -74,6 +80,7 @@ function partnerLabel(p: Partner) {
 
 export default function SongsPage() {
   const api = useApiClient();
+  const { getToken } = useAuth();
 
   const [songs, setSongs] = useState<Song[]>([]);
   const [partners, setPartners] = useState<Partner[]>([]);
@@ -87,6 +94,8 @@ export default function SongsPage() {
   const [selectedPartnerId, setSelectedPartnerId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fileInputKey, setFileInputKey] = useState(0);
+  const [formKey, setFormKey] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
@@ -124,8 +133,13 @@ export default function SongsPage() {
       toast.error("Please select a division.");
       return;
     }
+    if (!SOLO_ALLOWED_DIVISIONS.has(division) && !selectedPartnerId) {
+      toast.error("A partner is required for this division.");
+      return;
+    }
 
     setIsSubmitting(true);
+    setUploadProgress(0);
     let createdId: string | null = null;
 
     try {
@@ -137,9 +151,48 @@ export default function SongsPage() {
       });
       createdId = created.id;
 
-      const form = new FormData();
-      form.set("file", file);
-      await api.postForm<Song>(`/v1/songs/${createdId}/upload`, form);
+      await new Promise<void>((resolve, reject) => {
+        void (async () => {
+          try {
+            const token = await getToken();
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", `${apiBase}/v1/songs/${createdId}/upload`);
+            xhr.setRequestHeader("Accept", "application/json");
+            if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+
+            xhr.upload.onprogress = (ev) => {
+              if (ev.lengthComputable) {
+                setUploadProgress(Math.round((ev.loaded / ev.total) * 100));
+              }
+            };
+
+            xhr.onload = () => {
+              if (xhr.status < 200 || xhr.status >= 300) {
+                reject(new Error(`Upload failed: ${xhr.statusText || String(xhr.status)}`));
+                return;
+              }
+              try {
+                const json = JSON.parse(xhr.responseText) as SuccessEnvelope<unknown> | ErrorEnvelope;
+                if ("error" in json) {
+                  reject(new Error(json.error.message));
+                  return;
+                }
+                resolve();
+              } catch {
+                reject(new Error("Upload failed: invalid response"));
+              }
+            };
+
+            xhr.onerror = () => reject(new Error("Network error during upload"));
+
+            const form = new FormData();
+            form.set("file", file);
+            xhr.send(form);
+          } catch (e) {
+            reject(e instanceof Error ? e : new Error("Upload failed."));
+          }
+        })();
+      });
 
       toast.success("Song uploaded successfully.");
       setFile(null);
@@ -148,10 +201,13 @@ export default function SongsPage() {
       setDescriptor("");
       setSelectedPartnerId("");
       setFileInputKey((k) => k + 1);
+      setFormKey((k) => k + 1);
+      setUploadProgress(0);
 
       const updated = await api.get<Song[]>("/v1/songs");
       setSongs(updated);
     } catch (err) {
+      setUploadProgress(0);
       if (createdId) {
         try {
           await api.del(`/v1/songs/${createdId}`);
@@ -162,6 +218,7 @@ export default function SongsPage() {
       toast.error(err instanceof Error ? err.message : "Upload failed.");
     } finally {
       setIsSubmitting(false);
+      setUploadProgress(0);
     }
   };
 
@@ -221,6 +278,7 @@ export default function SongsPage() {
             <div className="space-y-2">
               <Label htmlFor="song-partner">Partner</Label>
               <Select
+                key={formKey}
                 value={selectedPartnerId === "" ? SOLO_PARTNER_VALUE : selectedPartnerId}
                 onValueChange={(v) =>
                   setSelectedPartnerId(v === SOLO_PARTNER_VALUE ? "" : v)
@@ -249,7 +307,7 @@ export default function SongsPage() {
 
             <div className="space-y-2">
               <Label htmlFor="song-division">Division</Label>
-              <Select value={division || undefined} onValueChange={setDivision}>
+              <Select key={formKey} value={division || undefined} onValueChange={setDivision}>
                 <SelectTrigger id="song-division">
                   <SelectValue placeholder="Select a division" />
                 </SelectTrigger>
@@ -298,6 +356,24 @@ export default function SongsPage() {
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Uploading…" : "Upload song"}
             </Button>
+            {isSubmitting && (
+              <div className="mt-3 space-y-1">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>
+                    {uploadProgress > 0 ? "Uploading file..." : "Creating record..."}
+                  </span>
+                  <span>{uploadProgress > 0 ? `${uploadProgress}%` : ""}</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full bg-primary transition-all duration-200"
+                    style={{
+                      width: uploadProgress > 0 ? `${uploadProgress}%` : "10%",
+                    }}
+                  />
+                </div>
+              </div>
+            )}
           </form>
         </CardContent>
       </Card>
