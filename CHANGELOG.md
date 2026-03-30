@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.2.5...v1.3.0) (2026-03-30)
+
+
+### Features
+
+* song upload UI — atomic two-step create+upload flow ([755d9dc](https://github.com/mini-app-polis/deejaytools-com/commit/755d9dc1b4e3c248b674340ebaae8456ccfd5d73))
+
 ## [1.2.5](https://github.com/mini-app-polis/deejaytools-com/compare/v1.2.4...v1.2.5) (2026-03-30)
 
 
