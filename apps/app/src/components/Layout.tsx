@@ -16,7 +16,10 @@ export default function Layout() {
     <div className="min-h-screen bg-background">
       <nav className="border-b px-6 h-14 flex items-center justify-between gap-4">
         <div className="flex items-center gap-6 min-w-0">
-          <span className="font-semibold shrink-0">DeeJay Tools</span>
+          <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2 }}>
+            <span className="font-semibold text-sm">DeejayTools.com</span>
+            <span className="text-xs text-muted-foreground">v{__APP_VERSION__}</span>
+          </div>
           <div className="flex items-center gap-4 flex-wrap">
             <NavLink to="/events" className={navClass}>
               Events
