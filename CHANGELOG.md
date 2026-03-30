@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.3.5...v1.4.0) (2026-03-30)
+
+
+### Features
+
+* partner validation, form reset, and upload progress bar ([c81babf](https://github.com/mini-app-polis/deejaytools-com/commit/c81babf53cfa94bec523999eea5797354bcc42d6))
+
 ## [1.3.5](https://github.com/mini-app-polis/deejaytools-com/compare/v1.3.4...v1.3.5) (2026-03-30)
 
 
