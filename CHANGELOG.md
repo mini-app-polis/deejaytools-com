@@ -1,3 +1,10 @@
+## [1.2.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.2.1...v1.2.2) (2026-03-30)
+
+
+### Bug Fixes
+
+* import version directly from root package.json ([a81ee36](https://github.com/mini-app-polis/deejaytools-com/commit/a81ee3609e4a9e8ba4d27423d8bd924d70832222))
+
 ## [1.2.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.2.0...v1.2.1) (2026-03-30)
 
 
