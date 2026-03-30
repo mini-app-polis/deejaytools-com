@@ -1,3 +1,10 @@
+## [1.0.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.0.3...v1.0.4) (2026-03-30)
+
+
+### Bug Fixes
+
+* copy index.html to 404.html for Cloudflare Pages SPA routing ([b56cf35](https://github.com/mini-app-polis/deejaytools-com/commit/b56cf35dc1cceb06f82c83b804c349b133618c1a))
+
 ## [1.0.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.0.2...v1.0.3) (2026-03-30)
 
 
