@@ -1,7 +1,7 @@
 import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
-import pkg from "./package.json";
+import pkg from "../../package.json";
 
 const api = process.env.VITE_API_URL ?? "http://localhost:3001";
 
