@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { app } from "../app.js";
 import {
+  assertErrorEnvelope,
   assertSuccessEnvelope,
   assertSuccessListEnvelope,
   assertValidation400,
@@ -184,5 +185,93 @@ describe("DELETE /v1/sessions/:id", () => {
     expect(res.status).toBe(200);
     const body = await readJson<SuccessEnvelope<{ deleted: boolean }>>(res);
     expect(body.data.deleted).toBe(true);
+  });
+});
+
+describe("GET /v1/sessions/:id", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+  });
+
+  it("returns 404 when session not found", async () => {
+    enqueueSelectResult([]);
+    const res = await app.request(`${BASE}/nonexistent`);
+    expect(res.status).toBe(404);
+    assertErrorEnvelope(await readJson<ErrorEnvelope>(res));
+  });
+
+  it("returns session with divisions and queue depth", async () => {
+    enqueueSelectResult([mockSession]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([]);
+    const res = await app.request(`${BASE}/s1`);
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<Record<string, unknown>>>(res);
+    assertSuccessEnvelope(body);
+    expect(body.data).toHaveProperty("divisions");
+    expect(body.data).toHaveProperty("queue_depth");
+  });
+});
+
+describe("PATCH /v1/sessions/:id", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+  });
+
+  it("returns 404 when session not found", async () => {
+    enqueueSelectResult([]);
+    const res = await app.request(`${BASE}/nonexistent`, {
+      method: "PATCH",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Updated" }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("updates session fields and returns 200", async () => {
+    const updated = { ...mockSession, name: "Updated Name" };
+    enqueueSelectResult([mockSession]);
+    enqueueSelectResult([updated]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([]);
+    const res = await app.request(`${BASE}/s1`, {
+      method: "PATCH",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Updated Name" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<Record<string, unknown>>>(res);
+    assertSuccessEnvelope(body);
+  });
+});
+
+describe("PUT /v1/sessions/:id/divisions", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+  });
+
+  it("returns 404 when session not found", async () => {
+    enqueueSelectResult([]);
+    const res = await app.request(`${BASE}/nonexistent/divisions`, {
+      method: "PUT",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ divisions: [] }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("replaces divisions and returns 200", async () => {
+    enqueueSelectResult([mockSession]);
+    enqueueSelectResult([mockSession]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([]);
+    const res = await app.request(`${BASE}/s1/divisions`, {
+      method: "PUT",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        divisions: [{ division_name: "Classic", is_priority: true }],
+      }),
+    });
+    expect(res.status).toBe(200);
   });
 });

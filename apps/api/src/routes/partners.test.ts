@@ -189,3 +189,68 @@ describe("DELETE /v1/partners/:id", () => {
     expect(res.status).toBe(204);
   });
 });
+
+describe("PATCH /v1/partners/:id", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+  });
+
+  it("returns 404 when partner not found", async () => {
+    enqueueSelectResult([]);
+    const res = await app.request(`${BASE}/nonexistent`, {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ first_name: "Updated" }),
+    });
+    expect(res.status).toBe(404);
+    assertErrorEnvelope(await readJson<ErrorEnvelope>(res));
+  });
+
+  it("returns 400 when first_name is empty string", async () => {
+    enqueueSelectResult([
+      {
+        id: "p1",
+        userId: "user_test123",
+        firstName: "Jane",
+        lastName: "Doe",
+        email: null,
+        linkedUserId: null,
+        partnerRole: "follower" as const,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ]);
+    const res = await app.request(`${BASE}/p1`, {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ first_name: "   " }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("updates partner and returns 200", async () => {
+    const existing = {
+      id: "p1",
+      userId: "user_test123",
+      firstName: "Jane",
+      lastName: "Doe",
+      email: null,
+      linkedUserId: null,
+      partnerRole: "follower" as const,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    const updated = { ...existing, firstName: "Janet" };
+    enqueueSelectResult([existing]);
+    enqueueSelectResult([updated]);
+    const res = await app.request(`${BASE}/p1`, {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ first_name: "Janet" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<Record<string, unknown>>>(res);
+    assertSuccessEnvelope(body);
+    expect(body.data).toMatchObject({ first_name: "Janet" });
+  });
+});
