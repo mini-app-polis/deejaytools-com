@@ -444,6 +444,7 @@ songRoutes.post("/:id/upload", requireAuth, async (c) => {
     bytes: inputBytes,
     newTitle,
     newArtist,
+    mimeType,
   });
 
   const uploadResult = await uploadSongToDrive(taggedBytes, {

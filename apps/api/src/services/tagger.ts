@@ -4,13 +4,24 @@ export interface TagSongInput {
   bytes: Buffer;
   newTitle: string;
   newArtist: string;
+  mimeType?: string;
 }
 
 export async function tagSongBytes({
   bytes,
   newTitle,
   newArtist,
+  mimeType,
 }: TagSongInput): Promise<Buffer> {
+  const isMp3 =
+    mimeType === "audio/mpeg" ||
+    mimeType === "audio/mp3" ||
+    mimeType === "audio/x-mp3";
+
+  if (!isMp3) {
+    return bytes;
+  }
+
   try {
     const existing = NodeID3.read(bytes);
     const prevTitle = typeof existing === "object" ? (existing.title ?? "") : "";
