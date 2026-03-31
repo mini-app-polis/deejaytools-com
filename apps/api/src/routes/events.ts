@@ -2,6 +2,7 @@ import {
   CommonErrors,
   EventStatusSchema,
   success,
+  successList,
 } from "@deejaytools/ts-utils";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
@@ -33,9 +34,9 @@ function mapEvent(row: typeof events.$inferSelect) {
   };
 }
 
-eventRoutes.get("/", requireAuth, async (c) => {
+eventRoutes.get("/", async (c) => {
   const rows = await db.select().from(events).orderBy(desc(events.createdAt));
-  return c.json(success(rows.map(mapEvent)));
+  return c.json(successList(rows.map(mapEvent)));
 });
 
 eventRoutes.get("/:id", requireAuth, async (c) => {

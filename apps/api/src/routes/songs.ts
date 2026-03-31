@@ -14,10 +14,10 @@ const listQuery = z.object({
 });
 
 const createBody = z.object({
-  partner_id: z.string().nullable().optional(),
+  partner_id: z.string().optional(),
   display_name: z.string().optional(),
   original_filename: z.string().optional(),
-  division: z.string().nullable().optional(),
+  division: z.string().min(1, "division is required"),
   routine_name: z.string().nullable().optional(),
   personal_descriptor: z.string().nullable().optional(),
   season_year: z.string().optional(),
