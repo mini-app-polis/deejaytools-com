@@ -1,3 +1,15 @@
+# [1.8.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.7.0...v1.8.0) (2026-03-31)
+
+
+### Bug Fixes
+
+* handle FK constraints on partner delete and add loading state ([b2c833c](https://github.com/mini-app-polis/deejaytools-com/commit/b2c833c1529918784ab5f927c55f6f7b7ef633bf))
+
+
+### Features
+
+* show association warnings before partner delete ([25eefb7](https://github.com/mini-app-polis/deejaytools-com/commit/25eefb7b9a9b056504304cd8f6f8cb4468976aff))
+
 # [1.7.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.6.0...v1.7.0) (2026-03-30)
 
 
