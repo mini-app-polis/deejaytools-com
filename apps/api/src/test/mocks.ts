@@ -98,11 +98,17 @@ export function mockRequireAuth(userId = "user_test123", role: "user" | "admin" 
   }) as unknown as MiddlewareHandler;
 }
 
+const ADMIN_USER_ID = "user_admin123";
+
 export function mockRequireAdmin(userId = "user_admin123") {
   return vi.fn(async (c: Context, next: () => Promise<void>) => {
     const h = c.req.header("Authorization") ?? "";
     if (!h.startsWith("Bearer ")) {
       return c.json(CommonErrors.unauthorized(), 401);
+    }
+    const tokenUid = h.slice("Bearer mock-token-".length).trim();
+    if (tokenUid !== ADMIN_USER_ID) {
+      return c.json(CommonErrors.forbidden(), 403);
     }
     c.set("user", {
       userId,

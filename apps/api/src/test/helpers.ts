@@ -29,6 +29,10 @@ export function authHeaders(user: { userId: string } = MOCK_USER) {
   };
 }
 
+export function adminHeaders() {
+  return authHeaders(MOCK_ADMIN);
+}
+
 /** Single-resource or non-list success payloads (meta may omit count). */
 export function assertSuccessEnvelope(body: unknown) {
   expect(body).toMatchObject({
