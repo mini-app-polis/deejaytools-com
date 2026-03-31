@@ -170,8 +170,11 @@ export default function PartnersPage() {
       setDeleteTarget(null);
       setDeleteAssociations(null);
       toast.success("Partner removed.");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete partner.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to delete partner.";
+      toast.error(msg);
+      setDeleteTarget(null);
+      setDeleteAssociations(null);
     } finally {
       setIsDeleting(false);
     }

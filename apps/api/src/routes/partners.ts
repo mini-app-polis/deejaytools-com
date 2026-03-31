@@ -10,7 +10,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { and, asc, count, eq, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { checkins, pairs, partners, songs } from "../db/schema.js";
+import { checkins, eventRegistrations, pairs, partners, songs } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
 
 const createBody = z.object({
@@ -211,13 +211,17 @@ partnerRoutes.delete("/:id", requireAuth, async (c) => {
     );
   }
 
-  const now = Date.now();
   await db
     .update(songs)
-    .set({ partnerId: null, updatedAt: now })
+    .set({ partnerId: null })
     .where(and(eq(songs.partnerId, id), eq(songs.userId, userId)));
 
   await db.update(pairs).set({ partnerBId: null }).where(eq(pairs.partnerBId, id));
+
+  await db
+    .update(eventRegistrations)
+    .set({ partnerId: null })
+    .where(and(eq(eventRegistrations.partnerId, id), eq(eventRegistrations.userId, userId)));
 
   await db.delete(partners).where(and(eq(partners.id, id), eq(partners.userId, userId)));
   return c.body(null, 204);
