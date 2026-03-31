@@ -63,6 +63,11 @@ const partnerSchema = z.object({
 
 type PartnerForm = z.infer<typeof partnerSchema>;
 
+type DeleteAssociations = {
+  song_count: number;
+  has_active_checkin: boolean;
+};
+
 export default function PartnersPage() {
   const api = useApiClient();
   const [partners, setPartners] = useState<PartnerRow[] | null>(null);
@@ -70,6 +75,8 @@ export default function PartnersPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<PartnerRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PartnerRow | null>(null);
+  const [deleteAssociations, setDeleteAssociations] = useState<DeleteAssociations | null>(null);
+  const [isCheckingAssociations, setIsCheckingAssociations] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isFormSubmitting, setIsFormSubmitting] = useState(false);
 
@@ -138,6 +145,22 @@ export default function PartnersPage() {
     }
   });
 
+  const handleDeleteClick = async (partner: PartnerRow) => {
+    setDeleteTarget(partner);
+    setDeleteAssociations(null);
+    setIsCheckingAssociations(true);
+    try {
+      const result = await api.get<DeleteAssociations>(
+        `/v1/partners/${partner.id}/associations`
+      );
+      setDeleteAssociations(result);
+    } catch {
+      setDeleteAssociations({ song_count: 0, has_active_checkin: false });
+    } finally {
+      setIsCheckingAssociations(false);
+    }
+  };
+
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setIsDeleting(true);
@@ -145,12 +168,18 @@ export default function PartnersPage() {
       await api.del(`/v1/partners/${deleteTarget.id}`);
       setPartners((prev) => prev?.filter((p) => p.id !== deleteTarget.id) ?? null);
       setDeleteTarget(null);
+      setDeleteAssociations(null);
       toast.success("Partner removed.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete partner.");
     } finally {
       setIsDeleting(false);
     }
+  };
+
+  const closeDeleteDialog = () => {
+    setDeleteTarget(null);
+    setDeleteAssociations(null);
   };
 
   if (loading && !partners) {
@@ -204,7 +233,11 @@ export default function PartnersPage() {
                   <Button variant="outline" size="sm" onClick={() => openEdit(p)}>
                     Edit
                   </Button>
-                  <Button variant="destructive" size="sm" onClick={() => setDeleteTarget(p)}>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => void handleDeleteClick(p)}
+                  >
                     Delete
                   </Button>
                 </TableCell>
@@ -296,7 +329,12 @@ export default function PartnersPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) closeDeleteDialog();
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Remove partner?</DialogTitle>
@@ -304,14 +342,34 @@ export default function PartnersPage() {
           <p className="text-sm text-muted-foreground">
             {deleteTarget?.first_name} {deleteTarget?.last_name} will be removed from your list.
           </p>
+          {isCheckingAssociations ? (
+            <p className="text-sm text-muted-foreground">Checking linked data…</p>
+          ) : deleteAssociations?.has_active_checkin ? (
+            <p className="text-sm text-destructive">
+              This partner has an active check-in and cannot be deleted. Complete or withdraw the
+              check-in first.
+            </p>
+          ) : deleteAssociations && deleteAssociations.song_count > 0 ? (
+            <p className="text-sm text-muted-foreground">
+              This partner is linked to {deleteAssociations.song_count} song
+              {deleteAssociations.song_count === 1 ? "" : "s"}. Deleting will remove the partner from
+              those songs.
+            </p>
+          ) : deleteAssociations != null ? (
+            <p className="text-sm text-muted-foreground">This action cannot be undone.</p>
+          ) : null}
           <DialogFooter>
-            <Button variant="secondary" onClick={() => setDeleteTarget(null)}>
+            <Button variant="secondary" onClick={closeDeleteDialog} disabled={isDeleting}>
               Cancel
             </Button>
             <Button
               variant="destructive"
               onClick={() => void confirmDelete()}
-              disabled={isDeleting}
+              disabled={
+                isDeleting ||
+                isCheckingAssociations ||
+                !!deleteAssociations?.has_active_checkin
+              }
             >
               {isDeleting ? "Removing..." : "Delete"}
             </Button>

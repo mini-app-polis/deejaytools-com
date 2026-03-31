@@ -8,9 +8,9 @@ import {
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, eq, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { checkins, pairs, partners } from "../db/schema.js";
+import { checkins, pairs, partners, songs } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
 
 const createBody = z.object({
@@ -77,6 +77,45 @@ partnerRoutes.post("/", requireAuth, zValidator("json", createBody), async (c) =
   });
   const [row] = await db.select().from(partners).where(eq(partners.id, id)).limit(1);
   return c.json(success(mapPartner(row!)), 201);
+});
+
+partnerRoutes.get("/:id/associations", requireAuth, async (c) => {
+  const userId = c.get("user").userId;
+  const id = c.req.param("id");
+
+  const [existing] = await db
+    .select()
+    .from(partners)
+    .where(and(eq(partners.id, id), eq(partners.userId, userId)))
+    .limit(1);
+
+  if (!existing) {
+    return c.json(CommonErrors.notFound("Partner"), 404);
+  }
+
+  const [songCountRow] = await db
+    .select({ c: count() })
+    .from(songs)
+    .where(and(eq(songs.partnerId, id), eq(songs.userId, userId)));
+
+  const [activeHit] = await db
+    .select({ id: checkins.id })
+    .from(checkins)
+    .innerJoin(pairs, eq(pairs.id, checkins.pairId))
+    .where(
+      and(
+        eq(pairs.partnerBId, id),
+        inArray(checkins.status, ["waiting", "on_deck", "running"])
+      )
+    )
+    .limit(1);
+
+  return c.json(
+    success({
+      song_count: Number(songCountRow?.c ?? 0),
+      has_active_checkin: !!activeHit,
+    })
+  );
 });
 
 partnerRoutes.get("/:id", requireAuth, async (c) => {
@@ -171,6 +210,14 @@ partnerRoutes.delete("/:id", requireAuth, async (c) => {
       409
     );
   }
+
+  const now = Date.now();
+  await db
+    .update(songs)
+    .set({ partnerId: null, updatedAt: now })
+    .where(and(eq(songs.partnerId, id), eq(songs.userId, userId)));
+
+  await db.update(pairs).set({ partnerBId: null }).where(eq(pairs.partnerBId, id));
 
   await db.delete(partners).where(and(eq(partners.id, id), eq(partners.userId, userId)));
   return c.body(null, 204);
