@@ -1,3 +1,15 @@
+# [1.9.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.8.0...v1.9.0) (2026-03-31)
+
+
+### Bug Fixes
+
+* skip ID3 tagging for non-MP3 audio formats ([b7e366e](https://github.com/mini-app-polis/deejaytools-com/commit/b7e366e033e279ed33dff5d149f1b58ac5d1f61f))
+
+
+### Features
+
+* multi-format audio tagging — MP3, WAV, m4a, FLAC ([b8d81d3](https://github.com/mini-app-polis/deejaytools-com/commit/b8d81d3dcab44e540e5c90a600991983c6e4a200))
+
 # [1.8.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.7.0...v1.8.0) (2026-03-31)
 
 
