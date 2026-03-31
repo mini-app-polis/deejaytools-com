@@ -49,7 +49,9 @@ const TEST_ENV = {
 function resetDriveTestState() {
   vi.resetAllMocks();
   mocks.mockGoogleDrive.mockImplementation(() => mocks.driveApi);
-  vi.mocked(JWT).mockImplementation(() => ({ type: "jwt" }));
+  vi.mocked(JWT).mockImplementation(
+    () => ({ type: "jwt" }) as unknown as InstanceType<typeof JWT>
+  );
   Object.assign(process.env, TEST_ENV);
 }
 

@@ -61,15 +61,9 @@ pnpm typecheck
 pnpm lint
 ```
 
-Initialize shadcn/ui later (not part of this scaffold):
-
-```bash
-cd apps/app && npx shadcn@latest init
-```
-
 ## Environment
 
-- **API**: `DATABASE_URL`, `CLERK_JWKS_URL`, `CORS_ORIGINS`, `PORT`, optional Google Drive vars for future uploads.
+- **API**: `DATABASE_URL`, `CLERK_JWKS_URL`, `CORS_ORIGINS`, `PORT`, `TICK_SECRET`, `SENTRY_DSN`. Google Drive vars required for song upload: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`, `GOOGLE_DRIVE_PARENT_FOLDER_ID`.
 - **App**: `VITE_API_URL` (defaults to proxy target in dev), `VITE_CLERK_PUBLISHABLE_KEY`.
 
 ## Versioning

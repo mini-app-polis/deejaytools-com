@@ -37,3 +37,22 @@ Layer 1 (liveness): Railway auto-restart. Layer 2 (structured logs): kaiano-ts-u
 
 **Session status via cron tick**
 Session status transitions (scheduled → checkin_open → in_progress → completed) are driven by `GET /internal/tick` called by a Railway cron job every minute. Protected by `x-tick-secret` header. Replaces Cloudflare Workers' native `scheduled()` handler.
+
+## Music management
+
+**Partner dance role on the partner record, not the user**
+Each partner relationship has a `partner_role` field (`leader` | `follower`) representing the partner's role. The uploading user's role is always the opposite. This allows the same user to be a leader with one partner and a follower with another. The role lives on the partner record rather than the user because it varies per relationship.
+
+**Filename ordering: always leader_follower**
+Processed filenames always put the leader name first regardless of who uploaded the song. The server resolves ordering at upload time based on `partner_role`: if the partner is a follower, the uploading user is the leader (user name first); if the partner is a leader, the uploading user is the follower (partner name first). Solo uploads use the user name only.
+
+Format: `{leader}_{follower}_{division}_{seasonYear}_{routineName}_{descriptor}_v{N}.{ext}`
+
+**Two-step atomic upload pattern**
+Song creation is split into two API calls: `POST /v1/songs` (JSON metadata, creates the DB record) and `POST /v1/songs/:id/upload` (multipart file, tags and uploads to Drive, updates the record). The frontend orchestrates both as a single atomic operation — if the upload fails after the record is created, the frontend deletes the record automatically. This keeps the API clean while giving the user a single-step experience.
+
+**Per-format audio tagging**
+ID3 tags (via `node-id3`) for MP3 and WAV. Vorbis comments (via `flac-tagger`) for FLAC. iTunes-style ilst atoms (manual Buffer manipulation) for m4a. All other formats pass through untagged. Each format preserves existing tags in a comment field as `prev[title=...,artist=...]` before overwriting.
+
+**Divisions list hardcoded**
+The 15 WCS divisions are hardcoded in the frontend. Admin-configurable divisions are deferred — when the floor trial UX is revisited, a divisions management UI should be part of that pass since session divisions and song divisions share the same list.
