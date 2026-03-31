@@ -1,3 +1,10 @@
+# [1.10.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.9.0...v1.10.0) (2026-03-31)
+
+
+### Features
+
+* testing milestone — 103 tests, multi-format audio tagging ([55db116](https://github.com/mini-app-polis/deejaytools-com/commit/55db11637d7bd40a0f0907a03421883c5213c604))
+
 # [1.9.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.8.0...v1.9.0) (2026-03-31)
 
 
