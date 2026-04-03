@@ -6,32 +6,32 @@
 
 @layer base {
   :root {
-    --background: 0 0% 4%;
-    --foreground: 35 15% 94%;
+    --background: 0 0% 7%;
+    --foreground: 35 20% 96%;
 
-    --card: 0 0% 6%;
-    --card-foreground: 35 15% 94%;
+    --card: 0 0% 11%;
+    --card-foreground: 35 20% 96%;
 
-    --popover: 0 0% 7%;
-    --popover-foreground: 35 15% 94%;
+    --popover: 0 0% 13%;
+    --popover-foreground: 35 20% 96%;
 
-    --primary: 35 15% 94%;
-    --primary-foreground: 0 0% 4%;
+    --primary: 35 20% 96%;
+    --primary-foreground: 0 0% 7%;
 
-    --secondary: 0 0% 10%;
-    --secondary-foreground: 35 15% 75%;
+    --secondary: 0 0% 16%;
+    --secondary-foreground: 35 15% 85%;
 
-    --muted: 0 0% 10%;
-    --muted-foreground: 35 8% 45%;
+    --muted: 0 0% 16%;
+    --muted-foreground: 35 8% 62%;
 
-    --accent: 0 0% 12%;
-    --accent-foreground: 35 15% 94%;
+    --accent: 0 0% 18%;
+    --accent-foreground: 35 20% 96%;
 
     --destructive: 0 72% 51%;
-    --destructive-foreground: 35 15% 94%;
+    --destructive-foreground: 35 20% 96%;
 
-    --border: 0 0% 14%;
-    --input: 0 0% 10%;
+    --border: 0 0% 22%;
+    --input: 0 0% 14%;
     --ring: 35 15% 60%;
 
     --radius: 0.5rem;
@@ -44,19 +44,13 @@
   body {
     @apply bg-background text-foreground;
     font-family: 'DM Sans', 'Helvetica Neue', Arial, sans-serif;
-    font-weight: 300;
+    font-weight: 400;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-weight: 400;
-    letter-spacing: -0.015em;
-  }
-
-  /* Monospace labels — apply sparingly */
-  .mono {
-    font-family: 'DM Mono', monospace;
     font-weight: 500;
+    letter-spacing: -0.015em;
   }
 }
