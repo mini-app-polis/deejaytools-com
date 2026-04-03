@@ -66,7 +66,7 @@ legacySongRoutes.get("/", zValidator("query", listQuery), async (c) => {
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(legacySongs.partnership);
 
-  logger.info({ event: "legacy_songs_listed", category: "api", count: rows.length });
+  logger.info({ event: "legacy_songs_listed", category: "api" });
 
   return c.json(successList(rows));
 });
