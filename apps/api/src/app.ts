@@ -8,6 +8,7 @@ import { db } from "./db/index.js";
 import { authRoutes } from "./routes/auth.js";
 import { checkinRoutes } from "./routes/checkins.js";
 import { eventRoutes } from "./routes/events.js";
+import { legacySongRoutes } from "./routes/legacy-songs.js";
 import { partnerRoutes } from "./routes/partners.js";
 import { sessionRoutes } from "./routes/sessions.js";
 import { slotRoutes } from "./routes/slots.js";
@@ -57,6 +58,7 @@ app.route("/v1/checkins", checkinRoutes);
 app.route("/v1/slots", slotRoutes);
 app.route("/v1/partners", partnerRoutes);
 app.route("/v1/songs", songRoutes);
+app.route("/v1/legacy-songs", legacySongRoutes);
 
 app.notFound((c) => c.json(CommonErrors.notFound(), 404));
 
