@@ -1,3 +1,10 @@
+# [1.12.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.11.0...v1.12.0) (2026-04-03)
+
+
+### Features
+
+* style overhall ([3e3173f](https://github.com/mini-app-polis/deejaytools-com/commit/3e3173ff893b30966990810816e13f6ff137e3cb))
+
 # [1.11.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.10.0...v1.11.0) (2026-04-03)
 
 
