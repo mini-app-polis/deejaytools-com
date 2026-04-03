@@ -1,3 +1,15 @@
+# [1.11.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.10.0...v1.11.0) (2026-04-03)
+
+
+### Bug Fixes
+
+* legacy songs endpoint ([b32c773](https://github.com/mini-app-polis/deejaytools-com/commit/b32c77374f4427fd96d34b404342c37f1ffe07c2))
+
+
+### Features
+
+* supporting legacy songs pre platform, and adding landing page ([becf14e](https://github.com/mini-app-polis/deejaytools-com/commit/becf14e4cb480a97ef03ed5066d2288d7a42de98))
+
 # [1.10.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.9.0...v1.10.0) (2026-03-31)
 
 
