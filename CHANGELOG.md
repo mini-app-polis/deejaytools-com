@@ -1,3 +1,10 @@
+## [1.12.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.12.1...v1.12.2) (2026-04-03)
+
+
+### Bug Fixes
+
+* UI ([5ab9703](https://github.com/mini-app-polis/deejaytools-com/commit/5ab9703abe8b90c5000d2abde4a1167e8faa58db))
+
 ## [1.12.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.12.0...v1.12.1) (2026-04-03)
 
 
