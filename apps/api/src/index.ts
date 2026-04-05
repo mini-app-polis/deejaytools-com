@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { serve } from "@hono/node-server";
-import { createLogger } from "@deejaytools/ts-utils";
+import { createLogger } from "common-typescript-utils";
 import { app } from "./app.js";
 
 const logger = createLogger("deejaytools-api");

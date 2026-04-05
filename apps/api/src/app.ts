@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/node";
-import { CommonErrors, createLogger, success } from "@deejaytools/ts-utils";
+import { CommonErrors, createLogger, success } from "common-typescript-utils";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger as honoLogger } from "hono/logger";

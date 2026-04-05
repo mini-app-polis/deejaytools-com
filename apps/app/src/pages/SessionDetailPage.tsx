@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { QueueTypeSchema } from "@deejaytools/ts-utils";
+import { QueueTypeSchema } from "@deejaytools/schemas";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useParams } from "react-router-dom";

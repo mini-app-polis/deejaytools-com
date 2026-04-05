@@ -41,13 +41,11 @@ Target: 75% statements.
 
 ---
 
-## kaiano-ts-utils extraction
+## common-typescript-utils versioning
 
-`packages/ts-utils` lives in this monorepo. Once the API is stable and the
-library interface stops changing, extract to its own repo and publish to
-GitHub Packages. The package is already structured as publishable.
-
-Blockers: API interface stability.
+Generic utilities are consumed from the published `common-typescript-utils`
+npm package. When adding or changing shared helpers, coordinate releases there
+and bump the dependency in this repo.
 
 ---
 

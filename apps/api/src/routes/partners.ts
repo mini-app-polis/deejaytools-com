@@ -1,10 +1,5 @@
-import {
-  CommonErrors,
-  PartnerRoleSchema,
-  error,
-  success,
-  successList,
-} from "@deejaytools/ts-utils";
+import { CommonErrors, error, success, successList } from "common-typescript-utils";
+import { PartnerRoleSchema } from "@deejaytools/schemas";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";

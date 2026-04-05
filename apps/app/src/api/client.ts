@@ -1,4 +1,5 @@
-import type { ErrorEnvelope, PartnerRole, SuccessEnvelope } from "@deejaytools/ts-utils";
+import type { ErrorEnvelope, SuccessEnvelope } from "common-typescript-utils";
+import type { PartnerRole } from "@deejaytools/schemas";
 
 /** Partner record from `/v1/partners`. */
 export type Partner = {

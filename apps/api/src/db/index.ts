@@ -1,4 +1,4 @@
-import { createLogger } from "@deejaytools/ts-utils";
+import { createLogger } from "common-typescript-utils";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema.js";

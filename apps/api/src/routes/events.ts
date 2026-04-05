@@ -1,9 +1,5 @@
-import {
-  CommonErrors,
-  EventStatusSchema,
-  success,
-  successList,
-} from "@deejaytools/ts-utils";
+import { CommonErrors, success, successList } from "common-typescript-utils";
+import { EventStatusSchema } from "@deejaytools/schemas";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";

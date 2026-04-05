@@ -1,4 +1,4 @@
-import { createLogger, success, successList } from "@deejaytools/ts-utils";
+import { createLogger, successList } from "common-typescript-utils";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";

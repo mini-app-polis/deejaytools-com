@@ -27,13 +27,13 @@ The old platform auto-determined queue type server-side based on division `is_pr
 
 ## Shared library
 
-**kaiano-ts-utils in-repo**
-`packages/ts-utils` lives inside this monorepo during development rather than as a published package. Will be extracted to its own repo (`kaiano-ts-utils`) and published to GitHub Packages once the API is stable and the library interface has stopped changing. Extraction is a one-afternoon job — the package is already structured as publishable.
+**common-typescript-utils (npm) + @deejaytools/schemas (workspace)**
+Generic cross-project utilities (structured logger, success/error envelopes, Clerk `verifyClerkToken`, `UserRoleSchema`, pagination helpers) ship as [`common-typescript-utils`](https://www.npmjs.com/package/common-typescript-utils) on npm. Deejaytools-specific Zod enums (`SessionStatusSchema`, `DivisionSchema`, `PartnerRoleSchema`, etc.) live in `packages/schemas` so the API and app stay aligned without coupling domain types to the generic library.
 
 ## Observability
 
 **Three-layer stack**
-Layer 1 (liveness): Railway auto-restart. Layer 2 (structured logs): kaiano-ts-utils logger emitting JSON with standard shape. Layer 3 (exceptions): Sentry capturing unhandled errors. Each layer covers a distinct failure mode.
+Layer 1 (liveness): Railway auto-restart. Layer 2 (structured logs): `common-typescript-utils` logger emitting JSON with standard shape. Layer 3 (exceptions): Sentry capturing unhandled errors. Each layer covers a distinct failure mode.
 
 **Session status via cron tick**
 Session status transitions (scheduled → checkin_open → in_progress → completed) are driven by `GET /internal/tick` called by a Railway cron job every minute. Protected by `x-tick-secret` header. Replaces Cloudflare Workers' native `scheduled()` handler.

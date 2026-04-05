@@ -13,7 +13,8 @@
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.20.0",
-    "@deejaytools/ts-utils": "workspace:*",
+    "@deejaytools/schemas": "workspace:*",
+    "common-typescript-utils": "^1.0.1",
     "@eslint/js": "^9.16.0",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-dialog": "^1.1.15",

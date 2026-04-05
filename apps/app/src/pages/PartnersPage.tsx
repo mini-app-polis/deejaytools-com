@@ -1,4 +1,4 @@
-import { PartnerRoleSchema, type PartnerRole } from "@deejaytools/ts-utils";
+import { PartnerRoleSchema, type PartnerRole } from "@deejaytools/schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";

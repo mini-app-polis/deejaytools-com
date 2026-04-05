@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import * as tsUtils from "@deejaytools/ts-utils";
+import * as ctu from "common-typescript-utils";
 import { app } from "../app.js";
 import {
   assertErrorEnvelope,
@@ -11,8 +11,8 @@ import {
 } from "../test/helpers.js";
 import { enqueueSelectResult, resetSelectQueue } from "../test/mocks.js";
 
-vi.mock("@deejaytools/ts-utils", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@deejaytools/ts-utils")>();
+vi.mock("common-typescript-utils", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("common-typescript-utils")>();
   return {
     ...actual,
     verifyClerkToken: vi.fn(),
@@ -24,7 +24,7 @@ vi.mock("../db/index.js", async () => {
   return { db };
 });
 
-const verifyClerkToken = vi.mocked(tsUtils.verifyClerkToken);
+const verifyClerkToken = vi.mocked(ctu.verifyClerkToken);
 
 describe("POST /v1/auth/sync", () => {
   beforeEach(() => {

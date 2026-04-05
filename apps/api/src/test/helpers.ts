@@ -1,4 +1,4 @@
-import type { ErrorEnvelope, SuccessEnvelope } from "@deejaytools/ts-utils";
+import type { ErrorEnvelope, SuccessEnvelope } from "common-typescript-utils";
 import { expect } from "vitest";
 
 export type { ErrorEnvelope, SuccessEnvelope };
