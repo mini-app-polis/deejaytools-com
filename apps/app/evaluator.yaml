@@ -1,0 +1,12 @@
+# deejaytools-com-app / evaluator.yaml
+# Per-repo evaluation configuration — ecosystem-standards ADR-001, ADR-002
+# Note: this repo lives at apps/app inside the deejaytools-com monorepo.
+
+type: react-app
+
+exemptions:
+  - rule: CD-002
+    reason: "React app uses @sentry/react for client-side error tracking, not sentry-sdk. The package variant differs but Sentry is present — this is a correct implementation for a browser context, not an absence of observability."
+
+# TEST-001/002/003/004 covered by react-app type scoping.
+# XSTACK-001 covered by react-app type scoping (shared library required).

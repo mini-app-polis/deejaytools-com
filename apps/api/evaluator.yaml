@@ -1,0 +1,8 @@
+# deejaytools-com-api / evaluator.yaml
+# Per-repo evaluation configuration — ecosystem-standards ADR-001, ADR-002
+# Note: this repo lives at apps/api inside the deejaytools-com monorepo.
+
+type: api-service
+
+# TEST-001/002/004 covered by api-service type scoping.
+# No exemptions or deferrals needed.
