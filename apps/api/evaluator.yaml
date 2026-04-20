@@ -4,5 +4,25 @@
 
 type: api-service
 
+exemptions:
+  - rule: CD-010
+    reason: >-
+      Evaluator false positive — the three-layer observability check runs Python-specific patterns (sentry_sdk.init, common-python-utils logger) against this TypeScript service. Actual state: @sentry/node is imported and initialised in src/app.ts (lines 1, 20), and createLogger from common-typescript-utils is used throughout (db/index.ts, services/cron.ts, middleware/auth.ts, routes/*). All three observability layers are in place with the correct TypeScript-ecosystem packages. To remove this exemption, update check_observability_layers in evaluator-cog to scope its Python patterns to Python services only and add equivalent TypeScript patterns (@sentry/node, common-typescript-utils createLogger) for TS services.
+
+  - rule: PRIN-005
+    reason: >-
+      Same root cause as CD-010 — Sentry and structured logging are both present via the TypeScript-ecosystem packages. The LLM conformance pass reported this from an 8-day-old run before the evaluator was scoped to check language-appropriate observability stacks.
+
+  - rule: API-011
+    reason: >-
+      Database migrations use Drizzle ORM and run at Railway deploy time via the service's release hook, not in ci.yml — see apps/api/docs/decisions/ADR-0001-drizzle-migrations-at-deploy.md. The check's 'drizzle-kit push/migrate in ci.yml' requirement is a different migration-timing decision than this repo's.
+
+  - rule: API-004
+    reason: >-
+      Effective route /internal/tick is intentionally unversioned — it is the Railway cron hook target and must be reachable at a stable version-independent path. Authentication is via the TICK_SECRET header check, not Clerk. All substantive API routes are mounted under /v1/. See src/app.ts for the inline intent marker.
+
+  - rule: XSTACK-002
+    reason: >-
+      Evaluator false positive — src/test/mocks.ts is test fixture code that constructs mock Hono Context responses with c.json. The check cannot distinguish between production route handlers and test-only mocks that mirror handler shape. Test fixtures correctly bypass the success/error envelope helpers because they are simulating Context behavior, not producing real responses. To remove this exemption, update check_hono_envelope_helpers in evaluator-cog to exclude files under src/test/ or **/test/ or *.test.ts.
+
 # TEST-001/002/004 covered by api-service type scoping.
-# No exemptions or deferrals needed.
