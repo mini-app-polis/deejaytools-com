@@ -8,5 +8,9 @@ exemptions:
   - rule: CD-002
     reason: "React app uses @sentry/react for client-side error tracking, not sentry-sdk. The package variant differs but Sentry is present — this is a correct implementation for a browser context, not an absence of observability."
 
+  - rule: TEST-013
+    reason: >-
+      Evaluator false positive — the check flags any setTimeout call with a hardcoded number as a production timeout that should be sourced from env. In a React app, setTimeout is used extensively for UI timing (toast fades, animation transitions, progress-bar finish-before-hide effects) where the value is a visual design choice, not a production-critical timeout. Specific hit: src/pages/SongsPage.tsx:219 is a 400ms delay between upload-progress-100% and the success toast, giving the progress bar time to visually complete. To remove this exemption, update check_hardcoded_timeouts in evaluator-cog to skip setTimeout calls in React/Astro source files, or scope the check to retry/HTTP/Prefect-task contexts only.
+
 # TEST-001/002/003/004 covered by react-app type scoping.
 # XSTACK-001 covered by react-app type scoping (shared library required).
