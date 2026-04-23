@@ -1,3 +1,10 @@
+## [1.13.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.13.1...v1.13.2) (2026-04-23)
+
+
+### Bug Fixes
+
+* **api:** move build tooling to dependencies to unblock Railway deploy ([a11a410](https://github.com/mini-app-polis/deejaytools-com/commit/a11a410d53849920aed7719f13b5215452be2cb7))
+
 ## [1.13.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.13.0...v1.13.1) (2026-04-23)
 
 
