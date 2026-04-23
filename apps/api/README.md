@@ -68,6 +68,26 @@ runtime:
 - `TICK_SECRET` — optional; required to call `/internal/tick`.
 - `NODE_ENV` — defaults to `development`.
 
+## Running locally
+
+Prerequisites:
+- **Node 22** (see the Stack table). Use `nvm use` or your version manager to match.
+- **pnpm 9+** — `npm install -g pnpm` if not already installed.
+- **PostgreSQL** running locally, or a connection string to a hosted instance.
+
+From the monorepo root:
+
+```bash
+pnpm install              # install all workspace dependencies
+pnpm --filter api dev     # start the API in watch mode
+pnpm --filter api test    # run the vitest suite
+pnpm --filter api build   # produce the production build
+```
+
+Plain `pnpm dev` and `pnpm test` at the monorepo root fan out via the root-level scripts (`dev:api`, `dev:app`, and `test` which runs `pnpm -r test`). Use the filtered forms when you want to target the api app specifically.
+
+Copy `apps/api/.env.example` to `apps/api/.env.local` and fill in the required variables listed under Environment variables.
+
 ## Migrations
 
 Managed by Drizzle ORM. Migration files live under `apps/api/drizzle/`.
