@@ -1,3 +1,10 @@
+## [1.13.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.13.0...v1.13.1) (2026-04-23)
+
+
+### Bug Fixes
+
+* **railway:** install devDependencies for build and db:migrate (closes tsc not found) ([23f98af](https://github.com/mini-app-polis/deejaytools-com/commit/23f98af45d8a6d47b1db6869e63b125f8a222846))
+
 # [1.13.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.12.2...v1.13.0) (2026-04-05)
 
 
