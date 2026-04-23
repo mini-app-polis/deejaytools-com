@@ -1,3 +1,11 @@
+## [1.13.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.13.3...v1.13.4) (2026-04-23)
+
+
+### Bug Fixes
+
+* **schemas:** build and ship compiled JS so runtime can import it ([1f254fc](https://github.com/mini-app-polis/deejaytools-com/commit/1f254fcf6e4489e3fb6936646d1667f263cdf99a))
+* **typecheck:** build @deejaytools/schemas before consumers typecheck ([088f8c7](https://github.com/mini-app-polis/deejaytools-com/commit/088f8c75b01dd64bcc3cc9980f9914e4abc9cf24))
+
 ## [1.13.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.13.2...v1.13.3) (2026-04-23)
 
 
