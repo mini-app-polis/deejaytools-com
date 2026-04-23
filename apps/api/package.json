@@ -22,6 +22,7 @@
     "@hono/zod-validator": "^0.4.2",
     "@sentry/node": "^10.46.0",
     "dotenv": "^16.4.7",
+    "drizzle-kit": "^0.30.1",
     "drizzle-orm": "^0.38.3",
     "flac-tagger": "^2.0.0",
     "google-auth-library": "^10.6.2",
@@ -31,15 +32,14 @@
     "music-metadata": "^11.12.3",
     "node-id3": "^0.2.9",
     "postgres": "^3.4.5",
+    "typescript": "^5.7.2",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/multer": "^2.1.0",
     "@types/node": "^22.10.2",
     "@vitest/coverage-v8": "^2.1.8",
-    "drizzle-kit": "^0.30.1",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2",
     "vitest": "^2.1.8",
     "xlsx": "^0.18.5"
   }
