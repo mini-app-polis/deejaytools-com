@@ -25,4 +25,8 @@ exemptions:
     reason: >-
       Evaluator false positive — src/test/mocks.ts is test fixture code that constructs mock Hono Context responses with c.json. The check cannot distinguish between production route handlers and test-only mocks that mirror handler shape. Test fixtures correctly bypass the success/error envelope helpers because they are simulating Context behavior, not producing real responses. To remove this exemption, update check_hono_envelope_helpers in evaluator-cog to exclude files under src/test/ or **/test/ or *.test.ts.
 
+  - rule: API-001
+    reason: >-
+      Railway deployment configuration lives at the monorepo root (/railway.toml), which is the correct location for a pnpm-monorepo-deployed service. The root-level railway.toml uses `pnpm install && pnpm --filter api build` as its buildCommand, targeting this app from the workspace root. Placing a separate apps/api/railway.toml would fragment deployment config and is not how Railway deploys pnpm monorepos. The API-001 check runs per-app without awareness that the monorepo-root config covers its apps; this is a checker-scoping gap, not a missing-config issue. To remove this exemption, update API-001 in evaluator-cog to check the monorepo root when evaluating an app within a monorepo workspace.
+
 # TEST-001/002/004 covered by api-service type scoping.
