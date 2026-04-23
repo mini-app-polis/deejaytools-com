@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@deejaytools/schemas": "workspace:*",
+    "@types/node": "^22.10.2",
     "common-typescript-utils": "^1.0.1",
     "@hono/node-server": "^1.13.7",
     "@hono/zod-validator": "^0.4.2",
@@ -37,7 +38,6 @@
   },
   "devDependencies": {
     "@types/multer": "^2.1.0",
-    "@types/node": "^22.10.2",
     "@vitest/coverage-v8": "^2.1.8",
     "tsx": "^4.19.2",
     "vitest": "^2.1.8",

@@ -56,6 +56,9 @@ importers:
       '@sentry/node':
         specifier: ^10.46.0
         version: 10.46.0
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.15
       common-typescript-utils:
         specifier: ^1.0.1
         version: 1.0.1
@@ -102,9 +105,6 @@ importers:
       '@types/multer':
         specifier: ^2.1.0
         version: 2.1.0
-      '@types/node':
-        specifier: ^22.10.2
-        version: 22.19.15
       '@vitest/coverage-v8':
         specifier: ^2.1.8
         version: 2.1.9(vitest@2.1.9(@types/node@22.19.15))
