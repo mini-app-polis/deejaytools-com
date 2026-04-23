@@ -1,3 +1,10 @@
+## [1.13.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.13.2...v1.13.3) (2026-04-23)
+
+
+### Bug Fixes
+
+* **api:** move @types/node to dependencies for Railway build ([78cada8](https://github.com/mini-app-polis/deejaytools-com/commit/78cada8029e357311da52cd5f4a1803177923610))
+
 ## [1.13.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.13.1...v1.13.2) (2026-04-23)
 
 
