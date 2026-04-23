@@ -1,14 +1,29 @@
 # Railway deployment config for the deejaytools-com monorepo.
 # The api app (apps/api) is the service deployed to Railway.
 # The web app (apps/app) deploys separately to Cloudflare Pages.
+# 
+# NPM_CONFIG_PRODUCTION=false is prepended to the pnpm commands that
+# need devDependencies:
+#   - Build: `tsc` (typescript) compiles the TypeScript source.
+#   - db:migrate: `drizzle-kit migrate` runs pending migrations.
+# Both tools live in devDependencies of apps/api/package.json, which
+# is correct (they are build/migration tools, not runtime deps).
+# Without this override, Railway's default NODE_ENV=production causes
+# pnpm to skip devDependencies, and both commands fail with
+# "not found" errors. The production `start` command does not need
+# devDependencies and runs under the normal production install.
 
 [build]
 builder = "NIXPACKS"
-buildCommand = "pnpm install && pnpm --filter api build"
+buildCommand = "NPM_CONFIG_PRODUCTION=false pnpm install && pnpm --filter api build"
 
 [deploy]
 # Run pending Drizzle migrations before the service starts (ADR-0001).
-startCommand = "pnpm --filter api db:migrate && pnpm --filter api start"
+# db:migrate needs drizzle-kit (a devDependency), so reinstall with
+# devDeps available before running it. The `start` step then runs
+# the already-built JS output (dist/index.js) and does not need
+# devDeps at runtime.
+startCommand = "NPM_CONFIG_PRODUCTION=false pnpm install --frozen-lockfile && pnpm --filter api db:migrate && pnpm --filter api start"
 healthcheckPath = "/health"
 healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"
