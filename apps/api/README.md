@@ -15,6 +15,10 @@ of the `deejaytools-com` monorepo at `apps/api/`.
 | Observability | Sentry (errors), common-typescript-utils logger (structured logs) |
 | Deployment | Railway (Procfile + `pnpm --filter api start`) |
 
+Auth verifies Clerk session JWTs only. Machine-to-machine (M2M)
+opaque-token verification is deferred — see [ADR-003](./docs/decisions/ADR-003-jwt-only-clerk-verification.md)
+for rationale and revisit triggers.
+
 ## Data inputs
 
 - **Clerk JWTs** on `Authorization: Bearer <token>` for all
