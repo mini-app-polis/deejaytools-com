@@ -357,6 +357,13 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
 songRoutes.post(
   "/:id/upload",
   async (c, next) => {
+    // Fast-path: if there's no Authorization header we can return 401 without
+    // reading the body. This preserves the expected API contract and avoids
+    // buffering a large file for an unauthenticated request.
+    if (!c.req.header("Authorization")) {
+      return c.json(CommonErrors.unauthorized(), 401);
+    }
+
     const formData = await c.req.parseBody();
     const fileValue = formData.file;
     const file =
