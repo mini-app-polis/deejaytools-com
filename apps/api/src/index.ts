@@ -6,4 +6,4 @@ import { app } from "./app.js";
 const logger = createLogger("deejaytools-api");
 const port = Number(process.env.PORT ?? "3001");
 logger.start("api_starting", { port });
-serve({ fetch: app.fetch, port });
+serve({ fetch: app.fetch, port, hostname: "0.0.0.0" });
