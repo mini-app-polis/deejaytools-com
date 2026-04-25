@@ -1,7 +1,9 @@
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { useEffect } from "react";
+import { createLogger } from "@/lib/logger";
 
 const SESSION_KEY = "deejaytools_auth_sync_v1";
+const logger = createLogger("deejaytools-app");
 
 export default function AuthSync() {
   const { isLoaded: authLoaded, isSignedIn, getToken } = useAuth();
@@ -17,7 +19,11 @@ export default function AuthSync() {
 
     const email = user.primaryEmailAddress?.emailAddress;
     if (!email) {
-      console.warn("[AuthSync] Missing primary email; skipping sync");
+      logger.warn({
+        event: "auth_sync_skipped",
+        category: "api",
+        context: { reason: "missing_primary_email" },
+      });
       return;
     }
 
@@ -35,7 +41,11 @@ export default function AuthSync() {
       try {
         const token = await getToken();
         if (!token) {
-          console.warn("[AuthSync] No session token");
+          logger.warn({
+            event: "auth_sync_skipped",
+            category: "api",
+            context: { reason: "no_session_token" },
+          });
           return;
         }
 
@@ -49,10 +59,18 @@ export default function AuthSync() {
         });
 
         if (!res.ok) {
-          console.error("[AuthSync] POST /v1/auth/sync failed", res.status, await res.text());
+          logger.error({
+            event: "auth_sync_failed",
+            category: "api",
+            context: { status: res.status, body: await res.text() },
+          });
         }
       } catch (err) {
-        console.error("[AuthSync] sync error", err);
+        logger.error({
+          event: "auth_sync_error",
+          category: "api",
+          error: err,
+        });
       }
     })();
   }, [authLoaded, userLoaded, isSignedIn, user, getToken]);
