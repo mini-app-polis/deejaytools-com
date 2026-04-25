@@ -11,7 +11,7 @@
  * `requireAuth` middleware like the other /v1 route modules.
  */
 import { createLogger, successList } from "common-typescript-utils";
-import { zValidator } from "@hono/zod-validator";
+import { zValidator } from "../lib/validate.js";
 import { Hono } from "hono";
 import { z } from "zod";
 import { and, eq, ilike, or } from "drizzle-orm";

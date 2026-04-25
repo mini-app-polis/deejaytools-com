@@ -1,5 +1,5 @@
 import { CommonErrors, createLogger, error, success, successList } from "common-typescript-utils";
-import { zValidator } from "@hono/zod-validator";
+import { zValidator } from "../lib/validate.js";
 import { Hono } from "hono";
 import { z } from "zod";
 import { and, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
