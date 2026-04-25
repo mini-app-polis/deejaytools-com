@@ -7,7 +7,6 @@ import {
   assertValidation400,
   authHeaders,
   type ErrorEnvelope,
-  type HonoZodFailureBody,
   readJson,
   type SuccessEnvelope,
 } from "../test/helpers.js";
@@ -87,7 +86,7 @@ describe("POST /v1/partners", () => {
       body: JSON.stringify({ first_name: "Jane", last_name: "Doe" }),
     });
     expect(res.status).toBe(400);
-    assertValidation400(await readJson<HonoZodFailureBody>(res));
+    assertValidation400(await readJson<ErrorEnvelope>(res));
   });
 
   it("returns 400 when first_name is missing", async () => {
@@ -97,7 +96,7 @@ describe("POST /v1/partners", () => {
       body: JSON.stringify({ last_name: "Doe", partner_role: "follower" }),
     });
     expect(res.status).toBe(400);
-    assertValidation400(await readJson<HonoZodFailureBody>(res));
+    assertValidation400(await readJson<ErrorEnvelope>(res));
   });
 
   it("creates a partner and returns 201 with envelope", async () => {

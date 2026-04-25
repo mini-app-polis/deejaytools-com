@@ -7,11 +7,6 @@ export async function readJson<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
-export type HonoZodFailureBody = {
-  success: false;
-  error: { name: "ZodError"; issues: { path: (string | number)[] }[] };
-};
-
 export const MOCK_USER = {
   userId: "user_test123",
   email: "test@example.com",
@@ -63,21 +58,8 @@ export function assertErrorEnvelope(body: unknown) {
   });
 }
 
-/** zValidator failures use Hono's default `{ success: false, error: ZodError }` shape. */
-export function assertValidation400(body: HonoZodFailureBody | ErrorEnvelope) {
-  const b = body as HonoZodFailureBody | ErrorEnvelope;
-  if (
-    "success" in b &&
-    b.success === false &&
-    b.error &&
-    typeof b.error === "object" &&
-    "name" in b.error &&
-    b.error.name === "ZodError" &&
-    "issues" in b.error &&
-    Array.isArray((b.error as { issues: unknown[] }).issues)
-  ) {
-    expect((b.error as { issues: unknown[] }).issues.length).toBeGreaterThan(0);
-    return;
-  }
-  assertErrorEnvelope(b);
+/** zValidator failures now flow through CommonErrors.validationError, so the
+ * shape is the canonical { error: { code, message } } envelope. */
+export function assertValidation400(body: ErrorEnvelope) {
+  assertErrorEnvelope(body);
 }
