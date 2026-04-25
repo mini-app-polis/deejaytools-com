@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -257,169 +258,15 @@ export default function EventDetailPage() {
                 <DialogTrigger asChild>
                   <Button>New Session</Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                <DialogContent className="max-w-lg">
                   <DialogHeader>
                     <DialogTitle>New session</DialogTitle>
+                    <DialogDescription>Smoke test — temporary</DialogDescription>
                   </DialogHeader>
-                  <Form {...form}>
-                    <form onSubmit={onCreateSession} className="space-y-4">
-                      <FormField
-                        control={form.control}
-                        name="name"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Name</FormLabel>
-                            <FormControl>
-                              <Input {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="date"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Date (optional)</FormLabel>
-                            <FormControl>
-                              <Input {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="checkin_opens_at"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Check-in opens</FormLabel>
-                            <FormControl>
-                              <Input type="datetime-local" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="floor_trial_starts_at"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Floor trial starts</FormLabel>
-                            <FormControl>
-                              <Input type="datetime-local" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="floor_trial_ends_at"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Floor trial ends</FormLabel>
-                            <FormControl>
-                              <Input type="datetime-local" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <div className="grid grid-cols-2 gap-3">
-                        <FormField
-                          control={form.control}
-                          name="active_priority_max"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Active cap (priority)</FormLabel>
-                              <FormControl>
-                                <Input type="number" min={0} {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="active_non_priority_max"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Active cap (non-priority)</FormLabel>
-                              <FormControl>
-                                <Input type="number" min={0} {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <FormLabel>Divisions</FormLabel>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              append({ division_name: "", is_priority: false, priority_run_limit: 0 })
-                            }
-                          >
-                            Add division
-                          </Button>
-                        </div>
-                        {fields.map((f, index) => (
-                          <div key={f.id} className="flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-center">
-                            <FormField
-                              control={form.control}
-                              name={`divisions.${index}.division_name`}
-                              render={({ field }) => (
-                                <FormItem className="flex-1">
-                                  <FormControl>
-                                    <Input placeholder="Division name" {...field} />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={form.control}
-                              name={`divisions.${index}.is_priority`}
-                              render={({ field }) => (
-                                <FormItem className="flex flex-row items-center gap-2 space-y-0">
-                                  <FormControl>
-                                    <Switch checked={field.value} onCheckedChange={field.onChange} />
-                                  </FormControl>
-                                  <FormLabel className="font-normal">Priority division</FormLabel>
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={form.control}
-                              name={`divisions.${index}.priority_run_limit`}
-                              render={({ field }) => (
-                                <FormItem className="w-28 shrink-0">
-                                  <FormLabel className="text-xs">Priority runs (1..X)</FormLabel>
-                                  <FormControl>
-                                    <Input type="number" min={0} {...field} />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)}>
-                              Remove
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                      <DialogFooter>
-                        <Button type="submit">Create session</Button>
-                      </DialogFooter>
-                    </form>
-                  </Form>
+                  <div className="space-y-4">
+                    <p>If you can read this, the dialog itself works.</p>
+                    <Button onClick={() => setSessionDialogOpen(false)}>Close</Button>
+                  </div>
                 </DialogContent>
               </Dialog>
             )}
