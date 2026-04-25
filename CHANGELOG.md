@@ -1,3 +1,10 @@
+## [1.17.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.17.0...v1.17.1) (2026-04-25)
+
+
+### Bug Fixes
+
+* updating UI to match the mpdel requirements change ([0507497](https://github.com/mini-app-polis/deejaytools-com/commit/0507497777b1c215d57a9695d9f170d34b474975))
+
 # [1.17.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.16.0...v1.17.0) (2026-04-25)
 
 
