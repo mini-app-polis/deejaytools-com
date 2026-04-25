@@ -1,37 +1,10 @@
-import { zodResolver } from "@hookform/resolvers/zod";
 import { EventStatusSchema } from "@deejaytools/schemas";
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { z } from "zod";
 import { useApiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -53,14 +26,6 @@ type EventRow = {
   updated_at?: number;
 };
 
-const eventFormSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  date: z.string().optional(),
-  status: EventStatusSchema.optional(),
-});
-
-type EventFormValues = z.infer<typeof eventFormSchema>;
-
 function eventStatusBadge(status: string) {
   switch (status) {
     case "upcoming":
@@ -80,6 +45,11 @@ function eventStatusBadge(status: string) {
   }
 }
 
+const FIELD_INPUT_CLASS =
+  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
+
+const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
+
 export default function EventsPage() {
   const api = useApiClient();
   const navigate = useNavigate();
@@ -87,12 +57,11 @@ export default function EventsPage() {
   const [events, setEvents] = useState<EventRow[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [isFormSubmitting, setIsFormSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const form = useForm<EventFormValues>({
-    resolver: zodResolver(eventFormSchema),
-    defaultValues: { name: "", date: "", status: "upcoming" },
-  });
+  const [fName, setFName] = useState("");
+  const [fDate, setFDate] = useState("");
+  const [fStatus, setFStatus] = useState<string>("upcoming");
 
   const load = () => {
     setLoading(true);
@@ -107,24 +76,37 @@ export default function EventsPage() {
     load();
   }, [api]);
 
-  const onCreate = form.handleSubmit(async (values) => {
-    setIsFormSubmitting(true);
+  const openDialog = () => {
+    setFName("");
+    setFDate("");
+    setFStatus("upcoming");
+    setDialogOpen(true);
+  };
+
+  const closeDialog = () => setDialogOpen(false);
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fName.trim()) {
+      toast.error("Name is required");
+      return;
+    }
+    setSubmitting(true);
     try {
       const created = await api.post<EventRow>("/v1/events", {
-        name: values.name.trim(),
-        ...(values.date?.trim() ? { date: values.date.trim() } : {}),
-        ...(values.status ? { status: values.status } : {}),
+        name: fName.trim(),
+        ...(fDate.trim() ? { date: fDate.trim() } : {}),
+        ...(fStatus ? { status: fStatus } : {}),
       });
       toast.success("Event created");
       setDialogOpen(false);
-      form.reset({ name: "", date: "", status: "upcoming" });
       setEvents((prev) => (prev ? [created, ...prev] : [created]));
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to create event");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create event");
     } finally {
-      setIsFormSubmitting(false);
+      setSubmitting(false);
     }
-  });
+  };
 
   if (loading && !events) {
     return (
@@ -139,77 +121,7 @@ export default function EventsPage() {
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl font-semibold">Events</h1>
-        {isAdmin && (
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>New Event</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>New event</DialogTitle>
-              </DialogHeader>
-              <Form {...form}>
-                <form onSubmit={onCreate} className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Name</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="date"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Date (optional)</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g. March 15, 2026" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="status"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Status</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Status" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {EventStatusSchema.options.map((s) => (
-                              <SelectItem key={s} value={s}>
-                                {s}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <DialogFooter>
-                    <Button type="submit" disabled={isFormSubmitting}>
-                      {isFormSubmitting ? "Creating..." : "Create"}
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
-        )}
+        {isAdmin && <Button onClick={openDialog}>New Event</Button>}
       </div>
 
       <div className={loading ? "opacity-60 pointer-events-none" : ""}>
@@ -253,6 +165,64 @@ export default function EventsPage() {
           </TableBody>
         </Table>
       </div>
+
+      {dialogOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={closeDialog}
+        >
+          <div
+            className="rounded-lg border bg-background p-6 shadow-lg max-w-md w-full space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">New event</h2>
+              <Button type="button" variant="ghost" size="sm" onClick={closeDialog}>
+                ✕
+              </Button>
+            </div>
+            <form onSubmit={onSubmit} className="space-y-4">
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Name</label>
+                <input
+                  className={FIELD_INPUT_CLASS}
+                  value={fName}
+                  onChange={(e) => setFName(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Date (optional)</label>
+                <input
+                  className={FIELD_INPUT_CLASS}
+                  placeholder="e.g. March 15, 2026"
+                  value={fDate}
+                  onChange={(e) => setFDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Status</label>
+                <select
+                  className={FIELD_INPUT_CLASS}
+                  value={fStatus}
+                  onChange={(e) => setFStatus(e.target.value)}
+                >
+                  {EventStatusSchema.options.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-end pt-2">
+                <Button type="submit" disabled={submitting}>
+                  {submitting ? "Creating..." : "Create"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
