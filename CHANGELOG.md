@@ -1,3 +1,15 @@
+# [1.15.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.14.0...v1.15.0) (2026-04-25)
+
+
+### Bug Fixes
+
+* tests ([b4a9271](https://github.com/mini-app-polis/deejaytools-com/commit/b4a9271316beb4cf4adf8cb76014ceb5eed8b648))
+
+
+### Features
+
+* **app:** floor-trial queue UI on new model ([234edbf](https://github.com/mini-app-polis/deejaytools-com/commit/234edbf42fabb9796c3d26cadc3067a154912069))
+
 # [1.14.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.13.4...v1.14.0) (2026-04-25)
 
 
