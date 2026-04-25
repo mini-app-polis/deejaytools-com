@@ -15,7 +15,7 @@ exemptions:
 
   - rule: API-011
     reason: >-
-      Database migrations use Drizzle ORM and run at Railway deploy time via the service's release hook, not in ci.yml — see apps/api/docs/decisions/ADR-0001-drizzle-migrations-at-deploy.md. The check's 'drizzle-kit push/migrate in ci.yml' requirement is a different migration-timing decision than this repo's.
+      Database migrations use Drizzle ORM and run at Railway deploy time via the service's release hook, not in ci.yml — see apps/api/docs/decisions/ADR-001-drizzle-migrations-at-deploy.md. The check's 'drizzle-kit push/migrate in ci.yml' requirement is a different migration-timing decision than this repo's.
 
   - rule: API-004
     reason: >-
