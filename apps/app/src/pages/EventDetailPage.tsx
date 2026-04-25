@@ -150,7 +150,6 @@ export default function EventDetailPage() {
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, id]);
 
   const openCreateDialog = () => {
