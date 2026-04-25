@@ -1,3 +1,15 @@
+# [1.18.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.17.5...v1.18.0) (2026-04-25)
+
+
+### Bug Fixes
+
+* **api:** drain upload body before requireAuth to fix Railway proxy timeout ([075491a](https://github.com/mini-app-polis/deejaytools-com/commit/075491a05fe03a757cc06e249171825f91144d96))
+
+
+### Features
+
+* restore upload ([856250a](https://github.com/mini-app-polis/deejaytools-com/commit/856250a037fb7532f9e979fbea5b171960f09bf0))
+
 ## [1.17.5](https://github.com/mini-app-polis/deejaytools-com/compare/v1.17.4...v1.17.5) (2026-04-25)
 
 
