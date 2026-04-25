@@ -1,3 +1,10 @@
+## [1.15.7](https://github.com/mini-app-polis/deejaytools-com/compare/v1.15.6...v1.15.7) (2026-04-25)
+
+
+### Bug Fixes
+
+* bandaid pattern ([7b7cd94](https://github.com/mini-app-polis/deejaytools-com/commit/7b7cd9421769d8f3f599ee0f38e449f2e883d88a))
+
 ## [1.15.6](https://github.com/mini-app-polis/deejaytools-com/compare/v1.15.5...v1.15.6) (2026-04-25)
 
 
