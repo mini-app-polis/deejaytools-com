@@ -77,6 +77,47 @@ rationale and a revisit trigger.
 
 ---
 
+## Sentry setup (deferred — code is wired, projects pending)
+
+Both services are instrumented with Sentry SDKs that no-op until a DSN is
+set. When ready to enable error tracking:
+
+**1. Create two Sentry projects** under one Sentry org:
+   - `deejaytools-com-api` — Node platform
+   - `deejaytools-com-app` — Browser/React platform
+
+**2. Add DSNs to Doppler** under the deejaytools-com Doppler project:
+   - `SENTRY_DSN` — for the API service (syncs to Railway)
+   - `VITE_SENTRY_DSN` — for the React app (syncs to Cloudflare Pages)
+
+**3. Configure rate limits** in each Sentry project:
+   `Project → Settings → Client Keys (DSN) → Configure → Rate Limits`
+   Set ~150–200 events/day per project. The Developer plan ceiling is
+   5,000 errors/month total across the org; per-day limits prevent a
+   single bad deploy from burning the whole month's quota.
+
+**4. Enable Spike Protection** at the org level. Auto-throttles on
+   abnormal traffic spikes. Free-tier-friendly. Worth turning on day one.
+
+**5. Do not enable** performance monitoring (`tracesSampleRate`) or
+   session replay (`replaysSessionSampleRate`) yet. Both share the same
+   5,000-event quota with errors. The current `instrument.ts` and the
+   API-side `Sentry.init()` deliberately omit these — keep it that way
+   until there's a clear reason to add them.
+
+**Expected cost:** $0/month indefinitely on the Developer plan
+(5K errors/month, 1 dashboard user). Upgrade triggers: more than one
+person needing dashboard access, sustained >5K errors/month, or wanting
+retention beyond 30 days. Team plan is $26/mo (50K errors,
+unlimited seats).
+
+**Failure mode if quota is exhausted:** Sentry silently drops new
+events for the rest of the billing cycle. No surprise bill. Rate limits
+above are designed to make this granular (lose visibility for a day,
+not the month).
+
+---
+
 ## Doppler development config
 
 The `development` config in Doppler is not populated. Local dev currently
