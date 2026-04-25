@@ -1,3 +1,10 @@
+## [1.15.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.15.3...v1.15.4) (2026-04-25)
+
+
+### Bug Fixes
+
+* **app:** simplify session-dialog open handler — drop pre-fill from latest ([8d67f31](https://github.com/mini-app-polis/deejaytools-com/commit/8d67f319e205579f79ba9b670f9f5c8947985621))
+
 ## [1.15.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.15.2...v1.15.3) (2026-04-25)
 
 
