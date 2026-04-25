@@ -1,3 +1,10 @@
+## [1.15.6](https://github.com/mini-app-polis/deejaytools-com/compare/v1.15.5...v1.15.6) (2026-04-25)
+
+
+### Bug Fixes
+
+* **app:** replace Radix Dialog with plain-div modal for session form ([ac17803](https://github.com/mini-app-polis/deejaytools-com/commit/ac1780369df63ef43f18417491bc0577bb7475ab))
+
 ## [1.15.5](https://github.com/mini-app-polis/deejaytools-com/compare/v1.15.4...v1.15.5) (2026-04-25)
 
 
