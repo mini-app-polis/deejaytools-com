@@ -11,7 +11,7 @@ of the `deejaytools-com` monorepo at `apps/api/`.
 | Runtime | Node 22 |
 | Framework | Hono |
 | Database | PostgreSQL via Drizzle ORM |
-| Auth | Clerk (JWT + M2M tokens) |
+| Auth | Clerk session JWTs (verified against JWKS) |
 | Observability | Sentry (errors), common-typescript-utils logger (structured logs) |
 | Deployment | Railway (Procfile + `pnpm --filter api start`) |
 

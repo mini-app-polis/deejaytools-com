@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "pnpm --filter @deejaytools/schemas build && tsc --noEmit",
     "lint": "eslint src",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "test:coverage": "vitest run --coverage --passWithNoTests"
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.20.0",
@@ -48,6 +49,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.8",
     "vitest": "^2.1.8"
   }
 }
