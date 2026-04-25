@@ -5,10 +5,16 @@
  * (timestamp, service, level, category, event, context) but writes to
  * console.* under the hood since the npm logger is Node-only.
  *
- * This is the single place to swap in Sentry breadcrumbs / @sentry/react
- * capture once frontend observability is wired. Do not call console.*
- * directly anywhere else in apps/app/src — use this wrapper.
+ * logger.error additionally forwards to Sentry — captureException when an
+ * Error instance is present in `error`, captureMessage otherwise. This
+ * gives logger.error parity with API-side createLogger, which routes
+ * through Sentry via Sentry.captureException in app.ts onError.
+ *
+ * Do not call console.* directly anywhere else in apps/app/src — use
+ * this wrapper.
  */
+import * as Sentry from "@sentry/react";
+
 export type LogCategory = "infra" | "pipeline" | "data" | "api";
 
 export interface LogEvent {
@@ -37,6 +43,22 @@ export function createLogger(service: string): BrowserLogger {
     };
     const fn = level === "ERROR" ? console.error : level === "WARN" ? console.warn : console.info;
     fn(payload);
+
+    if (level === "ERROR") {
+      const tags = { service, category: e.category, event: e.event };
+      if (e.error instanceof Error) {
+        Sentry.captureException(e.error, {
+          tags,
+          extra: e.context,
+        });
+      } else {
+        Sentry.captureMessage(e.event, {
+          level: "error",
+          tags,
+          extra: { ...(e.context ?? {}), ...(e.error !== undefined ? { error: e.error } : {}) },
+        });
+      }
+    }
   };
 
   return {
