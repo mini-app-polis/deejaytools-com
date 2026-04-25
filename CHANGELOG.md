@@ -1,3 +1,10 @@
+## [1.15.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.15.1...v1.15.2) (2026-04-25)
+
+
+### Bug Fixes
+
+* **app:** _redirects use force-rewrite flag for Cloudflare Pages SPA fallback ([32a181f](https://github.com/mini-app-polis/deejaytools-com/commit/32a181f6cab83f8e38bb1690dbe45a519f5390eb))
+
 ## [1.15.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.15.0...v1.15.1) (2026-04-25)
 
 
