@@ -48,7 +48,7 @@ createServer(async (req: IncomingMessage, res: ServerResponse) => {
     method: req.method ?? "GET",
     headers,
     body: bodyBuffer.length > 0 ? bodyBuffer : null,
-    // @ts-ignore — required for Node 18 fetch compat with non-null body
+    // @ts-expect-error — required for Node 18 fetch compat with non-null body
     duplex: "half",
   });
 
