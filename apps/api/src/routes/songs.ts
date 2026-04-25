@@ -9,6 +9,16 @@ import { requireAuth } from "../middleware/auth.js";
 import { softDeleteOnDrive, uploadSongToDrive } from "../services/drive.js";
 import { tagSongBytes } from "../services/tagger.js";
 
+declare module "hono" {
+  interface ContextVariableMap {
+    uploadCache: {
+      bytes: Buffer;
+      originalName: string;
+      mimeType: string;
+    };
+  }
+}
+
 const listQuery = z.object({
   partner_id: z.string().optional(),
 });
@@ -336,192 +346,166 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
 });
 
 // POST /v1/songs/:id/upload — multipart/form-data with file field
-songRoutes.post("/:id/upload", requireAuth, async (c) => {
-  const t0 = Date.now();
-  const log = (event: string, extra?: Record<string, unknown>) => {
-    console.log(
-      JSON.stringify({
-        event: `upload_debug.${event}`,
-        ms: Date.now() - t0,
-        ...extra,
-      })
-    );
-  };
+//
+// IMPORTANT: the body-drain middleware MUST be the first handler in the chain,
+// before requireAuth. Railway's Fastly edge proxy has an ~800ms idle write
+// timeout on inbound request bodies. requireAuth makes two async calls before
+// returning (Clerk JWKS fetch + DB user lookup), and the proxy gives up waiting
+// for Node to start reading the body during that time, causing ERR_TIMED_OUT.
+// Draining the body here — before any network/db work — keeps the socket alive.
+songRoutes.post(
+  "/:id/upload",
+  async (c, next) => {
+    const formData = await c.req.parseBody();
+    const fileValue = formData.file;
+    const file =
+      fileValue instanceof File
+        ? fileValue
+        : Array.isArray(fileValue)
+          ? fileValue.find((entry): entry is File => entry instanceof File)
+          : null;
+    if (!file) {
+      return c.json(CommonErrors.badRequest("Missing file upload field"), 400);
+    }
+    const bytes = Buffer.from(await file.arrayBuffer());
+    c.set("uploadCache", {
+      bytes,
+      originalName: file.name?.trim() || "song.mp3",
+      mimeType: inferMimeType(file),
+    });
+    await next();
+  },
+  requireAuth,
+  async (c) => {
+    const userId = c.get("user").userId;
+    const id = c.req.param("id");
+    const { bytes: inputBytes, originalName, mimeType } = c.get("uploadCache")!;
 
-  const userId = c.get("user").userId;
-  const id = c.req.param("id");
-  log("handler_entered", { id, userId });
-
-  log("before_song_select");
-  const [song] = await db
-    .select()
-    .from(songs)
-    .where(and(eq(songs.id, id), eq(songs.userId, userId)))
-    .limit(1);
-  log("after_song_select", { found: !!song });
-
-  if (!song) {
-    return c.json(CommonErrors.notFound("Song"), 404);
-  }
-
-  log("before_user_select");
-  const [userRow] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  log("after_user_select", { found: !!userRow });
-  if (!userRow) {
-    return c.json(CommonErrors.notFound("User"), 404);
-  }
-
-  let partnerRow: typeof partners.$inferSelect | null = null;
-  if (song.partnerId) {
-    log("before_partner_select");
-    const [p] = await db
+    const [song] = await db
       .select()
-      .from(partners)
-      .where(and(eq(partners.id, song.partnerId), eq(partners.userId, userId)))
+      .from(songs)
+      .where(and(eq(songs.id, id), eq(songs.userId, userId)))
       .limit(1);
-    partnerRow = p ?? null;
-    log("after_partner_select", { found: !!partnerRow });
-  }
+    if (!song) {
+      return c.json(CommonErrors.notFound("Song"), 404);
+    }
 
-  log("before_parseBody", {
-    contentLength: c.req.header("content-length"),
-    contentType: c.req.header("content-type"),
-  });
-  const body = await c.req.parseBody();
-  log("after_parseBody", { keys: Object.keys(body) });
+    const [userRow] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!userRow) {
+      return c.json(CommonErrors.notFound("User"), 404);
+    }
 
-  const fileValue = body.file;
-  const uploadedFile =
-    fileValue instanceof File
-      ? fileValue
-      : Array.isArray(fileValue)
-        ? fileValue.find((entry): entry is File => entry instanceof File)
-        : null;
+    let partnerRow: typeof partners.$inferSelect | null = null;
+    if (song.partnerId) {
+      const [p] = await db
+        .select()
+        .from(partners)
+        .where(and(eq(partners.id, song.partnerId), eq(partners.userId, userId)))
+        .limit(1);
+      partnerRow = p ?? null;
+    }
 
-  if (!uploadedFile) {
-    log("missing_file_field");
-    return c.json(CommonErrors.badRequest("Missing file upload field"), 400);
-  }
-  log("got_file", { name: uploadedFile.name, size: uploadedFile.size, type: uploadedFile.type });
+    const seasonYearStr = seasonYearFromTimestamp(Date.now());
 
-  const originalName = uploadedFile.name?.trim() || "song.mp3";
-  const mimeType = inferMimeType(uploadedFile);
+    const [countRow] = await db
+      .select({ c: sql<number>`count(*)::int` })
+      .from(songs)
+      .where(
+        and(
+          eq(songs.userId, userId),
+          sql`coalesce(${songs.division}, '') = ${song.division ?? ""}`,
+          sql`coalesce(${songs.routineName}, '') = ${song.routineName ?? ""}`,
+          eq(songs.seasonYear, seasonYearStr),
+          ne(songs.id, id)
+        )
+      );
 
-  log("before_arrayBuffer");
-  const inputBytes = Buffer.from(await uploadedFile.arrayBuffer());
-  log("after_arrayBuffer", { bytes: inputBytes.length });
+    const version = (countRow?.c ?? 0) + 1;
 
-  const seasonYearStr = seasonYearFromTimestamp(Date.now());
+    const userName =
+      [userRow.firstName, userRow.lastName].filter(Boolean).join("") || userId;
+    const partnerName = partnerRow
+      ? [partnerRow.firstName, partnerRow.lastName].filter(Boolean).join("")
+      : null;
 
-  log("before_version_count_query", { seasonYear: seasonYearStr });
-  const [countRow] = await db
-    .select({ c: sql<number>`count(*)::int` })
-    .from(songs)
-    .where(
-      and(
-        eq(songs.userId, userId),
-        sql`coalesce(${songs.division}, '') = ${song.division ?? ""}`,
-        sql`coalesce(${songs.routineName}, '') = ${song.routineName ?? ""}`,
-        eq(songs.seasonYear, seasonYearStr),
-        ne(songs.id, id)
+    let leaderName: string;
+    let followerName: string | null;
+
+    if (!partnerRow) {
+      leaderName = userName;
+      followerName = null;
+    } else if (partnerRow.partnerRole === "leader") {
+      leaderName = partnerName ?? "";
+      followerName = userName;
+    } else {
+      leaderName = userName;
+      followerName = partnerName ?? "";
+    }
+
+    const partnershipSegment = followerName
+      ? `${sanitizeSegment(leaderName)}_${sanitizeSegment(followerName)}`
+      : sanitizeSegment(leaderName);
+
+    const originalParts = splitNameAndExtension(originalName);
+    const pathSegments = [
+      partnershipSegment || sanitizeSegment(userId) || "user",
+      sanitizeSegment(song.division),
+      sanitizeSegment(seasonYearStr),
+      sanitizeSegment(song.routineName),
+      sanitizeSegment(song.personalDescriptor),
+    ].filter((s) => s.length > 0);
+    const baseWithoutVersion = pathSegments.join("_");
+    const versionedStem = `${baseWithoutVersion}_v${version}`;
+    const extSegment = sanitizeSegment(originalParts.ext);
+    const processedFilename = extSegment ? `${versionedStem}.${extSegment}` : versionedStem;
+
+    const newTitle = followerName ? `${leaderName} & ${followerName}` : leaderName;
+    const newArtist = [song.division, seasonYearStr, song.routineName].filter(Boolean).join(" - ");
+
+    const taggedBytes = await tagSongBytes({
+      bytes: inputBytes,
+      newTitle,
+      newArtist,
+      mimeType,
+    });
+
+    const uploadResult = await uploadSongToDrive(taggedBytes, {
+      filename: processedFilename,
+      mimeType,
+    });
+
+    const now = Date.now();
+    await db
+      .update(songs)
+      .set({
+        originalFilename: originalName,
+        processedFilename,
+        seasonYear: seasonYearStr,
+        driveFileId: uploadResult.fileId,
+        driveFolderId: uploadResult.folderId,
+        updatedAt: now,
+      })
+      .where(eq(songs.id, id));
+
+    const [r] = await db
+      .select({
+        song: songs,
+        partner_first_name: partners.firstName,
+        partner_last_name: partners.lastName,
+      })
+      .from(songs)
+      .leftJoin(partners, eq(partners.id, songs.partnerId))
+      .where(eq(songs.id, id))
+      .limit(1);
+
+    return c.json(
+      success(
+        mapSong({
+          ...r!.song,
+          partner_first_name: r!.partner_first_name,
+          partner_last_name: r!.partner_last_name,
+        })
       )
     );
-  log("after_version_count_query", { count: countRow?.c ?? 0 });
-
-  const version = (countRow?.c ?? 0) + 1;
-
-  const userName =
-    [userRow.firstName, userRow.lastName].filter(Boolean).join("") || userId;
-  const partnerName = partnerRow
-    ? [partnerRow.firstName, partnerRow.lastName].filter(Boolean).join("")
-    : null;
-
-  let leaderName: string;
-  let followerName: string | null;
-
-  if (!partnerRow) {
-    leaderName = userName;
-    followerName = null;
-  } else if (partnerRow.partnerRole === "leader") {
-    leaderName = partnerName ?? "";
-    followerName = userName;
-  } else {
-    leaderName = userName;
-    followerName = partnerName ?? "";
   }
-
-  const partnershipSegment = followerName
-    ? `${sanitizeSegment(leaderName)}_${sanitizeSegment(followerName)}`
-    : sanitizeSegment(leaderName);
-
-  const originalParts = splitNameAndExtension(originalName);
-  const pathSegments = [
-    partnershipSegment || sanitizeSegment(userId) || "user",
-    sanitizeSegment(song.division),
-    sanitizeSegment(seasonYearStr),
-    sanitizeSegment(song.routineName),
-    sanitizeSegment(song.personalDescriptor),
-  ].filter((s) => s.length > 0);
-  const baseWithoutVersion = pathSegments.join("_");
-  const versionedStem = `${baseWithoutVersion}_v${version}`;
-  const extSegment = sanitizeSegment(originalParts.ext);
-  const processedFilename = extSegment ? `${versionedStem}.${extSegment}` : versionedStem;
-
-  const newTitle = followerName ? `${leaderName} & ${followerName}` : leaderName;
-  const newArtist = [song.division, seasonYearStr, song.routineName].filter(Boolean).join(" - ");
-
-  log("before_tagSongBytes", { bytes: inputBytes.length, mimeType });
-  const taggedBytes = await tagSongBytes({
-    bytes: inputBytes,
-    newTitle,
-    newArtist,
-    mimeType,
-  });
-  log("after_tagSongBytes", { taggedBytes: taggedBytes.length });
-
-  log("before_uploadSongToDrive", { filename: processedFilename });
-  const uploadResult = await uploadSongToDrive(taggedBytes, {
-    filename: processedFilename,
-    mimeType,
-  });
-  log("after_uploadSongToDrive", { fileId: uploadResult.fileId });
-
-  const now = Date.now();
-  log("before_db_update");
-  await db
-    .update(songs)
-    .set({
-      originalFilename: originalName,
-      processedFilename,
-      seasonYear: seasonYearStr,
-      driveFileId: uploadResult.fileId,
-      driveFolderId: uploadResult.folderId,
-      updatedAt: now,
-    })
-    .where(eq(songs.id, id));
-  log("after_db_update");
-
-  log("before_final_select");
-  const [r] = await db
-    .select({
-      song: songs,
-      partner_first_name: partners.firstName,
-      partner_last_name: partners.lastName,
-    })
-    .from(songs)
-    .leftJoin(partners, eq(partners.id, songs.partnerId))
-    .where(eq(songs.id, id))
-    .limit(1);
-  log("after_final_select", { found: !!r });
-
-  log("done");
-  return c.json(
-    success(
-      mapSong({
-        ...r!.song,
-        partner_first_name: r!.partner_first_name,
-        partner_last_name: r!.partner_last_name,
-      })
-    )
-  );
-});
+);
