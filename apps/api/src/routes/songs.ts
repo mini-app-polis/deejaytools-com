@@ -337,15 +337,59 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
 
 // POST /v1/songs/:id/upload — multipart/form-data with file field
 songRoutes.post("/:id/upload", requireAuth, async (c) => {
+  const t0 = Date.now();
+  const log = (event: string, extra?: Record<string, unknown>) => {
+    console.log(
+      JSON.stringify({
+        event: `upload_debug.${event}`,
+        ms: Date.now() - t0,
+        ...extra,
+      })
+    );
+  };
+
   const userId = c.get("user").userId;
   const id = c.req.param("id");
+  log("handler_entered", { id, userId });
 
-  // IMPORTANT: drain the request body BEFORE any database queries.
-  // Railway's edge proxy has an idle write timeout (~800ms) on inbound bodies.
-  // If the Node process is blocked on db queries while the proxy is waiting to
-  // stream a large multipart body, the proxy gives up and the client sees
-  // ERR_TIMED_OUT. Reading the body first keeps the socket draining.
+  log("before_song_select");
+  const [song] = await db
+    .select()
+    .from(songs)
+    .where(and(eq(songs.id, id), eq(songs.userId, userId)))
+    .limit(1);
+  log("after_song_select", { found: !!song });
+
+  if (!song) {
+    return c.json(CommonErrors.notFound("Song"), 404);
+  }
+
+  log("before_user_select");
+  const [userRow] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  log("after_user_select", { found: !!userRow });
+  if (!userRow) {
+    return c.json(CommonErrors.notFound("User"), 404);
+  }
+
+  let partnerRow: typeof partners.$inferSelect | null = null;
+  if (song.partnerId) {
+    log("before_partner_select");
+    const [p] = await db
+      .select()
+      .from(partners)
+      .where(and(eq(partners.id, song.partnerId), eq(partners.userId, userId)))
+      .limit(1);
+    partnerRow = p ?? null;
+    log("after_partner_select", { found: !!partnerRow });
+  }
+
+  log("before_parseBody", {
+    contentLength: c.req.header("content-length"),
+    contentType: c.req.header("content-type"),
+  });
   const body = await c.req.parseBody();
+  log("after_parseBody", { keys: Object.keys(body) });
+
   const fileValue = body.file;
   const uploadedFile =
     fileValue instanceof File
@@ -355,37 +399,17 @@ songRoutes.post("/:id/upload", requireAuth, async (c) => {
         : null;
 
   if (!uploadedFile) {
+    log("missing_file_field");
     return c.json(CommonErrors.badRequest("Missing file upload field"), 400);
   }
+  log("got_file", { name: uploadedFile.name, size: uploadedFile.size, type: uploadedFile.type });
 
   const originalName = uploadedFile.name?.trim() || "song.mp3";
   const mimeType = inferMimeType(uploadedFile);
+
+  log("before_arrayBuffer");
   const inputBytes = Buffer.from(await uploadedFile.arrayBuffer());
-
-  const [song] = await db
-    .select()
-    .from(songs)
-    .where(and(eq(songs.id, id), eq(songs.userId, userId)))
-    .limit(1);
-
-  if (!song) {
-    return c.json(CommonErrors.notFound("Song"), 404);
-  }
-
-  const [userRow] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  if (!userRow) {
-    return c.json(CommonErrors.notFound("User"), 404);
-  }
-
-  let partnerRow: typeof partners.$inferSelect | null = null;
-  if (song.partnerId) {
-    const [p] = await db
-      .select()
-      .from(partners)
-      .where(and(eq(partners.id, song.partnerId), eq(partners.userId, userId)))
-      .limit(1);
-    partnerRow = p ?? null;
-  }
+  log("after_arrayBuffer", { bytes: inputBytes.length });
 
   const seasonYearStr = seasonYearFromTimestamp(Date.now());
 
@@ -444,19 +468,24 @@ songRoutes.post("/:id/upload", requireAuth, async (c) => {
   const newTitle = followerName ? `${leaderName} & ${followerName}` : leaderName;
   const newArtist = [song.division, seasonYearStr, song.routineName].filter(Boolean).join(" - ");
 
+  log("before_tagSongBytes", { bytes: inputBytes.length, mimeType });
   const taggedBytes = await tagSongBytes({
     bytes: inputBytes,
     newTitle,
     newArtist,
     mimeType,
   });
+  log("after_tagSongBytes", { taggedBytes: taggedBytes.length });
 
+  log("before_uploadSongToDrive", { filename: processedFilename });
   const uploadResult = await uploadSongToDrive(taggedBytes, {
     filename: processedFilename,
     mimeType,
   });
+  log("after_uploadSongToDrive", { fileId: uploadResult.fileId });
 
   const now = Date.now();
+  log("before_db_update");
   await db
     .update(songs)
     .set({
@@ -468,6 +497,7 @@ songRoutes.post("/:id/upload", requireAuth, async (c) => {
       updatedAt: now,
     })
     .where(eq(songs.id, id));
+  log("after_db_update");
 
   const [r] = await db
     .select({
