@@ -413,6 +413,7 @@ songRoutes.post("/:id/upload", requireAuth, async (c) => {
 
   const seasonYearStr = seasonYearFromTimestamp(Date.now());
 
+  log("before_version_count_query", { seasonYear: seasonYearStr });
   const [countRow] = await db
     .select({ c: sql<number>`count(*)::int` })
     .from(songs)
@@ -425,6 +426,7 @@ songRoutes.post("/:id/upload", requireAuth, async (c) => {
         ne(songs.id, id)
       )
     );
+  log("after_version_count_query", { count: countRow?.c ?? 0 });
 
   const version = (countRow?.c ?? 0) + 1;
 
@@ -499,6 +501,7 @@ songRoutes.post("/:id/upload", requireAuth, async (c) => {
     .where(eq(songs.id, id));
   log("after_db_update");
 
+  log("before_final_select");
   const [r] = await db
     .select({
       song: songs,
@@ -509,7 +512,9 @@ songRoutes.post("/:id/upload", requireAuth, async (c) => {
     .leftJoin(partners, eq(partners.id, songs.partnerId))
     .where(eq(songs.id, id))
     .limit(1);
+  log("after_final_select", { found: !!r });
 
+  log("done");
   return c.json(
     success(
       mapSong({
