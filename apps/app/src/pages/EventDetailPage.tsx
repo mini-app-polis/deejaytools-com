@@ -163,31 +163,11 @@ export default function EventDetailPage() {
   const onSessionDialogOpenChange = useCallback(
     (open: boolean) => {
       setSessionDialogOpen(open);
-      if (!open) return;
-      if (sessions && sessions.length > 0) {
-        const sorted = [...sessions].sort(
-          (a, b) => b.floor_trial_starts_at - a.floor_trial_starts_at
-        );
-        const latest = sorted[0]!;
-        const divs =
-          latest.divisions
-            ?.filter((d) => d.division_name?.trim() && d.division_name.trim() !== "Other")
-            .map((d) => ({
-              division_name: d.division_name.trim(),
-              is_priority: d.is_priority,
-              priority_run_limit: d.priority_run_limit ?? 0,
-            })) ?? [];
-        form.reset({
-          ...getEmptySessionFormValues(),
-          active_priority_max: latest.active_priority_max ?? 6,
-          active_non_priority_max: latest.active_non_priority_max ?? 4,
-          divisions: divs.length > 0 ? divs : getEmptySessionFormValues().divisions,
-        });
-      } else {
+      if (open) {
         form.reset(getEmptySessionFormValues());
       }
     },
-    [sessions, form]
+    [form]
   );
 
   const onCreateSession = form.handleSubmit(async (values) => {
