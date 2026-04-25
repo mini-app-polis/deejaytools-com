@@ -1,3 +1,10 @@
+## [1.15.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.15.0...v1.15.1) (2026-04-25)
+
+
+### Bug Fixes
+
+* **app:** _redirects fallback for SPA routes on Cloudflare Pages ([158d401](https://github.com/mini-app-polis/deejaytools-com/commit/158d40125bd45fbc4b88796e43fb70225cda816c))
+
 # [1.15.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.14.0...v1.15.0) (2026-04-25)
 
 
