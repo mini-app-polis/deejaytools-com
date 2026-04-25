@@ -1,3 +1,10 @@
+# [1.17.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.16.0...v1.17.0) (2026-04-25)
+
+
+### Features
+
+* full form with working pattern ([09f7331](https://github.com/mini-app-polis/deejaytools-com/commit/09f733105dbd14f917df3b9a054652c2a628e21d))
+
 # [1.16.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.15.8...v1.16.0) (2026-04-25)
 
 
