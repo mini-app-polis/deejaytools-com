@@ -340,6 +340,28 @@ songRoutes.post("/:id/upload", requireAuth, async (c) => {
   const userId = c.get("user").userId;
   const id = c.req.param("id");
 
+  // IMPORTANT: drain the request body BEFORE any database queries.
+  // Railway's edge proxy has an idle write timeout (~800ms) on inbound bodies.
+  // If the Node process is blocked on db queries while the proxy is waiting to
+  // stream a large multipart body, the proxy gives up and the client sees
+  // ERR_TIMED_OUT. Reading the body first keeps the socket draining.
+  const body = await c.req.parseBody();
+  const fileValue = body.file;
+  const uploadedFile =
+    fileValue instanceof File
+      ? fileValue
+      : Array.isArray(fileValue)
+        ? fileValue.find((entry): entry is File => entry instanceof File)
+        : null;
+
+  if (!uploadedFile) {
+    return c.json(CommonErrors.badRequest("Missing file upload field"), 400);
+  }
+
+  const originalName = uploadedFile.name?.trim() || "song.mp3";
+  const mimeType = inferMimeType(uploadedFile);
+  const inputBytes = Buffer.from(await uploadedFile.arrayBuffer());
+
   const [song] = await db
     .select()
     .from(songs)
@@ -364,23 +386,6 @@ songRoutes.post("/:id/upload", requireAuth, async (c) => {
       .limit(1);
     partnerRow = p ?? null;
   }
-
-  const body = await c.req.parseBody();
-  const fileValue = body.file;
-  const uploadedFile =
-    fileValue instanceof File
-      ? fileValue
-      : Array.isArray(fileValue)
-        ? fileValue.find((entry): entry is File => entry instanceof File)
-        : null;
-
-  if (!uploadedFile) {
-    return c.json(CommonErrors.badRequest("Missing file upload field"), 400);
-  }
-
-  const originalName = uploadedFile.name?.trim() || "song.mp3";
-  const mimeType = inferMimeType(uploadedFile);
-  const inputBytes = Buffer.from(await uploadedFile.arrayBuffer());
 
   const seasonYearStr = seasonYearFromTimestamp(Date.now());
 
