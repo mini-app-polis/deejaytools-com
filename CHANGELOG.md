@@ -1,3 +1,10 @@
+## [1.15.5](https://github.com/mini-app-polis/deejaytools-com/compare/v1.15.4...v1.15.5) (2026-04-25)
+
+
+### Bug Fixes
+
+* **app:** remove non-applying animation classes from shadcn Dialog (overlay+content) ([9643d8a](https://github.com/mini-app-polis/deejaytools-com/commit/9643d8ae4f6fe031324655abcb1fca2d932b83ba))
+
 ## [1.15.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.15.3...v1.15.4) (2026-04-25)
 
 
