@@ -1,3 +1,10 @@
+## [1.17.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.17.1...v1.17.2) (2026-04-25)
+
+
+### Bug Fixes
+
+* **api:** bind server to 0.0.0.0 so Railway can route multipart uploads ([c2488e1](https://github.com/mini-app-polis/deejaytools-com/commit/c2488e1f123f4c4877c90e0da3eebc5d0a62e2e4))
+
 ## [1.17.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.17.0...v1.17.1) (2026-04-25)
 
 
