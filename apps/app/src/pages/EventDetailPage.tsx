@@ -254,21 +254,18 @@ export default function EventDetailPage() {
         <TabsContent value="sessions" className="space-y-4 mt-4">
           <div className="flex justify-end">
             {isAdmin && (
-              <Dialog open={sessionDialogOpen} onOpenChange={onSessionDialogOpenChange}>
-                <DialogTrigger asChild>
-                  <Button>New Session</Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-lg">
-                  <DialogHeader>
-                    <DialogTitle>New session</DialogTitle>
-                    <DialogDescription>Smoke test — temporary</DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <p>If you can read this, the dialog itself works.</p>
-                    <Button onClick={() => setSessionDialogOpen(false)}>Close</Button>
+              <div>
+                <Button onClick={() => setSessionDialogOpen(true)}>New Session</Button>
+                {sessionDialogOpen && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                    <div className="rounded-lg border bg-background p-6 shadow-lg max-w-lg w-full space-y-4">
+                      <h2 className="text-lg font-semibold">New session (smoke test)</h2>
+                      <p>If you can read this, the dialog itself was the problem.</p>
+                      <Button onClick={() => setSessionDialogOpen(false)}>Close</Button>
+                    </div>
                   </div>
-                </DialogContent>
-              </Dialog>
+                )}
+              </div>
             )}
           </div>
           {sessions?.length === 0 && (
