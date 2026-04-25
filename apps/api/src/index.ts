@@ -30,7 +30,7 @@ createServer(async (req: IncomingMessage, res: ServerResponse) => {
   const bodyBuffer = Buffer.concat(chunks);
 
   // Step 2 — build a Web API Request for Hono.
-  const proto = (req.headers["x-forwarded-proto"] as string | undefined) ?? "http";
+  const proto = ((req.headers["x-forwarded-proto"] as string | undefined) ?? "http").split(",")[0].trim();
   const host = req.headers.host ?? `localhost:${port}`;
   const url = `${proto}://${host}${req.url ?? "/"}`;
 
