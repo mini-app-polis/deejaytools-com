@@ -1,5 +1,4 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { createCheckinBodySchema } from "@deejaytools/schemas";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useParams } from "react-router-dom";
@@ -34,7 +33,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuthMe } from "@/hooks/useAuthMe";
-import { useAuth } from "@clerk/clerk-react";
+import { useUser } from "@clerk/clerk-react";
 
 type SessionDetail = {
   id: string;
@@ -79,9 +78,14 @@ type SongRow = {
   processed_filename?: string | null;
 };
 
-const checkinFormSchema = createCheckinBodySchema
-  .omit({ sessionId: true })
-  .extend({
+const checkinFormSchema = z
+  .object({
+    divisionName: z.string().min(1),
+    entityPairId: z.string().nullish(),
+    entitySoloUserId: z.string().nullish(),
+    songId: z.string().min(1),
+    notes: z.string().nullish(),
+    eventRegistrationId: z.string().nullish(),
     entity: z.enum(["solo", "pair"]),
     pairId: z.string().optional(),
   })
@@ -127,7 +131,7 @@ function sessionStatusBadge(status: string) {
 export default function SessionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const api = useApiClient();
-  const { user } = useAuth();
+  const { user } = useUser();
   const { isAdmin } = useAuthMe();
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [active, setActive] = useState<QueueRow[]>([]);
@@ -635,7 +639,7 @@ export default function SessionDetailPage() {
                   <FormItem>
                     <FormLabel>Notes (optional)</FormLabel>
                     <FormControl>
-                      <Textarea {...field} rows={2} />
+                      <Textarea {...field} value={field.value ?? ""} rows={2} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
