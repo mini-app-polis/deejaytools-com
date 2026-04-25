@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  check,
   index,
   integer,
   pgEnum,
@@ -24,15 +25,19 @@ export const sessionStatusEnum = pgEnum("session_status", [
   "completed",
   "cancelled",
 ]);
-export const checkinStatusEnum = pgEnum("checkin_status", [
-  "waiting",
-  "on_deck",
-  "running",
-  "completed",
+export const partnerRoleEnum = pgEnum("partner_role", ["leader", "follower"]);
+
+export const queueTypeEnum = pgEnum("queue_type", ["priority", "non_priority", "active"]);
+
+export const queueEventActionEnum = pgEnum("queue_event_action", [
+  "checked_in",
+  "promoted_to_active",
+  "run_completed",
+  "run_incomplete_rotated",
   "withdrawn",
 ]);
-export const queueTypeEnum = pgEnum("queue_type", ["priority", "standard"]);
-export const partnerRoleEnum = pgEnum("partner_role", ["leader", "follower"]);
+
+export const initialQueueEnum = pgEnum("initial_queue", ["priority", "non_priority"]);
 
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
@@ -82,26 +87,30 @@ export const pairs = pgTable(
   })
 );
 
-export const songs = pgTable("songs", {
-  id: text("id").primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id),
-  partnerId: text("partner_id").references(() => partners.id),
-  displayName: text("display_name"),
-  originalFilename: text("original_filename"),
-  driveFileId: text("drive_file_id"),
-  driveFolderId: text("drive_folder_id"),
-  processedFilename: text("processed_filename"),
-  division: text("division"),
-  routineName: text("routine_name"),
-  personalDescriptor: text("personal_descriptor"),
-  seasonYear: text("season_year"),
-  createdAt: bigint("created_at", { mode: "number" }).notNull(),
-  updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
-}, (t) => ({
-  songsUserIdx: index("idx_songs_user_id").on(t.userId),
-}));
+export const songs = pgTable(
+  "songs",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    partnerId: text("partner_id").references(() => partners.id),
+    displayName: text("display_name"),
+    originalFilename: text("original_filename"),
+    driveFileId: text("drive_file_id"),
+    driveFolderId: text("drive_folder_id"),
+    processedFilename: text("processed_filename"),
+    division: text("division"),
+    routineName: text("routine_name"),
+    personalDescriptor: text("personal_descriptor"),
+    seasonYear: text("season_year"),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+  },
+  (t) => ({
+    songsUserIdx: index("idx_songs_user_id").on(t.userId),
+  })
+);
 
 export const events = pgTable("events", {
   id: text("id").primaryKey(),
@@ -144,26 +153,40 @@ export const sessions = pgTable(
     checkinOpensAt: bigint("checkin_opens_at", { mode: "number" }).notNull(),
     floorTrialStartsAt: bigint("floor_trial_starts_at", { mode: "number" }).notNull(),
     floorTrialEndsAt: bigint("floor_trial_ends_at", { mode: "number" }).notNull(),
-    maxSlots: integer("max_slots").notNull().default(7),
-    maxPriorityRuns: integer("max_priority_runs").notNull().default(3),
+    activePriorityMax: integer("active_priority_max").notNull().default(6),
+    activeNonPriorityMax: integer("active_non_priority_max").notNull().default(4),
     status: sessionStatusEnum("status").notNull().default("scheduled"),
     createdBy: text("created_by").references(() => users.id),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
   },
   (t) => ({
     eventIdx: index("idx_sessions_event_id").on(t.eventId),
+    activeCapsCheck: check(
+      "ck_sessions_active_caps",
+      sql`${t.activeNonPriorityMax} <= ${t.activePriorityMax} AND ${t.activePriorityMax} >= 0`
+    ),
   })
 );
 
-export const sessionDivisions = pgTable("session_divisions", {
-  id: text("id").primaryKey(),
-  sessionId: text("session_id")
-    .notNull()
-    .references(() => sessions.id),
-  divisionName: text("division_name").notNull(),
-  isPriority: boolean("is_priority").notNull().default(false),
-  sortOrder: integer("sort_order").notNull().default(0),
-});
+export const sessionDivisions = pgTable(
+  "session_divisions",
+  {
+    id: text("id").primaryKey(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => sessions.id),
+    divisionName: text("division_name").notNull(),
+    isPriority: boolean("is_priority").notNull().default(false),
+    priorityRunLimit: integer("priority_run_limit").notNull().default(0),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (t) => ({
+    sessionDivisionUq: uniqueIndex("uq_session_divisions_session_division").on(
+      t.sessionId,
+      t.divisionName
+    ),
+  })
+);
 
 export const checkins = pgTable(
   "checkins",
@@ -172,46 +195,141 @@ export const checkins = pgTable(
     sessionId: text("session_id")
       .notNull()
       .references(() => sessions.id),
-    eventRegistrationId: text("event_registration_id").references(
-      () => eventRegistrations.id
-    ),
-    pairId: text("pair_id")
+    divisionName: text("division_name").notNull(),
+    entityPairId: text("entity_pair_id").references(() => pairs.id, { onDelete: "restrict" }),
+    entitySoloUserId: text("entity_solo_user_id").references(() => users.id, { onDelete: "restrict" }),
+    songId: text("song_id")
       .notNull()
-      .references(() => pairs.id),
+      .references(() => songs.id, { onDelete: "restrict" }),
     submittedByUserId: text("submitted_by_user_id")
       .notNull()
       .references(() => users.id),
-    songId: text("song_id").references(() => songs.id),
-    division: text("division").notNull().default("Other"),
-    queueType: queueTypeEnum("queue_type").notNull(),
-    queuePosition: integer("queue_position").notNull(),
-    status: checkinStatusEnum("status").notNull().default("waiting"),
-    checkedInAt: bigint("checked_in_at", { mode: "number" }).notNull(),
-    lastRunAt: bigint("last_run_at", { mode: "number" }),
+    eventRegistrationId: text("event_registration_id").references(() => eventRegistrations.id),
+    initialQueue: initialQueueEnum("initial_queue").notNull(),
+    notes: text("notes"),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
   },
   (t) => ({
     sessIdx: index("idx_checkins_session_id").on(t.sessionId),
-    pairIdx: index("idx_checkins_pair_id").on(t.pairId),
-    subIdx: index("idx_checkins_submitted_by").on(t.submittedByUserId),
-    activePairUq: uniqueIndex("idx_checkins_unique_active")
-      .on(t.sessionId, t.pairId)
-      .where(sql`${t.status} IN ('waiting', 'on_deck', 'running')`),
+    pairIdx: index("idx_checkins_entity_pair_id").on(t.entityPairId),
+    soloIdx: index("idx_checkins_entity_solo_user_id").on(t.entitySoloUserId),
+    entityXor: check(
+      "ck_checkins_entity_xor",
+      sql`(${t.entityPairId} IS NOT NULL AND ${t.entitySoloUserId} IS NULL)
+           OR (${t.entityPairId} IS NULL AND ${t.entitySoloUserId} IS NOT NULL)`
+    ),
   })
 );
 
-export const floorSlots = pgTable(
-  "floor_slots",
+export const queueEntries = pgTable(
+  "queue_entries",
+  {
+    id: text("id").primaryKey(),
+    checkinId: text("checkin_id")
+      .notNull()
+      .unique()
+      .references(() => checkins.id),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => sessions.id),
+    entityPairId: text("entity_pair_id").references(() => pairs.id, { onDelete: "restrict" }),
+    entitySoloUserId: text("entity_solo_user_id").references(() => users.id, { onDelete: "restrict" }),
+    queueType: queueTypeEnum("queue_type").notNull(),
+    position: integer("position").notNull(),
+    enteredQueueAt: bigint("entered_queue_at", { mode: "number" }).notNull(),
+  },
+  (t) => ({
+    positionUq: uniqueIndex("uq_queue_entries_session_queue_position").on(
+      t.sessionId,
+      t.queueType,
+      t.position
+    ),
+    pairLiveUq: uniqueIndex("uq_queue_entries_session_pair_live")
+      .on(t.sessionId, t.entityPairId)
+      .where(sql`${t.entityPairId} IS NOT NULL`),
+    soloLiveUq: uniqueIndex("uq_queue_entries_session_solo_live")
+      .on(t.sessionId, t.entitySoloUserId)
+      .where(sql`${t.entitySoloUserId} IS NOT NULL`),
+    sessionIdx: index("idx_queue_entries_session_id").on(t.sessionId),
+    entityXor: check(
+      "ck_queue_entries_entity_xor",
+      sql`(${t.entityPairId} IS NOT NULL AND ${t.entitySoloUserId} IS NULL)
+           OR (${t.entityPairId} IS NULL AND ${t.entitySoloUserId} IS NOT NULL)`
+    ),
+    positionPositive: check("ck_queue_entries_position_positive", sql`${t.position} >= 1`),
+  })
+);
+
+export const runs = pgTable(
+  "runs",
+  {
+    id: text("id").primaryKey(),
+    checkinId: text("checkin_id")
+      .notNull()
+      .unique()
+      .references(() => checkins.id),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => sessions.id),
+    eventId: text("event_id").references(() => events.id),
+    divisionName: text("division_name").notNull(),
+    entityPairId: text("entity_pair_id").references(() => pairs.id, { onDelete: "restrict" }),
+    entitySoloUserId: text("entity_solo_user_id").references(() => users.id, { onDelete: "restrict" }),
+    songId: text("song_id")
+      .notNull()
+      .references(() => songs.id, { onDelete: "restrict" }),
+    completedAt: bigint("completed_at", { mode: "number" }).notNull(),
+    completedByUserId: text("completed_by_user_id")
+      .notNull()
+      .references(() => users.id),
+  },
+  (t) => ({
+    sessIdx: index("idx_runs_session_id").on(t.sessionId),
+    eventIdx: index("idx_runs_event_id").on(t.eventId),
+    pairDivIdx: index("idx_runs_pair_division").on(t.entityPairId, t.divisionName),
+    soloDivIdx: index("idx_runs_solo_division").on(t.entitySoloUserId, t.divisionName),
+    entityXor: check(
+      "ck_runs_entity_xor",
+      sql`(${t.entityPairId} IS NOT NULL AND ${t.entitySoloUserId} IS NULL)
+           OR (${t.entityPairId} IS NULL AND ${t.entitySoloUserId} IS NOT NULL)`
+    ),
+  })
+);
+
+export const queueEvents = pgTable(
+  "queue_events",
   {
     id: text("id").primaryKey(),
     sessionId: text("session_id")
       .notNull()
       .references(() => sessions.id),
-    slotNumber: integer("slot_number").notNull(),
     checkinId: text("checkin_id").references(() => checkins.id),
-    assignedAt: bigint("assigned_at", { mode: "number" }).notNull(),
+    action: queueEventActionEnum("action").notNull(),
+    fromQueue: queueTypeEnum("from_queue"),
+    fromPosition: integer("from_position"),
+    toQueue: queueTypeEnum("to_queue"),
+    toPosition: integer("to_position"),
+    actorUserId: text("actor_user_id")
+      .notNull()
+      .references(() => users.id),
+    reason: text("reason"),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
   },
   (t) => ({
-    slotUq: uniqueIndex("uq_floor_slots_session_slot").on(t.sessionId, t.slotNumber),
-    fsSessIdx: index("idx_floor_slots_session_id").on(t.sessionId),
+    sessTimeIdx: index("idx_queue_events_session_created").on(t.sessionId, t.createdAt),
+  })
+);
+
+export const eventDivisionRunLimits = pgTable(
+  "event_division_run_limits",
+  {
+    eventId: text("event_id")
+      .notNull()
+      .references(() => events.id),
+    divisionName: text("division_name").notNull(),
+    priorityRunLimit: integer("priority_run_limit").notNull(),
+  },
+  (t) => ({
+    pk: uniqueIndex("uq_event_division_run_limits_pk").on(t.eventId, t.divisionName),
   })
 );

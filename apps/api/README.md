@@ -25,7 +25,7 @@ for rationale and revisit triggers.
   authenticated routes under `/v1/`.
 - **Song files** (MP3, WAV, FLAC, m4a) — metadata via `POST /v1/songs` (JSON), then the file via `POST /v1/songs/:id/upload` as multipart form data. Files are persisted to Google Drive via the service account configured in `GOOGLE_SERVICE_ACCOUNT_*` env vars.
 - **Session/check-in events** posted by the floor-trial UI to
-  `/v1/sessions`, `/v1/checkins`, `/v1/slots`, `/v1/events`.
+  `/v1/sessions`, `/v1/checkins`, `/v1/queue`, `/v1/events`.
 - **Railway cron ticks** via `GET /internal/tick` (secret-gated),
   which advances session statuses on a schedule.
 
@@ -35,7 +35,7 @@ for rationale and revisit triggers.
   successful responses, `{ error: { code, message } }` for errors.
   Envelope helpers come from `common-typescript-utils`.
 - **PostgreSQL writes** via Drizzle to the `deejaytools` database:
-  users, partners, songs, sessions, check-ins, slots, events,
+  users, partners, songs, sessions, check-ins, queue entries, events,
   legacy_songs.
 - **Google Drive writes** for song files — the upload service tags
   files with partnership/division metadata before uploading.
@@ -53,8 +53,8 @@ for rationale and revisit triggers.
 | `/v1/auth` | Clerk session sync / whoami. |
 | `/v1/events` | Event CRUD for event organizers. |
 | `/v1/sessions` | Session lifecycle for a single event. |
-| `/v1/checkins` | Dancer check-in state. |
-| `/v1/slots` | Floor trial slot management. |
+| `/v1/checkins` | Dancer check-in (append-only history + live queue seed). |
+| `/v1/queue` | Floor trial queue: reads and admin promote/complete/withdraw. |
 | `/v1/partners` | Partner records (name, division, history). |
 | `/v1/songs` | Song uploads and metadata. |
 | `/v1/legacy-songs` | Read-only view of historical song catalog (public). |

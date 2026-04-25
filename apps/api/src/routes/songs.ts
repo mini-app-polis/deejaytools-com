@@ -2,9 +2,9 @@ import { CommonErrors, createLogger, error, success, successList } from "common-
 import { zValidator } from "../lib/validate.js";
 import { Hono } from "hono";
 import { z } from "zod";
-import { and, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, ne, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { checkins, partners, songs, users } from "../db/schema.js";
+import { checkins, partners, queueEntries, songs, users } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
 import { softDeleteOnDrive, uploadSongToDrive } from "../services/drive.js";
 import { tagSongBytes } from "../services/tagger.js";
@@ -300,9 +300,8 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
   const [activeHit] = await db
     .select({ id: checkins.id })
     .from(checkins)
-    .where(
-      and(eq(checkins.songId, id), inArray(checkins.status, ["waiting", "on_deck", "running"]))
-    )
+    .innerJoin(queueEntries, eq(queueEntries.checkinId, checkins.id))
+    .where(eq(checkins.songId, id))
     .limit(1);
 
   if (activeHit) {

@@ -2,9 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { app } from "../app.js";
 import {
   assertSuccessEnvelope,
-  assertSuccessListEnvelope,
   assertValidation400,
-  adminHeaders,
   authHeaders,
   type ErrorEnvelope,
   readJson,
@@ -16,67 +14,43 @@ vi.mock("../db/index.js", async () => {
   const { mockDb: db } = await import("../test/mocks.js");
   return { db };
 });
-vi.mock("../middleware/auth.js", async () => {
+vi.mock("../middleware/auth.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../middleware/auth.js")>();
   const { mockRequireAdmin, mockRequireAuth } = await import("../test/mocks.js");
   return {
+    ...actual,
     requireAuth: mockRequireAuth(),
     requireAdmin: mockRequireAdmin(),
   };
 });
-vi.mock("../lib/pair-display.js", () => ({
-  loadPairDisplayNames: vi.fn().mockResolvedValue(new Map<string, string>()),
-}));
 
 const BASE = "/v1/checkins";
 const now = Date.now();
 
-const mockSession = {
+const openSession = {
   id: "sess1",
   eventId: null as string | null,
   name: "S",
   date: null as string | null,
-  checkinOpensAt: now - 1000,
-  floorTrialStartsAt: now,
-  floorTrialEndsAt: now + 7200000,
-  maxSlots: 7,
-  maxPriorityRuns: 3,
+  checkinOpensAt: now - 10_000,
+  floorTrialStartsAt: now - 5000,
+  floorTrialEndsAt: now + 7_200_000,
+  activePriorityMax: 6,
+  activeNonPriorityMax: 4,
   status: "checkin_open" as const,
   createdBy: "user_admin123",
   createdAt: now,
 };
 
-const mockCheckin = {
-  id: "c1",
-  sessionId: "sess1",
-  eventRegistrationId: null as string | null,
-  pairId: "p1",
-  submittedByUserId: "user_test123",
-  songId: "song1",
-  division: "Classic",
-  queueType: "standard" as const,
-  queuePosition: 1,
-  status: "waiting" as const,
-  checkedInAt: now,
-  lastRunAt: null as number | null,
+const futureSession = {
+  ...openSession,
+  checkinOpensAt: now + 60_000,
 };
 
-describe("GET /v1/checkins", () => {
-  beforeEach(() => {
-    resetSelectQueue();
-  });
-
-  it("returns 400 when session_id is missing", async () => {
-    const res = await app.request(BASE);
-    expect(res.status).toBe(400);
-  });
-
-  it("returns success list for a session", async () => {
-    enqueueSelectResult([]);
-    const res = await app.request(`${BASE}?session_id=sess1`);
-    expect(res.status).toBe(200);
-    assertSuccessListEnvelope(await readJson(res));
-  });
-});
+const closedSession = {
+  ...openSession,
+  floorTrialEndsAt: now - 1000,
+};
 
 describe("POST /v1/checkins", () => {
   beforeEach(() => {
@@ -88,162 +62,170 @@ describe("POST /v1/checkins", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        session_id: "sess1",
-        division: "Classic",
-        queue_type: "standard",
-        partner_id: null,
+        sessionId: "sess1",
+        divisionName: "Classic",
+        entityPairId: "p1",
+        songId: "song1",
       }),
     });
     expect(res.status).toBe(401);
   });
 
-  it("returns 400 when division is missing", async () => {
+  it("returns 400 when entity XOR validation fails", async () => {
     const res = await app.request(BASE, {
       method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({
-        session_id: "sess1",
-        queue_type: "standard",
-        partner_id: null,
+        sessionId: "sess1",
+        divisionName: "Classic",
+        songId: "song1",
       }),
     });
     expect(res.status).toBe(400);
     assertValidation400(await readJson<ErrorEnvelope>(res));
   });
 
-  it("returns 404 when session not found", async () => {
-    enqueueSelectResult([]);
+  it("returns 400 when check-in has not opened yet", async () => {
+    enqueueSelectResult([futureSession]);
     const res = await app.request(BASE, {
       method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({
-        session_id: "nonexistent",
-        division: "Classic",
-        queue_type: "standard",
-        partner_id: null,
+        sessionId: "sess1",
+        divisionName: "Classic",
+        entityPairId: "p1",
+        songId: "song1",
       }),
     });
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(400);
   });
 
-  it("returns 409 when checkin is not open", async () => {
-    enqueueSelectResult([
-      {
-        ...mockSession,
-        status: "scheduled" as const,
-      },
-    ]);
+  it("returns 400 when check-in is closed", async () => {
+    enqueueSelectResult([closedSession]);
     const res = await app.request(BASE, {
       method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({
-        session_id: "sess1",
-        division: "Classic",
-        queue_type: "standard",
-        partner_id: null,
+        sessionId: "sess1",
+        divisionName: "Classic",
+        entityPairId: "p1",
+        songId: "song1",
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when user is not pair leader", async () => {
+    enqueueSelectResult([openSession]);
+    enqueueSelectResult([{ userAId: "other_user", partnerBId: null }]);
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "sess1",
+        divisionName: "Classic",
+        entityPairId: "p1",
+        songId: "song1",
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 409 when entity already has a live queue entry", async () => {
+    enqueueSelectResult([openSession]);
+    enqueueSelectResult([{ userAId: "user_test123", partnerBId: null }]);
+    enqueueSelectResult([{ id: "qe1" }]);
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "sess1",
+        divisionName: "Classic",
+        entityPairId: "p1",
+        songId: "song1",
       }),
     });
     expect(res.status).toBe(409);
-    const body = await readJson<ErrorEnvelope>(res);
-    expect(body.error.code).toBe("CHECKIN_NOT_OPEN");
   });
 
-  it("returns 409 on duplicate checkin", async () => {
-    enqueueSelectResult([mockSession]);
-    enqueueSelectResult([{ id: "div1" }]);
-    enqueueSelectResult([{ id: "pair1" }]);
-    enqueueSelectResult([{ id: "c_exist" }]);
+  it("returns 201 for pair check-in into priority division → priority queue", async () => {
+    enqueueSelectResult([openSession]);
+    enqueueSelectResult([{ userAId: "user_test123", partnerBId: null }]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([openSession]);
+    enqueueSelectResult([{ isPriority: true, priorityRunLimit: 3 }]);
+    enqueueSelectResult([{ n: 0 }]);
     const res = await app.request(BASE, {
       method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({
-        session_id: "sess1",
-        division: "Classic",
-        queue_type: "standard",
-        partner_id: null,
+        sessionId: "sess1",
+        divisionName: "Classic",
+        entityPairId: "p1",
+        songId: "song1",
       }),
     });
-    expect(res.status).toBe(409);
-    const body = await readJson<ErrorEnvelope>(res);
-    expect(body.error.code).toBe("DUPLICATE_CHECKIN");
-  });
-});
-
-describe("DELETE /v1/checkins/mine", () => {
-  beforeEach(() => {
-    resetSelectQueue();
-  });
-
-  it("returns 401 without auth", async () => {
-    const res = await app.request(`${BASE}/mine?session_id=sess1`, {
-      method: "DELETE",
-    });
-    expect(res.status).toBe(401);
-  });
-
-  it("returns 404 when no active checkin", async () => {
-    enqueueSelectResult([]);
-    const res = await app.request(`${BASE}/mine?session_id=sess1`, {
-      method: "DELETE",
-      headers: authHeaders(),
-    });
-    expect(res.status).toBe(404);
-  });
-
-  it("withdraws checkin and returns 204", async () => {
-    enqueueSelectResult([{ id: "c1" }]);
-    const res = await app.request(`${BASE}/mine?session_id=sess1`, {
-      method: "DELETE",
-      headers: authHeaders(),
-    });
-    expect(res.status).toBe(204);
-  });
-});
-
-describe("PATCH /v1/checkins/:id", () => {
-  beforeEach(() => {
-    resetSelectQueue();
-  });
-
-  it("returns 401 without bearer token", async () => {
-    const res = await app.request(`${BASE}/c1`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "running" }),
-    });
-    expect(res.status).toBe(401);
-  });
-
-  it("returns 403 when user is not admin", async () => {
-    const res = await app.request(`${BASE}/c1`, {
-      method: "PATCH",
-      headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "running" }),
-    });
-    expect(res.status).toBe(403);
-  });
-
-  it("returns 404 when checkin not found", async () => {
-    enqueueSelectResult([]);
-    const res = await app.request(`${BASE}/nonexistent`, {
-      method: "PATCH",
-      headers: { ...adminHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "running" }),
-    });
-    expect(res.status).toBe(404);
-  });
-
-  it("updates status and returns 200", async () => {
-    enqueueSelectResult([mockCheckin]);
-    enqueueSelectResult([{ ...mockCheckin, status: "running" as const }]);
-    const res = await app.request(`${BASE}/c1`, {
-      method: "PATCH",
-      headers: { ...adminHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "running" }),
-    });
-    expect(res.status).toBe(200);
-    const body = await readJson<SuccessEnvelope<Record<string, unknown>>>(res);
+    expect(res.status).toBe(201);
+    const body = await readJson<SuccessEnvelope<{ initialQueue: string }>>(res);
     assertSuccessEnvelope(body);
-    expect(body.data).toMatchObject({ status: "running" });
+    expect(body.data.initialQueue).toBe("priority");
+  });
+
+  it("returns 201 for non-priority division → non_priority", async () => {
+    enqueueSelectResult([openSession]);
+    enqueueSelectResult([{ userAId: "user_test123", partnerBId: null }]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([openSession]);
+    enqueueSelectResult([{ isPriority: false, priorityRunLimit: 0 }]);
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "sess1",
+        divisionName: "Classic",
+        entityPairId: "p1",
+        songId: "song1",
+      }),
+    });
+    expect(res.status).toBe(201);
+    const body = await readJson<SuccessEnvelope<{ initialQueue: string }>>(res);
+    expect(body.data.initialQueue).toBe("non_priority");
+  });
+
+  it("demotes to non_priority when session run limit reached", async () => {
+    enqueueSelectResult([openSession]);
+    enqueueSelectResult([{ userAId: "user_test123", partnerBId: null }]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([openSession]);
+    enqueueSelectResult([{ isPriority: true, priorityRunLimit: 3 }]);
+    enqueueSelectResult([{ n: 3 }]);
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "sess1",
+        divisionName: "Classic",
+        entityPairId: "p1",
+        songId: "song1",
+      }),
+    });
+    expect(res.status).toBe(201);
+    const body = await readJson<SuccessEnvelope<{ initialQueue: string }>>(res);
+    expect(body.data.initialQueue).toBe("non_priority");
+  });
+
+  it("returns 400 for solo check-in for someone else", async () => {
+    enqueueSelectResult([openSession]);
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "sess1",
+        divisionName: "Classic",
+        entitySoloUserId: "other_user",
+        songId: "song1",
+      }),
+    });
+    expect(res.status).toBe(400);
   });
 });

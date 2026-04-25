@@ -5,6 +5,15 @@ left out of the initial build and need to come back.
 
 ---
 
+## Recently completed
+
+- **ADR-004 floor-trial queue model.** Schema, helpers, routes, and
+  frontend updated. Replaces the original `floor_slots` design with
+  three queues, audit trail, and run-history tables. See
+  `apps/api/docs/decisions/ADR-004-floor-trial-queue-model.md`.
+
+---
+
 ## Floor trial UX — full revisit
 
 The events, sessions, and queue flows were migrated from the old platform
@@ -34,7 +43,7 @@ should be managed from the same place.
 ## Contract test coverage
 
 Current coverage: ~68% statements, 70% functions.
-Remaining gaps: slots happy paths, checkins business logic branches,
+Remaining gaps: queue mutation edge cases, check-in admission branches,
 optional-user helper, middleware JWT verification path.
 
 Target: 75% statements.

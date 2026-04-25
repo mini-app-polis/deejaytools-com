@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -46,8 +46,15 @@ type SessionRow = {
   checkin_opens_at: number;
   floor_trial_starts_at: number;
   floor_trial_ends_at: number;
+  active_priority_max?: number;
+  active_non_priority_max?: number;
   status: string;
-  divisions?: { division_name: string; is_priority: boolean; sort_order: number }[];
+  divisions?: {
+    division_name: string;
+    is_priority: boolean;
+    sort_order: number;
+    priority_run_limit?: number;
+  }[];
 };
 
 function sessionStatusBadge(status: string) {
@@ -81,20 +88,39 @@ function formatTime(ts: number): string {
 const divisionSchema = z.object({
   division_name: z.string().min(1),
   is_priority: z.boolean(),
+  priority_run_limit: z.coerce.number().int().min(0).default(0),
 });
 
-const sessionFormSchema = z.object({
-  name: z.string().min(1),
-  date: z.string().optional(),
-  checkin_opens_at: z.string().min(1),
-  floor_trial_starts_at: z.string().min(1),
-  floor_trial_ends_at: z.string().min(1),
-  max_slots: z.coerce.number().int().min(1).optional(),
-  max_priority_runs: z.coerce.number().int().min(0).optional(),
-  divisions: z.array(divisionSchema).default([]),
-});
+const sessionFormSchema = z
+  .object({
+    name: z.string().min(1),
+    date: z.string().optional(),
+    checkin_opens_at: z.string().min(1),
+    floor_trial_starts_at: z.string().min(1),
+    floor_trial_ends_at: z.string().min(1),
+    active_priority_max: z.coerce.number().int().min(0).default(6),
+    active_non_priority_max: z.coerce.number().int().min(0).default(4),
+    divisions: z.array(divisionSchema).default([]),
+  })
+  .refine((v) => v.active_non_priority_max <= v.active_priority_max, {
+    message: "Non-priority cap must be less than or equal to the priority (active) cap",
+    path: ["active_non_priority_max"],
+  });
 
 type SessionFormValues = z.infer<typeof sessionFormSchema>;
+
+function getEmptySessionFormValues(): SessionFormValues {
+  return {
+    name: "",
+    date: "",
+    checkin_opens_at: "",
+    floor_trial_starts_at: "",
+    floor_trial_ends_at: "",
+    active_priority_max: 6,
+    active_non_priority_max: 4,
+    divisions: [{ division_name: "Classic", is_priority: false, priority_run_limit: 0 }],
+  };
+}
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -107,16 +133,7 @@ export default function EventDetailPage() {
 
   const form = useForm<SessionFormValues>({
     resolver: zodResolver(sessionFormSchema),
-    defaultValues: {
-      name: "",
-      date: "",
-      checkin_opens_at: "",
-      floor_trial_starts_at: "",
-      floor_trial_ends_at: "",
-      max_slots: 7,
-      max_priority_runs: 3,
-      divisions: [{ division_name: "Classic", is_priority: false }],
-    },
+    defaultValues: getEmptySessionFormValues(),
   });
 
   const { fields, append, remove } = useFieldArray({
@@ -143,6 +160,36 @@ export default function EventDetailPage() {
     load();
   }, [api, id]);
 
+  const onSessionDialogOpenChange = useCallback(
+    (open: boolean) => {
+      setSessionDialogOpen(open);
+      if (!open) return;
+      if (sessions && sessions.length > 0) {
+        const sorted = [...sessions].sort(
+          (a, b) => b.floor_trial_starts_at - a.floor_trial_starts_at
+        );
+        const latest = sorted[0]!;
+        const divs =
+          latest.divisions
+            ?.filter((d) => d.division_name?.trim() && d.division_name.trim() !== "Other")
+            .map((d) => ({
+              division_name: d.division_name.trim(),
+              is_priority: d.is_priority,
+              priority_run_limit: d.priority_run_limit ?? 0,
+            })) ?? [];
+        form.reset({
+          ...getEmptySessionFormValues(),
+          active_priority_max: latest.active_priority_max ?? 6,
+          active_non_priority_max: latest.active_non_priority_max ?? 4,
+          divisions: divs.length > 0 ? divs : getEmptySessionFormValues().divisions,
+        });
+      } else {
+        form.reset(getEmptySessionFormValues());
+      }
+    },
+    [sessions, form]
+  );
+
   const onCreateSession = form.handleSubmit(async (values) => {
     if (!id) return;
     try {
@@ -152,6 +199,7 @@ export default function EventDetailPage() {
           division_name: d.division_name.trim(),
           is_priority: d.is_priority,
           sort_order: i,
+          priority_run_limit: d.priority_run_limit ?? 0,
         }));
       await api.post<SessionRow>("/v1/sessions", {
         event_id: id,
@@ -160,22 +208,13 @@ export default function EventDetailPage() {
         checkin_opens_at: new Date(values.checkin_opens_at).getTime(),
         floor_trial_starts_at: new Date(values.floor_trial_starts_at).getTime(),
         floor_trial_ends_at: new Date(values.floor_trial_ends_at).getTime(),
-        ...(values.max_slots != null ? { max_slots: values.max_slots } : {}),
-        ...(values.max_priority_runs != null ? { max_priority_runs: values.max_priority_runs } : {}),
+        active_priority_max: values.active_priority_max,
+        active_non_priority_max: values.active_non_priority_max,
         divisions,
       });
       toast.success("Session created");
       setSessionDialogOpen(false);
-      form.reset({
-        name: "",
-        date: "",
-        checkin_opens_at: "",
-        floor_trial_starts_at: "",
-        floor_trial_ends_at: "",
-        max_slots: 7,
-        max_priority_runs: 3,
-        divisions: [{ division_name: "Classic", is_priority: false }],
-      });
+      form.reset(getEmptySessionFormValues());
       load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to create session");
@@ -234,7 +273,7 @@ export default function EventDetailPage() {
         <TabsContent value="sessions" className="space-y-4 mt-4">
           <div className="flex justify-end">
             {isAdmin && (
-              <Dialog open={sessionDialogOpen} onOpenChange={setSessionDialogOpen}>
+              <Dialog open={sessionDialogOpen} onOpenChange={onSessionDialogOpenChange}>
                 <DialogTrigger asChild>
                   <Button>New Session</Button>
                 </DialogTrigger>
@@ -312,12 +351,12 @@ export default function EventDetailPage() {
                       <div className="grid grid-cols-2 gap-3">
                         <FormField
                           control={form.control}
-                          name="max_slots"
+                          name="active_priority_max"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Max slots</FormLabel>
+                              <FormLabel>Active cap (priority)</FormLabel>
                               <FormControl>
-                                <Input type="number" min={1} {...field} />
+                                <Input type="number" min={0} {...field} />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -325,10 +364,10 @@ export default function EventDetailPage() {
                         />
                         <FormField
                           control={form.control}
-                          name="max_priority_runs"
+                          name="active_non_priority_max"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Max priority runs</FormLabel>
+                              <FormLabel>Active cap (non-priority)</FormLabel>
                               <FormControl>
                                 <Input type="number" min={0} {...field} />
                               </FormControl>
@@ -344,7 +383,9 @@ export default function EventDetailPage() {
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={() => append({ division_name: "", is_priority: false })}
+                            onClick={() =>
+                              append({ division_name: "", is_priority: false, priority_run_limit: 0 })
+                            }
                           >
                             Add division
                           </Button>
@@ -372,6 +413,19 @@ export default function EventDetailPage() {
                                     <Switch checked={field.value} onCheckedChange={field.onChange} />
                                   </FormControl>
                                   <FormLabel className="font-normal">Priority division</FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name={`divisions.${index}.priority_run_limit`}
+                              render={({ field }) => (
+                                <FormItem className="w-28 shrink-0">
+                                  <FormLabel className="text-xs">Priority runs (1..X)</FormLabel>
+                                  <FormControl>
+                                    <Input type="number" min={0} {...field} />
+                                  </FormControl>
+                                  <FormMessage />
                                 </FormItem>
                               )}
                             />

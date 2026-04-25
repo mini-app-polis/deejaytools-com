@@ -3,9 +3,9 @@ import { PartnerRoleSchema } from "@deejaytools/schemas";
 import { zValidator } from "../lib/validate.js";
 import { Hono } from "hono";
 import { z } from "zod";
-import { and, asc, count, eq, inArray } from "drizzle-orm";
+import { and, asc, count, eq } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { checkins, eventRegistrations, pairs, partners, songs } from "../db/schema.js";
+import { checkins, eventRegistrations, pairs, partners, queueEntries, songs } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
 
 const createBody = z.object({
@@ -23,6 +23,33 @@ const patchBody = z.object({
 });
 
 export const partnerRoutes = new Hono();
+
+/** Pairs where the current user is user A (leader) — for check-in entity picker. */
+partnerRoutes.get("/leading-pairs", requireAuth, async (c) => {
+  const userId = c.get("user").userId;
+  const rows = await db
+    .select({
+      id: pairs.id,
+      partnerBId: pairs.partnerBId,
+    })
+    .from(pairs)
+    .where(eq(pairs.userAId, userId));
+
+  const results: { id: string; partner_b_id: string | null; display_name: string }[] = [];
+  for (const r of rows) {
+    let displayName = "Open slot";
+    if (r.partnerBId) {
+      const [p] = await db.select().from(partners).where(eq(partners.id, r.partnerBId)).limit(1);
+      if (p) displayName = partnerDisplayName(p.firstName, p.lastName);
+    }
+    results.push({
+      id: r.id,
+      partner_b_id: r.partnerBId,
+      display_name: displayName,
+    });
+  }
+  return c.json(successList(results));
+});
 
 function partnerDisplayName(firstName: string, lastName: string): string {
   return `${firstName} ${lastName}`.trim();
@@ -96,13 +123,9 @@ partnerRoutes.get("/:id/associations", requireAuth, async (c) => {
   const [activeHit] = await db
     .select({ id: checkins.id })
     .from(checkins)
-    .innerJoin(pairs, eq(pairs.id, checkins.pairId))
-    .where(
-      and(
-        eq(pairs.partnerBId, id),
-        inArray(checkins.status, ["waiting", "on_deck", "running"])
-      )
-    )
+    .innerJoin(pairs, eq(pairs.id, checkins.entityPairId))
+    .innerJoin(queueEntries, eq(queueEntries.checkinId, checkins.id))
+    .where(eq(pairs.partnerBId, id))
     .limit(1);
 
   return c.json(
@@ -187,13 +210,9 @@ partnerRoutes.delete("/:id", requireAuth, async (c) => {
   const [activeHit] = await db
     .select({ id: checkins.id })
     .from(checkins)
-    .innerJoin(pairs, eq(pairs.id, checkins.pairId))
-    .where(
-      and(
-        eq(pairs.partnerBId, id),
-        inArray(checkins.status, ["waiting", "on_deck", "running"])
-      )
-    )
+    .innerJoin(pairs, eq(pairs.id, checkins.entityPairId))
+    .innerJoin(queueEntries, eq(queueEntries.checkinId, checkins.id))
+    .where(eq(pairs.partnerBId, id))
     .limit(1);
 
   if (activeHit) {
