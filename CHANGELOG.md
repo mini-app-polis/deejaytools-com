@@ -1,3 +1,10 @@
+## [1.17.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.17.3...v1.17.4) (2026-04-25)
+
+
+### Bug Fixes
+
+* **api:** pin hono + node-server to last-known-working versions ([9d6f76d](https://github.com/mini-app-polis/deejaytools-com/commit/9d6f76d47a9eeff63e8395c857e8bf128ac0b111))
+
 ## [1.17.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.17.2...v1.17.3) (2026-04-25)
 
 
