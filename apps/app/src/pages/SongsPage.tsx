@@ -389,6 +389,7 @@ export default function SongsPage() {
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                 className="cursor-pointer"
               />
+              <p className="text-xs text-muted-foreground">MP3, WAV, FLAC, or M4A — max 100 MB</p>
             </div>
 
             <Button type="submit" disabled={isSubmitting}>

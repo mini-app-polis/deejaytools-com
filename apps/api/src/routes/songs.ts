@@ -1,5 +1,5 @@
 import { File } from "node:buffer";
-import { mkdir, writeFile, readdir, readFile, rm } from "node:fs/promises";
+import { mkdir, writeFile, readdir, readFile, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { CommonErrors, createLogger, error, success, successList } from "common-typescript-utils";
 import { zValidator } from "../lib/validate.js";
@@ -40,6 +40,30 @@ const patchBody = z.object({
 const CHUNK_TMP_BASE = "/tmp/dj-upload-chunks";
 const MAX_CHUNK_BYTES = 10 * 1024 * 1024; // 10 MB per chunk
 const MAX_ASSEMBLED_BYTES = 110 * 1024 * 1024; // ~110 MB assembled
+const CHUNK_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+/** Remove any stale upload dirs older than CHUNK_TTL_MS. Fire-and-forget — never throws. */
+async function sweepStaleTmpDirs(): Promise<void> {
+  try {
+    const entries = await readdir(CHUNK_TMP_BASE);
+    const now = Date.now();
+    await Promise.all(
+      entries.map(async (entry) => {
+        const dir = join(CHUNK_TMP_BASE, entry);
+        try {
+          const s = await stat(dir);
+          if (now - s.mtimeMs > CHUNK_TTL_MS) {
+            await rm(dir, { recursive: true, force: true });
+          }
+        } catch {
+          // ignore — dir may have been cleaned up by a concurrent request
+        }
+      })
+    );
+  } catch {
+    // CHUNK_TMP_BASE doesn't exist yet or readdir failed — nothing to clean
+  }
+}
 
 export const songRoutes = new Hono();
 const logger = createLogger("songs-routes");
@@ -465,6 +489,9 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
 songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   const userId = c.get("user").userId;
 
+  // Best-effort cleanup of abandoned upload dirs — does not block the request.
+  void sweepStaleTmpDirs();
+
   const body = await c.req.parseBody();
   const uploadId = typeof body.upload_id === "string" ? body.upload_id.trim() : "";
   const chunkIndex = Number(body.chunk_index ?? -1);
@@ -625,96 +652,3 @@ songRoutes.post("/:id/upload", requireAuth, async (c) => {
   }
 });
 
-// POST /v1/songs/:id/upload/chunk — chunked multipart upload.
-// Client sends sequential 5 MB chunks; server assembles, tags, and uploads to Drive on the final chunk.
-// Body fields: chunk (File), upload_id (UUID string), chunk_index (int), total_chunks (int),
-//              original_filename (string), mime_type (string).
-songRoutes.post("/:id/upload/chunk", requireAuth, async (c) => {
-  const userId = c.get("user").userId;
-  const id = c.req.param("id");
-
-  const [song] = await db
-    .select()
-    .from(songs)
-    .where(and(eq(songs.id, id), eq(songs.userId, userId)))
-    .limit(1);
-  if (!song) return c.json(CommonErrors.notFound("Song"), 404);
-
-  const body = await c.req.parseBody();
-  const uploadId = typeof body.upload_id === "string" ? body.upload_id.trim() : "";
-  const chunkIndex = Number(body.chunk_index ?? -1);
-  const totalChunks = Number(body.total_chunks ?? 0);
-  const originalName =
-    typeof body.original_filename === "string"
-      ? body.original_filename.trim() || "song.mp3"
-      : "song.mp3";
-  const mimeType =
-    typeof body.mime_type === "string" ? body.mime_type.trim() || "audio/mpeg" : "audio/mpeg";
-  const chunkFile = body.chunk instanceof File ? body.chunk : null;
-
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uploadId)) {
-    return c.json(CommonErrors.badRequest("Invalid upload_id"), 400);
-  }
-  if (!Number.isInteger(chunkIndex) || chunkIndex < 0) {
-    return c.json(CommonErrors.badRequest("Invalid chunk_index"), 400);
-  }
-  if (!Number.isInteger(totalChunks) || totalChunks < 1 || totalChunks > 30) {
-    return c.json(CommonErrors.badRequest("Invalid total_chunks (max 30)"), 400);
-  }
-  if (chunkIndex >= totalChunks) {
-    return c.json(CommonErrors.badRequest("chunk_index out of range"), 400);
-  }
-  if (!chunkFile) return c.json(CommonErrors.badRequest("Missing chunk field"), 400);
-
-  const chunkBytes = Buffer.from(await chunkFile.arrayBuffer());
-  if (chunkBytes.length > MAX_CHUNK_BYTES) {
-    return c.json(CommonErrors.badRequest("Chunk exceeds 10 MB limit"), 400);
-  }
-
-  // Write this chunk to a temp directory scoped by song + upload session.
-  const uploadDir = join(CHUNK_TMP_BASE, `${id}_${uploadId}`);
-  await mkdir(uploadDir, { recursive: true });
-  await writeFile(join(uploadDir, `chunk_${String(chunkIndex).padStart(6, "0")}`), chunkBytes);
-
-  const isLast = chunkIndex === totalChunks - 1;
-  if (!isLast) {
-    return c.json(success({ received: true, complete: false }));
-  }
-
-  // Final chunk received — verify all chunks are present, assemble, and process.
-  let chunkFiles: string[];
-  try {
-    chunkFiles = (await readdir(uploadDir)).sort();
-  } catch (err) {
-    logger.error({ event: "chunk_readdir_failed", category: "api", context: { songId: id, uploadId }, error: err });
-    return c.json(error("CHUNK_ERROR", "Failed to read uploaded chunks"), 500);
-  }
-
-  if (chunkFiles.length !== totalChunks) {
-    await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
-    return c.json(
-      error(
-        "CHUNK_MISSING",
-        `Expected ${totalChunks} chunks but only received ${chunkFiles.length}. Please retry the upload.`
-      ),
-      409
-    );
-  }
-
-  const parts = await Promise.all(chunkFiles.map((f) => readFile(join(uploadDir, f))));
-  const assembled = Buffer.concat(parts);
-  // Clean up temp dir immediately — we hold the assembled buffer in memory.
-  await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
-
-  if (assembled.length > MAX_ASSEMBLED_BYTES) {
-    return c.json(CommonErrors.badRequest("File exceeds 100 MB limit"), 400);
-  }
-
-  try {
-    const mappedSong = await buildAndUploadSong(song, userId, assembled, originalName, mimeType);
-    return c.json(success({ received: true, complete: true, song: mappedSong }));
-  } catch (err) {
-    logger.error({ event: "song_chunk_upload_failed", category: "api", context: { songId: id, uploadId }, error: err });
-    throw err;
-  }
-});
