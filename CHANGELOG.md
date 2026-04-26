@@ -1,3 +1,10 @@
+## [1.19.6](https://github.com/mini-app-polis/deejaytools-com/compare/v1.19.5...v1.19.6) (2026-04-26)
+
+
+### Bug Fixes
+
+* added hardening ([cac60a5](https://github.com/mini-app-polis/deejaytools-com/commit/cac60a5128d496c695fafc68bfc62abb983983fe))
+
 ## [1.19.5](https://github.com/mini-app-polis/deejaytools-com/compare/v1.19.4...v1.19.5) (2026-04-26)
 
 
