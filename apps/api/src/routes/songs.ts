@@ -457,6 +457,134 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
   return c.body(null, 204);
 });
 
+// POST /v1/songs/upload/chunk — atomic chunked upload: no song record is created until the
+// final chunk is processed and Drive confirms the upload. Song never exists in a broken state.
+// Body fields (send on every chunk): chunk (File), upload_id (UUID), chunk_index (int),
+//   total_chunks (int), original_filename (string), mime_type (string), division (string),
+//   partner_id (string|""), routine_name (string|""), personal_descriptor (string|"")
+songRoutes.post("/upload/chunk", requireAuth, async (c) => {
+  const userId = c.get("user").userId;
+
+  const body = await c.req.parseBody();
+  const uploadId = typeof body.upload_id === "string" ? body.upload_id.trim() : "";
+  const chunkIndex = Number(body.chunk_index ?? -1);
+  const totalChunks = Number(body.total_chunks ?? 0);
+  const originalName =
+    typeof body.original_filename === "string"
+      ? body.original_filename.trim() || "song.mp3"
+      : "song.mp3";
+  const mimeType =
+    typeof body.mime_type === "string" ? body.mime_type.trim() || "audio/mpeg" : "audio/mpeg";
+  const division = typeof body.division === "string" ? body.division.trim() : "";
+  const partnerId =
+    typeof body.partner_id === "string" ? body.partner_id.trim() || null : null;
+  const routineName =
+    typeof body.routine_name === "string" ? body.routine_name.trim() || null : null;
+  const personalDescriptor =
+    typeof body.personal_descriptor === "string"
+      ? body.personal_descriptor.trim() || null
+      : null;
+  const chunkFile = body.chunk instanceof File ? body.chunk : null;
+
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uploadId)) {
+    return c.json(CommonErrors.badRequest("Invalid upload_id"), 400);
+  }
+  if (!division) return c.json(CommonErrors.badRequest("division is required"), 400);
+  if (!Number.isInteger(chunkIndex) || chunkIndex < 0) {
+    return c.json(CommonErrors.badRequest("Invalid chunk_index"), 400);
+  }
+  if (!Number.isInteger(totalChunks) || totalChunks < 1 || totalChunks > 30) {
+    return c.json(CommonErrors.badRequest("Invalid total_chunks (max 30)"), 400);
+  }
+  if (chunkIndex >= totalChunks) {
+    return c.json(CommonErrors.badRequest("chunk_index out of range"), 400);
+  }
+  if (!chunkFile) return c.json(CommonErrors.badRequest("Missing chunk field"), 400);
+
+  const chunkBytes = Buffer.from(await chunkFile.arrayBuffer());
+  if (chunkBytes.length > MAX_CHUNK_BYTES) {
+    return c.json(CommonErrors.badRequest("Chunk exceeds 10 MB limit"), 400);
+  }
+
+  const uploadDir = join(CHUNK_TMP_BASE, `${userId}_${uploadId}`);
+  await mkdir(uploadDir, { recursive: true });
+  await writeFile(join(uploadDir, `chunk_${String(chunkIndex).padStart(6, "0")}`), chunkBytes);
+
+  const isLast = chunkIndex === totalChunks - 1;
+  if (!isLast) {
+    return c.json(success({ received: true, complete: false }));
+  }
+
+  // Final chunk — validate partner before assembling.
+  if (partnerId) {
+    const ok = await assertPartnerOwned(userId, partnerId);
+    if (!ok) {
+      await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+      return c.json(CommonErrors.badRequest("Partner not found or does not belong to you"), 400);
+    }
+  }
+
+  let chunkFiles: string[];
+  try {
+    chunkFiles = (await readdir(uploadDir)).sort();
+  } catch (err) {
+    logger.error({ event: "chunk_readdir_failed", category: "api", context: { userId, uploadId }, error: err });
+    return c.json(error("CHUNK_ERROR", "Failed to read uploaded chunks"), 500);
+  }
+
+  if (chunkFiles.length !== totalChunks) {
+    await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+    return c.json(
+      error(
+        "CHUNK_MISSING",
+        `Expected ${totalChunks} chunks but only received ${chunkFiles.length}. Please retry the upload.`
+      ),
+      409
+    );
+  }
+
+  const parts = await Promise.all(chunkFiles.map((f) => readFile(join(uploadDir, f))));
+  const assembled = Buffer.concat(parts);
+  await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+
+  if (assembled.length > MAX_ASSEMBLED_BYTES) {
+    return c.json(CommonErrors.badRequest("File exceeds 100 MB limit"), 400);
+  }
+
+  // Create the song record now — only reached if all chunks arrived successfully.
+  const now = Date.now();
+  const songId = crypto.randomUUID();
+  await db.insert(songs).values({
+    id: songId,
+    userId,
+    partnerId,
+    displayName: routineName || originalName || null,
+    originalFilename: originalName,
+    processedFilename: null,
+    division: division || null,
+    routineName,
+    personalDescriptor,
+    seasonYear: null,
+    driveFileId: null,
+    driveFolderId: null,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const [songRow] = await db.select().from(songs).where(eq(songs.id, songId)).limit(1);
+  if (!songRow) return c.json(CommonErrors.internalError(), 500);
+
+  try {
+    const mappedSong = await buildAndUploadSong(songRow, userId, assembled, originalName, mimeType);
+    return c.json(success({ received: true, complete: true, song: mappedSong }));
+  } catch (err) {
+    // Drive upload failed — remove the record so the user's list stays clean.
+    await db.delete(songs).where(eq(songs.id, songId)).catch(() => {});
+    logger.error({ event: "song_atomic_upload_failed", category: "api", context: { songId, uploadId }, error: err });
+    throw err;
+  }
+});
+
 // POST /v1/songs/:id/upload — single-request multipart upload (kept for compatibility).
 // Prefer the chunked endpoint for files > a few MB.
 songRoutes.post("/:id/upload", requireAuth, async (c) => {

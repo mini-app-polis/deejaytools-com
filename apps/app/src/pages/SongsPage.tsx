@@ -58,7 +58,7 @@ const apiBase = import.meta.env.VITE_API_URL ?? "";
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB per chunk
 const MAX_FILE_BYTES = 100 * 1024 * 1024; // 100 MB
 
-type UploadStage = "idle" | "creating" | "uploading" | "processing" | "finishing";
+type UploadStage = "idle" | "uploading" | "processing" | "finishing";
 
 function formatMB(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1);
@@ -155,23 +155,11 @@ export default function SongsPage() {
     }
 
     setIsSubmitting(true);
-    let createdId: string | null = null;
 
     try {
-      setUploadStage("creating");
-      setUploadProgress(5);
-      setUploadBytesSent(0);
-
-      const created = await api.post<Song>("/v1/songs", {
-        division,
-        routine_name: routineName.trim() || null,
-        personal_descriptor: descriptor.trim() || null,
-        partner_id: selectedPartnerId || null,
-      });
-      createdId = created.id;
-
       setUploadStage("uploading");
       setUploadProgress(10);
+      setUploadBytesSent(0);
 
       const token = await getToken();
       const uploadId = crypto.randomUUID();
@@ -185,7 +173,7 @@ export default function SongsPage() {
         const isLast = i === totalChunks - 1;
 
         // Switch to processing state before the final chunk — the server will take
-        // a moment to tag the audio and upload it to Drive.
+        // a moment to tag the audio, create the song record, and upload it to Drive.
         if (isLast) {
           setUploadStage("processing");
           setUploadProgress(i > 0 ? 90 : 50);
@@ -204,10 +192,15 @@ export default function SongsPage() {
           form.set("total_chunks", String(totalChunks));
           form.set("original_filename", file.name);
           form.set("mime_type", file.type || "audio/mpeg");
+          // Song metadata — server uses these on the final chunk to create the record.
+          form.set("division", division);
+          form.set("partner_id", selectedPartnerId || "");
+          form.set("routine_name", routineName.trim() || "");
+          form.set("personal_descriptor", descriptor.trim() || "");
 
           let res: Response;
           try {
-            res = await fetch(`${apiBase}/v1/songs/${createdId}/upload/chunk`, {
+            res = await fetch(`${apiBase}/v1/songs/upload/chunk`, {
               method: "POST",
               headers: {
                 Accept: "application/json",
@@ -255,13 +248,6 @@ export default function SongsPage() {
       setFileInputKey((k) => k + 1);
       setFormKey((k) => k + 1);
     } catch (err) {
-      if (createdId) {
-        try {
-          await api.del(`/v1/songs/${createdId}`);
-        } catch {
-          /* ignore rollback errors */
-        }
-      }
       toast.error(err instanceof Error ? err.message : "Upload failed.");
     } finally {
       setUploadStage("idle");
@@ -416,9 +402,7 @@ export default function SongsPage() {
                       ? `Uploading… ${formatMB(uploadBytesSent)} of ${formatMB(file.size)} MB`
                       : uploadStage === "processing"
                         ? "Processing your file… this may take a moment"
-                        : uploadStage === "creating"
-                          ? "Preparing…"
-                          : "Saving…"}
+                        : "Saving…"}
                   </span>
                   <span>{uploadProgress}%</span>
                 </div>
