@@ -20,7 +20,8 @@ const port = Number(process.env.PORT ?? "3001");
 // URL construction, and auth all continue to work exactly as normal.
 const server = createAdaptorServer({
   fetch: app.fetch,
-  createServer: (_options: object, requestListener: (req: IncomingMessage, res: ServerResponse) => void) => {
+  // Cast to satisfy the overloaded http.createServer type signature.
+  createServer: ((_options: unknown, requestListener: (req: IncomingMessage, res: ServerResponse) => void) => {
     return httpCreateServer(async (req: IncomingMessage, res: ServerResponse) => {
       // Drain body immediately at TCP level.
       const chunks: Buffer[] = [];
@@ -43,7 +44,7 @@ const server = createAdaptorServer({
 
       requestListener(req, res);
     });
-  },
+  }) as typeof httpCreateServer,
 });
 
 server.listen(port, "0.0.0.0", () => {
