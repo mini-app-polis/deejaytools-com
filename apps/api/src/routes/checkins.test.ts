@@ -7,7 +7,6 @@ import {
   adminHeaders,
   authHeaders,
   type ErrorEnvelope,
-  type HonoZodFailureBody,
   readJson,
   type SuccessEnvelope,
 } from "../test/helpers.js";
@@ -109,7 +108,7 @@ describe("POST /v1/checkins", () => {
       }),
     });
     expect(res.status).toBe(400);
-    assertValidation400(await readJson<HonoZodFailureBody>(res));
+    assertValidation400(await readJson<ErrorEnvelope>(res));
   });
 
   it("returns 404 when session not found", async () => {

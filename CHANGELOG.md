@@ -1,3 +1,15 @@
+# [1.14.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.13.4...v1.14.0) (2026-04-25)
+
+
+### Bug Fixes
+
+* **api:** canonical envelope for validation 400s via zValidator wrapper ([432fd49](https://github.com/mini-app-polis/deejaytools-com/commit/432fd493178dafa0861d4670bea4628068e04770))
+
+
+### Features
+
+* **app:** wire @sentry/react for browser error tracking ([7a95c01](https://github.com/mini-app-polis/deejaytools-com/commit/7a95c01efc911c88f8df643086bde6b5a58cae53))
+
 ## [1.13.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.13.3...v1.13.4) (2026-04-23)
 
 

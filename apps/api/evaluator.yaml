@@ -15,7 +15,7 @@ exemptions:
 
   - rule: API-011
     reason: >-
-      Database migrations use Drizzle ORM and run at Railway deploy time via the service's release hook, not in ci.yml — see apps/api/docs/decisions/ADR-0001-drizzle-migrations-at-deploy.md. The check's 'drizzle-kit push/migrate in ci.yml' requirement is a different migration-timing decision than this repo's.
+      Database migrations use Drizzle ORM and run at Railway deploy time via the service's release hook, not in ci.yml — see apps/api/docs/decisions/ADR-001-drizzle-migrations-at-deploy.md. The check's 'drizzle-kit push/migrate in ci.yml' requirement is a different migration-timing decision than this repo's.
 
   - rule: API-004
     reason: >-
@@ -28,5 +28,11 @@ exemptions:
   - rule: API-001
     reason: >-
       Railway deployment configuration lives at the monorepo root (/railway.toml), which is the correct location for a pnpm-monorepo-deployed service. The root-level railway.toml uses `pnpm install && pnpm --filter api build` as its buildCommand, targeting this app from the workspace root. Placing a separate apps/api/railway.toml would fragment deployment config and is not how Railway deploys pnpm monorepos. The API-001 check runs per-app without awareness that the monorepo-root config covers its apps; this is a checker-scoping gap, not a missing-config issue. To remove this exemption, update API-001 in evaluator-cog to check the monorepo root when evaluating an app within a monorepo workspace.
+
+deferrals:
+  - rule: CD-012
+    reason: >-
+      The API only verifies Clerk session JWTs (RS256 via JWKS). It does not implement the Clerk M2M opaque-token verification path that CD-012 step (4)(b) requires. Justification: there are no machine callers in scope. The deejaytools-com ecosystem is browser-to-API only — no Python cogs push to this API, and the React app sends user JWTs. Adding an M2M path that nothing exercises is unnecessary drift surface. Revisit when (a) any Python cog needs to write to deejaytools-com-api, (b) a TypeScript service needs to make M2M calls and `common-typescript-utils` ships an M2M helper, or (c) a non-browser caller is introduced. See apps/api/docs/decisions/ADR-003-jwt-only-clerk-verification.md for the full rationale and the trigger conditions to revisit. To remove this deferral: add the BAPI verify path to apps/api/src/middleware/auth.ts (token format discrimination by dot count — JWTs have two, opaque tokens have none), add CLERK_SECRET_KEY and CLERK_ISSUER to apps/api/.env.example, document the dual-path verification in the README, and update ADR-003's status to Superseded.
+    until: null
 
 # TEST-001/002/004 covered by api-service type scoping.

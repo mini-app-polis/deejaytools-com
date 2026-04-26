@@ -6,19 +6,20 @@ context around them, and their consequences.
 
 ## Format
 
-Each ADR is a markdown file named `NNNN-title-in-kebab-case.md` where
-`NNNN` is a zero-padded sequence number starting at `0001`.
+Each ADR is a markdown file named `ADR-NNN-title-in-kebab-case.md`
+where `NNN` is a zero-padded 3-digit sequence number starting at `001`.
+This matches ecosystem-standards DOC-005.
 
 ## Template
 
 ```markdown
-# NNNN. Title of the decision
+# ADR-NNN. Title of the decision
 
 Date: YYYY-MM-DD
 
 ## Status
 
-Proposed | Accepted | Superseded by [NNNN](./NNNN-other.md)
+Proposed | Accepted | Superseded by [ADR-NNN](./ADR-NNN-other.md)
 
 ## Context
 
@@ -35,4 +36,6 @@ What becomes easier or more difficult to do because of this change?
 
 ## Index
 
-No decisions recorded yet.
+- [ADR-001 — Run Drizzle migrations at Railway deploy time](./ADR-001-drizzle-migrations-at-deploy.md)
+- [ADR-002 — Validation 400 responses use the canonical error envelope](./ADR-002-validation-envelope-shape.md)
+- [ADR-003 — Clerk verification: session JWTs only, no M2M](./ADR-003-jwt-only-clerk-verification.md)

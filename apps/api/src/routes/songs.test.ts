@@ -8,7 +8,6 @@ import {
   assertValidation400,
   authHeaders,
   type ErrorEnvelope,
-  type HonoZodFailureBody,
   readJson,
   type SuccessEnvelope,
 } from "../test/helpers.js";
@@ -113,7 +112,7 @@ describe("POST /v1/songs", () => {
       body: JSON.stringify({ partner_id: "p1" }),
     });
     expect(res.status).toBe(400);
-    assertValidation400(await readJson<HonoZodFailureBody>(res));
+    assertValidation400(await readJson<ErrorEnvelope>(res));
   });
 
   it("returns 400 when partner_id is JSON null", async () => {
@@ -123,7 +122,7 @@ describe("POST /v1/songs", () => {
       body: JSON.stringify({ division: "open", partner_id: null }),
     });
     expect(res.status).toBe(400);
-    assertValidation400(await readJson<HonoZodFailureBody>(res));
+    assertValidation400(await readJson<ErrorEnvelope>(res));
   });
 
   it("creates a song and returns 201 with envelope", async () => {

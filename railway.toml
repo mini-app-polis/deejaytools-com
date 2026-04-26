@@ -14,7 +14,7 @@ builder = "NIXPACKS"
 buildCommand = "pnpm --filter api build"
 
 [deploy]
-# Run pending Drizzle migrations before the service starts (ADR-0001).
+# Run pending Drizzle migrations before the service starts (ADR-001).
 startCommand = "pnpm --filter api db:migrate && pnpm --filter api start"
 healthcheckPath = "/health"
 healthcheckTimeout = 30

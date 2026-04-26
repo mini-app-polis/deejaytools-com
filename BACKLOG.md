@@ -59,6 +59,24 @@ Deferred from initial build.
 
 ---
 
+## Standards deferrals
+
+Items the conformance review surfaced as gaps that we've consciously
+chosen to defer rather than fix immediately. Each has a documented
+rationale and a revisit trigger.
+
+| Rule | Scope | Rationale | Revisit when |
+|------|-------|-----------|--------------|
+| API-011 | apps/api | Drizzle migrations run at Railway deploy time, not in CI. | See [apps/api ADR-001](./apps/api/docs/decisions/ADR-001-drizzle-migrations-at-deploy.md). |
+| API-001 | apps/api | Railway config lives at the monorepo root rather than per-app. | Evaluator-cog API-001 check learns to look at the monorepo root. |
+| XSTACK-002 | apps/api | Test fixture `src/test/mocks.ts` mirrors handler shape with raw `c.json`. | Evaluator-cog excludes `src/test/` from XSTACK-002. |
+| API-004 | apps/api | `/internal/tick` is unversioned by design (Railway cron hook). | Never — intentional. Recorded inline in `src/app.ts`. |
+| CD-010, PRIN-005 | apps/api | Python-pattern observability checker false-positives against TypeScript. | Evaluator-cog adds `@sentry/node` + `common-typescript-utils` patterns. |
+| CD-012 | apps/api | JWT-only verification; no machine callers exist. | See [apps/api ADR-003](./apps/api/docs/decisions/ADR-003-jwt-only-clerk-verification.md). |
+| TEST-013 | apps/app | UI timing `setTimeout` calls flagged as production timeouts. | Evaluator-cog scopes the check to retry/HTTP/Prefect contexts. |
+
+---
+
 ## Doppler development config
 
 The `development` config in Doppler is not populated. Local dev currently

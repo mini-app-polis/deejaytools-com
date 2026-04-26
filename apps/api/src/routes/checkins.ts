@@ -1,6 +1,6 @@
 import { CommonErrors, error, success, successList } from "common-typescript-utils";
 import { CheckinStatusSchema, QueueTypeSchema } from "@deejaytools/schemas";
-import { zValidator } from "@hono/zod-validator";
+import { zValidator } from "../lib/validate.js";
 import { Hono } from "hono";
 import { z } from "zod";
 import { and, asc, count, desc, eq, inArray, isNull, max, or, sql } from "drizzle-orm";

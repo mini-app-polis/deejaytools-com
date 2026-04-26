@@ -7,7 +7,6 @@ import {
   assertValidation400,
   authHeaders,
   type ErrorEnvelope,
-  type HonoZodFailureBody,
   MOCK_ADMIN,
   readJson,
   type SuccessEnvelope,
@@ -81,7 +80,7 @@ describe("POST /v1/events", () => {
       body: JSON.stringify({ date: "2026-06-01" }),
     });
     expect(res.status).toBe(400);
-    assertValidation400(await readJson<HonoZodFailureBody>(res));
+    assertValidation400(await readJson<ErrorEnvelope>(res));
   });
 
   it("returns 201 with envelope on valid body", async () => {

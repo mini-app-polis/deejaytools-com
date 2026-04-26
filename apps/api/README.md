@@ -11,9 +11,13 @@ of the `deejaytools-com` monorepo at `apps/api/`.
 | Runtime | Node 22 |
 | Framework | Hono |
 | Database | PostgreSQL via Drizzle ORM |
-| Auth | Clerk (JWT + M2M tokens) |
+| Auth | Clerk session JWTs (verified against JWKS) |
 | Observability | Sentry (errors), common-typescript-utils logger (structured logs) |
 | Deployment | Railway (Procfile + `pnpm --filter api start`) |
+
+Auth verifies Clerk session JWTs only. Machine-to-machine (M2M)
+opaque-token verification is deferred — see [ADR-003](./docs/decisions/ADR-003-jwt-only-clerk-verification.md)
+for rationale and revisit triggers.
 
 ## Data inputs
 

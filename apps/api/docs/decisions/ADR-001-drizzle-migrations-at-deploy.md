@@ -1,4 +1,4 @@
-# 0001. Run Drizzle migrations at Railway deploy time
+# ADR-001. Run Drizzle migrations at Railway deploy time
 
 Date: 2026-04-20
 
@@ -50,6 +50,6 @@ Railway applies migrations before starting the new image.
 
 ## References
 
-- api-kaianolevine-com ADR-0001 documents the equivalent decision for
+- api-kaianolevine-com ADR-001 documents the equivalent decision for
   Alembic (raw SQL flavor).
 - ecosystem-standards API-011 (CI must run migrations at deploy).
