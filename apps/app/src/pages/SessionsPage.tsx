@@ -33,7 +33,7 @@ function sessionStatusBadge(status: string) {
       return <Badge variant="default">{status}</Badge>;
     case "in_progress":
       return (
-        <Badge className="bg-green-600 text-white hover:bg-green-600/90 border-transparent">
+        <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 border-transparent">
           {status}
         </Badge>
       );
@@ -83,13 +83,43 @@ export default function SessionsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-semibold">Sessions</h1>
+        <h1 className="page-title text-2xl">Sessions</h1>
         <p className="text-sm text-muted-foreground mt-1">
           All floor trials, newest first. Open a session to check in or view the live queue.
         </p>
       </div>
 
-      <div className={loading ? "opacity-60" : ""}>
+      {/* Mobile card list */}
+      <div className={`sm:hidden space-y-3${loading ? " opacity-60" : ""}`}>
+        {sessions?.length === 0 && (
+          <p className="text-sm text-muted-foreground py-4 text-center">No sessions yet.</p>
+        )}
+        {sessions?.map((s) => (
+          <Link
+            key={s.id}
+            to={`/sessions/${s.id}`}
+            className="block rounded-lg border bg-card p-4 space-y-2 shadow-sm active:opacity-70 transition-opacity"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <p className="font-medium text-base leading-snug">{s.name}</p>
+              {sessionStatusBadge(s.status)}
+            </div>
+            <div className="text-sm text-muted-foreground space-y-0.5">
+              {s.date && <p>{s.date}</p>}
+              <p>
+                Check-in {formatTime(s.checkin_opens_at)}
+              </p>
+              <p>
+                Floor trial ends {formatTime(s.floor_trial_ends_at)}
+              </p>
+            </div>
+            <p className="text-sm font-medium text-primary pt-1">Open →</p>
+          </Link>
+        ))}
+      </div>
+
+      {/* Desktop table */}
+      <div className={`hidden sm:block${loading ? " opacity-60" : ""}`}>
         <Table>
           <TableHeader>
             <TableRow>

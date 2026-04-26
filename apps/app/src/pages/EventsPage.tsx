@@ -32,7 +32,7 @@ function eventStatusBadge(status: string) {
       return <Badge variant="default">{status}</Badge>;
     case "active":
       return (
-        <Badge className="bg-green-600 text-white hover:bg-green-600/90 border-transparent">
+        <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 border-transparent">
           {status}
         </Badge>
       );
@@ -120,11 +120,40 @@ export default function EventsPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-xl font-semibold">Events</h1>
-        {isAdmin && <Button onClick={openDialog}>New Event</Button>}
+        <h1 className="page-title text-2xl">Events</h1>
+        {isAdmin && (
+          <Button onClick={openDialog} className="w-full sm:w-auto">
+            New Event
+          </Button>
+        )}
       </div>
 
-      <div className={loading ? "opacity-60 pointer-events-none" : ""}>
+      {/* Mobile card list */}
+      <div className={`sm:hidden space-y-3${loading ? " opacity-60 pointer-events-none" : ""}`}>
+        {events?.length === 0 && (
+          <p className="text-sm text-muted-foreground py-4 text-center">No events yet.</p>
+        )}
+        {events?.map((ev) => (
+          <button
+            key={ev.id}
+            type="button"
+            className="w-full text-left rounded-lg border bg-card p-4 space-y-2 shadow-sm active:opacity-70 transition-opacity"
+            onClick={() => navigate(`/events/${ev.id}`)}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <p className="font-medium text-base leading-snug">{ev.name}</p>
+              {eventStatusBadge(ev.status)}
+            </div>
+            {ev.date && (
+              <p className="text-sm text-muted-foreground">{ev.date}</p>
+            )}
+            <p className="text-sm font-medium text-primary pt-1">Open →</p>
+          </button>
+        ))}
+      </div>
+
+      {/* Desktop table */}
+      <div className={`hidden sm:block${loading ? " opacity-60 pointer-events-none" : ""}`}>
         <Table>
           <TableHeader>
             <TableRow>
@@ -168,11 +197,11 @@ export default function EventsPage() {
 
       {dialogOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4"
           onClick={closeDialog}
         >
           <div
-            className="rounded-lg border bg-background p-6 shadow-lg max-w-md w-full space-y-4"
+            className="rounded-lg border bg-background p-6 shadow-lg w-full sm:max-w-md space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
@@ -214,11 +243,9 @@ export default function EventsPage() {
                   ))}
                 </select>
               </div>
-              <div className="flex justify-end pt-2">
-                <Button type="submit" disabled={submitting}>
-                  {submitting ? "Creating..." : "Create"}
-                </Button>
-              </div>
+              <Button type="submit" disabled={submitting} className="w-full">
+                {submitting ? "Creating..." : "Create event"}
+              </Button>
             </form>
           </div>
         </div>

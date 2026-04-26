@@ -44,7 +44,7 @@ function sessionStatusBadge(status: string) {
       return <Badge variant="default">{status}</Badge>;
     case "in_progress":
       return (
-        <Badge className="bg-green-600 text-white hover:bg-green-600/90 border-transparent">
+        <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 border-transparent">
           {status}
         </Badge>
       );
@@ -231,13 +231,13 @@ export default function EventDetailPage() {
         </Button>
         <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-xl font-semibold">{event.name}</h1>
+            <h1 className="page-title text-2xl">{event.name}</h1>
             <p className="text-sm text-muted-foreground">{event.date ?? "—"}</p>
           </div>
           <div className="flex items-center gap-2">
             {event.status === "upcoming" && <Badge variant="default">upcoming</Badge>}
             {event.status === "active" && (
-              <Badge className="bg-green-600 text-white hover:bg-green-600/90 border-transparent">
+              <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 border-transparent">
                 active
               </Badge>
             )}
@@ -256,9 +256,11 @@ export default function EventDetailPage() {
           <TabsTrigger value="registrations">Registrations</TabsTrigger>
         </TabsList>
         <TabsContent value="sessions" className="space-y-4 mt-4">
-          <div className="flex justify-end">
-            {isAdmin && <Button onClick={openCreateDialog}>New Session</Button>}
-          </div>
+          {isAdmin && (
+            <Button onClick={openCreateDialog} className="w-full sm:w-auto">
+              New Session
+            </Button>
+          )}
           {sessions?.length === 0 && (
             <p className="text-sm text-muted-foreground">No sessions for this event.</p>
           )}
@@ -293,13 +295,16 @@ export default function EventDetailPage() {
 
       {sessionDialogOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
           onClick={closeCreateDialog}
         >
           <div
-            className="rounded-lg border bg-background p-6 shadow-lg max-w-lg w-full max-h-[90vh] overflow-y-auto space-y-4"
+            className="rounded-t-2xl sm:rounded-lg border bg-background p-6 shadow-lg w-full sm:max-w-lg max-h-[92vh] overflow-y-auto space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
+            <div className="sm:hidden flex justify-center -mt-2 mb-2">
+              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+            </div>
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">New session</h2>
               <Button type="button" variant="ghost" size="sm" onClick={closeCreateDialog}>
@@ -430,11 +435,9 @@ export default function EventDetailPage() {
                 ))}
               </div>
 
-              <div className="flex justify-end pt-2">
-                <Button type="submit" disabled={submitting}>
-                  {submitting ? "Creating..." : "Create session"}
-                </Button>
-              </div>
+              <Button type="submit" disabled={submitting} size="lg" className="w-full">
+                {submitting ? "Creating..." : "Create session"}
+              </Button>
             </form>
           </div>
         </div>

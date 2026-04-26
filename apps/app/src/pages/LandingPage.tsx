@@ -109,10 +109,10 @@ export default function LandingPage() {
     <div className="min-h-screen bg-background text-foreground">
 
       {/* Nav */}
-      <nav className="border-b border-border bg-background/90 backdrop-blur-md sticky top-0 z-40">
+      <nav className="border-b border-white/[0.07] bg-black/50 backdrop-blur-md sticky top-0 z-40">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <span
-            className="text-sm font-medium tracking-wide"
+            className="text-sm font-medium tracking-wide text-foreground"
             style={{ fontFamily: "'DM Mono', monospace" }}
           >
             DeejayTools.com
@@ -131,16 +131,19 @@ export default function LandingPage() {
       <main className="max-w-3xl mx-auto px-4 sm:px-6 pb-24">
 
         {/* Hero */}
-        <section className="py-14 sm:py-20 border-b border-border">
+        <section className="py-14 sm:py-20 border-b border-white/[0.07]">
           <p
-            className="text-xs font-medium tracking-widest uppercase text-muted-foreground mb-5"
+            className="text-[10px] font-medium tracking-[0.18em] uppercase text-primary mb-5"
             style={{ fontFamily: "'DM Mono', monospace" }}
           >
             West Coast Swing · Floor Trials
           </p>
-          <h1 className="text-3xl sm:text-5xl font-light tracking-tight leading-[1.08] mb-5">
+          <h1
+            className="text-4xl sm:text-6xl font-black italic leading-[0.95] tracking-tight mb-6"
+            style={{ fontFamily: "'Fraunces', ui-serif, serif", fontVariationSettings: "'opsz' 72" }}
+          >
             Music management<br />
-            <span className="text-muted-foreground">for competitors &amp; DJs</span>
+            <span className="text-muted-foreground">for competitors</span>
           </h1>
           <p className="text-sm sm:text-base text-muted-foreground leading-relaxed max-w-md font-light">
             Look up your submitted music, learn how floor trials work,
@@ -149,7 +152,7 @@ export default function LandingPage() {
         </section>
 
         {/* Music lookup */}
-        <section className="py-10 sm:py-14 border-b border-border">
+        <section className="py-10 sm:py-14 border-b border-white/[0.07]">
           <SectionLabel>Music lookup</SectionLabel>
           <h2 className="text-xl sm:text-2xl font-light tracking-tight mb-1">
             Is your music on file?
@@ -161,14 +164,14 @@ export default function LandingPage() {
           {/* Search inputs */}
           <div className="flex flex-col sm:flex-row gap-3 mb-5">
             <Input
-              className="flex-1 bg-card border-border text-sm font-light placeholder:text-muted-foreground"
+              className="flex-1 bg-card border-white/[0.07] text-sm font-light placeholder:text-muted-foreground"
               placeholder="Search by partnership or name…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
             <div className="sm:w-48">
               <Select value={division} onValueChange={setDivision}>
-                <SelectTrigger className="bg-card border-border text-sm font-light w-full">
+                <SelectTrigger className="bg-card border-white/[0.07] text-sm font-light w-full">
                   <SelectValue placeholder="All divisions" />
                 </SelectTrigger>
                 <SelectContent>
@@ -197,7 +200,7 @@ export default function LandingPage() {
           )}
 
           {!loading && results.length > 0 && (
-            <div className="rounded-lg border border-border overflow-hidden">
+            <div className="rounded-lg border border-white/[0.07] overflow-hidden">
               {/* Mobile: card-style rows */}
               <div className="sm:hidden divide-y divide-border">
                 {results.map((s) => (
@@ -220,7 +223,7 @@ export default function LandingPage() {
               {/* Desktop: table */}
               <table className="hidden sm:table w-full text-sm border-collapse">
                 <thead>
-                  <tr className="border-b border-border">
+                  <tr className="border-b border-white/[0.07]">
                     {["Partnership", "Division", "Routine", "Ver."].map((h) => (
                       <th
                         key={h}
@@ -253,7 +256,7 @@ export default function LandingPage() {
         </section>
 
         {/* How it works */}
-        <section className="py-10 sm:py-14 border-b border-border">
+        <section className="py-10 sm:py-14 border-b border-white/[0.07]">
           <SectionLabel>How it works</SectionLabel>
           <h2 className="text-xl sm:text-2xl font-light tracking-tight mb-1">
             Floor trial process
@@ -266,7 +269,7 @@ export default function LandingPage() {
             {STEPS.map((step) => (
               <div key={step.num} className="py-5 grid grid-cols-[40px_1fr] gap-4 items-start">
                 <span
-                  className="text-xs font-medium text-muted-foreground/40 pt-0.5 tabular-nums"
+                  className="text-xs font-medium text-primary/50 pt-0.5 tabular-nums"
                   style={{ fontFamily: "'DM Mono', monospace" }}
                 >
                   {step.num}
@@ -282,7 +285,7 @@ export default function LandingPage() {
 
         {/* Operator CTA */}
         <section className="py-10 sm:py-14">
-          <div className="rounded-xl border border-border bg-card px-6 py-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+          <div className="rounded-xl border border-white/[0.07] bg-card px-6 py-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div>
               <h2 className="text-base font-medium text-foreground mb-1">
                 For DJs &amp; event operators
@@ -313,12 +316,12 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-3 mb-4">
       <span
-        className="text-xs font-medium tracking-widest uppercase text-muted-foreground/50"
+        className="text-[10px] font-medium tracking-[0.18em] uppercase text-primary/60 shrink-0"
         style={{ fontFamily: "'DM Mono', monospace" }}
       >
         {children}
       </span>
-      <div className="flex-1 h-px bg-border" />
+      <div className="flex-1 h-px bg-white/[0.07]" />
     </div>
   );
 }

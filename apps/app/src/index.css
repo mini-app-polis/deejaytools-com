@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,700;0,9..144,900;1,9..144,700;1,9..144,900&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=DM+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,39 +6,45 @@
 
 @layer base {
   :root {
-    --background: 0 0% 7%;
-    --foreground: 35 20% 96%;
+    /* Near-black backgrounds — drawn from the WCS site palette */
+    --background: 240 6% 6%;
+    --foreground: 210 25% 94%;
 
-    --card: 0 0% 11%;
-    --card-foreground: 35 20% 96%;
+    --card: 240 10% 11%;
+    --card-foreground: 210 25% 94%;
 
-    --popover: 0 0% 13%;
-    --popover-foreground: 35 20% 96%;
+    --popover: 240 10% 14%;
+    --popover-foreground: 210 25% 94%;
 
-    --primary: 35 20% 96%;
-    --primary-foreground: 0 0% 7%;
+    /* Emerald green primary — #34d399 */
+    --primary: 160 68% 52%;
+    --primary-foreground: 240 6% 6%;
 
-    --secondary: 0 0% 16%;
-    --secondary-foreground: 35 15% 85%;
+    --secondary: 240 8% 18%;
+    --secondary-foreground: 210 20% 78%;
 
-    --muted: 0 0% 16%;
-    --muted-foreground: 35 8% 62%;
+    --muted: 240 8% 16%;
+    --muted-foreground: 215 12% 52%;
 
-    --accent: 0 0% 18%;
-    --accent-foreground: 35 20% 96%;
+    --accent: 240 8% 18%;
+    --accent-foreground: 210 25% 94%;
 
     --destructive: 0 72% 51%;
-    --destructive-foreground: 35 20% 96%;
+    --destructive-foreground: 210 25% 94%;
 
-    --border: 0 0% 22%;
-    --input: 0 0% 14%;
-    --ring: 35 15% 60%;
+    --border: 240 8% 18%;
+    --input: 240 8% 13%;
+    --ring: 160 68% 52%;
 
-    --radius: 0.5rem;
+    --radius: 0.625rem;
   }
 
   * {
     @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
   }
 
   body {
@@ -47,10 +53,25 @@
     font-weight: 400;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
   }
 
   h1, h2, h3, h4, h5, h6 {
     font-weight: 500;
     letter-spacing: -0.015em;
+  }
+
+  /* Page-level h1 titles get the Fraunces serif treatment */
+  h1.page-title {
+    font-family: 'Fraunces', ui-serif, Georgia, serif;
+    font-style: italic;
+    font-weight: 900;
+    font-variation-settings: 'opsz' 72;
+    letter-spacing: -0.02em;
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(160 68% 52% / 0.6);
+    outline-offset: 2px;
   }
 }

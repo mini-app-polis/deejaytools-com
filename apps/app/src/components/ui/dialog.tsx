@@ -36,11 +36,18 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg sm:rounded-lg",
+        // Mobile: bottom sheet sliding up from the bottom
+        "fixed bottom-0 left-0 right-0 z-50 grid w-full gap-4 border bg-background p-6 shadow-lg rounded-t-2xl max-h-[92vh] overflow-y-auto",
+        // Desktop: centered modal
+        "sm:bottom-auto sm:left-[50%] sm:top-[50%] sm:right-auto sm:translate-x-[-50%] sm:translate-y-[-50%] sm:max-w-lg sm:rounded-lg sm:max-h-[85vh]",
         className
       )}
       {...props}
     >
+      {/* Drag handle — visible on mobile only */}
+      <div className="sm:hidden flex justify-center -mt-2 mb-1 pointer-events-none">
+        <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+      </div>
       {children}
       <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
         <X className="h-4 w-4" />
@@ -71,7 +78,8 @@ const DialogFooter = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
+      "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-0 sm:space-x-2",
+      "[&>button]:w-full sm:[&>button]:w-auto",
       className
     )}
     {...props}

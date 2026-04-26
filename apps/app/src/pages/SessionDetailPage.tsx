@@ -76,7 +76,7 @@ function derivedStatusBadge(status: string) {
       return <Badge variant="secondary">{status}</Badge>;
     case "open":
       return (
-        <Badge className="bg-green-600 text-white hover:bg-green-600/90 border-transparent">
+        <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 border-transparent">
           {status}
         </Badge>
       );
@@ -335,7 +335,7 @@ export default function SessionDetailPage() {
         </Button>
         <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-xl font-semibold">{session.name}</h1>
+            <h1 className="page-title text-2xl">{session.name}</h1>
             <p className="text-sm text-muted-foreground">
               Opens {formatTime(session.checkin_opens_at)} · Floor trial{" "}
               {formatTime(session.floor_trial_starts_at)} –{" "}
@@ -412,16 +412,17 @@ export default function SessionDetailPage() {
           {upcoming.map((r) => (
             <div
               key={r.queueEntryId}
-              className="flex items-center justify-between border rounded-md px-3 py-2 text-sm"
+              className="flex items-start justify-between gap-3 border rounded-md px-3 py-2.5 text-sm"
             >
-              <span>
-                #{r.position} · {renderEntityLabel(r)} · {r.divisionName} ·{" "}
-                {renderSongLabel(r.songId)}
-              </span>
+              <div className="space-y-0.5 min-w-0">
+                <p className="font-medium">#{r.position} · {renderEntityLabel(r)}</p>
+                <p className="text-muted-foreground truncate">{r.divisionName} · {renderSongLabel(r.songId)}</p>
+              </div>
               {isAdmin && (
                 <Button
                   size="sm"
                   variant="outline"
+                  className="shrink-0"
                   onClick={() =>
                     queueAction("/v1/queue/withdraw", {
                       queueEntryId: r.queueEntryId,
@@ -447,13 +448,13 @@ export default function SessionDetailPage() {
               {priority.map((r) => (
                 <div
                   key={r.queueEntryId}
-                  className="flex items-center justify-between border rounded-md px-3 py-2 text-sm"
+                  className="flex items-start justify-between gap-3 border rounded-md px-3 py-2.5 text-sm"
                 >
-                  <span>
-                    #{r.position} · {renderEntityLabel(r)} · {r.divisionName} ·{" "}
-                    {renderSongLabel(r.songId)}
-                  </span>
-                  <div className="flex gap-2">
+                  <div className="space-y-0.5 min-w-0">
+                    <p className="font-medium">#{r.position} · {renderEntityLabel(r)}</p>
+                    <p className="text-muted-foreground truncate">{r.divisionName} · {renderSongLabel(r.songId)}</p>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
                     <Button
                       size="sm"
                       disabled={promotePriorityDisabled}
@@ -492,13 +493,13 @@ export default function SessionDetailPage() {
               {nonPriority.map((r) => (
                 <div
                   key={r.queueEntryId}
-                  className="flex items-center justify-between border rounded-md px-3 py-2 text-sm"
+                  className="flex items-start justify-between gap-3 border rounded-md px-3 py-2.5 text-sm"
                 >
-                  <span>
-                    #{r.position} · {renderEntityLabel(r)} · {r.divisionName} ·{" "}
-                    {renderSongLabel(r.songId)}
-                  </span>
-                  <div className="flex gap-2">
+                  <div className="space-y-0.5 min-w-0">
+                    <p className="font-medium">#{r.position} · {renderEntityLabel(r)}</p>
+                    <p className="text-muted-foreground truncate">{r.divisionName} · {renderSongLabel(r.songId)}</p>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
                     <Button
                       size="sm"
                       disabled={promoteNonPriorityDisabled}
@@ -531,43 +532,53 @@ export default function SessionDetailPage() {
         </>
       )}
 
-      <div className="flex items-center gap-3">
-        <Button disabled={!canCheckIn} onClick={openCheckin}>
+      <div className="space-y-2">
+        <Button
+          disabled={!canCheckIn}
+          onClick={openCheckin}
+          size="lg"
+          className="w-full sm:w-auto"
+        >
           Check in
         </Button>
         {!canCheckIn && session.has_active_checkin && (
-          <span className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Already in queue (division: {session.active_checkin_division ?? "?"})
-          </span>
+          </p>
         )}
         {!canCheckIn && !checkinWindowOpen && (
-          <span className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {now < session.checkin_opens_at
               ? `Check-in opens ${formatTime(session.checkin_opens_at)}`
               : "Check-in closed"}
-          </span>
+          </p>
         )}
         {!canCheckIn && checkinWindowOpen && songs.length === 0 && (
-          <span className="text-xs text-muted-foreground">
-            You have no songs uploaded — add a song first.
-          </span>
+          <p className="text-sm text-muted-foreground">
+            You have no songs uploaded — <a href="/songs" className="underline">add a song first</a>.
+          </p>
         )}
         {!canCheckIn && checkinWindowOpen && divisionsList.length === 0 && (
-          <span className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             No divisions configured for this session.
-          </span>
+          </p>
         )}
       </div>
 
       {checkinOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
           onClick={closeCheckin}
         >
           <div
-            className="rounded-lg border bg-background p-6 shadow-lg max-w-lg w-full max-h-[90vh] overflow-y-auto space-y-4"
+            className="rounded-t-2xl sm:rounded-lg border bg-background p-6 shadow-lg w-full sm:max-w-lg max-h-[92vh] overflow-y-auto space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Handle bar on mobile */}
+            <div className="sm:hidden flex justify-center -mt-2 mb-2">
+              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+            </div>
+
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Check in</h2>
               <Button type="button" variant="ghost" size="sm" onClick={closeCheckin}>
@@ -662,11 +673,9 @@ export default function SessionDetailPage() {
                 />
               </div>
 
-              <div className="flex justify-end pt-2">
-                <Button type="submit" disabled={submitting}>
-                  {submitting ? "Submitting..." : "Submit"}
-                </Button>
-              </div>
+              <Button type="submit" disabled={submitting} size="lg" className="w-full">
+                {submitting ? "Submitting..." : "Check in"}
+              </Button>
             </form>
           </div>
         </div>

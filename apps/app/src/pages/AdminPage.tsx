@@ -47,7 +47,7 @@ function eventStatusBadge(status: string) {
       return <Badge variant="default">{status}</Badge>;
     case "active":
       return (
-        <Badge className="bg-green-600 text-white hover:bg-green-600/90 border-transparent">
+        <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 border-transparent">
           {status}
         </Badge>
       );
@@ -68,7 +68,7 @@ function sessionStatusBadge(status: string) {
       return <Badge variant="default">{status}</Badge>;
     case "in_progress":
       return (
-        <Badge className="bg-green-600 text-white hover:bg-green-600/90 border-transparent">
+        <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 border-transparent">
           {status}
         </Badge>
       );
@@ -144,7 +144,7 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Admin</h1>
+      <h1 className="page-title text-2xl">Admin</h1>
 
       <Tabs defaultValue="events">
         <TabsList>

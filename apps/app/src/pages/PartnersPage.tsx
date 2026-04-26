@@ -197,11 +197,54 @@ export default function PartnersPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-xl font-semibold">Partners</h1>
-        <Button onClick={openCreate}>Add partner</Button>
+        <h1 className="page-title text-2xl">Partners</h1>
+        <Button onClick={openCreate} className="w-full sm:w-auto">Add partner</Button>
       </div>
 
-      <div className={loading ? "opacity-60" : ""}>
+      {/* Mobile card list */}
+      <div className={`sm:hidden space-y-3${loading ? " opacity-60" : ""}`}>
+        {partners?.length === 0 && (
+          <p className="text-sm text-muted-foreground py-4 text-center">No partners yet.</p>
+        )}
+        {partners?.map((p) => (
+          <div key={p.id} className="rounded-lg border bg-card p-4 space-y-3 shadow-sm">
+            <div className="flex items-center justify-between gap-2">
+              <p className="font-medium text-base">
+                {p.first_name} {p.last_name}
+              </p>
+              {p.partner_role === "leader" ? (
+                <Badge variant="default">Leader</Badge>
+              ) : (
+                <Badge variant="secondary">Follower</Badge>
+              )}
+            </div>
+            {p.email && (
+              <p className="text-sm text-muted-foreground">{p.email}</p>
+            )}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => openEdit(p)}
+              >
+                Edit
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                className="flex-1"
+                onClick={() => void handleDeleteClick(p)}
+              >
+                Delete
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop table */}
+      <div className={`hidden sm:block${loading ? " opacity-60" : ""}`}>
         <Table>
           <TableHeader>
             <TableRow>

@@ -18,8 +18,10 @@ export default function Layout() {
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     cn(
-      "text-sm font-normal transition-colors",
-      isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+      "rounded-full px-3 py-1.5 text-sm transition-colors",
+      isActive
+        ? "text-primary"
+        : "text-muted-foreground hover:text-foreground"
     );
 
   const items = isAdmin ? [...NAV_ITEMS, { to: "/admin", label: "Admin" }] : NAV_ITEMS;
@@ -27,20 +29,26 @@ export default function Layout() {
   return (
     <div className="min-h-screen bg-background">
       {/* Nav */}
-      <nav className="border-b border-border bg-background/90 backdrop-blur-md sticky top-0 z-40">
+      <nav className="border-b border-white/[0.07] bg-black/50 backdrop-blur-md sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
           {/* Wordmark */}
-          <div className="flex flex-col leading-tight shrink-0">
-            <span className="font-medium text-sm tracking-wide" style={{ fontFamily: "'DM Mono', monospace" }}>
+          <a href="/" className="flex flex-col leading-tight shrink-0 group">
+            <span
+              className="font-medium text-sm tracking-wide text-foreground transition-colors group-hover:text-primary"
+              style={{ fontFamily: "'DM Mono', monospace" }}
+            >
               DeejayTools.com
             </span>
-            <span className="text-xs text-muted-foreground" style={{ fontFamily: "'DM Mono', monospace" }}>
+            <span
+              className="text-[10px] text-muted-foreground"
+              style={{ fontFamily: "'DM Mono', monospace" }}
+            >
               v{pkg.version}
             </span>
-          </div>
+          </a>
 
           {/* Desktop nav */}
-          <div className="hidden sm:flex items-center gap-5 flex-1 ml-6">
+          <div className="hidden sm:flex items-center gap-1 flex-1 ml-6">
             {items.map((item) => (
               <NavLink key={item.to} to={item.to} className={linkClass}>
                 {item.label}
@@ -53,35 +61,26 @@ export default function Layout() {
             <UserButton />
             {/* Hamburger — mobile only */}
             <button
-              className="sm:hidden flex flex-col justify-center items-center w-8 h-8 gap-1.5"
+              className="sm:hidden flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground"
               onClick={() => setMenuOpen((o) => !o)}
               aria-label="Toggle menu"
             >
-              <span
-                className={cn(
-                  "block w-5 h-px bg-foreground transition-all duration-200",
-                  menuOpen && "rotate-45 translate-y-[8px]"
-                )}
-              />
-              <span
-                className={cn(
-                  "block w-5 h-px bg-foreground transition-all duration-200",
-                  menuOpen && "opacity-0"
-                )}
-              />
-              <span
-                className={cn(
-                  "block w-5 h-px bg-foreground transition-all duration-200",
-                  menuOpen && "-rotate-45 -translate-y-[8px]"
-                )}
-              />
+              {menuOpen ? (
+                <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+                  <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              ) : (
+                <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+                  <path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              )}
             </button>
           </div>
         </div>
 
         {/* Mobile menu */}
         {menuOpen && (
-          <div className="sm:hidden border-t border-border bg-background">
+          <div className="sm:hidden border-t border-white/[0.07] bg-background">
             <div className="max-w-6xl mx-auto px-4 py-3 flex flex-col gap-1">
               {items.map((item) => (
                 <NavLink
@@ -90,10 +89,10 @@ export default function Layout() {
                   onClick={() => setMenuOpen(false)}
                   className={({ isActive }) =>
                     cn(
-                      "px-3 py-2.5 rounded-md text-sm transition-colors",
+                      "px-4 py-3 rounded-xl text-sm transition-colors",
                       isActive
-                        ? "bg-accent text-foreground"
-                        : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:text-foreground hover:bg-white/5"
                     )
                   }
                 >

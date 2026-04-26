@@ -285,7 +285,7 @@ export default function SongsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Songs</h1>
+      <h1 className="page-title text-2xl">Songs</h1>
 
       <Card>
         <CardHeader>
@@ -392,7 +392,7 @@ export default function SongsPage() {
               <p className="text-xs text-muted-foreground">MP3, WAV, FLAC, or M4A — max 100 MB</p>
             </div>
 
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
               {isSubmitting ? "Uploading…" : "Upload song"}
             </Button>
             {uploadStage !== "idle" && (
@@ -419,7 +419,101 @@ export default function SongsPage() {
         </CardContent>
       </Card>
 
-      <div className={loading ? "opacity-60" : ""}>
+      {/* Mobile card list */}
+      <div className={`sm:hidden space-y-3${loading ? " opacity-60" : ""}`}>
+        {songs.length === 0 && (
+          <p className="text-sm text-muted-foreground py-4 text-center">No songs yet.</p>
+        )}
+        {songs.map((s) => {
+          const partnerName = !s.partner_id
+            ? null
+            : [s.partner_first_name, s.partner_last_name].filter(Boolean).join(" ").trim() || null;
+          return (
+            <div
+              key={s.id}
+              className="rounded-lg border bg-card p-4 space-y-2 shadow-sm"
+            >
+              {/* Filename + date row */}
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-mono text-sm leading-snug break-all flex-1">
+                  {s.processed_filename?.trim() ? s.processed_filename : "—"}
+                </p>
+                <p className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
+                  {new Date(s.created_at).toLocaleDateString()}
+                </p>
+              </div>
+
+              {/* Metadata pills */}
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                {s.division && (
+                  <span>
+                    <span className="text-muted-foreground text-xs">Division </span>
+                    {s.division}
+                  </span>
+                )}
+                {partnerName && (
+                  <span>
+                    <span className="text-muted-foreground text-xs">Partner </span>
+                    {partnerName}
+                  </span>
+                )}
+                {s.routine_name && (
+                  <span>
+                    <span className="text-muted-foreground text-xs">Routine </span>
+                    {s.routine_name}
+                  </span>
+                )}
+                {s.personal_descriptor && (
+                  <span>
+                    <span className="text-muted-foreground text-xs">Descriptor </span>
+                    {s.personal_descriptor}
+                  </span>
+                )}
+              </div>
+
+              {/* Delete action */}
+              {pendingDeleteId === s.id ? (
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="text-xs text-muted-foreground">Delete this song?</span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive"
+                    className="flex-1"
+                    onClick={() => void handleDelete(s.id)}
+                    disabled={deletingId === s.id}
+                  >
+                    {deletingId === s.id ? "Removing..." : "Yes, delete"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setPendingDeleteId(null)}
+                    disabled={deletingId === s.id}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  className="w-full mt-1"
+                  onClick={() => setPendingDeleteId(s.id)}
+                >
+                  Delete
+                </Button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop table */}
+      <div className={`hidden sm:block${loading ? " opacity-60" : ""}`}>
         <Table>
           <TableHeader>
             <TableRow>
