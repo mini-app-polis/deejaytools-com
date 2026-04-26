@@ -1,3 +1,10 @@
+## [1.22.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.22.1...v1.22.2) (2026-04-26)
+
+
+### Bug Fixes
+
+* modifying status which is derived ([4e30b76](https://github.com/mini-app-polis/deejaytools-com/commit/4e30b7664b11087635e2fe986907c2cba105e363))
+
 ## [1.22.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.22.0...v1.22.1) (2026-04-26)
 
 
