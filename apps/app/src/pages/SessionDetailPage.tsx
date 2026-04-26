@@ -253,17 +253,21 @@ export default function SessionDetailPage() {
       toast.error("Pick a division");
       return;
     }
-    if (!isSolo && !derivedPair) {
-      toast.error("No pair found for this song's partner — set one up under Partners first.");
-      return;
-    }
-
     setSubmitting(true);
     try {
+      // If the song has a partner but no pair row exists yet, create it transparently
+      let pairId: string | null = derivedPair?.id ?? null;
+      if (!isSolo && !pairId && selectedSong?.partner_id) {
+        const created = await api.post<{ id: string }>("/v1/pairs/find-or-create", {
+          partner_id: selectedSong.partner_id,
+        });
+        pairId = created.id;
+      }
+
       await api.post("/v1/checkins", {
         sessionId: id,
         divisionName: fDivision,
-        entityPairId: !isSolo && derivedPair ? derivedPair.id : null,
+        entityPairId: !isSolo ? pairId : null,
         entitySoloUserId: isSolo ? user.id : null,
         songId: fSongId,
         notes: fNotes.trim() || undefined,
@@ -435,25 +439,30 @@ export default function SessionDetailPage() {
                 </select>
               </div>
 
-              {/* Derived entity — shown for confirmation */}
-              {fSongId && (
-                <div className="rounded-md border bg-muted/40 px-3 py-3 text-sm space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground w-20 shrink-0">Dancing as</span>
+              {/* Confirmation card — shown once a song is selected */}
+              {fSongId && selectedSong && (
+                <div className="rounded-md border bg-muted/40 px-3 py-3 text-sm space-y-1.5">
+                  <div className="flex items-start gap-2">
+                    <span className="text-muted-foreground w-16 shrink-0 pt-px">You</span>
+                    <span className="font-medium">
+                      {user?.fullName ?? user?.firstName ?? "You"}
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-muted-foreground w-16 shrink-0 pt-px">Partner</span>
                     <span className="font-medium">
                       {isSolo
-                        ? "Solo"
-                        : derivedPair
-                        ? derivedPair.display_name
-                        : selectedSong?.partner_first_name
+                        ? <span className="text-muted-foreground italic">Solo</span>
+                        : selectedSong.partner_first_name
                         ? `${selectedSong.partner_first_name} ${selectedSong.partner_last_name ?? ""}`.trimEnd()
                         : "—"}
                     </span>
-                    {!isSolo && !derivedPair && (
-                      <span className="text-destructive text-xs">
-                        (no pair set up — <Link to="/partners" className="underline">fix in Partners</Link>)
-                      </span>
-                    )}
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-muted-foreground w-16 shrink-0 pt-px">Song</span>
+                    <span className="font-medium truncate">
+                      {selectedSong.display_name ?? selectedSong.processed_filename ?? selectedSong.id}
+                    </span>
                   </div>
                 </div>
               )}

@@ -9,6 +9,7 @@ import { authRoutes } from "./routes/auth.js";
 import { checkinRoutes } from "./routes/checkins.js";
 import { eventRoutes } from "./routes/events.js";
 import { legacySongRoutes } from "./routes/legacy-songs.js";
+import { pairRoutes } from "./routes/pairs.js";
 import { partnerRoutes } from "./routes/partners.js";
 import { sessionRoutes } from "./routes/sessions.js";
 import { queueRoutes } from "./routes/queue.js";
@@ -61,6 +62,7 @@ app.route("/v1/events", eventRoutes);
 app.route("/v1/sessions", sessionRoutes);
 app.route("/v1/checkins", checkinRoutes);
 app.route("/v1/queue", queueRoutes);
+app.route("/v1/pairs", pairRoutes);
 app.route("/v1/partners", partnerRoutes);
 app.route("/v1/songs", songRoutes);
 // Intentionally public — read-only historical catalog, no user data.
