@@ -1,3 +1,10 @@
+## [1.20.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.20.0...v1.20.1) (2026-04-26)
+
+
+### Bug Fixes
+
+* update versioning of songs ([bcdf710](https://github.com/mini-app-polis/deejaytools-com/commit/bcdf710e23e722b3fbf7d7fe982d5cc3e92ea8a7))
+
 # [1.20.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.19.6...v1.20.0) (2026-04-26)
 
 
