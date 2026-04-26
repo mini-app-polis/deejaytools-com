@@ -1,3 +1,32 @@
+## [1.13.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.13.3...v1.13.4) (2026-04-23)
+
+
+### Bug Fixes
+
+* **schemas:** build and ship compiled JS so runtime can import it ([1f254fc](https://github.com/mini-app-polis/deejaytools-com/commit/1f254fcf6e4489e3fb6936646d1667f263cdf99a))
+* **typecheck:** build @deejaytools/schemas before consumers typecheck ([088f8c7](https://github.com/mini-app-polis/deejaytools-com/commit/088f8c75b01dd64bcc3cc9980f9914e4abc9cf24))
+
+## [1.13.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.13.2...v1.13.3) (2026-04-23)
+
+
+### Bug Fixes
+
+* **api:** move @types/node to dependencies for Railway build ([78cada8](https://github.com/mini-app-polis/deejaytools-com/commit/78cada8029e357311da52cd5f4a1803177923610))
+
+## [1.13.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.13.1...v1.13.2) (2026-04-23)
+
+
+### Bug Fixes
+
+* **api:** move build tooling to dependencies to unblock Railway deploy ([a11a410](https://github.com/mini-app-polis/deejaytools-com/commit/a11a410d53849920aed7719f13b5215452be2cb7))
+
+## [1.13.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.13.0...v1.13.1) (2026-04-23)
+
+
+### Bug Fixes
+
+* **railway:** install devDependencies for build and db:migrate (closes tsc not found) ([23f98af](https://github.com/mini-app-polis/deejaytools-com/commit/23f98af45d8a6d47b1db6869e63b125f8a222846))
+
 # [1.13.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.12.2...v1.13.0) (2026-04-05)
 
 

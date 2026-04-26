@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "pnpm --filter @deejaytools/schemas build && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "pnpm --filter @deejaytools/schemas build && tsc --noEmit",
     "lint": "eslint src",
     "test": "vitest run --passWithNoTests"
   },

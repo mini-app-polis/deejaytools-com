@@ -56,12 +56,18 @@ importers:
       '@sentry/node':
         specifier: ^10.46.0
         version: 10.46.0
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.15
       common-typescript-utils:
         specifier: ^1.0.1
         version: 1.0.1
       dotenv:
         specifier: ^16.4.7
         version: 16.6.1
+      drizzle-kit:
+        specifier: ^0.30.1
+        version: 0.30.6
       drizzle-orm:
         specifier: ^0.38.3
         version: 0.38.4(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(@types/react@19.2.14)(postgres@3.4.8)(react@19.2.4)
@@ -89,6 +95,9 @@ importers:
       postgres:
         specifier: ^3.4.5
         version: 3.4.8
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -96,21 +105,12 @@ importers:
       '@types/multer':
         specifier: ^2.1.0
         version: 2.1.0
-      '@types/node':
-        specifier: ^22.10.2
-        version: 22.19.15
       '@vitest/coverage-v8':
         specifier: ^2.1.8
         version: 2.1.9(vitest@2.1.9(@types/node@22.19.15))
-      drizzle-kit:
-        specifier: ^0.30.1
-        version: 0.30.6
       tsx:
         specifier: ^4.19.2
         version: 4.21.0
-      typescript:
-        specifier: ^5.7.2
-        version: 5.9.3
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.19.15)
@@ -229,13 +229,13 @@ importers:
 
   packages/schemas:
     dependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
       zod:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
-      typescript:
-        specifier: ^5.7.2
-        version: 5.9.3
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.19.15)

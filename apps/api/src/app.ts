@@ -40,8 +40,11 @@ app.use(
 );
 app.use("*", honoLogger());
 
+// Intentionally public — liveness probe for load balancers and uptime monitors.
 app.get("/health", (c) => c.json({ status: "ok" }));
 
+// Intentionally unversioned — Railway cron hits this at a stable path.
+// Not public: gated by TICK_SECRET header when TICK_SECRET is set.
 app.get("/internal/tick", async (c) => {
   const secret = process.env.TICK_SECRET;
   if (secret && c.req.header("x-tick-secret") !== secret) {
@@ -51,6 +54,8 @@ app.get("/internal/tick", async (c) => {
   return c.json(success({ ticked: true }));
 });
 
+// Auth-required — all /v1 sub-routers apply Clerk JWT verification
+// via `requireAuth` middleware, except the explicit public paths noted below.
 app.route("/v1/auth", authRoutes);
 app.route("/v1/events", eventRoutes);
 app.route("/v1/sessions", sessionRoutes);
@@ -58,6 +63,7 @@ app.route("/v1/checkins", checkinRoutes);
 app.route("/v1/slots", slotRoutes);
 app.route("/v1/partners", partnerRoutes);
 app.route("/v1/songs", songRoutes);
+// Intentionally public — read-only historical catalog, no user data.
 app.route("/v1/legacy-songs", legacySongRoutes);
 
 app.notFound((c) => c.json(CommonErrors.notFound(), 404));
