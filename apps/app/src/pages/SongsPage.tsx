@@ -1,4 +1,3 @@
-import type { ErrorEnvelope, SuccessEnvelope } from "common-typescript-utils";
 import { useAuth } from "@clerk/clerk-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -56,14 +55,14 @@ const SOLO_PARTNER_VALUE = "__solo__";
 
 const apiBase = import.meta.env.VITE_API_URL ?? "";
 
-type UploadStage = "idle" | "creating" | "uploading" | "finishing";
+const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB per chunk
+const MAX_FILE_BYTES = 100 * 1024 * 1024; // 100 MB
 
-const stageLabel: Record<UploadStage, string> = {
-  idle: "",
-  creating: "Preparing...",
-  uploading: "Uploading file...",
-  finishing: "Saving...",
-};
+type UploadStage = "idle" | "creating" | "uploading" | "processing" | "finishing";
+
+function formatMB(bytes: number): string {
+  return (bytes / (1024 * 1024)).toFixed(1);
+}
 
 type Song = {
   id: string;
@@ -107,6 +106,7 @@ export default function SongsPage() {
   const [formKey, setFormKey] = useState(0);
   const [uploadStage, setUploadStage] = useState<UploadStage>("idle");
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadBytesSent, setUploadBytesSent] = useState(0);
 
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -141,6 +141,10 @@ export default function SongsPage() {
       toast.error("Please select an audio file.");
       return;
     }
+    if (file.size > MAX_FILE_BYTES) {
+      toast.error("That file is too large. Please choose an audio file under 100 MB.");
+      return;
+    }
     if (!division) {
       toast.error("Please select a division.");
       return;
@@ -156,6 +160,8 @@ export default function SongsPage() {
     try {
       setUploadStage("creating");
       setUploadProgress(5);
+      setUploadBytesSent(0);
+
       const created = await api.post<Song>("/v1/songs", {
         division,
         routine_name: routineName.trim() || null,
@@ -167,48 +173,69 @@ export default function SongsPage() {
       setUploadStage("uploading");
       setUploadProgress(10);
 
-      await new Promise<void>((resolve, reject) => {
-        void (async () => {
-          try {
-            const token = await getToken();
-            const xhr = new XMLHttpRequest();
-            xhr.open("POST", `${apiBase}/v1/songs/${createdId}/upload`);
-            xhr.setRequestHeader("Accept", "application/json");
-            if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      const token = await getToken();
+      const uploadId = crypto.randomUUID();
+      const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+      const MAX_RETRIES = 3;
 
-            xhr.upload.onprogress = (ev) => {
-              if (ev.lengthComputable) {
-                setUploadProgress(10 + Math.round((ev.loaded / ev.total) * 80));
-              }
-            };
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, file.size);
+        const chunk = file.slice(start, end);
+        const isLast = i === totalChunks - 1;
 
-            xhr.onload = () => {
-              if (xhr.status < 200 || xhr.status >= 300) {
-                reject(new Error(`Upload failed: ${xhr.statusText || String(xhr.status)}`));
-                return;
-              }
-              try {
-                const json = JSON.parse(xhr.responseText) as SuccessEnvelope<unknown> | ErrorEnvelope;
-                if ("error" in json) {
-                  reject(new Error(json.error.message));
-                  return;
-                }
-                resolve();
-              } catch {
-                reject(new Error("Upload failed: invalid response"));
-              }
-            };
+        // Switch to processing state before the final chunk — the server will take
+        // a moment to tag the audio and upload it to Drive.
+        if (isLast) {
+          setUploadStage("processing");
+          setUploadProgress(i > 0 ? 90 : 50);
+        }
 
-            xhr.onerror = () => reject(new Error("Network error during upload"));
-
-            const form = new FormData();
-            form.set("file", file);
-            xhr.send(form);
-          } catch (e) {
-            reject(e instanceof Error ? e : new Error("Upload failed."));
+        let lastErr: Error | null = null;
+        for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+          if (attempt > 0) {
+            await new Promise((r) => setTimeout(r, 1000 * attempt));
           }
-        })();
-      });
+
+          const form = new FormData();
+          form.set("chunk", chunk, file.name);
+          form.set("upload_id", uploadId);
+          form.set("chunk_index", String(i));
+          form.set("total_chunks", String(totalChunks));
+          form.set("original_filename", file.name);
+          form.set("mime_type", file.type || "audio/mpeg");
+
+          let res: Response;
+          try {
+            res = await fetch(`${apiBase}/v1/songs/${createdId}/upload/chunk`, {
+              method: "POST",
+              headers: {
+                Accept: "application/json",
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+              body: form,
+            });
+          } catch {
+            lastErr = new Error("Network error — check your connection and try again.");
+            continue;
+          }
+
+          if (!res.ok) {
+            const json = await res.json().catch(() => null) as { error?: { message?: string } } | null;
+            lastErr = new Error(json?.error?.message ?? `Upload failed (${res.status})`);
+            continue;
+          }
+
+          lastErr = null;
+          if (!isLast) {
+            setUploadBytesSent(end);
+            setUploadProgress(10 + Math.round((end / file.size) * 75));
+          }
+          break;
+        }
+
+        if (lastErr) throw lastErr;
+      }
 
       setUploadStage("finishing");
       setUploadProgress(95);
@@ -224,6 +251,7 @@ export default function SongsPage() {
       setRoutineName("");
       setDescriptor("");
       setSelectedPartnerId("");
+      setUploadBytesSent(0);
       setFileInputKey((k) => k + 1);
       setFormKey((k) => k + 1);
     } catch (err) {
@@ -238,6 +266,7 @@ export default function SongsPage() {
     } finally {
       setUploadStage("idle");
       setUploadProgress(0);
+      setUploadBytesSent(0);
       setIsSubmitting(false);
     }
   };
@@ -382,7 +411,15 @@ export default function SongsPage() {
             {uploadStage !== "idle" && (
               <div className="mt-3 space-y-1">
                 <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>{stageLabel[uploadStage]}</span>
+                  <span>
+                    {uploadStage === "uploading" && file
+                      ? `Uploading… ${formatMB(uploadBytesSent)} of ${formatMB(file.size)} MB`
+                      : uploadStage === "processing"
+                        ? "Processing your file… this may take a moment"
+                        : uploadStage === "creating"
+                          ? "Preparing…"
+                          : "Saving…"}
+                  </span>
                   <span>{uploadProgress}%</span>
                 </div>
                 <div className="h-2 w-full overflow-hidden rounded-full bg-muted">

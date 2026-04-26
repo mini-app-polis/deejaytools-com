@@ -1,4 +1,6 @@
 import { File } from "node:buffer";
+import { mkdir, writeFile, readdir, readFile, rm } from "node:fs/promises";
+import { join } from "node:path";
 import { CommonErrors, createLogger, error, success, successList } from "common-typescript-utils";
 import { zValidator } from "../lib/validate.js";
 import { Hono } from "hono";
@@ -34,6 +36,10 @@ const patchBody = z.object({
   personal_descriptor: z.string().nullable().optional(),
   season_year: z.string().nullable().optional(),
 });
+
+const CHUNK_TMP_BASE = "/tmp/dj-upload-chunks";
+const MAX_CHUNK_BYTES = 10 * 1024 * 1024; // 10 MB per chunk
+const MAX_ASSEMBLED_BYTES = 110 * 1024 * 1024; // ~110 MB assembled
 
 export const songRoutes = new Hono();
 const logger = createLogger("songs-routes");
@@ -106,6 +112,120 @@ function mapSong(
     partner_first_name: row.partner_first_name ?? null,
     partner_last_name: row.partner_last_name ?? null,
   };
+}
+
+/**
+ * Shared logic: tag audio bytes, upload to Drive, update the song row.
+ * Used by both the single-request upload endpoint and the chunked upload endpoint.
+ */
+async function buildAndUploadSong(
+  song: typeof songs.$inferSelect,
+  userId: string,
+  inputBytes: Buffer,
+  originalName: string,
+  mimeType: string
+): Promise<ReturnType<typeof mapSong>> {
+  const [userRow] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!userRow) throw new Error("User not found");
+
+  let partnerRow: typeof partners.$inferSelect | null = null;
+  if (song.partnerId) {
+    const [p] = await db
+      .select()
+      .from(partners)
+      .where(and(eq(partners.id, song.partnerId), eq(partners.userId, userId)))
+      .limit(1);
+    partnerRow = p ?? null;
+  }
+
+  const seasonYearStr = seasonYearFromTimestamp(Date.now());
+
+  const [countRow] = await db
+    .select({ c: sql<number>`count(*)::int` })
+    .from(songs)
+    .where(
+      and(
+        eq(songs.userId, userId),
+        sql`coalesce(${songs.division}, '') = ${song.division ?? ""}`,
+        sql`coalesce(${songs.routineName}, '') = ${song.routineName ?? ""}`,
+        eq(songs.seasonYear, seasonYearStr),
+        ne(songs.id, song.id)
+      )
+    );
+  const version = (countRow?.c ?? 0) + 1;
+
+  const userName =
+    [userRow.firstName, userRow.lastName].filter(Boolean).join("") || userId;
+  const partnerName = partnerRow
+    ? [partnerRow.firstName, partnerRow.lastName].filter(Boolean).join("")
+    : null;
+
+  let leaderName: string;
+  let followerName: string | null;
+  if (!partnerRow) {
+    leaderName = userName;
+    followerName = null;
+  } else if (partnerRow.partnerRole === "leader") {
+    leaderName = partnerName ?? "";
+    followerName = userName;
+  } else {
+    leaderName = userName;
+    followerName = partnerName ?? "";
+  }
+
+  const partnershipSegment = followerName
+    ? `${sanitizeSegment(leaderName)}_${sanitizeSegment(followerName)}`
+    : sanitizeSegment(leaderName);
+
+  const originalParts = splitNameAndExtension(originalName);
+  const pathSegments = [
+    partnershipSegment || sanitizeSegment(userId) || "user",
+    sanitizeSegment(song.division),
+    sanitizeSegment(seasonYearStr),
+    sanitizeSegment(song.routineName),
+    sanitizeSegment(song.personalDescriptor),
+  ].filter((s) => s.length > 0);
+  const baseWithoutVersion = pathSegments.join("_");
+  const versionedStem = `${baseWithoutVersion}_v${version}`;
+  const extSegment = sanitizeSegment(originalParts.ext);
+  const processedFilename = extSegment ? `${versionedStem}.${extSegment}` : versionedStem;
+
+  const newTitle = followerName ? `${leaderName} & ${followerName}` : leaderName;
+  const newArtist = [song.division, seasonYearStr, song.routineName].filter(Boolean).join(" - ");
+
+  const taggedBytes = await tagSongBytes({ bytes: inputBytes, newTitle, newArtist, mimeType });
+
+  const uploadResult = await uploadSongToDrive(taggedBytes, { filename: processedFilename, mimeType });
+
+  const now = Date.now();
+  await db
+    .update(songs)
+    .set({
+      originalFilename: originalName,
+      processedFilename,
+      seasonYear: seasonYearStr,
+      driveFileId: uploadResult.fileId,
+      driveFolderId: uploadResult.folderId,
+      updatedAt: now,
+    })
+    .where(eq(songs.id, song.id));
+
+  const [r] = await db
+    .select({
+      song: songs,
+      partner_first_name: partners.firstName,
+      partner_last_name: partners.lastName,
+    })
+    .from(songs)
+    .leftJoin(partners, eq(partners.id, songs.partnerId))
+    .where(eq(songs.id, song.id))
+    .limit(1);
+
+  return mapSong({
+    ...r!.song,
+    partner_first_name: r!.partner_first_name,
+    partner_last_name: r!.partner_last_name,
+  });
 }
 
 async function assertPartnerOwned(userId: string, partnerId: string | null | undefined) {
@@ -337,7 +457,8 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
   return c.body(null, 204);
 });
 
-// POST /v1/songs/:id/upload — multipart/form-data with file field
+// POST /v1/songs/:id/upload — single-request multipart upload (kept for compatibility).
+// Prefer the chunked endpoint for files > a few MB.
 songRoutes.post("/:id/upload", requireAuth, async (c) => {
   const userId = c.get("user").userId;
   const id = c.req.param("id");
@@ -347,25 +468,7 @@ songRoutes.post("/:id/upload", requireAuth, async (c) => {
     .from(songs)
     .where(and(eq(songs.id, id), eq(songs.userId, userId)))
     .limit(1);
-
-  if (!song) {
-    return c.json(CommonErrors.notFound("Song"), 404);
-  }
-
-  const [userRow] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  if (!userRow) {
-    return c.json(CommonErrors.notFound("User"), 404);
-  }
-
-  let partnerRow: typeof partners.$inferSelect | null = null;
-  if (song.partnerId) {
-    const [p] = await db
-      .select()
-      .from(partners)
-      .where(and(eq(partners.id, song.partnerId), eq(partners.userId, userId)))
-      .limit(1);
-    partnerRow = p ?? null;
-  }
+  if (!song) return c.json(CommonErrors.notFound("Song"), 404);
 
   const body = await c.req.parseBody();
   const fileValue = body.file;
@@ -376,114 +479,114 @@ songRoutes.post("/:id/upload", requireAuth, async (c) => {
         ? fileValue.find((entry): entry is File => entry instanceof File)
         : null;
 
-  if (!uploadedFile) {
-    return c.json(CommonErrors.badRequest("Missing file upload field"), 400);
+  if (!uploadedFile) return c.json(CommonErrors.badRequest("Missing file upload field"), 400);
+  if (uploadedFile.size > MAX_ASSEMBLED_BYTES) {
+    return c.json(CommonErrors.badRequest("File exceeds 100 MB limit"), 400);
   }
 
   const originalName = uploadedFile.name?.trim() || "song.mp3";
   const mimeType = inferMimeType(uploadedFile);
   const inputBytes = Buffer.from(await uploadedFile.arrayBuffer());
 
-  const seasonYearStr = seasonYearFromTimestamp(Date.now());
+  try {
+    const mappedSong = await buildAndUploadSong(song, userId, inputBytes, originalName, mimeType);
+    return c.json(success(mappedSong));
+  } catch (err) {
+    logger.error({ event: "song_upload_failed", category: "api", context: { songId: id }, error: err });
+    throw err;
+  }
+});
 
-  const [countRow] = await db
-    .select({ c: sql<number>`count(*)::int` })
+// POST /v1/songs/:id/upload/chunk — chunked multipart upload.
+// Client sends sequential 5 MB chunks; server assembles, tags, and uploads to Drive on the final chunk.
+// Body fields: chunk (File), upload_id (UUID string), chunk_index (int), total_chunks (int),
+//              original_filename (string), mime_type (string).
+songRoutes.post("/:id/upload/chunk", requireAuth, async (c) => {
+  const userId = c.get("user").userId;
+  const id = c.req.param("id");
+
+  const [song] = await db
+    .select()
     .from(songs)
-    .where(
-      and(
-        eq(songs.userId, userId),
-        sql`coalesce(${songs.division}, '') = ${song.division ?? ""}`,
-        sql`coalesce(${songs.routineName}, '') = ${song.routineName ?? ""}`,
-        eq(songs.seasonYear, seasonYearStr),
-        ne(songs.id, id)
-      )
-    );
+    .where(and(eq(songs.id, id), eq(songs.userId, userId)))
+    .limit(1);
+  if (!song) return c.json(CommonErrors.notFound("Song"), 404);
 
-  const version = (countRow?.c ?? 0) + 1;
+  const body = await c.req.parseBody();
+  const uploadId = typeof body.upload_id === "string" ? body.upload_id.trim() : "";
+  const chunkIndex = Number(body.chunk_index ?? -1);
+  const totalChunks = Number(body.total_chunks ?? 0);
+  const originalName =
+    typeof body.original_filename === "string"
+      ? body.original_filename.trim() || "song.mp3"
+      : "song.mp3";
+  const mimeType =
+    typeof body.mime_type === "string" ? body.mime_type.trim() || "audio/mpeg" : "audio/mpeg";
+  const chunkFile = body.chunk instanceof File ? body.chunk : null;
 
-  const userName =
-    [userRow.firstName, userRow.lastName].filter(Boolean).join("") || userId;
-  const partnerName = partnerRow
-    ? [partnerRow.firstName, partnerRow.lastName].filter(Boolean).join("")
-    : null;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uploadId)) {
+    return c.json(CommonErrors.badRequest("Invalid upload_id"), 400);
+  }
+  if (!Number.isInteger(chunkIndex) || chunkIndex < 0) {
+    return c.json(CommonErrors.badRequest("Invalid chunk_index"), 400);
+  }
+  if (!Number.isInteger(totalChunks) || totalChunks < 1 || totalChunks > 30) {
+    return c.json(CommonErrors.badRequest("Invalid total_chunks (max 30)"), 400);
+  }
+  if (chunkIndex >= totalChunks) {
+    return c.json(CommonErrors.badRequest("chunk_index out of range"), 400);
+  }
+  if (!chunkFile) return c.json(CommonErrors.badRequest("Missing chunk field"), 400);
 
-  let leaderName: string;
-  let followerName: string | null;
-
-  if (!partnerRow) {
-    leaderName = userName;
-    followerName = null;
-  } else if (partnerRow.partnerRole === "leader") {
-    leaderName = partnerName ?? "";
-    followerName = userName;
-  } else {
-    leaderName = userName;
-    followerName = partnerName ?? "";
+  const chunkBytes = Buffer.from(await chunkFile.arrayBuffer());
+  if (chunkBytes.length > MAX_CHUNK_BYTES) {
+    return c.json(CommonErrors.badRequest("Chunk exceeds 10 MB limit"), 400);
   }
 
-  const partnershipSegment = followerName
-    ? `${sanitizeSegment(leaderName)}_${sanitizeSegment(followerName)}`
-    : sanitizeSegment(leaderName);
+  // Write this chunk to a temp directory scoped by song + upload session.
+  const uploadDir = join(CHUNK_TMP_BASE, `${id}_${uploadId}`);
+  await mkdir(uploadDir, { recursive: true });
+  await writeFile(join(uploadDir, `chunk_${String(chunkIndex).padStart(6, "0")}`), chunkBytes);
 
-  const originalParts = splitNameAndExtension(originalName);
-  const pathSegments = [
-    partnershipSegment || sanitizeSegment(userId) || "user",
-    sanitizeSegment(song.division),
-    sanitizeSegment(seasonYearStr),
-    sanitizeSegment(song.routineName),
-    sanitizeSegment(song.personalDescriptor),
-  ].filter((s) => s.length > 0);
-  const baseWithoutVersion = pathSegments.join("_");
-  const versionedStem = `${baseWithoutVersion}_v${version}`;
-  const extSegment = sanitizeSegment(originalParts.ext);
-  const processedFilename = extSegment ? `${versionedStem}.${extSegment}` : versionedStem;
+  const isLast = chunkIndex === totalChunks - 1;
+  if (!isLast) {
+    return c.json(success({ received: true, complete: false }));
+  }
 
-  const newTitle = followerName ? `${leaderName} & ${followerName}` : leaderName;
-  const newArtist = [song.division, seasonYearStr, song.routineName].filter(Boolean).join(" - ");
+  // Final chunk received — verify all chunks are present, assemble, and process.
+  let chunkFiles: string[];
+  try {
+    chunkFiles = (await readdir(uploadDir)).sort();
+  } catch (err) {
+    logger.error({ event: "chunk_readdir_failed", category: "api", context: { songId: id, uploadId }, error: err });
+    return c.json(error("CHUNK_ERROR", "Failed to read uploaded chunks"), 500);
+  }
 
-  const taggedBytes = await tagSongBytes({
-    bytes: inputBytes,
-    newTitle,
-    newArtist,
-    mimeType,
-  });
+  if (chunkFiles.length !== totalChunks) {
+    await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+    return c.json(
+      error(
+        "CHUNK_MISSING",
+        `Expected ${totalChunks} chunks but only received ${chunkFiles.length}. Please retry the upload.`
+      ),
+      409
+    );
+  }
 
-  const uploadResult = await uploadSongToDrive(taggedBytes, {
-    filename: processedFilename,
-    mimeType,
-  });
+  const parts = await Promise.all(chunkFiles.map((f) => readFile(join(uploadDir, f))));
+  const assembled = Buffer.concat(parts);
+  // Clean up temp dir immediately — we hold the assembled buffer in memory.
+  await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
 
-  const now = Date.now();
-  await db
-    .update(songs)
-    .set({
-      originalFilename: originalName,
-      processedFilename,
-      seasonYear: seasonYearStr,
-      driveFileId: uploadResult.fileId,
-      driveFolderId: uploadResult.folderId,
-      updatedAt: now,
-    })
-    .where(eq(songs.id, id));
+  if (assembled.length > MAX_ASSEMBLED_BYTES) {
+    return c.json(CommonErrors.badRequest("File exceeds 100 MB limit"), 400);
+  }
 
-  const [r] = await db
-    .select({
-      song: songs,
-      partner_first_name: partners.firstName,
-      partner_last_name: partners.lastName,
-    })
-    .from(songs)
-    .leftJoin(partners, eq(partners.id, songs.partnerId))
-    .where(eq(songs.id, id))
-    .limit(1);
-
-  return c.json(
-    success(
-      mapSong({
-        ...r!.song,
-        partner_first_name: r!.partner_first_name,
-        partner_last_name: r!.partner_last_name,
-      })
-    )
-  );
+  try {
+    const mappedSong = await buildAndUploadSong(song, userId, assembled, originalName, mimeType);
+    return c.json(success({ received: true, complete: true, song: mappedSong }));
+  } catch (err) {
+    logger.error({ event: "song_chunk_upload_failed", category: "api", context: { songId: id, uploadId }, error: err });
+    throw err;
+  }
 });
