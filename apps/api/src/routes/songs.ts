@@ -89,9 +89,6 @@ function splitNameAndExtension(filename: string): { base: string; ext: string } 
   };
 }
 
-function inferMimeType(file: File): string {
-  return file.type?.trim() || "audio/mpeg";
-}
 
 /** Calendar months 11–12 (Nov–Dec) map to the next calendar year’s season label. */
 function seasonYearFromTimestamp(ms: number): string {
@@ -619,43 +616,4 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   }
 });
 
-// POST /v1/songs/:id/upload — single-request multipart upload (kept for compatibility).
-// Prefer the chunked endpoint for files > a few MB.
-songRoutes.post("/:id/upload", requireAuth, async (c) => {
-  const userId = c.get("user").userId;
-  const id = c.req.param("id");
-
-  const [song] = await db
-    .select()
-    .from(songs)
-    .where(and(eq(songs.id, id), eq(songs.userId, userId)))
-    .limit(1);
-  if (!song) return c.json(CommonErrors.notFound("Song"), 404);
-
-  const body = await c.req.parseBody();
-  const fileValue = body.file;
-  const uploadedFile =
-    fileValue instanceof File
-      ? fileValue
-      : Array.isArray(fileValue)
-        ? fileValue.find((entry): entry is File => entry instanceof File)
-        : null;
-
-  if (!uploadedFile) return c.json(CommonErrors.badRequest("Missing file upload field"), 400);
-  if (uploadedFile.size > MAX_ASSEMBLED_BYTES) {
-    return c.json(CommonErrors.badRequest("File exceeds 100 MB limit"), 400);
-  }
-
-  const originalName = uploadedFile.name?.trim() || "song.mp3";
-  const mimeType = inferMimeType(uploadedFile);
-  const inputBytes = Buffer.from(await uploadedFile.arrayBuffer());
-
-  try {
-    const mappedSong = await buildAndUploadSong(song, userId, inputBytes, originalName, mimeType);
-    return c.json(success(mappedSong));
-  } catch (err) {
-    logger.error({ event: "song_upload_failed", category: "api", context: { songId: id }, error: err });
-    throw err;
-  }
-});
 
