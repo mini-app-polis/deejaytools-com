@@ -161,9 +161,10 @@ export default function AdminPage() {
   const [sessFloorEndsTime, setSessFloorEndsTime] = useState("");
   const [sessPriorityMax, setSessPriorityMax] = useState("6");
   const [sessNonPriorityMax, setSessNonPriorityMax] = useState("4");
-  const [sessPrioritySession, setSessPrioritySession] = useState(false);
-  const [sessSelectedDivisions, setSessSelectedDivisions] = useState<Set<string>>(
-    new Set(DIVISION_OPTIONS)
+  const [sessPriorityRunLimit, setSessPriorityRunLimit] = useState("1");
+  // Per-division priority flags — all divisions always present, admin picks which are priority
+  const [sessDivisionPriority, setSessDivisionPriority] = useState<Record<string, boolean>>(
+    Object.fromEntries(DIVISION_OPTIONS.map((d) => [d, false]))
   );
 
   // ── Live queue tab ──────────────────────────────────────────────────────────
@@ -321,8 +322,8 @@ export default function AdminPage() {
     setSessFloorEndsTime("");
     setSessPriorityMax("6");
     setSessNonPriorityMax("4");
-    setSessPrioritySession(false);
-    setSessSelectedDivisions(new Set(DIVISION_OPTIONS));
+    setSessPriorityRunLimit("1");
+    setSessDivisionPriority(Object.fromEntries(DIVISION_OPTIONS.map((d) => [d, false])));
   };
 
   const openSessDialog = () => {
@@ -330,13 +331,8 @@ export default function AdminPage() {
     setSessDialogOpen(true);
   };
 
-  const toggleDivision = (name: string) => {
-    setSessSelectedDivisions((prev) => {
-      const next = new Set(prev);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
-      return next;
-    });
+  const toggleDivisionPriority = (name: string) => {
+    setSessDivisionPriority((prev) => ({ ...prev, [name]: !prev[name] }));
   };
 
   const submitCreateSession = async (e: React.FormEvent) => {
@@ -345,10 +341,6 @@ export default function AdminPage() {
     if (!sessDate) { toast.error("Date is required"); return; }
     if (!sessCheckinOpensTime || !sessFloorStartsTime || !sessFloorEndsTime) {
       toast.error("All three time fields are required");
-      return;
-    }
-    if (sessSelectedDivisions.size === 0) {
-      toast.error("Select at least one division");
       return;
     }
     const priorityMaxNum = Number(sessPriorityMax);
@@ -381,6 +373,12 @@ export default function AdminPage() {
       return;
     }
 
+    const priorityRunLimitNum = Number(sessPriorityRunLimit);
+    if (Number.isNaN(priorityRunLimitNum) || priorityRunLimitNum < 0) {
+      toast.error("Priority run limit must be a non-negative number");
+      return;
+    }
+
     // Auto-generate session name from date
     const sessionName = new Date(`${sessDate}T12:00:00`).toLocaleDateString("en-US", {
       weekday: "long",
@@ -389,11 +387,12 @@ export default function AdminPage() {
       day: "numeric",
     });
 
-    const divisions = DIVISION_OPTIONS.filter((d) => sessSelectedDivisions.has(d)).map((d, i) => ({
+    // All divisions always included; per-division priority flag; shared run limit
+    const divisions = DIVISION_OPTIONS.map((d, i) => ({
       division_name: d,
-      is_priority: sessPrioritySession,
+      is_priority: sessDivisionPriority[d] ?? false,
       sort_order: i,
-      priority_run_limit: 1,
+      priority_run_limit: (sessDivisionPriority[d] ?? false) ? priorityRunLimitNum : 0,
     }));
 
     setSessSubmitting(true);
@@ -917,47 +916,39 @@ export default function AdminPage() {
                   />
                 </div>
               </div>
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={sessPrioritySession}
-                  onChange={(e) => setSessPrioritySession(e.target.checked)}
-                />
-                <span className="font-medium">Priority session</span>
-                <span className="text-muted-foreground text-xs">(applies to all divisions)</span>
-              </label>
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className={FIELD_LABEL_CLASS}>Divisions</label>
-                  <div className="flex gap-2 text-xs">
-                    <button
-                      type="button"
-                      className="text-primary underline"
-                      onClick={() => setSessSelectedDivisions(new Set(DIVISION_OPTIONS))}
-                    >
-                      All
-                    </button>
-                    <button
-                      type="button"
-                      className="text-muted-foreground underline"
-                      onClick={() => setSessSelectedDivisions(new Set())}
-                    >
-                      None
-                    </button>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-1.5">
+                <label className={FIELD_LABEL_CLASS}>Priority run limit</label>
+                <input
+                  type="number"
+                  min={0}
+                  className={FIELD_INPUT_CLASS}
+                  value={sessPriorityRunLimit}
+                  onChange={(e) => setSessPriorityRunLimit(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Number of runs that count as priority for each priority division.
+                </p>
+              </div>
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Divisions</label>
+                <div className="space-y-1 mt-1">
                   {DIVISION_OPTIONS.map((d) => (
-                    <label key={d} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <label key={d} className="flex items-center gap-3 text-sm cursor-pointer py-0.5">
                       <input
                         type="checkbox"
-                        checked={sessSelectedDivisions.has(d)}
-                        onChange={() => toggleDivision(d)}
+                        checked={sessDivisionPriority[d] ?? false}
+                        onChange={() => toggleDivisionPriority(d)}
                       />
-                      {d}
+                      <span>{d}</span>
+                      {sessDivisionPriority[d] && (
+                        <span className="text-xs text-primary font-medium">priority</span>
+                      )}
                     </label>
                   ))}
                 </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  All divisions are always included. Check the ones that grant priority status.
+                </p>
               </div>
               <Button type="submit" disabled={sessSubmitting} size="lg" className="w-full">
                 {sessSubmitting ? "Creating…" : "Create session"}

@@ -50,7 +50,11 @@ type LeadingPair = {
 type SongRow = {
   id: string;
   display_name: string | null;
-  processed_filename?: string | null;
+  processed_filename: string | null;
+  division: string | null;
+  partner_id: string | null;
+  partner_first_name: string | null;
+  partner_last_name: string | null;
 };
 
 function formatTime(ts: number): string {
@@ -99,10 +103,9 @@ export default function SessionDetailPage() {
   const [loading, setLoading] = useState(true);
   const [checkinOpen, setCheckinOpen] = useState(false);
 
-  const [fEntity, setFEntity] = useState<"pair" | "solo">("pair");
-  const [fPairId, setFPairId] = useState("");
-  const [fDivision, setFDivision] = useState("");
+  // Check-in form — song-first
   const [fSongId, setFSongId] = useState("");
+  const [fDivision, setFDivision] = useState("");
   const [fNotes, setFNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -149,28 +152,47 @@ export default function SessionDetailPage() {
     return () => clearInterval(t);
   }, [id, loadQueue, loadSession]);
 
-  const divisionsList = useMemo(() => {
-    const fromSession = session?.divisions?.map((d) => d.division_name) ?? [];
-    return fromSession.filter((n) => n && n !== "Other");
-  }, [session]);
+  // Session's division names
+  const sessionDivisions = useMemo(
+    () => (session?.divisions?.map((d) => d.division_name) ?? []).filter(Boolean),
+    [session]
+  );
 
-  useEffect(() => {
-    if (!session) return;
-    const first = divisionsList[0] ?? "";
-    if (first && !fDivision) setFDivision(first);
-  }, [session, divisionsList, fDivision]);
+  // Index pairs by partner_b_id for fast lookup
+  const pairByPartnerId = useMemo(() => {
+    const m = new Map<string, LeadingPair>();
+    for (const p of pairs) {
+      if (p.partner_b_id) m.set(p.partner_b_id, p);
+    }
+    return m;
+  }, [pairs]);
 
+  // Derived check-in context from the selected song
+  const selectedSong = useMemo(
+    () => songs.find((s) => s.id === fSongId) ?? null,
+    [songs, fSongId]
+  );
+
+  const derivedPair = useMemo(() => {
+    if (!selectedSong?.partner_id) return null;
+    return pairByPartnerId.get(selectedSong.partner_id) ?? null;
+  }, [selectedSong, pairByPartnerId]);
+
+  const isSolo = !selectedSong?.partner_id;
+
+  const divisionInSession = fDivision ? sessionDivisions.includes(fDivision) : false;
+
+  // When a song is selected, auto-fill division from song if it matches session
   useEffect(() => {
-    if (!id) return;
-    const pair = fPairId ? pairs.find((p) => p.id === fPairId) : null;
-    const q = pair?.partner_b_id
-      ? `?partner_id=${encodeURIComponent(pair.partner_b_id)}`
-      : "";
-    void api
-      .get<SongRow[]>(`/v1/songs${q}`)
-      .then(setSongs)
-      .catch(() => {});
-  }, [api, id, fPairId, pairs]);
+    if (!selectedSong) return;
+    const songDiv = selectedSong.division ?? "";
+    if (songDiv && sessionDivisions.includes(songDiv)) {
+      setFDivision(songDiv);
+    } else if (songDiv) {
+      // Song division not in this session — clear so user must pick
+      setFDivision("");
+    }
+  }, [selectedSong, sessionDivisions]);
 
   const songMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -208,14 +230,11 @@ export default function SessionDetailPage() {
     !!session &&
     checkinWindowOpen &&
     session.has_active_checkin !== true &&
-    songs.length > 0 &&
-    divisionsList.length > 0;
+    songs.length > 0;
 
   const openCheckin = () => {
-    setFEntity("pair");
-    setFPairId("");
-    setFDivision(divisionsList[0] ?? "");
     setFSongId("");
+    setFDivision("");
     setFNotes("");
     setCheckinOpen(true);
   };
@@ -226,16 +245,16 @@ export default function SessionDetailPage() {
     e.preventDefault();
     if (!id || !user?.id) return;
 
-    if (!fDivision.trim()) {
-      toast.error("Pick a division");
-      return;
-    }
     if (!fSongId) {
       toast.error("Pick a song");
       return;
     }
-    if (fEntity === "pair" && !fPairId) {
-      toast.error("Pick a pair");
+    if (!fDivision) {
+      toast.error("Pick a division");
+      return;
+    }
+    if (!isSolo && !derivedPair) {
+      toast.error("No pair found for this song's partner — set one up under Partners first.");
       return;
     }
 
@@ -243,9 +262,9 @@ export default function SessionDetailPage() {
     try {
       await api.post("/v1/checkins", {
         sessionId: id,
-        divisionName: fDivision.trim(),
-        entityPairId: fEntity === "pair" ? fPairId : null,
-        entitySoloUserId: fEntity === "solo" ? user.id : null,
+        divisionName: fDivision,
+        entityPairId: !isSolo && derivedPair ? derivedPair.id : null,
+        entitySoloUserId: isSolo ? user.id : null,
         songId: fSongId,
         notes: fNotes.trim() || undefined,
       });
@@ -285,7 +304,7 @@ export default function SessionDetailPage() {
     <div className={`space-y-6 ${loading ? "opacity-60" : ""}`}>
       <div>
         <Button variant="ghost" size="sm" className="mb-2 px-0" asChild>
-          <Link to="/sessions">← Sessions</Link>
+          <Link to={session.event_id ? `/events/${session.event_id}` : "/events"}>← Back</Link>
         </Button>
         <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
           <div>
@@ -335,7 +354,9 @@ export default function SessionDetailPage() {
             >
               <div className="space-y-0.5 min-w-0">
                 <p className="font-medium">#{r.position} · {renderEntityLabel(r)}</p>
-                <p className="text-muted-foreground truncate">{r.divisionName} · {renderSongLabel(r.songId)}</p>
+                <p className="text-muted-foreground truncate">
+                  {r.divisionName} · {renderSongLabel(r.songId)}
+                </p>
               </div>
             </div>
           ))}
@@ -365,12 +386,8 @@ export default function SessionDetailPage() {
         )}
         {!canCheckIn && checkinWindowOpen && songs.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            You have no songs uploaded — <a href="/songs" className="underline">add a song first</a>.
-          </p>
-        )}
-        {!canCheckIn && checkinWindowOpen && divisionsList.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            No divisions configured for this session.
+            You have no songs uploaded —{" "}
+            <Link to="/songs" className="underline">add a song first</Link>.
           </p>
         )}
       </div>
@@ -394,46 +411,54 @@ export default function SessionDetailPage() {
                 ✕
               </Button>
             </div>
+
             <form onSubmit={submitCheckin} className="space-y-4">
+              {/* Song — drives everything else */}
               <div>
-                <label className={FIELD_LABEL_CLASS}>Dancing as</label>
+                <label className={FIELD_LABEL_CLASS}>Song</label>
                 <select
                   className={FIELD_INPUT_CLASS}
-                  value={fEntity}
-                  onChange={(e) => {
-                    const v = e.target.value as "pair" | "solo";
-                    setFEntity(v);
-                    if (v === "solo") setFPairId("");
-                  }}
+                  value={fSongId}
+                  onChange={(e) => setFSongId(e.target.value)}
+                  autoFocus
                 >
-                  <option value="pair">Pair</option>
-                  <option value="solo">Solo</option>
+                  <option value="">Select a song…</option>
+                  {songs.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.display_name ?? s.processed_filename ?? s.id}
+                      {s.division ? ` · ${s.division}` : ""}
+                      {s.partner_first_name
+                        ? ` · ${s.partner_first_name} ${s.partner_last_name ?? ""}`.trimEnd()
+                        : " · Solo"}
+                    </option>
+                  ))}
                 </select>
               </div>
 
-              {fEntity === "pair" && (
-                <div>
-                  <label className={FIELD_LABEL_CLASS}>Pair</label>
-                  <select
-                    className={FIELD_INPUT_CLASS}
-                    value={fPairId}
-                    onChange={(e) => setFPairId(e.target.value)}
-                  >
-                    <option value="">Select pair</option>
-                    {pairs.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.display_name}
-                      </option>
-                    ))}
-                  </select>
-                  {pairs.length === 0 && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      You have no leading pairs. Set one up under Partners first.
-                    </p>
-                  )}
+              {/* Derived entity — shown for confirmation */}
+              {fSongId && (
+                <div className="rounded-md border bg-muted/40 px-3 py-3 text-sm space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground w-20 shrink-0">Dancing as</span>
+                    <span className="font-medium">
+                      {isSolo
+                        ? "Solo"
+                        : derivedPair
+                        ? derivedPair.display_name
+                        : selectedSong?.partner_first_name
+                        ? `${selectedSong.partner_first_name} ${selectedSong.partner_last_name ?? ""}`.trimEnd()
+                        : "—"}
+                    </span>
+                    {!isSolo && !derivedPair && (
+                      <span className="text-destructive text-xs">
+                        (no pair set up — <Link to="/partners" className="underline">fix in Partners</Link>)
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
 
+              {/* Division — auto-filled from song; user can override if needed */}
               <div>
                 <label className={FIELD_LABEL_CLASS}>Division</label>
                 <select
@@ -441,36 +466,23 @@ export default function SessionDetailPage() {
                   value={fDivision}
                   onChange={(e) => setFDivision(e.target.value)}
                 >
-                  <option value="">Select division</option>
-                  {divisionsList.map((d) => (
+                  <option value="">Select division…</option>
+                  {sessionDivisions.map((d) => (
                     <option key={d} value={d}>
                       {d}
+                      {selectedSong?.division === d ? " ✓" : ""}
                     </option>
                   ))}
                 </select>
-              </div>
-
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Song</label>
-                <select
-                  className={FIELD_INPUT_CLASS}
-                  value={fSongId}
-                  onChange={(e) => setFSongId(e.target.value)}
-                >
-                  <option value="">Select song</option>
-                  {songs.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.display_name ?? s.processed_filename ?? s.id}
-                    </option>
-                  ))}
-                </select>
-                {songs.length === 0 && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    No songs found. Upload a song first.
+                {selectedSong?.division && !divisionInSession && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    Your song's division ({selectedSong.division}) isn't offered in this session.
+                    Please pick the closest match above.
                   </p>
                 )}
               </div>
 
+              {/* Notes */}
               <div>
                 <label className={FIELD_LABEL_CLASS}>Notes (optional)</label>
                 <textarea
@@ -483,7 +495,7 @@ export default function SessionDetailPage() {
               </div>
 
               <Button type="submit" disabled={submitting} size="lg" className="w-full">
-                {submitting ? "Submitting..." : "Check in"}
+                {submitting ? "Submitting…" : "Check in"}
               </Button>
             </form>
           </div>

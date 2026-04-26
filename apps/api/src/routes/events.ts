@@ -55,7 +55,7 @@ function mapEvent(row: typeof events.$inferSelect) {
 }
 
 eventRoutes.get("/", async (c) => {
-  const rows = await db.select().from(events).orderBy(desc(events.createdAt));
+  const rows = await db.select().from(events).orderBy(desc(events.startDate));
   return c.json(successList(rows.map(mapEvent)));
 });
 
