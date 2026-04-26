@@ -1,3 +1,10 @@
+# [1.22.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.21.0...v1.22.0) (2026-04-26)
+
+
+### Features
+
+* separating admin functionality ([6317628](https://github.com/mini-app-polis/deejaytools-com/commit/6317628bd2d9e19b42a981d569ea142d97c0d98c))
+
 # [1.21.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.20.2...v1.21.0) (2026-04-26)
 
 
