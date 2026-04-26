@@ -1,3 +1,15 @@
+## [1.19.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.19.3...v1.19.4) (2026-04-26)
+
+
+### Bug Fixes
+
+* resolving 500 error ([af91044](https://github.com/mini-app-polis/deejaytools-com/commit/af910445a922f6fdb4f3c7ef003befd740b9a2a5))
+
+
+### Reverts
+
+* restore simple @hono/node-server ([0c27030](https://github.com/mini-app-polis/deejaytools-com/commit/0c270304c41418ea1547c1561e106e87703354e2))
+
 ## [1.19.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.19.2...v1.19.3) (2026-04-26)
 
 
