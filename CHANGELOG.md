@@ -1,3 +1,10 @@
+# [1.21.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.20.2...v1.21.0) (2026-04-26)
+
+
+### Features
+
+* **app:** mobile-first redesign + WCS-inspired visual theme ([7bdba1a](https://github.com/mini-app-polis/deejaytools-com/commit/7bdba1a9badf764c286ec432b292520937f76461))
+
 ## [1.20.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.20.1...v1.20.2) (2026-04-26)
 
 
