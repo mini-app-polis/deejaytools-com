@@ -7,12 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type EventRow = {
   id: string;
   name: string;
-  date: string | null;
+  start_date: string;
+  end_date: string;
   status: string;
 };
 
@@ -109,7 +109,11 @@ export default function EventDetailPage() {
         <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="page-title text-2xl">{event.name}</h1>
-            <p className="text-sm text-muted-foreground">{event.date ?? "—"}</p>
+            <p className="text-sm text-muted-foreground">
+              {event.start_date === event.end_date
+                ? event.start_date
+                : `${event.start_date} – ${event.end_date}`}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             {event.status === "upcoming" && <Badge variant="default">upcoming</Badge>}
@@ -127,43 +131,35 @@ export default function EventDetailPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="sessions">
-        <TabsList>
-          <TabsTrigger value="sessions">Sessions</TabsTrigger>
-          <TabsTrigger value="registrations">Registrations</TabsTrigger>
-        </TabsList>
-        <TabsContent value="sessions" className="space-y-4 mt-4">
-          {sessions?.length === 0 && (
-            <p className="text-sm text-muted-foreground">No sessions for this event.</p>
-          )}
-          <div className="grid gap-3 md:grid-cols-2">
-            {sessions?.map((sess) => (
-              <Card key={sess.id}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base flex flex-wrap items-center gap-2">
-                    {sess.name}
-                    {sessionStatusBadge(sess.status)}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="text-sm text-muted-foreground space-y-1">
-                  <p>Check-in: {formatTime(sess.checkin_opens_at)}</p>
-                  <p>
-                    Floor trial: {formatTime(sess.floor_trial_starts_at)} –{" "}
-                    {formatTime(sess.floor_trial_ends_at)}
-                  </p>
-                  <Separator className="my-2" />
-                  <Button variant="link" className="px-0 h-auto" asChild>
-                    <Link to={`/sessions/${sess.id}`}>Open session →</Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-        <TabsContent value="registrations" className="mt-4">
-          <p className="text-muted-foreground">Coming soon</p>
-        </TabsContent>
-      </Tabs>
+      <div className="space-y-4">
+        <h2 className="text-base font-semibold">Sessions</h2>
+        {sessions?.length === 0 && (
+          <p className="text-sm text-muted-foreground">No sessions for this event.</p>
+        )}
+        <div className="grid gap-3 md:grid-cols-2">
+          {sessions?.map((sess) => (
+            <Card key={sess.id}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex flex-wrap items-center gap-2">
+                  {sess.name}
+                  {sessionStatusBadge(sess.status)}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-muted-foreground space-y-1">
+                <p>Check-in: {formatTime(sess.checkin_opens_at)}</p>
+                <p>
+                  Floor trial: {formatTime(sess.floor_trial_starts_at)} –{" "}
+                  {formatTime(sess.floor_trial_ends_at)}
+                </p>
+                <Separator className="my-2" />
+                <Button variant="link" className="px-0 h-auto" asChild>
+                  <Link to={`/sessions/${sess.id}`}>Open session →</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

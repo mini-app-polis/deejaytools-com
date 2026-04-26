@@ -1,5 +1,4 @@
 import { CommonErrors, success, successList } from "common-typescript-utils";
-import { EventStatusSchema } from "@deejaytools/schemas";
 import { zValidator } from "../lib/validate.js";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -8,7 +7,6 @@ import { db } from "../db/index.js";
 import {
   checkins,
   eventDivisionRunLimits,
-  eventRegistrations,
   events,
   queueEntries,
   queueEvents,
@@ -18,22 +16,38 @@ import {
 } from "../db/schema.js";
 import { requireAdmin, requireAuth } from "../middleware/auth.js";
 
+// YYYY-MM-DD
+const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD");
+
 const createEvent = z.object({
   name: z.string().min(1),
-  date: z.string().optional(),
-  status: EventStatusSchema.optional(),
+  start_date: dateString,
+  end_date: dateString,
 });
 
-const patchEvent = createEvent.partial();
+const patchEvent = z.object({
+  name: z.string().min(1).optional(),
+  start_date: dateString.optional(),
+  end_date: dateString.optional(),
+});
 
 export const eventRoutes = new Hono();
+
+/** Derive status from start/end dates without storing it. */
+function computeStatus(startDate: string, endDate: string): string {
+  const today = new Date().toISOString().slice(0, 10);
+  if (today < startDate) return "upcoming";
+  if (today > endDate) return "completed";
+  return "active";
+}
 
 function mapEvent(row: typeof events.$inferSelect) {
   return {
     id: row.id,
     name: row.name,
-    date: row.date,
-    status: row.status,
+    start_date: row.startDate,
+    end_date: row.endDate,
+    status: computeStatus(row.startDate, row.endDate),
     created_by: row.createdBy,
     created_at: row.createdAt,
     updated_at: row.updatedAt,
@@ -48,22 +62,23 @@ eventRoutes.get("/", async (c) => {
 eventRoutes.get("/:id", requireAuth, async (c) => {
   const id = c.req.param("id");
   const [row] = await db.select().from(events).where(eq(events.id, id)).limit(1);
-  if (!row) {
-    return c.json(CommonErrors.notFound("Event"), 404);
-  }
+  if (!row) return c.json(CommonErrors.notFound("Event"), 404);
   return c.json(success(mapEvent(row)));
 });
 
 eventRoutes.post("/", requireAdmin, zValidator("json", createEvent), async (c) => {
   const body = c.req.valid("json");
+  if (body.start_date > body.end_date) {
+    return c.json(CommonErrors.badRequest("start_date must be on or before end_date"), 400);
+  }
   const uid = c.get("user").userId;
   const now = Date.now();
   const id = crypto.randomUUID();
   await db.insert(events).values({
     id,
     name: body.name,
-    date: body.date ?? null,
-    status: body.status ?? "upcoming",
+    startDate: body.start_date,
+    endDate: body.end_date,
     createdBy: uid,
     createdAt: now,
     updatedAt: now,
@@ -76,16 +91,21 @@ eventRoutes.patch("/:id", requireAdmin, zValidator("json", patchEvent), async (c
   const id = c.req.param("id");
   const body = c.req.valid("json");
   const [existing] = await db.select().from(events).where(eq(events.id, id)).limit(1);
-  if (!existing) {
-    return c.json(CommonErrors.notFound("Event"), 404);
+  if (!existing) return c.json(CommonErrors.notFound("Event"), 404);
+
+  const nextStart = body.start_date ?? existing.startDate;
+  const nextEnd = body.end_date ?? existing.endDate;
+  if (nextStart > nextEnd) {
+    return c.json(CommonErrors.badRequest("start_date must be on or before end_date"), 400);
   }
+
   const now = Date.now();
   await db
     .update(events)
     .set({
       ...(body.name !== undefined && { name: body.name }),
-      ...(body.date !== undefined && { date: body.date }),
-      ...(body.status !== undefined && { status: body.status }),
+      ...(body.start_date !== undefined && { startDate: body.start_date }),
+      ...(body.end_date !== undefined && { endDate: body.end_date }),
       updatedAt: now,
     })
     .where(eq(events.id, id));
@@ -96,12 +116,9 @@ eventRoutes.patch("/:id", requireAdmin, zValidator("json", patchEvent), async (c
 eventRoutes.delete("/:id", requireAdmin, async (c) => {
   const id = c.req.param("id");
   const [existing] = await db.select().from(events).where(eq(events.id, id)).limit(1);
-  if (!existing) {
-    return c.json(CommonErrors.notFound("Event"), 404);
-  }
+  if (!existing) return c.json(CommonErrors.notFound("Event"), 404);
 
   await db.transaction(async (tx) => {
-    // Collect all session IDs for this event
     const eventSessions = await tx
       .select({ id: sessions.id })
       .from(sessions)
@@ -109,24 +126,15 @@ eventRoutes.delete("/:id", requireAdmin, async (c) => {
     const sessionIds = eventSessions.map((s) => s.id);
 
     if (sessionIds.length > 0) {
-      // Delete queue entries and queue events by session
       await tx.delete(queueEntries).where(inArray(queueEntries.sessionId, sessionIds));
       await tx.delete(queueEvents).where(inArray(queueEvents.sessionId, sessionIds));
-      // Delete runs by session
       await tx.delete(runs).where(inArray(runs.sessionId, sessionIds));
-      // Delete checkins by session
       await tx.delete(checkins).where(inArray(checkins.sessionId, sessionIds));
-      // Delete session divisions
       await tx.delete(sessionDivisions).where(inArray(sessionDivisions.sessionId, sessionIds));
-      // Delete sessions
       await tx.delete(sessions).where(inArray(sessions.id, sessionIds));
     }
 
-    // Delete event-level children
-    await tx.delete(eventRegistrations).where(eq(eventRegistrations.eventId, id));
     await tx.delete(eventDivisionRunLimits).where(eq(eventDivisionRunLimits.eventId, id));
-
-    // Finally delete the event
     await tx.delete(events).where(eq(events.id, id));
   });
 

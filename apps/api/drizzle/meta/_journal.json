@@ -29,6 +29,13 @@
       "when": 1774914982000,
       "tag": "0003_floor_trial_queue_model",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1777233600000,
+      "tag": "0004_event_date_range",
+      "breakpoints": true
     }
   ]
 }

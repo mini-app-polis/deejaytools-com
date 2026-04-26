@@ -12,12 +12,6 @@ import {
 } from "drizzle-orm/pg-core";
 
 export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
-export const eventStatusEnum = pgEnum("event_status", [
-  "upcoming",
-  "active",
-  "completed",
-  "cancelled",
-]);
 export const sessionStatusEnum = pgEnum("session_status", [
   "scheduled",
   "checkin_open",
@@ -112,36 +106,22 @@ export const songs = pgTable(
   })
 );
 
-export const events = pgTable("events", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  date: text("date"),
-  status: eventStatusEnum("status").notNull().default("upcoming"),
-  createdBy: text("created_by").references(() => users.id),
-  createdAt: bigint("created_at", { mode: "number" }).notNull(),
-  updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
-});
-
-export const eventRegistrations = pgTable(
-  "event_registrations",
+export const events = pgTable(
+  "events",
   {
     id: text("id").primaryKey(),
-    eventId: text("event_id")
-      .notNull()
-      .references(() => events.id),
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id),
-    partnerId: text("partner_id").references(() => partners.id),
-    songId: text("song_id").references(() => songs.id),
-    division: text("division").notNull(),
+    name: text("name").notNull(),
+    startDate: text("start_date").notNull(),
+    endDate: text("end_date").notNull(),
+    createdBy: text("created_by").references(() => users.id),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
   },
   (t) => ({
-    evIdx: index("idx_event_registrations_event_id").on(t.eventId),
-    usrIdx: index("idx_event_registrations_user_id").on(t.userId),
+    dateRangeCheck: check("ck_events_date_range", sql`${t.startDate} <= ${t.endDate}`),
   })
 );
+
 
 export const sessions = pgTable(
   "sessions",
@@ -204,7 +184,6 @@ export const checkins = pgTable(
     submittedByUserId: text("submitted_by_user_id")
       .notNull()
       .references(() => users.id),
-    eventRegistrationId: text("event_registration_id").references(() => eventRegistrations.id),
     initialQueue: initialQueueEnum("initial_queue").notNull(),
     notes: text("notes"),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),

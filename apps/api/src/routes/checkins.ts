@@ -20,7 +20,6 @@ const createCheckinBody = z
     entitySoloUserId: z.string().nullish(),
     songId: z.string().min(1),
     notes: z.string().nullish(),
-    eventRegistrationId: z.string().nullish(),
   })
   .refine(
     (b) =>
@@ -100,7 +99,6 @@ checkinRoutes.post(
           entitySoloUserId: body.entitySoloUserId ?? null,
           songId: body.songId,
           submittedByUserId: userId,
-          eventRegistrationId: body.eventRegistrationId ?? null,
           initialQueue,
           notes: body.notes ?? null,
           createdAt: now,

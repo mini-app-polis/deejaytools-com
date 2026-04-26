@@ -5,7 +5,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { and, asc, count, desc, eq, inArray, or } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { checkins, pairs, queueEntries, sessionDivisions, sessions } from "../db/schema.js";
+import { checkins, events, pairs, queueEntries, sessionDivisions, sessions } from "../db/schema.js";
 import { getOptionalSyncedUserId } from "../lib/optional-user.js";
 import { sessionOverlapsInEvent } from "../lib/sessions/overlap.js";
 import { requireAdmin } from "../middleware/auth.js";
@@ -53,6 +53,30 @@ const statusBody = z.object({
 });
 
 export const sessionRoutes = new Hono();
+
+/** Convert epoch ms to "YYYY-MM-DD" (UTC). */
+function msToDate(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+/** Validate that session timestamps fall within the event's date range. */
+async function validateSessionWithinEvent(
+  eventId: string,
+  checkinOpensAt: number,
+  floorTrialEndsAt: number
+): Promise<string | null> {
+  const [ev] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
+  if (!ev) return "Event not found";
+  const sessionStart = msToDate(checkinOpensAt);
+  const sessionEnd = msToDate(floorTrialEndsAt);
+  if (sessionStart < ev.startDate) {
+    return `Session starts (${sessionStart}) before event start date (${ev.startDate})`;
+  }
+  if (sessionEnd > ev.endDate) {
+    return `Session ends (${sessionEnd}) after event end date (${ev.endDate})`;
+  }
+  return null;
+}
 
 type SessionRow = typeof sessions.$inferSelect;
 type DivisionRow = typeof sessionDivisions.$inferSelect;
@@ -251,6 +275,14 @@ sessionRoutes.post("/", requireAdmin, zValidator("json", createSessionBody), asy
         400
       );
     }
+    const dateErr = await validateSessionWithinEvent(
+      eventId,
+      body.checkin_opens_at,
+      body.floor_trial_ends_at
+    );
+    if (dateErr) {
+      return c.json(CommonErrors.badRequest(dateErr), 400);
+    }
   }
 
   await db.transaction(async (tx) => {
@@ -421,6 +453,12 @@ sessionRoutes.patch("/:id", requireAdmin, zValidator("json", patchSessionBody), 
         CommonErrors.badRequest("Session floor-trial window overlaps another session in this event"),
         400
       );
+    }
+    const nextCheckinOpensAt =
+      body.checkin_opens_at !== undefined ? body.checkin_opens_at : existing.checkinOpensAt;
+    const dateErr = await validateSessionWithinEvent(nextEventId, nextCheckinOpensAt, nextEnd);
+    if (dateErr) {
+      return c.json(CommonErrors.badRequest(dateErr), 400);
     }
   }
 

@@ -17,11 +17,9 @@ import {
 type EventRow = {
   id: string;
   name: string;
-  date: string | null;
+  start_date: string;
+  end_date: string;
   status: string;
-  created_by?: string;
-  created_at?: number;
-  updated_at?: number;
 };
 
 function eventStatusBadge(status: string) {
@@ -93,9 +91,11 @@ export default function EventsPage() {
               <p className="font-medium text-base leading-snug">{ev.name}</p>
               {eventStatusBadge(ev.status)}
             </div>
-            {ev.date && (
-              <p className="text-sm text-muted-foreground">{ev.date}</p>
-            )}
+            <p className="text-sm text-muted-foreground">
+              {ev.start_date === ev.end_date
+                ? ev.start_date
+                : `${ev.start_date} – ${ev.end_date}`}
+            </p>
             <p className="text-sm font-medium text-primary pt-1">Open →</p>
           </button>
         ))}
@@ -107,7 +107,7 @@ export default function EventsPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
-              <TableHead>Date</TableHead>
+              <TableHead>Dates</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-[120px]">Actions</TableHead>
             </TableRow>
@@ -127,7 +127,11 @@ export default function EventsPage() {
                 onClick={() => navigate(`/events/${ev.id}`)}
               >
                 <TableCell className="font-medium">{ev.name}</TableCell>
-                <TableCell>{ev.date ?? "—"}</TableCell>
+                <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                  {ev.start_date === ev.end_date
+                    ? ev.start_date
+                    : `${ev.start_date} – ${ev.end_date}`}
+                </TableCell>
                 <TableCell>{eventStatusBadge(ev.status)}</TableCell>
                 <TableCell onClick={(e) => e.stopPropagation()}>
                   <Button

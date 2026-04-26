@@ -15,13 +15,33 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const DIVISION_OPTIONS = [
+  "Classic",
+  "Showcase",
+  "Rising Star Classic",
+  "Rising Star Showcase",
+  "Sophisticated",
+  "Masters",
+  "Teams",
+  "ProAm LeaderAm",
+  "ProAm FollowerAm",
+  "NovInt Routines",
+  "Juniors",
+  "Young Adult",
+  "Exhibition",
+  "Superstar",
+] as const;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type EventRow = {
   id: string;
   name: string;
-  date: string | null;
-  status: string;
+  start_date: string;
+  end_date: string;
+  status: string; // computed server-side
 };
 
 type SessionRow = {
@@ -33,12 +53,6 @@ type SessionRow = {
   checkin_opens_at: number;
   floor_trial_starts_at: number;
   floor_trial_ends_at: number;
-};
-
-type DivisionRow = {
-  division_name: string;
-  is_priority: boolean;
-  priority_run_limit: number;
 };
 
 type QueueRow = {
@@ -132,7 +146,8 @@ export default function AdminPage() {
   const [evDialogOpen, setEvDialogOpen] = useState(false);
   const [evSubmitting, setEvSubmitting] = useState(false);
   const [evName, setEvName] = useState("");
-  const [evDate, setEvDate] = useState("");
+  const [evStartDate, setEvStartDate] = useState("");
+  const [evEndDate, setEvEndDate] = useState("");
 
   // ── Sessions tab ────────────────────────────────────────────────────────────
   const [sessions, setSessions] = useState<SessionRow[] | null>(null);
@@ -140,16 +155,16 @@ export default function AdminPage() {
   const [sessDialogOpen, setSessDialogOpen] = useState(false);
   const [sessSubmitting, setSessSubmitting] = useState(false);
   const [sessEventId, setSessEventId] = useState("");
-  const [sessName, setSessName] = useState("");
   const [sessDate, setSessDate] = useState("");
-  const [sessCheckinOpensAt, setSessCheckinOpensAt] = useState("");
-  const [sessFloorStartsAt, setSessFloorStartsAt] = useState("");
-  const [sessFloorEndsAt, setSessFloorEndsAt] = useState("");
+  const [sessCheckinOpensTime, setSessCheckinOpensTime] = useState("");
+  const [sessFloorStartsTime, setSessFloorStartsTime] = useState("");
+  const [sessFloorEndsTime, setSessFloorEndsTime] = useState("");
   const [sessPriorityMax, setSessPriorityMax] = useState("6");
   const [sessNonPriorityMax, setSessNonPriorityMax] = useState("4");
-  const [sessDivisions, setSessDivisions] = useState<DivisionRow[]>([
-    { division_name: "Classic", is_priority: false, priority_run_limit: 0 },
-  ]);
+  const [sessPrioritySession, setSessPrioritySession] = useState(false);
+  const [sessSelectedDivisions, setSessSelectedDivisions] = useState<Set<string>>(
+    new Set(DIVISION_OPTIONS)
+  );
 
   // ── Live queue tab ──────────────────────────────────────────────────────────
   const [lqSessionId, setLqSessionId] = useState("");
@@ -268,19 +283,23 @@ export default function AdminPage() {
 
   const openEvDialog = () => {
     setEvName("");
-    setEvDate("");
+    setEvStartDate("");
+    setEvEndDate("");
     setEvDialogOpen(true);
   };
 
   const submitCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!evName.trim()) { toast.error("Name is required"); return; }
-    if (!evDate) { toast.error("Date is required"); return; }
+    if (!evStartDate) { toast.error("Start date is required"); return; }
+    if (!evEndDate) { toast.error("End date is required"); return; }
+    if (evEndDate < evStartDate) { toast.error("End date must be on or after start date"); return; }
     setEvSubmitting(true);
     try {
       const created = await api.post<EventRow>("/v1/events", {
         name: evName.trim(),
-        date: evDate,
+        start_date: evStartDate,
+        end_date: evEndDate,
       });
       toast.success("Event created");
       setEvDialogOpen(false);
@@ -296,14 +315,14 @@ export default function AdminPage() {
 
   const resetSessForm = () => {
     setSessEventId(events?.[0]?.id ?? "");
-    setSessName("");
     setSessDate("");
-    setSessCheckinOpensAt("");
-    setSessFloorStartsAt("");
-    setSessFloorEndsAt("");
+    setSessCheckinOpensTime("");
+    setSessFloorStartsTime("");
+    setSessFloorEndsTime("");
     setSessPriorityMax("6");
     setSessNonPriorityMax("4");
-    setSessDivisions([{ division_name: "Classic", is_priority: false, priority_run_limit: 0 }]);
+    setSessPrioritySession(false);
+    setSessSelectedDivisions(new Set(DIVISION_OPTIONS));
   };
 
   const openSessDialog = () => {
@@ -311,16 +330,25 @@ export default function AdminPage() {
     setSessDialogOpen(true);
   };
 
-  const updateDivision = (index: number, patch: Partial<DivisionRow>) => {
-    setSessDivisions((prev) => prev.map((d, i) => (i === index ? { ...d, ...patch } : d)));
+  const toggleDivision = (name: string) => {
+    setSessSelectedDivisions((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
   };
 
   const submitCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sessEventId) { toast.error("Select an event"); return; }
-    if (!sessName.trim()) { toast.error("Name is required"); return; }
-    if (!sessCheckinOpensAt || !sessFloorStartsAt || !sessFloorEndsAt) {
-      toast.error("All three datetime fields are required");
+    if (!sessDate) { toast.error("Date is required"); return; }
+    if (!sessCheckinOpensTime || !sessFloorStartsTime || !sessFloorEndsTime) {
+      toast.error("All three time fields are required");
+      return;
+    }
+    if (sessSelectedDivisions.size === 0) {
+      toast.error("Select at least one division");
       return;
     }
     const priorityMaxNum = Number(sessPriorityMax);
@@ -337,24 +365,46 @@ export default function AdminPage() {
       toast.error("Non-priority cap must be ≤ priority cap");
       return;
     }
-    const divisions = sessDivisions
-      .filter((d) => d.division_name.trim() && d.division_name.trim() !== "Other")
-      .map((d, i) => ({
-        division_name: d.division_name.trim(),
-        is_priority: d.is_priority,
-        sort_order: i,
-        priority_run_limit: Number.isFinite(d.priority_run_limit) ? d.priority_run_limit : 0,
-      }));
+
+    // Build timestamps by combining the selected date with each time
+    const toTs = (time: string) => new Date(`${sessDate}T${time}`).getTime();
+    const checkinOpensAt = toTs(sessCheckinOpensTime);
+    const floorStartsAt = toTs(sessFloorStartsTime);
+    const floorEndsAt = toTs(sessFloorEndsTime);
+
+    if (floorStartsAt >= floorEndsAt) {
+      toast.error("Floor trial end must be after floor trial start");
+      return;
+    }
+    if (checkinOpensAt >= floorStartsAt) {
+      toast.error("Check-in must open before floor trial starts");
+      return;
+    }
+
+    // Auto-generate session name from date
+    const sessionName = new Date(`${sessDate}T12:00:00`).toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+
+    const divisions = DIVISION_OPTIONS.filter((d) => sessSelectedDivisions.has(d)).map((d, i) => ({
+      division_name: d,
+      is_priority: sessPrioritySession,
+      sort_order: i,
+      priority_run_limit: 1,
+    }));
 
     setSessSubmitting(true);
     try {
       await api.post<SessionRow>("/v1/sessions", {
         event_id: sessEventId,
-        name: sessName.trim(),
-        ...(sessDate.trim() ? { date: sessDate.trim() } : {}),
-        checkin_opens_at: new Date(sessCheckinOpensAt).getTime(),
-        floor_trial_starts_at: new Date(sessFloorStartsAt).getTime(),
-        floor_trial_ends_at: new Date(sessFloorEndsAt).getTime(),
+        name: sessionName,
+        date: sessDate,
+        checkin_opens_at: checkinOpensAt,
+        floor_trial_starts_at: floorStartsAt,
+        floor_trial_ends_at: floorEndsAt,
         active_priority_max: priorityMaxNum,
         active_non_priority_max: nonPriorityMaxNum,
         divisions,
@@ -419,7 +469,7 @@ export default function AdminPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
-                    <TableHead>Date</TableHead>
+                    <TableHead>Dates</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="w-[100px]" />
                   </TableRow>
@@ -439,7 +489,11 @@ export default function AdminPage() {
                       onClick={() => navigate(`/events/${ev.id}`)}
                     >
                       <TableCell className="font-medium">{ev.name}</TableCell>
-                      <TableCell>{ev.date ?? "—"}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                        {ev.start_date === ev.end_date
+                          ? ev.start_date
+                          : `${ev.start_date} – ${ev.end_date}`}
+                      </TableCell>
                       <TableCell>{eventStatusBadge(ev.status)}</TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <Button
@@ -737,15 +791,31 @@ export default function AdminPage() {
                   autoFocus
                 />
               </div>
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Date</label>
-                <input
-                  type="date"
-                  className={FIELD_INPUT_CLASS}
-                  value={evDate}
-                  onChange={(e) => setEvDate(e.target.value)}
-                  required
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={FIELD_LABEL_CLASS}>Start date</label>
+                  <input
+                    type="date"
+                    className={FIELD_INPUT_CLASS}
+                    value={evStartDate}
+                    onChange={(e) => {
+                      setEvStartDate(e.target.value);
+                      if (evEndDate && e.target.value > evEndDate) setEvEndDate(e.target.value);
+                    }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className={FIELD_LABEL_CLASS}>End date</label>
+                  <input
+                    type="date"
+                    className={FIELD_INPUT_CLASS}
+                    value={evEndDate}
+                    min={evStartDate || undefined}
+                    onChange={(e) => setEvEndDate(e.target.value)}
+                    required
+                  />
+                </div>
               </div>
               <Button type="submit" disabled={evSubmitting} size="lg" className="w-full">
                 {evSubmitting ? "Creating…" : "Create event"}
@@ -787,47 +857,43 @@ export default function AdminPage() {
                 </select>
               </div>
               <div>
-                <label className={FIELD_LABEL_CLASS}>Name</label>
+                <label className={FIELD_LABEL_CLASS}>Date</label>
                 <input
-                  className={FIELD_INPUT_CLASS}
-                  value={sessName}
-                  onChange={(e) => setSessName(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Date (optional)</label>
-                <input
+                  type="date"
                   className={FIELD_INPUT_CLASS}
                   value={sessDate}
                   onChange={(e) => setSessDate(e.target.value)}
+                  required
                 />
               </div>
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Check-in opens</label>
-                <input
-                  type="datetime-local"
-                  className={FIELD_INPUT_CLASS}
-                  value={sessCheckinOpensAt}
-                  onChange={(e) => setSessCheckinOpensAt(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Floor trial starts</label>
-                <input
-                  type="datetime-local"
-                  className={FIELD_INPUT_CLASS}
-                  value={sessFloorStartsAt}
-                  onChange={(e) => setSessFloorStartsAt(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Floor trial ends</label>
-                <input
-                  type="datetime-local"
-                  className={FIELD_INPUT_CLASS}
-                  value={sessFloorEndsAt}
-                  onChange={(e) => setSessFloorEndsAt(e.target.value)}
-                />
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className={FIELD_LABEL_CLASS}>Check-in opens</label>
+                  <input
+                    type="time"
+                    className={FIELD_INPUT_CLASS}
+                    value={sessCheckinOpensTime}
+                    onChange={(e) => setSessCheckinOpensTime(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={FIELD_LABEL_CLASS}>Floor starts</label>
+                  <input
+                    type="time"
+                    className={FIELD_INPUT_CLASS}
+                    value={sessFloorStartsTime}
+                    onChange={(e) => setSessFloorStartsTime(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={FIELD_LABEL_CLASS}>Floor ends</label>
+                  <input
+                    type="time"
+                    className={FIELD_INPUT_CLASS}
+                    value={sessFloorEndsTime}
+                    onChange={(e) => setSessFloorEndsTime(e.target.value)}
+                  />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -851,68 +917,47 @@ export default function AdminPage() {
                   />
                 </div>
               </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={sessPrioritySession}
+                  onChange={(e) => setSessPrioritySession(e.target.checked)}
+                />
+                <span className="font-medium">Priority session</span>
+                <span className="text-muted-foreground text-xs">(applies to all divisions)</span>
+              </label>
+              <div>
+                <div className="flex items-center justify-between mb-2">
                   <label className={FIELD_LABEL_CLASS}>Divisions</label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setSessDivisions((prev) => [
-                        ...prev,
-                        { division_name: "", is_priority: false, priority_run_limit: 0 },
-                      ])
-                    }
-                  >
-                    Add division
-                  </Button>
+                  <div className="flex gap-2 text-xs">
+                    <button
+                      type="button"
+                      className="text-primary underline"
+                      onClick={() => setSessSelectedDivisions(new Set(DIVISION_OPTIONS))}
+                    >
+                      All
+                    </button>
+                    <button
+                      type="button"
+                      className="text-muted-foreground underline"
+                      onClick={() => setSessSelectedDivisions(new Set())}
+                    >
+                      None
+                    </button>
+                  </div>
                 </div>
-                {sessDivisions.map((d, index) => (
-                  <div
-                    key={index}
-                    className="flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-center"
-                  >
-                    <input
-                      placeholder="Division name"
-                      className={`${FIELD_INPUT_CLASS} flex-1`}
-                      value={d.division_name}
-                      onChange={(e) => updateDivision(index, { division_name: e.target.value })}
-                    />
-                    <label className="flex items-center gap-2 text-sm">
+                <div className="grid grid-cols-2 gap-1.5">
+                  {DIVISION_OPTIONS.map((d) => (
+                    <label key={d} className="flex items-center gap-2 text-sm cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={d.is_priority}
-                        onChange={(e) => updateDivision(index, { is_priority: e.target.checked })}
+                        checked={sessSelectedDivisions.has(d)}
+                        onChange={() => toggleDivision(d)}
                       />
-                      Priority
+                      {d}
                     </label>
-                    <div className="w-28 shrink-0">
-                      <label className="text-xs block mb-1">Priority runs (1..X)</label>
-                      <input
-                        type="number"
-                        min={0}
-                        className={FIELD_INPUT_CLASS}
-                        value={d.priority_run_limit}
-                        onChange={(e) =>
-                          updateDivision(index, {
-                            priority_run_limit: Number(e.target.value) || 0,
-                          })
-                        }
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
-                        setSessDivisions((prev) => prev.filter((_, i) => i !== index))
-                      }
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
               <Button type="submit" disabled={sessSubmitting} size="lg" className="w-full">
                 {sessSubmitting ? "Creating…" : "Create session"}
