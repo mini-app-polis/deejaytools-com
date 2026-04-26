@@ -1,3 +1,10 @@
+# [1.20.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.19.6...v1.20.0) (2026-04-26)
+
+
+### Features
+
+* major checkpoint, sessions in, model updated, uploads fixed ([ec69e68](https://github.com/mini-app-polis/deejaytools-com/commit/ec69e6875c1e9927cd12b7787f05422600d48983))
+
 ## [1.19.6](https://github.com/mini-app-polis/deejaytools-com/compare/v1.19.5...v1.19.6) (2026-04-26)
 
 
