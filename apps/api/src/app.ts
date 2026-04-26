@@ -30,25 +30,6 @@ const origins =
     .map((s) => s.trim())
     .filter(Boolean) ?? ["http://localhost:5173"];
 
-// Must be first: eagerly drain the request body so Railway's Fastly edge proxy
-// never hits its idle write timeout. @hono/node-server wraps IncomingMessage in
-// a lazy ReadableStream — if auth or DB work runs before the body is consumed,
-// Fastly's write timeout fires on slow connections and the client sees
-// ERR_TIMED_OUT. Cloning and draining in the background starts the underlying
-// socket flowing immediately without blocking the middleware chain or consuming
-// the body for downstream handlers.
-app.use("*", async (c, next) => {
-  if (c.req.raw.body) {
-    try {
-      const clone = c.req.raw.clone();
-      clone.arrayBuffer().catch(() => {});
-    } catch {
-      // ignore — drain is best-effort
-    }
-  }
-  await next();
-});
-
 app.use(
   "*",
   cors({
