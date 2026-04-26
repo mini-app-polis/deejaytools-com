@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useAuthMe } from "@/hooks/useAuthMe";
 
 type EventRow = {
   id: string;
@@ -28,12 +27,6 @@ type SessionRow = {
   active_priority_max?: number;
   active_non_priority_max?: number;
   status: string;
-};
-
-type DivisionRow = {
-  division_name: string;
-  is_priority: boolean;
-  priority_run_limit: number;
 };
 
 function sessionStatusBadge(status: string) {
@@ -64,32 +57,12 @@ function formatTime(ts: number): string {
   });
 }
 
-const FIELD_INPUT_CLASS =
-  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
-
-const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
-
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
   const api = useApiClient();
-  const { isAdmin } = useAuthMe();
   const [event, setEvent] = useState<EventRow | null>(null);
   const [sessions, setSessions] = useState<SessionRow[] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
-
-  // Form state — plain useState, no react-hook-form.
-  const [fName, setFName] = useState("");
-  const [fDate, setFDate] = useState("");
-  const [fCheckinOpensAt, setFCheckinOpensAt] = useState("");
-  const [fFloorStartsAt, setFFloorStartsAt] = useState("");
-  const [fFloorEndsAt, setFFloorEndsAt] = useState("");
-  const [fPriorityMax, setFPriorityMax] = useState("6");
-  const [fNonPriorityMax, setFNonPriorityMax] = useState("4");
-  const [fDivisions, setFDivisions] = useState<DivisionRow[]>([
-    { division_name: "Classic", is_priority: false, priority_run_limit: 0 },
-  ]);
-  const [submitting, setSubmitting] = useState(false);
 
   const load = () => {
     if (!id) return;
@@ -109,102 +82,6 @@ export default function EventDetailPage() {
   useEffect(() => {
     load();
   }, [api, id]);
-
-  const resetForm = () => {
-    setFName("");
-    setFDate("");
-    setFCheckinOpensAt("");
-    setFFloorStartsAt("");
-    setFFloorEndsAt("");
-    setFPriorityMax("6");
-    setFNonPriorityMax("4");
-    setFDivisions([{ division_name: "Classic", is_priority: false, priority_run_limit: 0 }]);
-  };
-
-  const openCreateDialog = () => {
-    resetForm();
-    setSessionDialogOpen(true);
-  };
-
-  const closeCreateDialog = () => {
-    setSessionDialogOpen(false);
-  };
-
-  const updateDivision = (index: number, patch: Partial<DivisionRow>) => {
-    setFDivisions((prev) => prev.map((d, i) => (i === index ? { ...d, ...patch } : d)));
-  };
-
-  const addDivision = () => {
-    setFDivisions((prev) => [
-      ...prev,
-      { division_name: "", is_priority: false, priority_run_limit: 0 },
-    ]);
-  };
-
-  const removeDivision = (index: number) => {
-    setFDivisions((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!id) return;
-
-    const priorityMaxNum = Number(fPriorityMax);
-    const nonPriorityMaxNum = Number(fNonPriorityMax);
-
-    if (!fName.trim()) {
-      toast.error("Name is required");
-      return;
-    }
-    if (!fCheckinOpensAt || !fFloorStartsAt || !fFloorEndsAt) {
-      toast.error("All three datetime fields are required");
-      return;
-    }
-    if (Number.isNaN(priorityMaxNum) || priorityMaxNum < 0) {
-      toast.error("Active cap (priority) must be a non-negative number");
-      return;
-    }
-    if (Number.isNaN(nonPriorityMaxNum) || nonPriorityMaxNum < 0) {
-      toast.error("Active cap (non-priority) must be a non-negative number");
-      return;
-    }
-    if (nonPriorityMaxNum > priorityMaxNum) {
-      toast.error("Non-priority cap must be ≤ priority cap");
-      return;
-    }
-
-    const divisions = fDivisions
-      .filter((d) => d.division_name.trim() && d.division_name.trim() !== "Other")
-      .map((d, i) => ({
-        division_name: d.division_name.trim(),
-        is_priority: d.is_priority,
-        sort_order: i,
-        priority_run_limit: Number.isFinite(d.priority_run_limit) ? d.priority_run_limit : 0,
-      }));
-
-    setSubmitting(true);
-    try {
-      await api.post<SessionRow>("/v1/sessions", {
-        event_id: id,
-        name: fName.trim(),
-        ...(fDate.trim() ? { date: fDate.trim() } : {}),
-        checkin_opens_at: new Date(fCheckinOpensAt).getTime(),
-        floor_trial_starts_at: new Date(fFloorStartsAt).getTime(),
-        floor_trial_ends_at: new Date(fFloorEndsAt).getTime(),
-        active_priority_max: priorityMaxNum,
-        active_non_priority_max: nonPriorityMaxNum,
-        divisions,
-      });
-      toast.success("Session created");
-      setSessionDialogOpen(false);
-      resetForm();
-      load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to create session");
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   if (!id) {
     return <p className="text-muted-foreground">Missing event id.</p>;
@@ -256,11 +133,6 @@ export default function EventDetailPage() {
           <TabsTrigger value="registrations">Registrations</TabsTrigger>
         </TabsList>
         <TabsContent value="sessions" className="space-y-4 mt-4">
-          {isAdmin && (
-            <Button onClick={openCreateDialog} className="w-full sm:w-auto">
-              New Session
-            </Button>
-          )}
           {sessions?.length === 0 && (
             <p className="text-sm text-muted-foreground">No sessions for this event.</p>
           )}
@@ -292,156 +164,6 @@ export default function EventDetailPage() {
           <p className="text-muted-foreground">Coming soon</p>
         </TabsContent>
       </Tabs>
-
-      {sessionDialogOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
-          onClick={closeCreateDialog}
-        >
-          <div
-            className="rounded-t-2xl sm:rounded-lg border bg-background p-6 shadow-lg w-full sm:max-w-lg max-h-[92vh] overflow-y-auto space-y-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="sm:hidden flex justify-center -mt-2 mb-2">
-              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
-            </div>
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">New session</h2>
-              <Button type="button" variant="ghost" size="sm" onClick={closeCreateDialog}>
-                ✕
-              </Button>
-            </div>
-            <form onSubmit={onSubmit} className="space-y-4">
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Name</label>
-                <input
-                  className={FIELD_INPUT_CLASS}
-                  value={fName}
-                  onChange={(e) => setFName(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Date (optional)</label>
-                <input
-                  className={FIELD_INPUT_CLASS}
-                  value={fDate}
-                  onChange={(e) => setFDate(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Check-in opens</label>
-                <input
-                  type="datetime-local"
-                  className={FIELD_INPUT_CLASS}
-                  value={fCheckinOpensAt}
-                  onChange={(e) => setFCheckinOpensAt(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Floor trial starts</label>
-                <input
-                  type="datetime-local"
-                  className={FIELD_INPUT_CLASS}
-                  value={fFloorStartsAt}
-                  onChange={(e) => setFFloorStartsAt(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Floor trial ends</label>
-                <input
-                  type="datetime-local"
-                  className={FIELD_INPUT_CLASS}
-                  value={fFloorEndsAt}
-                  onChange={(e) => setFFloorEndsAt(e.target.value)}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={FIELD_LABEL_CLASS}>Active cap (priority)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    className={FIELD_INPUT_CLASS}
-                    value={fPriorityMax}
-                    onChange={(e) => setFPriorityMax(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className={FIELD_LABEL_CLASS}>Active cap (non-priority)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    className={FIELD_INPUT_CLASS}
-                    value={fNonPriorityMax}
-                    onChange={(e) => setFNonPriorityMax(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className={FIELD_LABEL_CLASS}>Divisions</label>
-                  <Button type="button" variant="outline" size="sm" onClick={addDivision}>
-                    Add division
-                  </Button>
-                </div>
-                {fDivisions.map((d, index) => (
-                  <div
-                    key={index}
-                    className="flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-center"
-                  >
-                    <input
-                      placeholder="Division name"
-                      className={`${FIELD_INPUT_CLASS} flex-1`}
-                      value={d.division_name}
-                      onChange={(e) => updateDivision(index, { division_name: e.target.value })}
-                    />
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={d.is_priority}
-                        onChange={(e) => updateDivision(index, { is_priority: e.target.checked })}
-                      />
-                      Priority
-                    </label>
-                    <div className="w-28 shrink-0">
-                      <label className="text-xs block mb-1">Priority runs (1..X)</label>
-                      <input
-                        type="number"
-                        min={0}
-                        className={FIELD_INPUT_CLASS}
-                        value={d.priority_run_limit}
-                        onChange={(e) =>
-                          updateDivision(index, {
-                            priority_run_limit: Number(e.target.value) || 0,
-                          })
-                        }
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeDivision(index)}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                ))}
-              </div>
-
-              <Button type="submit" disabled={submitting} size="lg" className="w-full">
-                {submitting ? "Creating..." : "Create session"}
-              </Button>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

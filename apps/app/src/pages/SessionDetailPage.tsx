@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAuthMe } from "@/hooks/useAuthMe";
 
 type SessionDetail = {
   id: string;
@@ -17,8 +16,6 @@ type SessionDetail = {
   checkin_opens_at: number;
   floor_trial_starts_at: number;
   floor_trial_ends_at: number;
-  active_priority_max?: number;
-  active_non_priority_max?: number;
   status: string;
   divisions?: {
     division_name: string;
@@ -63,7 +60,6 @@ function formatTime(ts: number): string {
   });
 }
 
-/** Display-derived status from timestamps. The DB column is decorative; this is what users see. */
 function derivedStatus(s: SessionDetail, now: number): string {
   if (now < s.checkin_opens_at) return "scheduled";
   if (now <= s.floor_trial_ends_at) return "open";
@@ -96,17 +92,13 @@ export default function SessionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const api = useApiClient();
   const { user } = useUser();
-  const { isAdmin } = useAuthMe();
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [active, setActive] = useState<QueueRow[]>([]);
-  const [priority, setPriority] = useState<QueueRow[]>([]);
-  const [nonPriority, setNonPriority] = useState<QueueRow[]>([]);
   const [pairs, setPairs] = useState<LeadingPair[]>([]);
   const [songs, setSongs] = useState<SongRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkinOpen, setCheckinOpen] = useState(false);
 
-  // Plain useState form fields. No useForm, no zodResolver, no FormField.
   const [fEntity, setFEntity] = useState<"pair" | "solo">("pair");
   const [fPairId, setFPairId] = useState("");
   const [fDivision, setFDivision] = useState("");
@@ -121,22 +113,11 @@ export default function SessionDetailPage() {
     return api.get<SessionDetail>(`/v1/sessions/${id}`).then(setSession);
   }, [api, id]);
 
-  const loadQueues = useCallback(async () => {
+  const loadQueue = useCallback(async () => {
     if (!id) return;
     const a = await api.get<QueueRow[]>(`/v1/queue/${id}/active`);
     setActive(a);
-    if (isAdmin) {
-      const [p, np] = await Promise.all([
-        api.get<QueueRow[]>(`/v1/queue/${id}/priority`),
-        api.get<QueueRow[]>(`/v1/queue/${id}/non-priority`),
-      ]);
-      setPriority(p);
-      setNonPriority(np);
-    } else {
-      setPriority([]);
-      setNonPriority([]);
-    }
-  }, [api, id, isAdmin]);
+  }, [api, id]);
 
   const loadExtras = useCallback(async () => {
     const [p, s] = await Promise.all([
@@ -150,38 +131,35 @@ export default function SessionDetailPage() {
   const refresh = useCallback(() => {
     if (!id) return;
     setLoading(true);
-    Promise.all([loadSession(), loadQueues(), loadExtras()])
+    Promise.all([loadSession(), loadQueue(), loadExtras()])
       .catch((e: Error) => toast.error(e.message))
       .finally(() => setLoading(false));
-  }, [id, loadExtras, loadQueues, loadSession]);
+  }, [id, loadExtras, loadQueue, loadSession]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  // Poll queues + session, and tick the clock so canCheckIn re-evaluates without a refresh.
   useEffect(() => {
     if (!id) return;
     const t = setInterval(() => {
       setNow(Date.now());
-      void Promise.all([loadQueues(), loadSession()]).catch(() => {});
+      void Promise.all([loadQueue(), loadSession()]).catch(() => {});
     }, 10_000);
     return () => clearInterval(t);
-  }, [id, loadQueues, loadSession]);
+  }, [id, loadQueue, loadSession]);
 
   const divisionsList = useMemo(() => {
     const fromSession = session?.divisions?.map((d) => d.division_name) ?? [];
     return fromSession.filter((n) => n && n !== "Other");
   }, [session]);
 
-  // Auto-pick the first division in the form when the session loads.
   useEffect(() => {
     if (!session) return;
     const first = divisionsList[0] ?? "";
     if (first && !fDivision) setFDivision(first);
   }, [session, divisionsList, fDivision]);
 
-  // When the user picks a pair, refetch songs scoped to that partner.
   useEffect(() => {
     if (!id) return;
     const pair = fPairId ? pairs.find((p) => p.id === fPairId) : null;
@@ -194,7 +172,6 @@ export default function SessionDetailPage() {
       .catch(() => {});
   }, [api, id, fPairId, pairs]);
 
-  // Build lookup maps so we render names instead of UUIDs.
   const songMap = useMemo(() => {
     const m = new Map<string, string>();
     for (const s of songs) {
@@ -222,13 +199,6 @@ export default function SessionDetailPage() {
     .filter((r) => r.position > 1)
     .sort((a, b) => a.position - b.position);
 
-  const depth = session?.queue_depth ?? { priority: 0, non_priority: 0, active: 0 };
-  const promotePriorityDisabled =
-    depth.active >= (session?.active_priority_max ?? 6);
-  const promoteNonPriorityDisabled =
-    depth.priority > 0 || depth.active >= (session?.active_non_priority_max ?? 4);
-
-  // Time-based check-in gate matches what the API enforces.
   const checkinWindowOpen =
     !!session &&
     now >= session.checkin_opens_at &&
@@ -240,22 +210,6 @@ export default function SessionDetailPage() {
     session.has_active_checkin !== true &&
     songs.length > 0 &&
     divisionsList.length > 0;
-
-  const queueAction = async (path: string, body: unknown) => {
-    try {
-      await api.post(path, body);
-      toast.success("Updated");
-      await loadQueues();
-      await loadSession();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Request failed";
-      if (msg.toLowerCase().includes("conflict") || msg.toLowerCase().includes("retry")) {
-        toast.error(`${msg} — retry?`);
-      } else {
-        toast.error(msg);
-      }
-    }
-  };
 
   const openCheckin = () => {
     setFEntity("pair");
@@ -297,7 +251,7 @@ export default function SessionDetailPage() {
       });
       toast.success("Checked in");
       setCheckinOpen(false);
-      await Promise.all([loadQueues(), loadSession()]);
+      await Promise.all([loadQueue(), loadSession()]);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Check-in failed";
       if (msg.includes("already has a live")) {
@@ -352,49 +306,14 @@ export default function SessionDetailPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           {slotOne ? (
-            <>
-              <div className="text-sm">
-                <div className="font-medium">
-                  Slot 1 · {renderEntityLabel(slotOne)} · {slotOne.divisionName}
-                </div>
-                <div className="text-muted-foreground">
-                  {renderSongLabel(slotOne.songId)}
-                </div>
+            <div className="text-sm">
+              <div className="font-medium">
+                Slot 1 · {renderEntityLabel(slotOne)} · {slotOne.divisionName}
               </div>
-              {isAdmin && (
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() =>
-                      queueAction("/v1/queue/complete", { sessionId: id, reason: null })
-                    }
-                  >
-                    Run complete
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() =>
-                      queueAction("/v1/queue/incomplete", { sessionId: id, reason: null })
-                    }
-                  >
-                    Run incomplete
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      queueAction("/v1/queue/withdraw", {
-                        queueEntryId: slotOne.queueEntryId,
-                        reason: null,
-                      })
-                    }
-                  >
-                    Withdraw
-                  </Button>
-                </div>
-              )}
-            </>
+              <div className="text-muted-foreground">
+                {renderSongLabel(slotOne.songId)}
+              </div>
+            </div>
           ) : (
             <p className="text-sm text-muted-foreground">No one on deck (slot 1 empty).</p>
           )}
@@ -403,7 +322,7 @@ export default function SessionDetailPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Upcoming (active)</CardTitle>
+          <CardTitle>Upcoming</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           {upcoming.length === 0 && (
@@ -412,125 +331,16 @@ export default function SessionDetailPage() {
           {upcoming.map((r) => (
             <div
               key={r.queueEntryId}
-              className="flex items-start justify-between gap-3 border rounded-md px-3 py-2.5 text-sm"
+              className="flex items-start gap-3 border rounded-md px-3 py-2.5 text-sm"
             >
               <div className="space-y-0.5 min-w-0">
                 <p className="font-medium">#{r.position} · {renderEntityLabel(r)}</p>
                 <p className="text-muted-foreground truncate">{r.divisionName} · {renderSongLabel(r.songId)}</p>
               </div>
-              {isAdmin && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="shrink-0"
-                  onClick={() =>
-                    queueAction("/v1/queue/withdraw", {
-                      queueEntryId: r.queueEntryId,
-                      reason: null,
-                    })
-                  }
-                >
-                  Withdraw
-                </Button>
-              )}
             </div>
           ))}
         </CardContent>
       </Card>
-
-      {isAdmin && (
-        <>
-          <Card>
-            <CardHeader>
-              <CardTitle>Priority queue</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {priority.map((r) => (
-                <div
-                  key={r.queueEntryId}
-                  className="flex items-start justify-between gap-3 border rounded-md px-3 py-2.5 text-sm"
-                >
-                  <div className="space-y-0.5 min-w-0">
-                    <p className="font-medium">#{r.position} · {renderEntityLabel(r)}</p>
-                    <p className="text-muted-foreground truncate">{r.divisionName} · {renderSongLabel(r.songId)}</p>
-                  </div>
-                  <div className="flex gap-2 shrink-0">
-                    <Button
-                      size="sm"
-                      disabled={promotePriorityDisabled}
-                      onClick={() =>
-                        queueAction("/v1/queue/promote", { queueEntryId: r.queueEntryId })
-                      }
-                    >
-                      Promote
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        queueAction("/v1/queue/withdraw", {
-                          queueEntryId: r.queueEntryId,
-                          reason: null,
-                        })
-                      }
-                    >
-                      Withdraw
-                    </Button>
-                  </div>
-                </div>
-              ))}
-              {priority.length === 0 && (
-                <p className="text-sm text-muted-foreground">Priority queue empty.</p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Non-priority queue</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {nonPriority.map((r) => (
-                <div
-                  key={r.queueEntryId}
-                  className="flex items-start justify-between gap-3 border rounded-md px-3 py-2.5 text-sm"
-                >
-                  <div className="space-y-0.5 min-w-0">
-                    <p className="font-medium">#{r.position} · {renderEntityLabel(r)}</p>
-                    <p className="text-muted-foreground truncate">{r.divisionName} · {renderSongLabel(r.songId)}</p>
-                  </div>
-                  <div className="flex gap-2 shrink-0">
-                    <Button
-                      size="sm"
-                      disabled={promoteNonPriorityDisabled}
-                      onClick={() =>
-                        queueAction("/v1/queue/promote", { queueEntryId: r.queueEntryId })
-                      }
-                    >
-                      Promote
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        queueAction("/v1/queue/withdraw", {
-                          queueEntryId: r.queueEntryId,
-                          reason: null,
-                        })
-                      }
-                    >
-                      Withdraw
-                    </Button>
-                  </div>
-                </div>
-              ))}
-              {nonPriority.length === 0 && (
-                <p className="text-sm text-muted-foreground">Non-priority queue empty.</p>
-              )}
-            </CardContent>
-          </Card>
-        </>
-      )}
 
       <div className="space-y-2">
         <Button
@@ -574,7 +384,6 @@ export default function SessionDetailPage() {
             className="rounded-t-2xl sm:rounded-lg border bg-background p-6 shadow-lg w-full sm:max-w-lg max-h-[92vh] overflow-y-auto space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Handle bar on mobile */}
             <div className="sm:hidden flex justify-center -mt-2 mb-2">
               <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
             </div>
