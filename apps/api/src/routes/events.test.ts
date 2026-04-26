@@ -36,8 +36,8 @@ describe("GET /v1/events", () => {
     const ev = {
       id: "e1",
       name: "Social",
-      date: "2026-01-01",
-      status: "upcoming",
+      startDate: "2026-01-01",
+      endDate: "2026-01-03",
       createdBy: "user_admin123",
       createdAt: 1,
       updatedAt: 2,
@@ -51,6 +51,8 @@ describe("GET /v1/events", () => {
     expect(body.data[0]).toMatchObject({
       id: "e1",
       name: "Social",
+      start_date: "2026-01-01",
+      end_date: "2026-01-03",
     });
   });
 });
@@ -77,7 +79,20 @@ describe("POST /v1/events", () => {
         ...authHeaders(MOCK_ADMIN),
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ date: "2026-06-01" }),
+      body: JSON.stringify({ start_date: "2026-06-01", end_date: "2026-06-01" }),
+    });
+    expect(res.status).toBe(400);
+    assertValidation400(await readJson<ErrorEnvelope>(res));
+  });
+
+  it("returns 400 when start_date or end_date is missing", async () => {
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: {
+        ...authHeaders(MOCK_ADMIN),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name: "Workshop" }),
     });
     expect(res.status).toBe(400);
     assertValidation400(await readJson<ErrorEnvelope>(res));
@@ -87,8 +102,8 @@ describe("POST /v1/events", () => {
     const created = {
       id: "e_new",
       name: "Workshop",
-      date: null,
-      status: "upcoming",
+      startDate: "2026-06-01",
+      endDate: "2026-06-03",
       createdBy: "user_admin123",
       createdAt: 10,
       updatedAt: 10,
@@ -100,12 +115,12 @@ describe("POST /v1/events", () => {
         ...authHeaders(MOCK_ADMIN),
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ name: "Workshop" }),
+      body: JSON.stringify({ name: "Workshop", start_date: "2026-06-01", end_date: "2026-06-03" }),
     });
     expect(res.status).toBe(201);
     const body = await readJson<SuccessEnvelope<Record<string, unknown>>>(res);
     assertSuccessEnvelope(body);
-    expect(body.data).toMatchObject({ id: "e_new", name: "Workshop" });
+    expect(body.data).toMatchObject({ id: "e_new", name: "Workshop", start_date: "2026-06-01", end_date: "2026-06-03" });
   });
 });
 
@@ -132,8 +147,8 @@ describe("PATCH /v1/events/:id", () => {
     const existing = {
       id: "e1",
       name: "Old",
-      date: null,
-      status: "upcoming" as const,
+      startDate: "2026-06-01",
+      endDate: "2026-06-01",
       createdBy: "user_admin123",
       createdAt: 1,
       updatedAt: 2,
