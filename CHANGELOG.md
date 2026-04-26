@@ -1,3 +1,10 @@
+## [1.22.5](https://github.com/mini-app-polis/deejaytools-com/compare/v1.22.4...v1.22.5) (2026-04-26)
+
+
+### Bug Fixes
+
+* adjusting check in flow ([9091352](https://github.com/mini-app-polis/deejaytools-com/commit/9091352c7cf2b2f13b32d3fb6233e78aa5539a19))
+
 ## [1.22.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.22.3...v1.22.4) (2026-04-26)
 
 
