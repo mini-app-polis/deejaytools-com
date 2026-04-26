@@ -4,7 +4,7 @@ import {
   CommonErrors,
   createLogger,
   error,
-} from "common-typescript-utils";
+} from "@deejaytools/ts-utils";
 import type { Context } from "hono";
 import { createMiddleware } from "hono/factory";
 import { eq } from "drizzle-orm";

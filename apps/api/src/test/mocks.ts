@@ -1,4 +1,4 @@
-import { CommonErrors } from "common-typescript-utils";
+import { CommonErrors } from "@deejaytools/ts-utils";
 import type { Context, MiddlewareHandler } from "hono";
 import { vi } from "vitest";
 

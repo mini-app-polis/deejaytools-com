@@ -1,4 +1,4 @@
-import { EventStatusSchema, SessionStatusSchema } from "@deejaytools/schemas";
+import { EventStatusSchema, SessionStatusSchema } from "@deejaytools/ts-utils";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";

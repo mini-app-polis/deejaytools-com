@@ -1,4 +1,4 @@
-import type { ErrorEnvelope, SuccessEnvelope } from "common-typescript-utils";
+import type { ErrorEnvelope, SuccessEnvelope } from "@deejaytools/ts-utils";
 import { expect } from "vitest";
 
 export type { ErrorEnvelope, SuccessEnvelope };
@@ -6,6 +6,11 @@ export type { ErrorEnvelope, SuccessEnvelope };
 export async function readJson<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
+
+export type HonoZodFailureBody = {
+  success: false;
+  error: { name: "ZodError"; issues: { path: (string | number)[] }[] };
+};
 
 export const MOCK_USER = {
   userId: "user_test123",
@@ -58,8 +63,21 @@ export function assertErrorEnvelope(body: unknown) {
   });
 }
 
-/** zValidator failures now flow through CommonErrors.validationError, so the
- * shape is the canonical { error: { code, message } } envelope. */
-export function assertValidation400(body: ErrorEnvelope) {
-  assertErrorEnvelope(body);
+/** zValidator failures use Hono's default `{ success: false, error: ZodError }` shape. */
+export function assertValidation400(body: HonoZodFailureBody | ErrorEnvelope) {
+  const b = body as HonoZodFailureBody | ErrorEnvelope;
+  if (
+    "success" in b &&
+    b.success === false &&
+    b.error &&
+    typeof b.error === "object" &&
+    "name" in b.error &&
+    b.error.name === "ZodError" &&
+    "issues" in b.error &&
+    Array.isArray((b.error as { issues: unknown[] }).issues)
+  ) {
+    expect((b.error as { issues: unknown[] }).issues.length).toBeGreaterThan(0);
+    return;
+  }
+  assertErrorEnvelope(b);
 }

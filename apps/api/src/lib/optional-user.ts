@@ -1,4 +1,4 @@
-import { verifyClerkToken } from "common-typescript-utils";
+import { verifyClerkToken } from "@deejaytools/ts-utils";
 import type { Context } from "hono";
 import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";

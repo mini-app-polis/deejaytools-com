@@ -6,11 +6,9 @@ Monorepo for [deejaytools.com](https://deejaytools.com): a West Coast Swing rout
 
 | Path | Role |
 |------|------|
-| `packages/schemas` | Shared Zod domain schemas (session/checkin/event/partner enums, etc.) |
+| `packages/ts-utils` | Shared TypeScript utilities (logger, API envelope, Clerk JWT verify, Zod schemas) |
 | `apps/api` | Hono API on Node, Drizzle + PostgreSQL, Clerk auth |
 | `apps/app` | Vite + React + Tailwind frontend, Clerk |
-
-Shared logger, API response envelopes, Clerk JWT verification, and generic Zod helpers (`UserRoleSchema`, `PaginationSchema`, …) come from the [`common-typescript-utils`](https://www.npmjs.com/package/common-typescript-utils) package on npm.
 
 ## Stack
 

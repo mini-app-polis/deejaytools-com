@@ -44,30 +44,21 @@ importers:
 
   apps/api:
     dependencies:
-      '@deejaytools/schemas':
+      '@deejaytools/ts-utils':
         specifier: workspace:*
-        version: link:../../packages/schemas
+        version: link:../../packages/ts-utils
       '@hono/node-server':
-        specifier: 1.13.7
-        version: 1.13.7(hono@4.6.14)
+        specifier: ^1.13.7
+        version: 1.19.11(hono@4.12.9)
       '@hono/zod-validator':
         specifier: ^0.4.2
-        version: 0.4.3(hono@4.6.14)(zod@3.25.76)
+        version: 0.4.3(hono@4.12.9)(zod@3.25.76)
       '@sentry/node':
         specifier: ^10.46.0
         version: 10.46.0
-      '@types/node':
-        specifier: ^22.10.2
-        version: 22.19.15
-      common-typescript-utils:
-        specifier: ^1.0.1
-        version: 1.0.1
       dotenv:
         specifier: ^16.4.7
         version: 16.6.1
-      drizzle-kit:
-        specifier: ^0.30.1
-        version: 0.30.6
       drizzle-orm:
         specifier: ^0.38.3
         version: 0.38.4(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(@types/react@19.2.14)(postgres@3.4.8)(react@19.2.4)
@@ -81,8 +72,8 @@ importers:
         specifier: ^171.4.0
         version: 171.4.0
       hono:
-        specifier: 4.6.14
-        version: 4.6.14
+        specifier: ^4.6.14
+        version: 4.12.9
       multer:
         specifier: ^2.1.1
         version: 2.1.1
@@ -95,9 +86,6 @@ importers:
       postgres:
         specifier: ^3.4.5
         version: 3.4.8
-      typescript:
-        specifier: ^5.7.2
-        version: 5.9.3
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -105,12 +93,21 @@ importers:
       '@types/multer':
         specifier: ^2.1.0
         version: 2.1.0
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.15
       '@vitest/coverage-v8':
         specifier: ^2.1.8
         version: 2.1.9(vitest@2.1.9(@types/node@22.19.15))
+      drizzle-kit:
+        specifier: ^0.30.1
+        version: 0.30.6
       tsx:
         specifier: ^4.19.2
         version: 4.21.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.19.15)
@@ -123,9 +120,9 @@ importers:
       '@clerk/clerk-react':
         specifier: ^5.20.0
         version: 5.61.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@deejaytools/schemas':
+      '@deejaytools/ts-utils':
         specifier: workspace:*
-        version: link:../../packages/schemas
+        version: link:../../packages/ts-utils
       '@eslint/js':
         specifier: ^9.16.0
         version: 9.39.4
@@ -156,9 +153,6 @@ importers:
       '@radix-ui/react-tabs':
         specifier: ^1.1.13
         version: 1.1.13(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@sentry/react':
-        specifier: ^10.49.0
-        version: 10.50.0(react@19.2.4)
       '@types/react':
         specifier: ^19.0.2
         version: 19.2.14
@@ -177,9 +171,6 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
-      common-typescript-utils:
-        specifier: ^1.0.1
-        version: 1.0.1
       eslint:
         specifier: ^9.16.0
         version: 9.39.4(jiti@1.21.7)
@@ -226,15 +217,15 @@ importers:
         specifier: ^3.25.76
         version: 3.25.76
     devDependencies:
-      '@vitest/coverage-v8':
-        specifier: ^2.1.8
-        version: 2.1.9(vitest@2.1.9(@types/node@22.19.15))
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.19.15)
 
-  packages/schemas:
+  packages/ts-utils:
     dependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.15
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
@@ -242,9 +233,6 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
-      '@vitest/coverage-v8':
-        specifier: ^2.1.8
-        version: 2.1.9(vitest@2.1.9(@types/node@22.19.15))
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.19.15)
@@ -1173,8 +1161,8 @@ packages:
   '@floating-ui/utils@0.2.11':
     resolution: {integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==}
 
-  '@hono/node-server@1.13.7':
-    resolution: {integrity: sha512-kTfUMsoloVKtRA2fLiGSd9qBddmru9KadNyhJCwgKBxTiNkaAJEwkVN9KV/rS4HtmmNRtUh6P+YpmjRMl0d9vQ==}
+  '@hono/node-server@1.19.11':
+    resolution: {integrity: sha512-dr8/3zEaB+p0D2n/IUrlPF1HZm586qgJNXK1a9fhg/PzdtkK7Ksd5l312tJX2yBuALqDYBlG20QEbayqPyxn+g==}
     engines: {node: '>=18.14.1'}
     peerDependencies:
       hono: ^4
@@ -2114,32 +2102,8 @@ packages:
     peerDependencies:
       semantic-release: '>=20.1.0'
 
-  '@sentry-internal/browser-utils@10.50.0':
-    resolution: {integrity: sha512-42bxyRTxnCmYlWnvz4CxikuQNanw8UNma2WJrtxJ0f1MAJV2GhQGSHDLnA+lvFlmiz6qct3pfen/NXGyOTegTA==}
-    engines: {node: '>=18'}
-
-  '@sentry-internal/feedback@10.50.0':
-    resolution: {integrity: sha512-0k9XZF0wn86f77mIO2U3gNNyDZooy139CnEanRzHinrN106vVzvBZ6TUEQoHtoO1fqQxr+nWWVrqV/PXUqk47w==}
-    engines: {node: '>=18'}
-
-  '@sentry-internal/replay-canvas@10.50.0':
-    resolution: {integrity: sha512-jx6RKBmcJSWdI92qDGS/sBv1w+7Cww879Z/moX7bw7ipHa/Ts3iDcB3rgZwvhmi17U+mvYsbJeL2DXkPo3TjPw==}
-    engines: {node: '>=18'}
-
-  '@sentry-internal/replay@10.50.0':
-    resolution: {integrity: sha512-51FYNfnvVLAWw1rrEWPFfwHuMRb9mkVCFGA4J9/un7SpeGBsQDziGB0Di4fsCxI7+EdSBpfLHPF0csKtCCw0oQ==}
-    engines: {node: '>=18'}
-
-  '@sentry/browser@10.50.0':
-    resolution: {integrity: sha512-1f6rAvET6myiTaSeYqvaaBwvq1LfxqWjAPIoAW/NVC9bPMkeEcuvgDajHrnZMrBeWoJ81NMyoLkyX+iOc7MoFA==}
-    engines: {node: '>=18'}
-
   '@sentry/core@10.46.0':
     resolution: {integrity: sha512-N3fj4zqBQOhXliS1Ne9euqIKuciHCGOJfPGQLwBoW9DNz03jF+NB8+dUKtrJ79YLoftjVgf8nbgwtADK7NR+2Q==}
-    engines: {node: '>=18'}
-
-  '@sentry/core@10.50.0':
-    resolution: {integrity: sha512-J4A+vzUO3adl0TkFCjaN1+4miamrjHiEIYuLHiuu1lmAjq5WIVw32ObvAh4yMwNtxyaEMosTrrh5M6f12XSJFg==}
     engines: {node: '>=18'}
 
   '@sentry/node-core@10.46.0':
@@ -2182,12 +2146,6 @@ packages:
       '@opentelemetry/core': ^1.30.1 || ^2.1.0
       '@opentelemetry/sdk-trace-base': ^1.30.1 || ^2.1.0
       '@opentelemetry/semantic-conventions': ^1.39.0
-
-  '@sentry/react@10.50.0':
-    resolution: {integrity: sha512-MZHYjEZAtFIa4zPrWS4oXlo+gMppRvfETqUqF920Sj2jN2U7WjboU03lDmjfDqEcH7QiwjQyl13jHd2nwAyrrw==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      react: ^16.14.0 || 17.x || 18.x || 19.x
 
   '@simple-libs/stream-utils@1.2.0':
     resolution: {integrity: sha512-KxXvfapcixpz6rVEB6HPjOUZT22yN6v0vI0urQSk1L8MlEWPDFCZkhw2xmkyoTGYeFw7tWTZd7e3lVzRZRN/EA==}
@@ -2646,9 +2604,6 @@ packages:
   commander@4.1.1:
     resolution: {integrity: sha512-NOKm8xhkzAjzFx8B2v5OAHT+u5pRQc2UCa2Vq9jYL/31o2wi9mxBA7LIFs3sV5VSC49z6pEhfbMULvShKj26WA==}
     engines: {node: '>= 6'}
-
-  common-typescript-utils@1.0.1:
-    resolution: {integrity: sha512-PZtH+WN9hQNg0hq3PqMmcvwmTvZMiFVb/e+aDG/NoCyTgUu5a8BsA2hnroulrJmQF5ochQCMx7fE5lVju1MN5w==}
 
   compare-func@2.0.0:
     resolution: {integrity: sha512-zHig5N+tPWARooBnb0Zx1MFcdfpyJrfTJ3Y5L+IFvUm8rM74hHz66z0gw0x4tijh5CorKkKUCnW82R2vmpeCRA==}
@@ -3290,8 +3245,8 @@ packages:
   highlight.js@10.7.3:
     resolution: {integrity: sha512-tzcUFauisWKNHaRkN4Wjl/ZA07gENAjFl3J/c480dprkGTg5EQstgaNFqBfUqCq54kZRIEcreTsAgF/m2quD7A==}
 
-  hono@4.6.14:
-    resolution: {integrity: sha512-j4VkyUp2xazGJ8eCCLN1Vm/bxdvm/j5ZuU9AIjLu9vapn2M44p9L3Ktr9Vnb2RN2QtcR/wVjZVMlT5k7GJQgPw==}
+  hono@4.12.9:
+    resolution: {integrity: sha512-wy3T8Zm2bsEvxKZM5w21VdHDDcwVS1yUFFY6i8UobSsKfFceT7TOwhbhfKsDyx7tYQlmRM5FLpIuYvNFyjctiA==}
     engines: {node: '>=16.9.0'}
 
   hook-std@4.0.0:
@@ -5574,13 +5529,13 @@ snapshots:
 
   '@floating-ui/utils@0.2.11': {}
 
-  '@hono/node-server@1.13.7(hono@4.6.14)':
+  '@hono/node-server@1.19.11(hono@4.12.9)':
     dependencies:
-      hono: 4.6.14
+      hono: 4.12.9
 
-  '@hono/zod-validator@0.4.3(hono@4.6.14)(zod@3.25.76)':
+  '@hono/zod-validator@0.4.3(hono@4.12.9)(zod@3.25.76)':
     dependencies:
-      hono: 4.6.14
+      hono: 4.12.9
       zod: 3.25.76
 
   '@hookform/resolvers@3.10.0(react-hook-form@7.72.0(react@19.2.4))':
@@ -6592,35 +6547,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@sentry-internal/browser-utils@10.50.0':
-    dependencies:
-      '@sentry/core': 10.50.0
-
-  '@sentry-internal/feedback@10.50.0':
-    dependencies:
-      '@sentry/core': 10.50.0
-
-  '@sentry-internal/replay-canvas@10.50.0':
-    dependencies:
-      '@sentry-internal/replay': 10.50.0
-      '@sentry/core': 10.50.0
-
-  '@sentry-internal/replay@10.50.0':
-    dependencies:
-      '@sentry-internal/browser-utils': 10.50.0
-      '@sentry/core': 10.50.0
-
-  '@sentry/browser@10.50.0':
-    dependencies:
-      '@sentry-internal/browser-utils': 10.50.0
-      '@sentry-internal/feedback': 10.50.0
-      '@sentry-internal/replay': 10.50.0
-      '@sentry-internal/replay-canvas': 10.50.0
-      '@sentry/core': 10.50.0
-
   '@sentry/core@10.46.0': {}
-
-  '@sentry/core@10.50.0': {}
 
   '@sentry/node-core@10.46.0(@opentelemetry/api@1.9.1)(@opentelemetry/context-async-hooks@2.6.1(@opentelemetry/api@1.9.1))(@opentelemetry/core@2.6.1(@opentelemetry/api@1.9.1))(@opentelemetry/instrumentation@0.213.0(@opentelemetry/api@1.9.1))(@opentelemetry/resources@2.6.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.6.1(@opentelemetry/api@1.9.1))(@opentelemetry/semantic-conventions@1.40.0)':
     dependencies:
@@ -6684,12 +6611,6 @@ snapshots:
       '@opentelemetry/sdk-trace-base': 2.6.1(@opentelemetry/api@1.9.1)
       '@opentelemetry/semantic-conventions': 1.40.0
       '@sentry/core': 10.46.0
-
-  '@sentry/react@10.50.0(react@19.2.4)':
-    dependencies:
-      '@sentry/browser': 10.50.0
-      '@sentry/core': 10.50.0
-      react: 19.2.4
 
   '@simple-libs/stream-utils@1.2.0': {}
 
@@ -7211,10 +7132,6 @@ snapshots:
   color-name@1.1.4: {}
 
   commander@4.1.1: {}
-
-  common-typescript-utils@1.0.1:
-    dependencies:
-      zod: 3.25.76
 
   compare-func@2.0.0:
     dependencies:
@@ -7922,7 +7839,7 @@ snapshots:
 
   highlight.js@10.7.3: {}
 
-  hono@4.6.14: {}
+  hono@4.12.9: {}
 
   hook-std@4.0.0: {}
 

@@ -1,4 +1,4 @@
-import type { ErrorEnvelope, SuccessEnvelope } from "common-typescript-utils";
+import type { ErrorEnvelope, SuccessEnvelope } from "@deejaytools/ts-utils";
 import { useAuth } from "@clerk/clerk-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
