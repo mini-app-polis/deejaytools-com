@@ -1,3 +1,10 @@
+## [1.20.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.20.1...v1.20.2) (2026-04-26)
+
+
+### Bug Fixes
+
+* Tests: full coverage of the new endpoint ([05c24fb](https://github.com/mini-app-polis/deejaytools-com/commit/05c24fb34ef9c12f880e70d571e3ca56d1ffe8eb))
+
 ## [1.20.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.20.0...v1.20.1) (2026-04-26)
 
 
