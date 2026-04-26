@@ -21,6 +21,18 @@ exemptions:
     reason: >-
       Effective route /internal/tick is intentionally unversioned — it is the Railway cron hook target and must be reachable at a stable version-independent path. Authentication is via the TICK_SECRET header check, not Clerk. All substantive API routes are mounted under /v1/. See src/app.ts for the inline intent marker.
 
+  - rule: API-006
+    reason: >-
+      Floor-trial entities (events, sessions, session_divisions, checkins,
+      queue_entries, runs, queue_events, event_division_run_limits) are
+      admin-managed shared resources, not per-user-owned. They don't fit
+      any of API-006's three patterns (owner_id, user_id, relationship
+      table). created_by is recorded for audit, not authorisation.
+      See apps/api/docs/decisions/ADR-004-floor-trial-queue-model.md
+      for the full rationale. To remove this exemption, API-006 would
+      need a fourth pattern explicitly modelling "admin-managed shared
+      resource" — a standards-repo change.
+
   - rule: XSTACK-002
     reason: >-
       Evaluator false positive — src/test/mocks.ts is test fixture code that constructs mock Hono Context responses with c.json. The check cannot distinguish between production route handlers and test-only mocks that mirror handler shape. Test fixtures correctly bypass the success/error envelope helpers because they are simulating Context behavior, not producing real responses. To remove this exemption, update check_hono_envelope_helpers in evaluator-cog to exclude files under src/test/ or **/test/ or *.test.ts.

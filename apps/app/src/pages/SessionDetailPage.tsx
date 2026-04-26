@@ -1,40 +1,13 @@
-import { zodResolver } from "@hookform/resolvers/zod";
-import { QueueTypeSchema } from "@deejaytools/schemas";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { z } from "zod";
+import { useUser } from "@clerk/clerk-react";
 import { useApiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthMe } from "@/hooks/useAuthMe";
-import { cn } from "@/lib/utils";
 
 type SessionDetail = {
   id: string;
@@ -44,41 +17,37 @@ type SessionDetail = {
   checkin_opens_at: number;
   floor_trial_starts_at: number;
   floor_trial_ends_at: number;
+  active_priority_max?: number;
+  active_non_priority_max?: number;
   status: string;
-  divisions?: { division_name: string; is_priority: boolean }[];
+  divisions?: {
+    division_name: string;
+    is_priority: boolean;
+    priority_run_limit?: number;
+  }[];
   has_active_checkin?: boolean;
   active_checkin_division?: string;
+  queue_depth?: { priority: number; non_priority: number; active: number };
 };
 
-type CheckinRow = {
-  id: string;
-  session_id: string;
-  pair_id: string;
-  pair_display_name: string;
-  song_id: string | null;
-  division: string;
-  queue_type: string;
-  queue_position: number;
-  status: string;
-  processed_filename?: string | null;
+type QueueRow = {
+  queueEntryId: string;
+  checkinId: string;
+  position: number;
+  enteredQueueAt: number;
+  entityPairId: string | null;
+  entitySoloUserId: string | null;
+  divisionName: string;
+  songId: string;
+  notes: string | null;
+  initialQueue: string;
+  checkedInAt: number;
 };
 
-type SlotRow = {
+type LeadingPair = {
   id: string;
-  session_id: string;
-  slot_number: number;
-  checkin_id: string | null;
-  assigned_at: number;
-  pair_display_name?: string;
-  division?: string;
-  queue_type?: string;
-};
-
-type PartnerRow = {
-  id: string;
-  first_name: string;
-  last_name: string;
-  partner_role: "leader" | "follower";
+  partner_b_id: string | null;
+  display_name: string;
 };
 
 type SongRow = {
@@ -94,261 +63,252 @@ function formatTime(ts: number): string {
   });
 }
 
-function sessionStatusBadge(status: string) {
+/** Display-derived status from timestamps. The DB column is decorative; this is what users see. */
+function derivedStatus(s: SessionDetail, now: number): string {
+  if (now < s.checkin_opens_at) return "scheduled";
+  if (now <= s.floor_trial_ends_at) return "open";
+  return "ended";
+}
+
+function derivedStatusBadge(status: string) {
   switch (status) {
     case "scheduled":
       return <Badge variant="secondary">{status}</Badge>;
-    case "checkin_open":
-      return <Badge variant="default">{status}</Badge>;
-    case "in_progress":
+    case "open":
       return (
         <Badge className="bg-green-600 text-white hover:bg-green-600/90 border-transparent">
           {status}
         </Badge>
       );
-    case "completed":
+    case "ended":
       return <Badge variant="outline">{status}</Badge>;
-    case "cancelled":
-      return <Badge variant="destructive">{status}</Badge>;
     default:
       return <Badge variant="outline">{status}</Badge>;
   }
 }
 
-const checkinFormSchema = z.object({
-  division: z.string().min(1),
-  queue_type: QueueTypeSchema,
-  partner_id: z.string().optional(),
-  song_id: z.string().min(1, "Select a song"),
-});
+const FIELD_INPUT_CLASS =
+  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
 
-type CheckinFormValues = z.infer<typeof checkinFormSchema>;
+const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
 
 export default function SessionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const api = useApiClient();
+  const { user } = useUser();
   const { isAdmin } = useAuthMe();
   const [session, setSession] = useState<SessionDetail | null>(null);
-  const [checkins, setCheckins] = useState<CheckinRow[]>([]);
-  const [slots, setSlots] = useState<SlotRow[]>([]);
-  const [partners, setPartners] = useState<PartnerRow[]>([]);
+  const [active, setActive] = useState<QueueRow[]>([]);
+  const [priority, setPriority] = useState<QueueRow[]>([]);
+  const [nonPriority, setNonPriority] = useState<QueueRow[]>([]);
+  const [pairs, setPairs] = useState<LeadingPair[]>([]);
   const [songs, setSongs] = useState<SongRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkinOpen, setCheckinOpen] = useState(false);
-  const [clearOpen, setClearOpen] = useState(false);
-  const [clearSlot, setClearSlot] = useState<SlotRow | null>(null);
-  const [withdrawOnClear, setWithdrawOnClear] = useState(false);
 
-  const form = useForm<CheckinFormValues>({
-    resolver: zodResolver(checkinFormSchema),
-    defaultValues: {
-      division: "Other",
-      queue_type: "standard",
-      partner_id: "",
-      song_id: "",
-    },
-  });
+  // Plain useState form fields. No useForm, no zodResolver, no FormField.
+  const [fEntity, setFEntity] = useState<"pair" | "solo">("pair");
+  const [fPairId, setFPairId] = useState("");
+  const [fDivision, setFDivision] = useState("");
+  const [fSongId, setFSongId] = useState("");
+  const [fNotes, setFNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const [now, setNow] = useState(Date.now());
 
   const loadSession = useCallback(() => {
     if (!id) return;
     return api.get<SessionDetail>(`/v1/sessions/${id}`).then(setSession);
   }, [api, id]);
 
-  const loadQueue = useCallback(() => {
+  const loadQueues = useCallback(async () => {
     if (!id) return;
-    return api
-      .get<CheckinRow[]>(`/v1/checkins?session_id=${encodeURIComponent(id)}`)
-      .then(setCheckins);
-  }, [api, id]);
+    const a = await api.get<QueueRow[]>(`/v1/queue/${id}/active`);
+    setActive(a);
+    if (isAdmin) {
+      const [p, np] = await Promise.all([
+        api.get<QueueRow[]>(`/v1/queue/${id}/priority`),
+        api.get<QueueRow[]>(`/v1/queue/${id}/non-priority`),
+      ]);
+      setPriority(p);
+      setNonPriority(np);
+    } else {
+      setPriority([]);
+      setNonPriority([]);
+    }
+  }, [api, id, isAdmin]);
 
-  const loadSlots = useCallback(() => {
-    if (!id) return;
-    return api.get<SlotRow[]>(`/v1/slots?session_id=${encodeURIComponent(id)}`).then(setSlots);
-  }, [api, id]);
-
-  const loadExtras = useCallback(() => {
-    return Promise.all([
-      api.get<PartnerRow[]>("/v1/partners"),
+  const loadExtras = useCallback(async () => {
+    const [p, s] = await Promise.all([
+      api.get<LeadingPair[]>("/v1/partners/leading-pairs"),
       api.get<SongRow[]>("/v1/songs"),
-    ]).then(([p, s]) => {
-      setPartners(p);
-      setSongs(s);
-    });
+    ]);
+    setPairs(p);
+    setSongs(s);
   }, [api]);
 
   const refresh = useCallback(() => {
     if (!id) return;
     setLoading(true);
-    Promise.all([loadSession(), loadQueue(), loadSlots(), loadExtras()])
+    Promise.all([loadSession(), loadQueues(), loadExtras()])
       .catch((e: Error) => toast.error(e.message))
       .finally(() => setLoading(false));
-  }, [id, loadExtras, loadQueue, loadSession, loadSlots]);
+  }, [id, loadExtras, loadQueues, loadSession]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
+  // Poll queues + session, and tick the clock so canCheckIn re-evaluates without a refresh.
   useEffect(() => {
     if (!id) return;
     const t = setInterval(() => {
-      void Promise.all([loadQueue(), loadSlots(), loadSession()]).catch(() => {});
+      setNow(Date.now());
+      void Promise.all([loadQueues(), loadSession()]).catch(() => {});
     }, 10_000);
     return () => clearInterval(t);
-  }, [id, loadQueue, loadSession, loadSlots]);
+  }, [id, loadQueues, loadSession]);
 
   const divisionsList = useMemo(() => {
     const fromSession = session?.divisions?.map((d) => d.division_name) ?? [];
-    const withOther = fromSession.includes("Other") ? fromSession : [...fromSession, "Other"];
-    return withOther.length > 0 ? withOther : ["Other"];
+    return fromSession.filter((n) => n && n !== "Other");
   }, [session]);
 
+  // Auto-pick the first division in the form when the session loads.
   useEffect(() => {
     if (!session) return;
-    const first = divisionsList[0] ?? "Other";
-    form.setValue("division", first);
-  }, [session?.id, divisionsList, form]);
+    const first = divisionsList[0] ?? "";
+    if (first && !fDivision) setFDivision(first);
+  }, [session, divisionsList, fDivision]);
 
+  // When the user picks a pair, refetch songs scoped to that partner.
   useEffect(() => {
-    if (songs.length > 0 && !form.getValues("song_id")) {
-      form.setValue("song_id", songs[0]!.id);
+    if (!id) return;
+    const pair = fPairId ? pairs.find((p) => p.id === fPairId) : null;
+    const q = pair?.partner_b_id
+      ? `?partner_id=${encodeURIComponent(pair.partner_b_id)}`
+      : "";
+    void api
+      .get<SongRow[]>(`/v1/songs${q}`)
+      .then(setSongs)
+      .catch(() => {});
+  }, [api, id, fPairId, pairs]);
+
+  // Build lookup maps so we render names instead of UUIDs.
+  const songMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of songs) {
+      m.set(s.id, s.display_name ?? s.processed_filename ?? s.id);
     }
-  }, [songs, form]);
+    return m;
+  }, [songs]);
 
-  const priorityWaiting = useMemo(
-    () =>
-      checkins
-        .filter((c) => c.status === "waiting" && c.queue_type === "priority")
-        .sort((a, b) => a.queue_position - b.queue_position),
-    [checkins]
-  );
+  const pairMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of pairs) m.set(p.id, p.display_name);
+    return m;
+  }, [pairs]);
 
-  const standardWaiting = useMemo(
-    () =>
-      checkins
-        .filter((c) => c.status === "waiting" && c.queue_type === "standard")
-        .sort((a, b) => a.queue_position - b.queue_position),
-    [checkins]
-  );
+  const renderEntityLabel = (row: QueueRow): string => {
+    if (row.entityPairId) return pairMap.get(row.entityPairId) ?? "Pair";
+    if (row.entitySoloUserId) return "Solo dancer";
+    return "Entity";
+  };
+
+  const renderSongLabel = (songId: string): string => songMap.get(songId) ?? songId;
+
+  const slotOne = active.find((r) => r.position === 1);
+  const upcoming = active
+    .filter((r) => r.position > 1)
+    .sort((a, b) => a.position - b.position);
+
+  const depth = session?.queue_depth ?? { priority: 0, non_priority: 0, active: 0 };
+  const promotePriorityDisabled =
+    depth.active >= (session?.active_priority_max ?? 6);
+  const promoteNonPriorityDisabled =
+    depth.priority > 0 || depth.active >= (session?.active_non_priority_max ?? 4);
+
+  // Time-based check-in gate matches what the API enforces.
+  const checkinWindowOpen =
+    !!session &&
+    now >= session.checkin_opens_at &&
+    now <= session.floor_trial_ends_at;
 
   const canCheckIn =
-    session &&
-    (session.status === "checkin_open" || session.status === "in_progress") &&
+    !!session &&
+    checkinWindowOpen &&
     session.has_active_checkin !== true &&
-    songs.length > 0;
+    songs.length > 0 &&
+    divisionsList.length > 0;
 
-  const submitCheckin = form.handleSubmit(async (values) => {
-    if (!id) return;
+  const queueAction = async (path: string, body: unknown) => {
+    try {
+      await api.post(path, body);
+      toast.success("Updated");
+      await loadQueues();
+      await loadSession();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Request failed";
+      if (msg.toLowerCase().includes("conflict") || msg.toLowerCase().includes("retry")) {
+        toast.error(`${msg} — retry?`);
+      } else {
+        toast.error(msg);
+      }
+    }
+  };
+
+  const openCheckin = () => {
+    setFEntity("pair");
+    setFPairId("");
+    setFDivision(divisionsList[0] ?? "");
+    setFSongId("");
+    setFNotes("");
+    setCheckinOpen(true);
+  };
+
+  const closeCheckin = () => setCheckinOpen(false);
+
+  const submitCheckin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id || !user?.id) return;
+
+    if (!fDivision.trim()) {
+      toast.error("Pick a division");
+      return;
+    }
+    if (!fSongId) {
+      toast.error("Pick a song");
+      return;
+    }
+    if (fEntity === "pair" && !fPairId) {
+      toast.error("Pick a pair");
+      return;
+    }
+
+    setSubmitting(true);
     try {
       await api.post("/v1/checkins", {
-        session_id: id,
-        partner_id: values.partner_id?.trim() ? values.partner_id.trim() : null,
-        division: values.division.trim(),
-        queue_type: values.queue_type,
-        song_id: values.song_id,
+        sessionId: id,
+        divisionName: fDivision.trim(),
+        entityPairId: fEntity === "pair" ? fPairId : null,
+        entitySoloUserId: fEntity === "solo" ? user.id : null,
+        songId: fSongId,
+        notes: fNotes.trim() || undefined,
       });
       toast.success("Checked in");
       setCheckinOpen(false);
-      await Promise.all([loadQueue(), loadSession(), loadSlots()]);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Check-in failed");
-    }
-  });
-
-  const withdraw = async () => {
-    if (!id) return;
-    try {
-      await api.del(`/v1/checkins/mine?session_id=${encodeURIComponent(id)}`);
-      toast.success("Withdrawn");
-      await Promise.all([loadQueue(), loadSession(), loadSlots()]);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Withdraw failed");
+      await Promise.all([loadQueues(), loadSession()]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Check-in failed";
+      if (msg.includes("already has a live")) {
+        toast.error("You're already in the queue for this session.");
+      } else {
+        toast.error(msg);
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
-
-  const swapQueuePositions = async (a: CheckinRow, b: CheckinRow) => {
-    const subset = checkins
-      .filter((c) => c.status === "waiting" && c.queue_type === a.queue_type)
-      .map((c) => c.queue_position);
-    const maxPos = subset.length > 0 ? Math.max(...subset) : 0;
-    const temp = maxPos + 1;
-    try {
-      await api.patch(`/v1/checkins/${a.id}`, { queue_position: temp });
-      await api.patch(`/v1/checkins/${b.id}`, { queue_position: a.queue_position });
-      await api.patch(`/v1/checkins/${a.id}`, { queue_position: b.queue_position });
-      toast.success("Order updated");
-      await loadQueue();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Reorder failed");
-    }
-  };
-
-  const moveCheckin = async (row: CheckinRow, dir: -1 | 1) => {
-    const list =
-      row.queue_type === "priority"
-        ? priorityWaiting
-        : standardWaiting;
-    const idx = list.findIndex((c) => c.id === row.id);
-    const j = idx + dir;
-    if (idx < 0 || j < 0 || j >= list.length) return;
-    await swapQueuePositions(row, list[j]!);
-  };
-
-  /** One call fills a single empty slot (next by slot number); repeat to fill more. */
-  const fillNext = async () => {
-    if (!id) return;
-    try {
-      await api.post("/v1/slots/fill", { session_id: id });
-      toast.success("Next empty slot filled");
-      await Promise.all([loadSlots(), loadQueue()]);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Fill failed");
-    }
-  };
-
-  const confirmClearSlot = async () => {
-    if (!id || !clearSlot) return;
-    try {
-      await api.patch(
-        `/v1/slots/${clearSlot.slot_number}/clear?session_id=${encodeURIComponent(id)}`,
-        { withdraw_checkin: withdrawOnClear }
-      );
-      toast.success(withdrawOnClear ? "Cleared and withdrawn" : "Cleared and returned to queue");
-      setClearOpen(false);
-      setClearSlot(null);
-      await Promise.all([loadSlots(), loadQueue()]);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Clear failed");
-    }
-  };
-
-  const songLabel = (s: SongRow) => s.display_name ?? s.processed_filename ?? s.id;
-
-  const renderQueueCard = (c: CheckinRow) => (
-    <Card key={c.id}>
-      <CardHeader className="py-3 px-4">
-        <CardTitle className="text-sm font-medium leading-snug">{c.pair_display_name}</CardTitle>
-        <p className="text-xs text-muted-foreground mt-1">
-          {c.division} · #{c.queue_position}
-          {c.processed_filename && (
-            <>
-              <br />
-              <span className="italic">{c.processed_filename}</span>
-            </>
-          )}
-        </p>
-        {isAdmin && (
-          <div className="flex gap-2 mt-2">
-            <Button type="button" size="sm" variant="outline" onClick={() => moveCheckin(c, -1)}>
-              Up
-            </Button>
-            <Button type="button" size="sm" variant="outline" onClick={() => moveCheckin(c, 1)}>
-              Down
-            </Button>
-          </div>
-        )}
-      </CardHeader>
-    </Card>
-  );
 
   if (!id) {
     return <p className="text-muted-foreground">Missing session id.</p>;
@@ -367,264 +327,350 @@ export default function SessionDetailPage() {
     return <p className="text-muted-foreground">Session not found.</p>;
   }
 
-  const backHref = session.event_id ? `/events/${session.event_id}` : "/events";
-
   return (
-    <div className={cn("space-y-6", loading && "opacity-70")}>
+    <div className={`space-y-6 ${loading ? "opacity-60" : ""}`}>
       <div>
         <Button variant="ghost" size="sm" className="mb-2 px-0" asChild>
-          <Link to={backHref}>← Back</Link>
+          <Link to="/sessions">← Sessions</Link>
         </Button>
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-xl font-semibold flex flex-wrap items-center gap-3">
-              {session.name}
-              {sessionStatusBadge(session.status)}
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Check-in opens {formatTime(session.checkin_opens_at)} · Floor{" "}
-              {formatTime(session.floor_trial_starts_at)} – {formatTime(session.floor_trial_ends_at)}
+            <h1 className="text-xl font-semibold">{session.name}</h1>
+            <p className="text-sm text-muted-foreground">
+              Opens {formatTime(session.checkin_opens_at)} · Floor trial{" "}
+              {formatTime(session.floor_trial_starts_at)} –{" "}
+              {formatTime(session.floor_trial_ends_at)}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {canCheckIn && (
-              <Dialog open={checkinOpen} onOpenChange={setCheckinOpen}>
-                <Button type="button" onClick={() => setCheckinOpen(true)}>
-                  Check in
-                </Button>
-                <DialogContent className="max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Check in</DialogTitle>
-                  </DialogHeader>
-                  <Form {...form}>
-                    <form onSubmit={submitCheckin} className="space-y-4">
-                      <FormField
-                        control={form.control}
-                        name="division"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Division</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {divisionsList.map((d) => (
-                                  <SelectItem key={d} value={d}>
-                                    {d}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="queue_type"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Queue</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {QueueTypeSchema.options.map((q) => (
-                                  <SelectItem key={q} value={q}>
-                                    {q}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="partner_id"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Partner</FormLabel>
-                            <Select
-                              onValueChange={(v) => field.onChange(v === "none" ? "" : v)}
-                              value={field.value && field.value !== "" ? field.value : "none"}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Solo" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="none">Solo</SelectItem>
-                                {partners.map((p) => (
-                                  <SelectItem key={p.id} value={p.id}>
-                                    {p.first_name} {p.last_name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="song_id"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Song</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {songs.map((s) => (
-                                  <SelectItem key={s.id} value={s.id}>
-                                    {songLabel(s)}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <DialogFooter>
-                        <Button type="submit">Submit</Button>
-                      </DialogFooter>
-                    </form>
-                  </Form>
-                </DialogContent>
-              </Dialog>
-            )}
-            {session.has_active_checkin && (
-              <Button variant="destructive" onClick={withdraw}>
-                Withdraw
-              </Button>
-            )}
-            {session.has_active_checkin && (
-              <p className="text-sm text-muted-foreground self-center">
-                Checked in ({session.active_checkin_division ?? "—"})
-              </p>
-            )}
-          </div>
+          {derivedStatusBadge(derivedStatus(session, now))}
         </div>
       </div>
 
-      {songs.length === 0 && (
-        <p className="text-sm text-amber-700 dark:text-amber-400">
-          Add a song under Songs before you can check in.
-        </p>
+      <Card>
+        <CardHeader>
+          <CardTitle>Currently running</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {slotOne ? (
+            <>
+              <div className="text-sm">
+                <div className="font-medium">
+                  Slot 1 · {renderEntityLabel(slotOne)} · {slotOne.divisionName}
+                </div>
+                <div className="text-muted-foreground">
+                  {renderSongLabel(slotOne.songId)}
+                </div>
+              </div>
+              {isAdmin && (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      queueAction("/v1/queue/complete", { sessionId: id, reason: null })
+                    }
+                  >
+                    Run complete
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() =>
+                      queueAction("/v1/queue/incomplete", { sessionId: id, reason: null })
+                    }
+                  >
+                    Run incomplete
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      queueAction("/v1/queue/withdraw", {
+                        queueEntryId: slotOne.queueEntryId,
+                        reason: null,
+                      })
+                    }
+                  >
+                    Withdraw
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">No one on deck (slot 1 empty).</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Upcoming (active)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {upcoming.length === 0 && (
+            <p className="text-sm text-muted-foreground">No upcoming slots.</p>
+          )}
+          {upcoming.map((r) => (
+            <div
+              key={r.queueEntryId}
+              className="flex items-center justify-between border rounded-md px-3 py-2 text-sm"
+            >
+              <span>
+                #{r.position} · {renderEntityLabel(r)} · {r.divisionName} ·{" "}
+                {renderSongLabel(r.songId)}
+              </span>
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    queueAction("/v1/queue/withdraw", {
+                      queueEntryId: r.queueEntryId,
+                      reason: null,
+                    })
+                  }
+                >
+                  Withdraw
+                </Button>
+              )}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {isAdmin && (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Priority queue</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {priority.map((r) => (
+                <div
+                  key={r.queueEntryId}
+                  className="flex items-center justify-between border rounded-md px-3 py-2 text-sm"
+                >
+                  <span>
+                    #{r.position} · {renderEntityLabel(r)} · {r.divisionName} ·{" "}
+                    {renderSongLabel(r.songId)}
+                  </span>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      disabled={promotePriorityDisabled}
+                      onClick={() =>
+                        queueAction("/v1/queue/promote", { queueEntryId: r.queueEntryId })
+                      }
+                    >
+                      Promote
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        queueAction("/v1/queue/withdraw", {
+                          queueEntryId: r.queueEntryId,
+                          reason: null,
+                        })
+                      }
+                    >
+                      Withdraw
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              {priority.length === 0 && (
+                <p className="text-sm text-muted-foreground">Priority queue empty.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Non-priority queue</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {nonPriority.map((r) => (
+                <div
+                  key={r.queueEntryId}
+                  className="flex items-center justify-between border rounded-md px-3 py-2 text-sm"
+                >
+                  <span>
+                    #{r.position} · {renderEntityLabel(r)} · {r.divisionName} ·{" "}
+                    {renderSongLabel(r.songId)}
+                  </span>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      disabled={promoteNonPriorityDisabled}
+                      onClick={() =>
+                        queueAction("/v1/queue/promote", { queueEntryId: r.queueEntryId })
+                      }
+                    >
+                      Promote
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        queueAction("/v1/queue/withdraw", {
+                          queueEntryId: r.queueEntryId,
+                          reason: null,
+                        })
+                      }
+                    >
+                      Withdraw
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              {nonPriority.length === 0 && (
+                <p className="text-sm text-muted-foreground">Non-priority queue empty.</p>
+              )}
+            </CardContent>
+          </Card>
+        </>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="space-y-4">
-          <div>
-            <h2 className="text-sm font-semibold mb-2">Priority queue</h2>
-            <div className="space-y-2">
-              {priorityWaiting.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No one waiting.</p>
-              ) : (
-                priorityWaiting.map(renderQueueCard)
-              )}
-            </div>
-          </div>
-          <div>
-            <h2 className="text-sm font-semibold mb-2">Standard queue</h2>
-            <div className="space-y-2">
-              {standardWaiting.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No one waiting.</p>
-              ) : (
-                standardWaiting.map(renderQueueCard)
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-            <div>
-              <h2 className="text-sm font-semibold">Floor slots</h2>
-              {isAdmin && session.status === "in_progress" && (
-                <p className="text-xs text-muted-foreground mt-1 max-w-md">
-                  Fill Next Slot assigns one waiting check-in to the lowest-numbered empty slot. Click again to
-                  fill additional slots.
-                </p>
-              )}
-            </div>
-            {isAdmin && session.status === "in_progress" && (
-              <Button size="sm" className="shrink-0" onClick={fillNext}>
-                Fill Next Slot
-              </Button>
-            )}
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {slots.map((slot) => (
-              <Card key={slot.id}>
-                <CardContent className="p-3 space-y-2">
-                  <div className="text-xs font-medium text-muted-foreground">Slot {slot.slot_number}</div>
-                  <p className="text-sm">{slot.pair_display_name ?? "Empty"}</p>
-                  {isAdmin && slot.checkin_id && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => {
-                        setClearSlot(slot);
-                        setWithdrawOnClear(false);
-                        setClearOpen(true);
-                      }}
-                    >
-                      Clear
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
+      <div className="flex items-center gap-3">
+        <Button disabled={!canCheckIn} onClick={openCheckin}>
+          Check in
+        </Button>
+        {!canCheckIn && session.has_active_checkin && (
+          <span className="text-xs text-muted-foreground">
+            Already in queue (division: {session.active_checkin_division ?? "?"})
+          </span>
+        )}
+        {!canCheckIn && !checkinWindowOpen && (
+          <span className="text-xs text-muted-foreground">
+            {now < session.checkin_opens_at
+              ? `Check-in opens ${formatTime(session.checkin_opens_at)}`
+              : "Check-in closed"}
+          </span>
+        )}
+        {!canCheckIn && checkinWindowOpen && songs.length === 0 && (
+          <span className="text-xs text-muted-foreground">
+            You have no songs uploaded — add a song first.
+          </span>
+        )}
+        {!canCheckIn && checkinWindowOpen && divisionsList.length === 0 && (
+          <span className="text-xs text-muted-foreground">
+            No divisions configured for this session.
+          </span>
+        )}
       </div>
 
-      <Dialog open={clearOpen} onOpenChange={setClearOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Clear slot {clearSlot?.slot_number}</DialogTitle>
-            <DialogDescription>
-              Remove this pair from the slot. Choose whether to withdraw the check-in entirely or return it
-              to the queue.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-2">
-            <Button
-              variant={!withdrawOnClear ? "default" : "outline"}
-              onClick={() => setWithdrawOnClear(false)}
-            >
-              Return to queue
-            </Button>
-            <Button
-              variant={withdrawOnClear ? "destructive" : "outline"}
-              onClick={() => setWithdrawOnClear(true)}
-            >
-              Withdraw check-in
-            </Button>
+      {checkinOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={closeCheckin}
+        >
+          <div
+            className="rounded-lg border bg-background p-6 shadow-lg max-w-lg w-full max-h-[90vh] overflow-y-auto space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Check in</h2>
+              <Button type="button" variant="ghost" size="sm" onClick={closeCheckin}>
+                ✕
+              </Button>
+            </div>
+            <form onSubmit={submitCheckin} className="space-y-4">
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Dancing as</label>
+                <select
+                  className={FIELD_INPUT_CLASS}
+                  value={fEntity}
+                  onChange={(e) => {
+                    const v = e.target.value as "pair" | "solo";
+                    setFEntity(v);
+                    if (v === "solo") setFPairId("");
+                  }}
+                >
+                  <option value="pair">Pair</option>
+                  <option value="solo">Solo</option>
+                </select>
+              </div>
+
+              {fEntity === "pair" && (
+                <div>
+                  <label className={FIELD_LABEL_CLASS}>Pair</label>
+                  <select
+                    className={FIELD_INPUT_CLASS}
+                    value={fPairId}
+                    onChange={(e) => setFPairId(e.target.value)}
+                  >
+                    <option value="">Select pair</option>
+                    {pairs.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.display_name}
+                      </option>
+                    ))}
+                  </select>
+                  {pairs.length === 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      You have no leading pairs. Set one up under Partners first.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Division</label>
+                <select
+                  className={FIELD_INPUT_CLASS}
+                  value={fDivision}
+                  onChange={(e) => setFDivision(e.target.value)}
+                >
+                  <option value="">Select division</option>
+                  {divisionsList.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Song</label>
+                <select
+                  className={FIELD_INPUT_CLASS}
+                  value={fSongId}
+                  onChange={(e) => setFSongId(e.target.value)}
+                >
+                  <option value="">Select song</option>
+                  {songs.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.display_name ?? s.processed_filename ?? s.id}
+                    </option>
+                  ))}
+                </select>
+                {songs.length === 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    No songs found. Upload a song first.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Notes (optional)</label>
+                <textarea
+                  className={FIELD_INPUT_CLASS}
+                  rows={2}
+                  value={fNotes}
+                  onChange={(e) => setFNotes(e.target.value)}
+                  placeholder="Any special instructions for the deejay"
+                />
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <Button type="submit" disabled={submitting}>
+                  {submitting ? "Submitting..." : "Submit"}
+                </Button>
+              </div>
+            </form>
           </div>
-          <DialogFooter>
-            <Button variant="secondary" onClick={() => setClearOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={confirmClearSlot}>Confirm</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
     </div>
   );
 }

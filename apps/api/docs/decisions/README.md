@@ -39,3 +39,4 @@ What becomes easier or more difficult to do because of this change?
 - [ADR-001 — Run Drizzle migrations at Railway deploy time](./ADR-001-drizzle-migrations-at-deploy.md)
 - [ADR-002 — Validation 400 responses use the canonical error envelope](./ADR-002-validation-envelope-shape.md)
 - [ADR-003 — Clerk verification: session JWTs only, no M2M](./ADR-003-jwt-only-clerk-verification.md)
+- [ADR-004 — Floor-trial queue model](./ADR-004-floor-trial-queue-model.md)

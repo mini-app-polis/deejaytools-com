@@ -11,7 +11,7 @@ import { eventRoutes } from "./routes/events.js";
 import { legacySongRoutes } from "./routes/legacy-songs.js";
 import { partnerRoutes } from "./routes/partners.js";
 import { sessionRoutes } from "./routes/sessions.js";
-import { slotRoutes } from "./routes/slots.js";
+import { queueRoutes } from "./routes/queue.js";
 import { songRoutes } from "./routes/songs.js";
 import { tickSessionStatuses } from "./services/cron.js";
 
@@ -60,7 +60,7 @@ app.route("/v1/auth", authRoutes);
 app.route("/v1/events", eventRoutes);
 app.route("/v1/sessions", sessionRoutes);
 app.route("/v1/checkins", checkinRoutes);
-app.route("/v1/slots", slotRoutes);
+app.route("/v1/queue", queueRoutes);
 app.route("/v1/partners", partnerRoutes);
 app.route("/v1/songs", songRoutes);
 // Intentionally public — read-only historical catalog, no user data.

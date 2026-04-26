@@ -1,33 +1,12 @@
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { z } from "zod";
 import { useApiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuthMe } from "@/hooks/useAuthMe";
 
@@ -46,8 +25,15 @@ type SessionRow = {
   checkin_opens_at: number;
   floor_trial_starts_at: number;
   floor_trial_ends_at: number;
+  active_priority_max?: number;
+  active_non_priority_max?: number;
   status: string;
-  divisions?: { division_name: string; is_priority: boolean; sort_order: number }[];
+};
+
+type DivisionRow = {
+  division_name: string;
+  is_priority: boolean;
+  priority_run_limit: number;
 };
 
 function sessionStatusBadge(status: string) {
@@ -78,23 +64,10 @@ function formatTime(ts: number): string {
   });
 }
 
-const divisionSchema = z.object({
-  division_name: z.string().min(1),
-  is_priority: z.boolean(),
-});
+const FIELD_INPUT_CLASS =
+  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
 
-const sessionFormSchema = z.object({
-  name: z.string().min(1),
-  date: z.string().optional(),
-  checkin_opens_at: z.string().min(1),
-  floor_trial_starts_at: z.string().min(1),
-  floor_trial_ends_at: z.string().min(1),
-  max_slots: z.coerce.number().int().min(1).optional(),
-  max_priority_runs: z.coerce.number().int().min(0).optional(),
-  divisions: z.array(divisionSchema).default([]),
-});
-
-type SessionFormValues = z.infer<typeof sessionFormSchema>;
+const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -105,24 +78,18 @@ export default function EventDetailPage() {
   const [loading, setLoading] = useState(true);
   const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
 
-  const form = useForm<SessionFormValues>({
-    resolver: zodResolver(sessionFormSchema),
-    defaultValues: {
-      name: "",
-      date: "",
-      checkin_opens_at: "",
-      floor_trial_starts_at: "",
-      floor_trial_ends_at: "",
-      max_slots: 7,
-      max_priority_runs: 3,
-      divisions: [{ division_name: "Classic", is_priority: false }],
-    },
-  });
-
-  const { fields, append, remove } = useFieldArray({
-    control: form.control,
-    name: "divisions",
-  });
+  // Form state — plain useState, no react-hook-form.
+  const [fName, setFName] = useState("");
+  const [fDate, setFDate] = useState("");
+  const [fCheckinOpensAt, setFCheckinOpensAt] = useState("");
+  const [fFloorStartsAt, setFFloorStartsAt] = useState("");
+  const [fFloorEndsAt, setFFloorEndsAt] = useState("");
+  const [fPriorityMax, setFPriorityMax] = useState("6");
+  const [fNonPriorityMax, setFNonPriorityMax] = useState("4");
+  const [fDivisions, setFDivisions] = useState<DivisionRow[]>([
+    { division_name: "Classic", is_priority: false, priority_run_limit: 0 },
+  ]);
+  const [submitting, setSubmitting] = useState(false);
 
   const load = () => {
     if (!id) return;
@@ -143,44 +110,101 @@ export default function EventDetailPage() {
     load();
   }, [api, id]);
 
-  const onCreateSession = form.handleSubmit(async (values) => {
+  const resetForm = () => {
+    setFName("");
+    setFDate("");
+    setFCheckinOpensAt("");
+    setFFloorStartsAt("");
+    setFFloorEndsAt("");
+    setFPriorityMax("6");
+    setFNonPriorityMax("4");
+    setFDivisions([{ division_name: "Classic", is_priority: false, priority_run_limit: 0 }]);
+  };
+
+  const openCreateDialog = () => {
+    resetForm();
+    setSessionDialogOpen(true);
+  };
+
+  const closeCreateDialog = () => {
+    setSessionDialogOpen(false);
+  };
+
+  const updateDivision = (index: number, patch: Partial<DivisionRow>) => {
+    setFDivisions((prev) => prev.map((d, i) => (i === index ? { ...d, ...patch } : d)));
+  };
+
+  const addDivision = () => {
+    setFDivisions((prev) => [
+      ...prev,
+      { division_name: "", is_priority: false, priority_run_limit: 0 },
+    ]);
+  };
+
+  const removeDivision = (index: number) => {
+    setFDivisions((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!id) return;
+
+    const priorityMaxNum = Number(fPriorityMax);
+    const nonPriorityMaxNum = Number(fNonPriorityMax);
+
+    if (!fName.trim()) {
+      toast.error("Name is required");
+      return;
+    }
+    if (!fCheckinOpensAt || !fFloorStartsAt || !fFloorEndsAt) {
+      toast.error("All three datetime fields are required");
+      return;
+    }
+    if (Number.isNaN(priorityMaxNum) || priorityMaxNum < 0) {
+      toast.error("Active cap (priority) must be a non-negative number");
+      return;
+    }
+    if (Number.isNaN(nonPriorityMaxNum) || nonPriorityMaxNum < 0) {
+      toast.error("Active cap (non-priority) must be a non-negative number");
+      return;
+    }
+    if (nonPriorityMaxNum > priorityMaxNum) {
+      toast.error("Non-priority cap must be ≤ priority cap");
+      return;
+    }
+
+    const divisions = fDivisions
+      .filter((d) => d.division_name.trim() && d.division_name.trim() !== "Other")
+      .map((d, i) => ({
+        division_name: d.division_name.trim(),
+        is_priority: d.is_priority,
+        sort_order: i,
+        priority_run_limit: Number.isFinite(d.priority_run_limit) ? d.priority_run_limit : 0,
+      }));
+
+    setSubmitting(true);
     try {
-      const divisions = values.divisions
-        .filter((d) => d.division_name.trim() && d.division_name.trim() !== "Other")
-        .map((d, i) => ({
-          division_name: d.division_name.trim(),
-          is_priority: d.is_priority,
-          sort_order: i,
-        }));
       await api.post<SessionRow>("/v1/sessions", {
         event_id: id,
-        name: values.name.trim(),
-        ...(values.date?.trim() ? { date: values.date.trim() } : {}),
-        checkin_opens_at: new Date(values.checkin_opens_at).getTime(),
-        floor_trial_starts_at: new Date(values.floor_trial_starts_at).getTime(),
-        floor_trial_ends_at: new Date(values.floor_trial_ends_at).getTime(),
-        ...(values.max_slots != null ? { max_slots: values.max_slots } : {}),
-        ...(values.max_priority_runs != null ? { max_priority_runs: values.max_priority_runs } : {}),
+        name: fName.trim(),
+        ...(fDate.trim() ? { date: fDate.trim() } : {}),
+        checkin_opens_at: new Date(fCheckinOpensAt).getTime(),
+        floor_trial_starts_at: new Date(fFloorStartsAt).getTime(),
+        floor_trial_ends_at: new Date(fFloorEndsAt).getTime(),
+        active_priority_max: priorityMaxNum,
+        active_non_priority_max: nonPriorityMaxNum,
         divisions,
       });
       toast.success("Session created");
       setSessionDialogOpen(false);
-      form.reset({
-        name: "",
-        date: "",
-        checkin_opens_at: "",
-        floor_trial_starts_at: "",
-        floor_trial_ends_at: "",
-        max_slots: 7,
-        max_priority_runs: 3,
-        divisions: [{ division_name: "Classic", is_priority: false }],
-      });
+      resetForm();
       load();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to create session");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create session");
+    } finally {
+      setSubmitting(false);
     }
-  });
+  };
 
   if (!id) {
     return <p className="text-muted-foreground">Missing event id.</p>;
@@ -233,162 +257,7 @@ export default function EventDetailPage() {
         </TabsList>
         <TabsContent value="sessions" className="space-y-4 mt-4">
           <div className="flex justify-end">
-            {isAdmin && (
-              <Dialog open={sessionDialogOpen} onOpenChange={setSessionDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button>New Session</Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>New session</DialogTitle>
-                  </DialogHeader>
-                  <Form {...form}>
-                    <form onSubmit={onCreateSession} className="space-y-4">
-                      <FormField
-                        control={form.control}
-                        name="name"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Name</FormLabel>
-                            <FormControl>
-                              <Input {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="date"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Date (optional)</FormLabel>
-                            <FormControl>
-                              <Input {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="checkin_opens_at"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Check-in opens</FormLabel>
-                            <FormControl>
-                              <Input type="datetime-local" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="floor_trial_starts_at"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Floor trial starts</FormLabel>
-                            <FormControl>
-                              <Input type="datetime-local" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="floor_trial_ends_at"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Floor trial ends</FormLabel>
-                            <FormControl>
-                              <Input type="datetime-local" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <div className="grid grid-cols-2 gap-3">
-                        <FormField
-                          control={form.control}
-                          name="max_slots"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Max slots</FormLabel>
-                              <FormControl>
-                                <Input type="number" min={1} {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="max_priority_runs"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Max priority runs</FormLabel>
-                              <FormControl>
-                                <Input type="number" min={0} {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <FormLabel>Divisions</FormLabel>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => append({ division_name: "", is_priority: false })}
-                          >
-                            Add division
-                          </Button>
-                        </div>
-                        {fields.map((f, index) => (
-                          <div key={f.id} className="flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-center">
-                            <FormField
-                              control={form.control}
-                              name={`divisions.${index}.division_name`}
-                              render={({ field }) => (
-                                <FormItem className="flex-1">
-                                  <FormControl>
-                                    <Input placeholder="Division name" {...field} />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={form.control}
-                              name={`divisions.${index}.is_priority`}
-                              render={({ field }) => (
-                                <FormItem className="flex flex-row items-center gap-2 space-y-0">
-                                  <FormControl>
-                                    <Switch checked={field.value} onCheckedChange={field.onChange} />
-                                  </FormControl>
-                                  <FormLabel className="font-normal">Priority division</FormLabel>
-                                </FormItem>
-                              )}
-                            />
-                            <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)}>
-                              Remove
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                      <DialogFooter>
-                        <Button type="submit">Create session</Button>
-                      </DialogFooter>
-                    </form>
-                  </Form>
-                </DialogContent>
-              </Dialog>
-            )}
+            {isAdmin && <Button onClick={openCreateDialog}>New Session</Button>}
           </div>
           {sessions?.length === 0 && (
             <p className="text-sm text-muted-foreground">No sessions for this event.</p>
@@ -404,7 +273,10 @@ export default function EventDetailPage() {
                 </CardHeader>
                 <CardContent className="text-sm text-muted-foreground space-y-1">
                   <p>Check-in: {formatTime(sess.checkin_opens_at)}</p>
-                  <p>Floor trial: {formatTime(sess.floor_trial_starts_at)} – {formatTime(sess.floor_trial_ends_at)}</p>
+                  <p>
+                    Floor trial: {formatTime(sess.floor_trial_starts_at)} –{" "}
+                    {formatTime(sess.floor_trial_ends_at)}
+                  </p>
                   <Separator className="my-2" />
                   <Button variant="link" className="px-0 h-auto" asChild>
                     <Link to={`/sessions/${sess.id}`}>Open session →</Link>
@@ -418,6 +290,155 @@ export default function EventDetailPage() {
           <p className="text-muted-foreground">Coming soon</p>
         </TabsContent>
       </Tabs>
+
+      {sessionDialogOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={closeCreateDialog}
+        >
+          <div
+            className="rounded-lg border bg-background p-6 shadow-lg max-w-lg w-full max-h-[90vh] overflow-y-auto space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">New session</h2>
+              <Button type="button" variant="ghost" size="sm" onClick={closeCreateDialog}>
+                ✕
+              </Button>
+            </div>
+            <form onSubmit={onSubmit} className="space-y-4">
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Name</label>
+                <input
+                  className={FIELD_INPUT_CLASS}
+                  value={fName}
+                  onChange={(e) => setFName(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Date (optional)</label>
+                <input
+                  className={FIELD_INPUT_CLASS}
+                  value={fDate}
+                  onChange={(e) => setFDate(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Check-in opens</label>
+                <input
+                  type="datetime-local"
+                  className={FIELD_INPUT_CLASS}
+                  value={fCheckinOpensAt}
+                  onChange={(e) => setFCheckinOpensAt(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Floor trial starts</label>
+                <input
+                  type="datetime-local"
+                  className={FIELD_INPUT_CLASS}
+                  value={fFloorStartsAt}
+                  onChange={(e) => setFFloorStartsAt(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Floor trial ends</label>
+                <input
+                  type="datetime-local"
+                  className={FIELD_INPUT_CLASS}
+                  value={fFloorEndsAt}
+                  onChange={(e) => setFFloorEndsAt(e.target.value)}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={FIELD_LABEL_CLASS}>Active cap (priority)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    className={FIELD_INPUT_CLASS}
+                    value={fPriorityMax}
+                    onChange={(e) => setFPriorityMax(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={FIELD_LABEL_CLASS}>Active cap (non-priority)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    className={FIELD_INPUT_CLASS}
+                    value={fNonPriorityMax}
+                    onChange={(e) => setFNonPriorityMax(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className={FIELD_LABEL_CLASS}>Divisions</label>
+                  <Button type="button" variant="outline" size="sm" onClick={addDivision}>
+                    Add division
+                  </Button>
+                </div>
+                {fDivisions.map((d, index) => (
+                  <div
+                    key={index}
+                    className="flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-center"
+                  >
+                    <input
+                      placeholder="Division name"
+                      className={`${FIELD_INPUT_CLASS} flex-1`}
+                      value={d.division_name}
+                      onChange={(e) => updateDivision(index, { division_name: e.target.value })}
+                    />
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={d.is_priority}
+                        onChange={(e) => updateDivision(index, { is_priority: e.target.checked })}
+                      />
+                      Priority
+                    </label>
+                    <div className="w-28 shrink-0">
+                      <label className="text-xs block mb-1">Priority runs (1..X)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        className={FIELD_INPUT_CLASS}
+                        value={d.priority_run_limit}
+                        onChange={(e) =>
+                          updateDivision(index, {
+                            priority_run_limit: Number(e.target.value) || 0,
+                          })
+                        }
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeDivision(index)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <Button type="submit" disabled={submitting}>
+                  {submitting ? "Creating..." : "Create session"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
