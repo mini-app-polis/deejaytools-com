@@ -1,3 +1,10 @@
+## [1.22.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.22.3...v1.22.4) (2026-04-26)
+
+
+### Bug Fixes
+
+* check in flow based off set up songs ([82f5590](https://github.com/mini-app-polis/deejaytools-com/commit/82f5590c205fa6c75f7c13aaa862117e0d9a098e))
+
 ## [1.22.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.22.2...v1.22.3) (2026-04-26)
 
 
