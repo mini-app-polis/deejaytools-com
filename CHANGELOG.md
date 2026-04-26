@@ -1,3 +1,10 @@
+## [1.22.6](https://github.com/mini-app-polis/deejaytools-com/compare/v1.22.5...v1.22.6) (2026-04-26)
+
+
+### Bug Fixes
+
+* showing queues ([dd65e51](https://github.com/mini-app-polis/deejaytools-com/commit/dd65e512120e2de9f49c20bac139834967b66940))
+
 ## [1.22.5](https://github.com/mini-app-polis/deejaytools-com/compare/v1.22.4...v1.22.5) (2026-04-26)
 
 
