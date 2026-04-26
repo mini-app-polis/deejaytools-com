@@ -1,3 +1,11 @@
+## [1.19.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.19.2...v1.19.3) (2026-04-26)
+
+
+### Bug Fixes
+
+* cast createServer to satisfy TypeScript overloaded signature ([0a4e8da](https://github.com/mini-app-polis/deejaytools-com/commit/0a4e8dac6d1f692493ea574968d8704eaa71cd26))
+* pre-drain request body via createAdaptorServer hook to avoid Railway Fastly timeout ([20b4ebc](https://github.com/mini-app-polis/deejaytools-com/commit/20b4ebc6e5718951cc4841be17f27dfbf5fcba26))
+
 ## [1.19.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.19.1...v1.19.2) (2026-04-26)
 
 
