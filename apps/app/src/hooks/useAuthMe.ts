@@ -48,7 +48,9 @@ export function useAuthMe() {
     void reload();
   }, [isLoaded, isSignedIn, reload]);
 
-  const loading = !isLoaded || fetching;
+  // Keep loading=true until we actually have a me record (or know user isn't signed in),
+  // otherwise AdminGuard can fire a redirect before the fetch even starts.
+  const loading = !isLoaded || fetching || (isSignedIn === true && me === null);
 
   return {
     me,

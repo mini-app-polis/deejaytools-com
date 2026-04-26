@@ -7,7 +7,6 @@ import pkg from "../../../../package.json";
 
 const NAV_ITEMS = [
   { to: "/events", label: "Events" },
-  { to: "/sessions", label: "Sessions" },
   { to: "/partners", label: "Partners" },
   { to: "/songs", label: "Songs" },
 ];
