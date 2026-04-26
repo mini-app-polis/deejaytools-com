@@ -164,8 +164,11 @@ async function buildAndUploadSong(
 
   const seasonYearStr = seasonYearFromTimestamp(Date.now());
 
-  const [countRow] = await db
-    .select({ c: sql<number>`count(*)::int` })
+  // Derive version from the highest _vN found in existing filenames so that
+  // deleted versions are still counted (e.g. if v1–v3 exist and v1/v2 are
+  // deleted, the next upload becomes v4, not v2).
+  const existingRows = await db
+    .select({ processedFilename: songs.processedFilename })
     .from(songs)
     .where(
       and(
@@ -176,7 +179,11 @@ async function buildAndUploadSong(
         ne(songs.id, song.id)
       )
     );
-  const version = (countRow?.c ?? 0) + 1;
+  const maxVersion = existingRows.reduce((max, row) => {
+    const match = row.processedFilename?.match(/_v(\d+)(?:\.[^.]*)?$/);
+    return match ? Math.max(max, parseInt(match[1], 10)) : max;
+  }, 0);
+  const version = maxVersion + 1;
 
   const userName =
     [userRow.firstName, userRow.lastName].filter(Boolean).join("") || userId;
@@ -210,7 +217,7 @@ async function buildAndUploadSong(
     sanitizeSegment(song.personalDescriptor),
   ].filter((s) => s.length > 0);
   const baseWithoutVersion = pathSegments.join("_");
-  const versionedStem = `${baseWithoutVersion}_v${version}`;
+  const versionedStem = `${baseWithoutVersion}_v${String(version).padStart(2, "0")}`;
   const extSegment = sanitizeSegment(originalParts.ext);
   const processedFilename = extSegment ? `${versionedStem}.${extSegment}` : versionedStem;
 
