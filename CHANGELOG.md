@@ -1,3 +1,10 @@
+# [1.19.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.18.2...v1.19.0) (2026-04-26)
+
+
+### Features
+
+* restoring song upload ([bd0e56b](https://github.com/mini-app-polis/deejaytools-com/commit/bd0e56b080a82f7c9ffefefae120a765ccc1a5e8))
+
 ## [1.18.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.18.1...v1.18.2) (2026-04-25)
 
 
