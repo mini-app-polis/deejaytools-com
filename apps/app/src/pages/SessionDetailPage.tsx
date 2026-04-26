@@ -39,6 +39,7 @@ type QueueRow = {
   notes: string | null;
   initialQueue: string;
   checkedInAt: number;
+  subQueue?: "priority" | "non_priority";
 };
 
 type LeadingPair = {
@@ -98,6 +99,7 @@ export default function SessionDetailPage() {
   const { user } = useUser();
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [active, setActive] = useState<QueueRow[]>([]);
+  const [waiting, setWaiting] = useState<QueueRow[]>([]);
   const [pairs, setPairs] = useState<LeadingPair[]>([]);
   const [songs, setSongs] = useState<SongRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -118,8 +120,12 @@ export default function SessionDetailPage() {
 
   const loadQueue = useCallback(async () => {
     if (!id) return;
-    const a = await api.get<QueueRow[]>(`/v1/queue/${id}/active`);
+    const [a, w] = await Promise.all([
+      api.get<QueueRow[]>(`/v1/queue/${id}/active`),
+      api.get<QueueRow[]>(`/v1/queue/${id}/waiting`),
+    ]);
     setActive(a);
+    setWaiting(w);
   }, [api, id]);
 
   const loadExtras = useCallback(async () => {
@@ -348,7 +354,7 @@ export default function SessionDetailPage() {
           <CardTitle>Upcoming</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          {upcoming.length === 0 && (
+          {upcoming.length === 0 && waiting.length === 0 && (
             <p className="text-sm text-muted-foreground">No upcoming slots.</p>
           )}
           {upcoming.map((r) => (
@@ -364,6 +370,33 @@ export default function SessionDetailPage() {
               </div>
             </div>
           ))}
+          {waiting.length > 0 && (
+            <>
+              {upcoming.length > 0 && (
+                <div className="flex items-center gap-2 py-1">
+                  <div className="flex-1 border-t border-dashed" />
+                  <span className="text-xs text-muted-foreground">Waiting</span>
+                  <div className="flex-1 border-t border-dashed" />
+                </div>
+              )}
+              {waiting.map((r, i) => (
+                <div
+                  key={r.queueEntryId}
+                  className="flex items-start gap-3 border rounded-md px-3 py-2.5 text-sm"
+                >
+                  <div className="space-y-0.5 min-w-0 flex-1">
+                    <p className="font-medium">#{i + 1} · {renderEntityLabel(r)}</p>
+                    <p className="text-muted-foreground truncate">
+                      {r.divisionName} · {renderSongLabel(r.songId)}
+                    </p>
+                  </div>
+                  {r.subQueue === "priority" && (
+                    <span className="text-xs text-primary font-medium shrink-0 mt-0.5">priority</span>
+                  )}
+                </div>
+              ))}
+            </>
+          )}
         </CardContent>
       </Card>
 

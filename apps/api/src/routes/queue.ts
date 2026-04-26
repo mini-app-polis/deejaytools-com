@@ -348,6 +348,23 @@ queueRoutes.get("/:sessionId/active", async (c) => {
   return c.json(success(data));
 });
 
+/**
+ * GET /v1/queue/:sessionId/waiting — public combined waiting queue (priority then non-priority).
+ * Returns entries tagged with their sub-queue so the UI can distinguish them.
+ */
+queueRoutes.get("/:sessionId/waiting", async (c) => {
+  const sessionId = c.req.param("sessionId");
+  const [priorityRows, nonPriorityRows] = await Promise.all([
+    listQueue(sessionId, "priority"),
+    listQueue(sessionId, "non_priority"),
+  ]);
+  const data = [
+    ...priorityRows.map((r) => ({ ...r, subQueue: "priority" as const })),
+    ...nonPriorityRows.map((r) => ({ ...r, subQueue: "non_priority" as const })),
+  ];
+  return c.json(success(data));
+});
+
 /** GET /v1/queue/:sessionId/priority */
 queueRoutes.get("/:sessionId/priority", requireAdmin, async (c) => {
   const sessionId = c.req.param("sessionId");
