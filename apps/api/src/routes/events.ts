@@ -3,9 +3,19 @@ import { EventStatusSchema } from "@deejaytools/schemas";
 import { zValidator } from "../lib/validate.js";
 import { Hono } from "hono";
 import { z } from "zod";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { events } from "../db/schema.js";
+import {
+  checkins,
+  eventDivisionRunLimits,
+  eventRegistrations,
+  events,
+  queueEntries,
+  queueEvents,
+  runs,
+  sessionDivisions,
+  sessions,
+} from "../db/schema.js";
 import { requireAdmin, requireAuth } from "../middleware/auth.js";
 
 const createEvent = z.object({
@@ -89,6 +99,36 @@ eventRoutes.delete("/:id", requireAdmin, async (c) => {
   if (!existing) {
     return c.json(CommonErrors.notFound("Event"), 404);
   }
-  await db.delete(events).where(eq(events.id, id));
+
+  await db.transaction(async (tx) => {
+    // Collect all session IDs for this event
+    const eventSessions = await tx
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(eq(sessions.eventId, id));
+    const sessionIds = eventSessions.map((s) => s.id);
+
+    if (sessionIds.length > 0) {
+      // Delete queue entries and queue events by session
+      await tx.delete(queueEntries).where(inArray(queueEntries.sessionId, sessionIds));
+      await tx.delete(queueEvents).where(inArray(queueEvents.sessionId, sessionIds));
+      // Delete runs by session
+      await tx.delete(runs).where(inArray(runs.sessionId, sessionIds));
+      // Delete checkins by session
+      await tx.delete(checkins).where(inArray(checkins.sessionId, sessionIds));
+      // Delete session divisions
+      await tx.delete(sessionDivisions).where(inArray(sessionDivisions.sessionId, sessionIds));
+      // Delete sessions
+      await tx.delete(sessions).where(inArray(sessions.id, sessionIds));
+    }
+
+    // Delete event-level children
+    await tx.delete(eventRegistrations).where(eq(eventRegistrations.eventId, id));
+    await tx.delete(eventDivisionRunLimits).where(eq(eventDivisionRunLimits.eventId, id));
+
+    // Finally delete the event
+    await tx.delete(events).where(eq(events.id, id));
+  });
+
   return c.json(success({ deleted: true }));
 });

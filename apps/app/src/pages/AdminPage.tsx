@@ -1,17 +1,9 @@
-import { EventStatusSchema, SessionStatusSchema } from "@deejaytools/schemas";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useApiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -141,7 +133,6 @@ export default function AdminPage() {
   const [evSubmitting, setEvSubmitting] = useState(false);
   const [evName, setEvName] = useState("");
   const [evDate, setEvDate] = useState("");
-  const [evStatus, setEvStatus] = useState("upcoming");
 
   // ── Sessions tab ────────────────────────────────────────────────────────────
   const [sessions, setSessions] = useState<SessionRow[] | null>(null);
@@ -264,16 +255,6 @@ export default function AdminPage() {
 
   // ── Event CRUD ──────────────────────────────────────────────────────────────
 
-  const patchEventStatus = async (id: string, status: string) => {
-    try {
-      const updated = await api.patch<EventRow>(`/v1/events/${id}`, { status });
-      toast.success("Event updated");
-      setEvents((prev) => prev?.map((e) => (e.id === id ? updated : e)) ?? null);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Update failed");
-    }
-  };
-
   const deleteEvent = async (id: string) => {
     if (!confirm("Delete this event?")) return;
     try {
@@ -288,19 +269,18 @@ export default function AdminPage() {
   const openEvDialog = () => {
     setEvName("");
     setEvDate("");
-    setEvStatus("upcoming");
     setEvDialogOpen(true);
   };
 
   const submitCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!evName.trim()) { toast.error("Name is required"); return; }
+    if (!evDate) { toast.error("Date is required"); return; }
     setEvSubmitting(true);
     try {
       const created = await api.post<EventRow>("/v1/events", {
         name: evName.trim(),
-        ...(evDate.trim() ? { date: evDate.trim() } : {}),
-        status: evStatus,
+        date: evDate,
       });
       toast.success("Event created");
       setEvDialogOpen(false);
@@ -313,16 +293,6 @@ export default function AdminPage() {
   };
 
   // ── Session CRUD ─────────────────────────────────────────────────────────────
-
-  const patchSessionStatus = async (id: string, status: string) => {
-    try {
-      const updated = await api.patch<SessionRow>(`/v1/sessions/${id}/status`, { status });
-      toast.success("Session updated");
-      setSessions((prev) => prev?.map((s) => (s.id === id ? { ...s, ...updated } : s)) ?? null);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Update failed");
-    }
-  };
 
   const resetSessForm = () => {
     setSessEventId(events?.[0]?.id ?? "");
@@ -451,14 +421,13 @@ export default function AdminPage() {
                     <TableHead>Name</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Change status</TableHead>
                     <TableHead className="w-[100px]" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {events?.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-muted-foreground">
+                      <TableCell colSpan={4} className="text-muted-foreground">
                         No events yet.
                       </TableCell>
                     </TableRow>
@@ -471,26 +440,7 @@ export default function AdminPage() {
                     >
                       <TableCell className="font-medium">{ev.name}</TableCell>
                       <TableCell>{ev.date ?? "—"}</TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        {eventStatusBadge(ev.status)}
-                      </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <Select
-                          value={ev.status}
-                          onValueChange={(v) => patchEventStatus(ev.id, v)}
-                        >
-                          <SelectTrigger className="w-[160px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {EventStatusSchema.options.map((s) => (
-                              <SelectItem key={s} value={s}>
-                                {s}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
+                      <TableCell>{eventStatusBadge(ev.status)}</TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <Button
                           variant="destructive"
@@ -523,7 +473,7 @@ export default function AdminPage() {
                     <TableHead>Name</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Check-in opens</TableHead>
-                    <TableHead>Change status</TableHead>
+                    <TableHead>Floor trial ends</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -535,36 +485,18 @@ export default function AdminPage() {
                     </TableRow>
                   )}
                   {sessions?.map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell className="font-medium">
-                        <Button
-                          variant="link"
-                          className="px-0 h-auto"
-                          onClick={() => navigate(`/sessions/${s.id}`)}
-                        >
-                          {s.name}
-                        </Button>
-                      </TableCell>
+                    <TableRow
+                      key={s.id}
+                      className="cursor-pointer"
+                      onClick={() => navigate(`/sessions/${s.id}`)}
+                    >
+                      <TableCell className="font-medium">{s.name}</TableCell>
                       <TableCell>{sessionStatusBadge(s.status)}</TableCell>
                       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                         {formatTime(s.checkin_opens_at)}
                       </TableCell>
-                      <TableCell>
-                        <Select
-                          value={s.status}
-                          onValueChange={(v) => patchSessionStatus(s.id, v)}
-                        >
-                          <SelectTrigger className="w-[180px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {SessionStatusSchema.options.map((st) => (
-                              <SelectItem key={st} value={st}>
-                                {st}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                        {formatTime(s.floor_trial_ends_at)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -806,25 +738,14 @@ export default function AdminPage() {
                 />
               </div>
               <div>
-                <label className={FIELD_LABEL_CLASS}>Date (optional)</label>
+                <label className={FIELD_LABEL_CLASS}>Date</label>
                 <input
+                  type="date"
                   className={FIELD_INPUT_CLASS}
-                  placeholder="e.g. March 15, 2026"
                   value={evDate}
                   onChange={(e) => setEvDate(e.target.value)}
+                  required
                 />
-              </div>
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Status</label>
-                <select
-                  className={FIELD_INPUT_CLASS}
-                  value={evStatus}
-                  onChange={(e) => setEvStatus(e.target.value)}
-                >
-                  {EventStatusSchema.options.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
               </div>
               <Button type="submit" disabled={evSubmitting} size="lg" className="w-full">
                 {evSubmitting ? "Creating…" : "Create event"}
