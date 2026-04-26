@@ -1,3 +1,11 @@
+## [1.22.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.22.2...v1.22.3) (2026-04-26)
+
+
+### Bug Fixes
+
+* tests update ([dc86f0a](https://github.com/mini-app-polis/deejaytools-com/commit/dc86f0a1dbfe2a4f9b09b59bde8b29d7dd88be67))
+* updating stale process ([fcf5f79](https://github.com/mini-app-polis/deejaytools-com/commit/fcf5f79a53c9feaeb63445d3bc551d1f378e119c))
+
 ## [1.22.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.22.1...v1.22.2) (2026-04-26)
 
 
