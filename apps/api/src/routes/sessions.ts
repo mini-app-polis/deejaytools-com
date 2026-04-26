@@ -1,20 +1,23 @@
 import { CommonErrors, error, success, successList } from "common-typescript-utils";
 import { SessionStatusSchema } from "@deejaytools/schemas";
-import { zValidator } from "../lib/validate.js";
+import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
-import { and, asc, count, desc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { checkins, pairs, queueEntries, sessionDivisions, sessions } from "../db/schema.js";
+import {
+  checkins,
+  floorSlots,
+  sessionDivisions,
+  sessions,
+} from "../db/schema.js";
 import { getOptionalSyncedUserId } from "../lib/optional-user.js";
-import { sessionOverlapsInEvent } from "../lib/sessions/overlap.js";
 import { requireAdmin } from "../middleware/auth.js";
 
 const divisionItemSchema = z.object({
   division_name: z.string(),
   is_priority: z.boolean().optional(),
   sort_order: z.number().int().optional(),
-  priority_run_limit: z.number().int().min(0).optional(),
 });
 
 const createSessionBody = z.object({
@@ -24,8 +27,8 @@ const createSessionBody = z.object({
   checkin_opens_at: z.number(),
   floor_trial_starts_at: z.number(),
   floor_trial_ends_at: z.number(),
-  active_priority_max: z.number().int().min(0).optional(),
-  active_non_priority_max: z.number().int().min(0).optional(),
+  max_slots: z.number().int().min(1).optional(),
+  max_priority_runs: z.number().int().min(0).optional(),
   divisions: z.array(divisionItemSchema),
 });
 
@@ -36,8 +39,8 @@ const patchSessionBody = z.object({
   checkin_opens_at: z.number().optional(),
   floor_trial_starts_at: z.number().optional(),
   floor_trial_ends_at: z.number().optional(),
-  active_priority_max: z.number().int().min(0).optional(),
-  active_non_priority_max: z.number().int().min(0).optional(),
+  max_slots: z.number().int().min(1).optional(),
+  max_priority_runs: z.number().int().min(0).optional(),
 });
 
 const putDivisionsBody = z.object({
@@ -66,8 +69,8 @@ function mapSessionBase(row: SessionRow) {
     checkin_opens_at: row.checkinOpensAt,
     floor_trial_starts_at: row.floorTrialStartsAt,
     floor_trial_ends_at: row.floorTrialEndsAt,
-    active_priority_max: row.activePriorityMax,
-    active_non_priority_max: row.activeNonPriorityMax,
+    max_slots: row.maxSlots,
+    max_priority_runs: row.maxPriorityRuns,
     status: row.status,
     created_by: row.createdBy,
     created_at: row.createdAt,
@@ -80,52 +83,23 @@ function mapDivision(d: DivisionRow) {
     division_name: d.divisionName,
     is_priority: d.isPriority,
     sort_order: d.sortOrder,
-    priority_run_limit: d.priorityRunLimit,
   };
 }
 
-async function loadQueueDepthsForSession(sessionId: string) {
-  const rows = await db
-    .select({
-      queueType: queueEntries.queueType,
-      c: count(),
-    })
-    .from(queueEntries)
-    .where(eq(queueEntries.sessionId, sessionId))
-    .groupBy(queueEntries.queueType);
-  const depth = { priority: 0, non_priority: 0, active: 0 };
-  for (const r of rows) {
-    const n = Number(r.c ?? 0);
-    if (r.queueType === "priority") depth.priority = n;
-    else if (r.queueType === "non_priority") depth.non_priority = n;
-    else if (r.queueType === "active") depth.active = n;
-  }
-  return depth;
-}
-
-async function loadQueueDepthsForSessions(sessionIds: string[]) {
-  const map = new Map<string, { priority: number; non_priority: number; active: number }>();
-  if (sessionIds.length === 0) return map;
-  for (const id of sessionIds) {
-    map.set(id, { priority: 0, non_priority: 0, active: 0 });
-  }
-  const rows = await db
-    .select({
-      sessionId: queueEntries.sessionId,
-      queueType: queueEntries.queueType,
-      c: count(),
-    })
-    .from(queueEntries)
-    .where(inArray(queueEntries.sessionId, sessionIds))
-    .groupBy(queueEntries.sessionId, queueEntries.queueType);
+function buildQueueDepthMap(
+  rows: { sessionId: string | null; queueType: string; c: bigint | number }[]
+): Map<string, { priority: number; standard: number }> {
+  const map = new Map<string, { priority: number; standard: number }>();
   for (const r of rows) {
     if (!r.sessionId) continue;
-    const e = map.get(r.sessionId);
-    if (!e) continue;
+    let e = map.get(r.sessionId);
+    if (!e) {
+      e = { priority: 0, standard: 0 };
+      map.set(r.sessionId, e);
+    }
     const n = Number(r.c ?? 0);
     if (r.queueType === "priority") e.priority = n;
-    else if (r.queueType === "non_priority") e.non_priority = n;
-    else if (r.queueType === "active") e.active = n;
+    else if (r.queueType === "standard") e.standard = n;
   }
   return map;
 }
@@ -138,6 +112,7 @@ async function loadDivisionsForSession(sessionId: string): Promise<DivisionRow[]
     .orderBy(asc(sessionDivisions.sortOrder));
 }
 
+/** Batch-load divisions for many sessions; grouped in session order. */
 async function loadDivisionsForSessions(sessionIds: string[]): Promise<Map<string, DivisionRow[]>> {
   const map = new Map<string, DivisionRow[]>();
   if (sessionIds.length === 0) return map;
@@ -154,6 +129,25 @@ async function loadDivisionsForSessions(sessionIds: string[]): Promise<Map<strin
     map.get(row.sessionId)?.push(row);
   }
   return map;
+}
+
+async function queueDepthForSession(sessionId: string) {
+  const rows = await db
+    .select({
+      queueType: checkins.queueType,
+      c: count(),
+    })
+    .from(checkins)
+    .where(
+      and(
+        eq(checkins.sessionId, sessionId),
+        inArray(checkins.status, ["waiting", "on_deck"])
+      )
+    )
+    .groupBy(checkins.queueType);
+  return buildQueueDepthMap(
+    rows.map((r) => ({ sessionId: sessionId, queueType: r.queueType, c: r.c }))
+  ).get(sessionId) ?? { priority: 0, standard: 0 };
 }
 
 sessionRoutes.get("/", zValidator("query", listQuery), async (c) => {
@@ -173,30 +167,44 @@ sessionRoutes.get("/", zValidator("query", listQuery), async (c) => {
 
   const sessionIds = rows.map((r) => r.id);
   const divisionsBySession = await loadDivisionsForSessions(sessionIds);
-  const queueMap = await loadQueueDepthsForSessions(sessionIds);
+
+  let queueMap = new Map<string, { priority: number; standard: number }>();
+  if (sessionIds.length > 0) {
+    const qRows = await db
+      .select({
+        sessionId: checkins.sessionId,
+        queueType: checkins.queueType,
+        c: count(),
+      })
+      .from(checkins)
+      .where(
+        and(
+          inArray(checkins.sessionId, sessionIds),
+          inArray(checkins.status, ["waiting", "on_deck"])
+        )
+      )
+      .groupBy(checkins.sessionId, checkins.queueType);
+    queueMap = buildQueueDepthMap(qRows);
+  }
 
   let activeSet = new Set<string>();
   if (userId && sessionIds.length > 0) {
-    const userPairs = await db.select({ id: pairs.id }).from(pairs).where(eq(pairs.userAId, userId));
-    const pairIds = userPairs.map((p) => p.id);
-    const liveParts = [
-      eq(checkins.entitySoloUserId, userId),
-      eq(checkins.submittedByUserId, userId),
-    ];
-    if (pairIds.length > 0) {
-      liveParts.push(inArray(checkins.entityPairId, pairIds));
-    }
-    const live = await db
-      .select({ sessionId: queueEntries.sessionId })
-      .from(queueEntries)
-      .innerJoin(checkins, eq(checkins.id, queueEntries.checkinId))
-      .where(and(inArray(queueEntries.sessionId, sessionIds), or(...liveParts)));
-    activeSet = new Set(live.map((l) => l.sessionId!).filter(Boolean));
+    const actives = await db
+      .select({ sessionId: checkins.sessionId })
+      .from(checkins)
+      .where(
+        and(
+          inArray(checkins.sessionId, sessionIds),
+          eq(checkins.submittedByUserId, userId),
+          inArray(checkins.status, ["waiting", "on_deck", "running"])
+        )
+      );
+    activeSet = new Set(actives.map((a) => a.sessionId));
   }
 
   const results = rows.map((row) => {
     const divs = (divisionsBySession.get(row.id) ?? []).map(mapDivision);
-    const depth = queueMap.get(row.id) ?? { priority: 0, non_priority: 0, active: 0 };
+    const depth = queueMap.get(row.id) ?? { priority: 0, standard: 0 };
     const base = {
       ...mapSessionBase(row),
       divisions: divs,
@@ -214,8 +222,8 @@ sessionRoutes.post("/", requireAdmin, zValidator("json", createSessionBody), asy
   const uid = c.get("user").userId;
   const now = Date.now();
   const id = crypto.randomUUID();
-  const activePriorityMax = body.active_priority_max ?? 6;
-  const activeNonPriorityMax = body.active_non_priority_max ?? 4;
+  const maxSlots = body.max_slots ?? 7;
+  const maxPriorityRuns = body.max_priority_runs ?? 3;
 
   if (
     !body.name.trim() ||
@@ -231,43 +239,31 @@ sessionRoutes.post("/", requireAdmin, zValidator("json", createSessionBody), asy
     );
   }
 
-  if (activeNonPriorityMax > activePriorityMax) {
-    return c.json(
-      CommonErrors.badRequest("active_non_priority_max must be <= active_priority_max"),
-      400
-    );
-  }
-
-  const eventId = body.event_id ?? null;
-  if (eventId) {
-    const overlaps = await sessionOverlapsInEvent({
-      eventId,
-      startTime: body.floor_trial_starts_at,
-      endTime: body.floor_trial_ends_at,
-    });
-    if (overlaps) {
-      return c.json(
-        CommonErrors.badRequest("Session floor-trial window overlaps another session in this event"),
-        400
-      );
-    }
-  }
-
   await db.transaction(async (tx) => {
     await tx.insert(sessions).values({
       id,
-      eventId,
+      eventId: body.event_id ?? null,
       name: body.name.trim(),
       date: body.date ?? null,
       checkinOpensAt: body.checkin_opens_at,
       floorTrialStartsAt: body.floor_trial_starts_at,
       floorTrialEndsAt: body.floor_trial_ends_at,
-      activePriorityMax,
-      activeNonPriorityMax,
+      maxSlots,
+      maxPriorityRuns,
       status: "scheduled",
       createdBy: uid,
       createdAt: now,
     });
+
+    for (let slotNumber = 1; slotNumber <= maxSlots; slotNumber++) {
+      await tx.insert(floorSlots).values({
+        id: crypto.randomUUID(),
+        sessionId: id,
+        slotNumber,
+        checkinId: null,
+        assignedAt: now,
+      });
+    }
 
     for (let i = 0; i < body.divisions.length; i++) {
       const d = body.divisions[i]!;
@@ -275,13 +271,11 @@ sessionRoutes.post("/", requireAdmin, zValidator("json", createSessionBody), asy
       if (!name || name === "Other") continue;
       const isPriority = d.is_priority ?? false;
       const sortOrder = d.sort_order ?? i;
-      const priorityRunLimit = d.priority_run_limit ?? 0;
       await tx.insert(sessionDivisions).values({
         id: crypto.randomUUID(),
         sessionId: id,
         divisionName: name,
         isPriority,
-        priorityRunLimit,
         sortOrder,
       });
     }
@@ -289,7 +283,7 @@ sessionRoutes.post("/", requireAdmin, zValidator("json", createSessionBody), asy
 
   const [created] = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1);
   const divs = (await loadDivisionsForSession(id)).map(mapDivision);
-  const depth = await loadQueueDepthsForSession(id);
+  const depth = await queueDepthForSession(id);
   return c.json(
     success({
       ...mapSessionBase(created!),
@@ -321,13 +315,11 @@ sessionRoutes.put(
         if (!name || name === "Other") continue;
         const isPriority = d.is_priority ?? false;
         const sortOrder = d.sort_order ?? i;
-        const priorityRunLimit = d.priority_run_limit ?? 0;
         await tx.insert(sessionDivisions).values({
           id: crypto.randomUUID(),
           sessionId: id,
           divisionName: name,
           isPriority,
-          priorityRunLimit,
           sortOrder,
         });
       }
@@ -335,7 +327,7 @@ sessionRoutes.put(
 
     const [row] = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1);
     const divs = (await loadDivisionsForSession(id)).map(mapDivision);
-    const depth = await loadQueueDepthsForSession(id);
+    const depth = await queueDepthForSession(id);
     return c.json(
       success({
         ...mapSessionBase(row!),
@@ -356,7 +348,7 @@ sessionRoutes.patch("/:id/status", requireAdmin, zValidator("json", statusBody),
   await db.update(sessions).set({ status }).where(eq(sessions.id, id));
   const [row] = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1);
   const divs = (await loadDivisionsForSession(id)).map(mapDivision);
-  const depth = await loadQueueDepthsForSession(id);
+  const depth = await queueDepthForSession(id);
   return c.json(
     success({
       ...mapSessionBase(row!),
@@ -385,44 +377,8 @@ sessionRoutes.patch("/:id", requireAdmin, zValidator("json", patchSessionBody), 
   if (body.floor_trial_ends_at !== undefined) {
     updates.floorTrialEndsAt = body.floor_trial_ends_at;
   }
-  if (body.active_priority_max !== undefined) updates.activePriorityMax = body.active_priority_max;
-  if (body.active_non_priority_max !== undefined) {
-    updates.activeNonPriorityMax = body.active_non_priority_max;
-  }
-
-  const nextEventId = body.event_id !== undefined ? body.event_id : existing.eventId;
-  const nextStart =
-    body.floor_trial_starts_at !== undefined
-      ? body.floor_trial_starts_at
-      : existing.floorTrialStartsAt;
-  const nextEnd =
-    body.floor_trial_ends_at !== undefined ? body.floor_trial_ends_at : existing.floorTrialEndsAt;
-
-  if (updates.activePriorityMax !== undefined || updates.activeNonPriorityMax !== undefined) {
-    const apm = updates.activePriorityMax ?? existing.activePriorityMax;
-    const anpm = updates.activeNonPriorityMax ?? existing.activeNonPriorityMax;
-    if (anpm > apm) {
-      return c.json(
-        CommonErrors.badRequest("active_non_priority_max must be <= active_priority_max"),
-        400
-      );
-    }
-  }
-
-  if (nextEventId) {
-    const overlaps = await sessionOverlapsInEvent({
-      eventId: nextEventId,
-      startTime: nextStart,
-      endTime: nextEnd,
-      excludeSessionId: id,
-    });
-    if (overlaps) {
-      return c.json(
-        CommonErrors.badRequest("Session floor-trial window overlaps another session in this event"),
-        400
-      );
-    }
-  }
+  if (body.max_slots !== undefined) updates.maxSlots = body.max_slots;
+  if (body.max_priority_runs !== undefined) updates.maxPriorityRuns = body.max_priority_runs;
 
   if (Object.keys(updates).length > 0) {
     await db.update(sessions).set(updates).where(eq(sessions.id, id));
@@ -430,7 +386,7 @@ sessionRoutes.patch("/:id", requireAdmin, zValidator("json", patchSessionBody), 
 
   const [row] = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1);
   const divs = (await loadDivisionsForSession(id)).map(mapDivision);
-  const depth = await loadQueueDepthsForSession(id);
+  const depth = await queueDepthForSession(id);
   return c.json(
     success({
       ...mapSessionBase(row!),
@@ -463,6 +419,8 @@ sessionRoutes.delete("/:id", requireAdmin, async (c) => {
   }
 
   await db.transaction(async (tx) => {
+    await tx.update(floorSlots).set({ checkinId: null }).where(eq(floorSlots.sessionId, id));
+    await tx.delete(floorSlots).where(eq(floorSlots.sessionId, id));
     await tx.delete(sessionDivisions).where(eq(sessionDivisions.sessionId, id));
     await tx.delete(sessions).where(eq(sessions.id, id));
   });
@@ -478,30 +436,26 @@ sessionRoutes.get("/:id", async (c) => {
   }
 
   const divs = (await loadDivisionsForSession(id)).map(mapDivision);
-  const depth = await loadQueueDepthsForSession(id);
+  const depth = await queueDepthForSession(id);
 
   const userId = await getOptionalSyncedUserId(c);
   let has_active_checkin: boolean | undefined;
   let active_checkin_division: string | undefined;
   if (userId) {
-    const userPairs = await db.select({ id: pairs.id }).from(pairs).where(eq(pairs.userAId, userId));
-    const pairIds = userPairs.map((p) => p.id);
-    const parts = [
-      eq(checkins.entitySoloUserId, userId),
-      eq(checkins.submittedByUserId, userId),
-    ];
-    if (pairIds.length > 0) parts.push(inArray(checkins.entityPairId, pairIds));
-
-    const [hit] = await db
-      .select({ divisionName: checkins.divisionName })
-      .from(queueEntries)
-      .innerJoin(checkins, eq(checkins.id, queueEntries.checkinId))
-      .where(and(eq(queueEntries.sessionId, id), or(...parts)))
+    const [active] = await db
+      .select({ division: checkins.division })
+      .from(checkins)
+      .where(
+        and(
+          eq(checkins.sessionId, id),
+          eq(checkins.submittedByUserId, userId),
+          inArray(checkins.status, ["waiting", "on_deck", "running"])
+        )
+      )
       .limit(1);
-
-    if (hit) {
+    if (active) {
       has_active_checkin = true;
-      active_checkin_division = hit.divisionName;
+      active_checkin_division = active.division;
     } else {
       has_active_checkin = false;
     }

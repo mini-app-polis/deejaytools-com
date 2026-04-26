@@ -1,17 +1,5 @@
-/**
- * Legacy songs — read-only, intentionally public.
- *
- * This module exposes a read-only view of the historical song catalog
- * (pre-routine-system data imported from the legacy platform). No auth
- * is required because the data is already public on the marketing site
- * and includes no personally identifiable information — just
- * partnership names, division, and routine metadata.
- *
- * If this ever becomes writable or starts exposing user data, add
- * `requireAuth` middleware like the other /v1 route modules.
- */
 import { createLogger, successList } from "common-typescript-utils";
-import { zValidator } from "../lib/validate.js";
+import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
 import { and, eq, ilike, or } from "drizzle-orm";

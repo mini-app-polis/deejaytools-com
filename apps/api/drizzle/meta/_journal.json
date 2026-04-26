@@ -22,13 +22,6 @@
       "when": 1774914981746,
       "tag": "0002_legacy_songs",
       "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1774914982000,
-      "tag": "0003_floor_trial_queue_model",
-      "breakpoints": true
     }
   ]
 }

@@ -27,22 +27,7 @@ export const CheckinStatusSchema = z.enum([
   "withdrawn",
 ]);
 
-export const QueueTypeSchema = z.enum(["priority", "non_priority", "active"]);
-
-export const createCheckinBodySchema = z
-  .object({
-    sessionId: z.string().min(1),
-    divisionName: z.string().min(1),
-    entityPairId: z.string().nullish(),
-    entitySoloUserId: z.string().nullish(),
-    songId: z.string().min(1),
-    notes: z.string().nullish(),
-    eventRegistrationId: z.string().nullish(),
-  })
-  .refine(
-    (b) => Boolean(b.entityPairId) !== Boolean(b.entitySoloUserId),
-    { message: "Exactly one of entityPairId / entitySoloUserId" }
-  );
+export const QueueTypeSchema = z.enum(["priority", "standard"]);
 
 export const EventStatusSchema = z.enum([
   "upcoming",

@@ -7,6 +7,7 @@ import {
   assertValidation400,
   adminHeaders,
   type ErrorEnvelope,
+  type HonoZodFailureBody,
   readJson,
   type SuccessEnvelope,
 } from "../test/helpers.js";
@@ -37,8 +38,8 @@ const mockSession = {
   checkinOpensAt: futureTime,
   floorTrialStartsAt: futureTime + 1000,
   floorTrialEndsAt: futureTime + 7200000,
-  activePriorityMax: 6,
-  activeNonPriorityMax: 4,
+  maxSlots: 7,
+  maxPriorityRuns: 3,
   status: "scheduled" as const,
   createdBy: "user_admin123",
   createdAt: Date.now(),
@@ -87,7 +88,7 @@ describe("POST /v1/sessions", () => {
       body: JSON.stringify({ name: "Test Session" }),
     });
     expect(res.status).toBe(400);
-    assertValidation400(await readJson<ErrorEnvelope>(res));
+    assertValidation400(await readJson<HonoZodFailureBody>(res));
   });
 
   it("creates session and returns 201", async () => {
@@ -144,7 +145,7 @@ describe("PATCH /v1/sessions/:id/status", () => {
       body: JSON.stringify({ status: "invalid_status" }),
     });
     expect(res.status).toBe(400);
-    assertValidation400(await readJson<ErrorEnvelope>(res));
+    assertValidation400(await readJson<HonoZodFailureBody>(res));
   });
 });
 

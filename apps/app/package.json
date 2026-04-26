@@ -5,12 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "pnpm --filter @deejaytools/schemas build && vite build",
+    "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "pnpm --filter @deejaytools/schemas build && tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint src",
-    "test": "vitest run --passWithNoTests",
-    "test:coverage": "vitest run --coverage --passWithNoTests"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.20.0",
@@ -26,7 +25,6 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tabs": "^1.1.13",
-    "@sentry/react": "^10.49.0",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "@vitejs/plugin-react": "^4.3.4",
@@ -50,7 +48,6 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^2.1.8",
     "vitest": "^2.1.8"
   }
 }
