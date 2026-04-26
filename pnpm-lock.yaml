@@ -48,7 +48,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/schemas
       '@hono/node-server':
-        specifier: 1.13.7
+        specifier: ^1.13.7
         version: 1.13.7(hono@4.6.14)
       '@hono/zod-validator':
         specifier: ^0.4.2
@@ -81,7 +81,7 @@ importers:
         specifier: ^171.4.0
         version: 171.4.0
       hono:
-        specifier: 4.6.14
+        specifier: ^4.6.14
         version: 4.6.14
       multer:
         specifier: ^2.1.1
