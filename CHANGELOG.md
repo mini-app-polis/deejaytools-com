@@ -1,3 +1,10 @@
+## [1.19.5](https://github.com/mini-app-polis/deejaytools-com/compare/v1.19.4...v1.19.5) (2026-04-26)
+
+
+### Bug Fixes
+
+* upload process hardening ([4ecc555](https://github.com/mini-app-polis/deejaytools-com/commit/4ecc555d370a233822dac370c221fe5b78d1c21b))
+
 ## [1.19.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.19.3...v1.19.4) (2026-04-26)
 
 
