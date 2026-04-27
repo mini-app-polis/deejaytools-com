@@ -81,6 +81,18 @@ type SongRow = {
   processed_filename?: string | null;
 };
 
+type TestInjection = {
+  pair_id: string;
+  created_at: number;
+  leader_name: string;
+  follower_name: string | null;
+  session_id: string | null;
+  session_name: string | null;
+  division_name: string | null;
+  queue_status: "active" | "priority" | "non_priority" | "off_queue";
+  position: number | null;
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function eventStatusBadge(status: string) {
@@ -178,6 +190,18 @@ export default function AdminPage() {
   const lqSessionRef = useRef(lqSessionId);
   lqSessionRef.current = lqSessionId;
 
+  // ── Test injection tab ──────────────────────────────────────────────────────
+  const [tiSessionId, setTiSessionId] = useState("");
+  const [tiDivision, setTiDivision] = useState<string>(DIVISION_OPTIONS[0]);
+  const [tiLeaderFirst, setTiLeaderFirst] = useState("");
+  const [tiLeaderLast, setTiLeaderLast] = useState("");
+  const [tiFollowerFirst, setTiFollowerFirst] = useState("");
+  const [tiFollowerLast, setTiFollowerLast] = useState("");
+  const [tiNotes, setTiNotes] = useState("");
+  const [tiSubmitting, setTiSubmitting] = useState(false);
+  const [tiData, setTiData] = useState<TestInjection[] | null>(null);
+  const [tiDeleting, setTiDeleting] = useState(false);
+
   // ── Data loaders ────────────────────────────────────────────────────────────
 
   const loadEvents = useCallback(() => {
@@ -229,11 +253,21 @@ export default function AdminPage() {
     setLqSongs(songs);
   }, [api]);
 
+  const loadTestInjections = useCallback(async () => {
+    try {
+      const data = await api.get<TestInjection[]>("/v1/admin/checkins/test");
+      setTiData(data);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load test data");
+    }
+  }, [api]);
+
   useEffect(() => {
     loadEvents();
     loadSessions();
     void loadLqExtras().catch(() => {});
-  }, [loadEvents, loadSessions, loadLqExtras]);
+    void loadTestInjections().catch(() => {});
+  }, [loadEvents, loadSessions, loadLqExtras, loadTestInjections]);
 
   // Auto-refresh live queue every 8 s when a session is selected
   useEffect(() => {
@@ -441,6 +475,93 @@ export default function AdminPage() {
   const handlePromote = (queueEntryId: string) =>
     queueAction("/v1/queue/promote", { queueEntryId });
 
+  // ── Test injection ──────────────────────────────────────────────────────────
+
+  const submitTestInjection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tiSessionId) { toast.error("Select a session"); return; }
+    if (!tiDivision) { toast.error("Select a division"); return; }
+    if (!tiLeaderFirst.trim() || !tiLeaderLast.trim()) {
+      toast.error("Leader first and last name are required");
+      return;
+    }
+    if (!tiFollowerFirst.trim() || !tiFollowerLast.trim()) {
+      toast.error("Follower first and last name are required");
+      return;
+    }
+
+    setTiSubmitting(true);
+    try {
+      const result = await api.post<{
+        id: string;
+        sessionId: string;
+        divisionName: string;
+        initialQueue: "priority" | "non_priority";
+        pair: { id: string; partner_b_id: string | null; display_name: string };
+      }>("/v1/admin/checkins", {
+        sessionId: tiSessionId,
+        divisionName: tiDivision,
+        leaderFirstName: tiLeaderFirst.trim(),
+        leaderLastName: tiLeaderLast.trim(),
+        followerFirstName: tiFollowerFirst.trim(),
+        followerLastName: tiFollowerLast.trim(),
+        notes: tiNotes.trim() || undefined,
+      });
+
+      // Append the synthetic pair to the local map so the queue tab renders
+      // the leader/follower name correctly when the same session is viewed.
+      setLqPairs((prev) => [...prev, result.pair]);
+
+      toast.success(
+        `Injected into ${result.initialQueue === "priority" ? "priority" : "non-priority"} queue`
+      );
+
+      // If the user is currently viewing this session's live queue, refresh it.
+      if (lqSessionRef.current === tiSessionId) {
+        void loadLiveQueues(tiSessionId).catch(() => {});
+      }
+
+      // Reset only the names so the same session/division stay selected for repeat injects.
+      setTiLeaderFirst("");
+      setTiLeaderLast("");
+      setTiFollowerFirst("");
+      setTiFollowerLast("");
+      setTiNotes("");
+
+      void loadTestInjections().catch(() => {});
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Injection failed");
+    } finally {
+      setTiSubmitting(false);
+    }
+  };
+
+  const deleteAllTestData = async () => {
+    if (!tiData || tiData.length === 0) return;
+    if (
+      !confirm(
+        `Delete all ${tiData.length} test injection${tiData.length === 1 ? "" : "s"}? This will remove the synthetic users, partners, pairs, check-ins, and queue entries created by test injection. This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setTiDeleting(true);
+    const expectedCount = tiData.length;
+    try {
+      await api.del("/v1/admin/checkins/test");
+      toast.success(`Deleted ${expectedCount} test injection${expectedCount === 1 ? "" : "s"}`);
+      setTiData([]);
+      // Refresh queue display if a session is currently being viewed.
+      if (lqSessionRef.current) {
+        void loadLiveQueues(lqSessionRef.current).catch(() => {});
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setTiDeleting(false);
+    }
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
@@ -452,6 +573,7 @@ export default function AdminPage() {
           <TabsTrigger value="events">Events</TabsTrigger>
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
           <TabsTrigger value="queue">Live Queue</TabsTrigger>
+          <TabsTrigger value="inject">Test Inject</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
         </TabsList>
 
@@ -755,6 +877,172 @@ export default function AdminPage() {
 
             </div>
           )}
+        </TabsContent>
+
+        {/* ── Test Inject tab ── */}
+        <TabsContent value="inject" className="mt-4 space-y-4">
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+            Testing-only bypass. Creates throwaway user/partner/pair rows and uses a placeholder song.
+            Skips the check-in time window. Each submission adds one entry to the selected session's queue.
+          </div>
+          <form onSubmit={submitTestInjection} className="space-y-4 max-w-lg">
+            <div>
+              <label className={FIELD_LABEL_CLASS}>Session</label>
+              <select
+                className={FIELD_INPUT_CLASS}
+                value={tiSessionId}
+                onChange={(e) => setTiSessionId(e.target.value)}
+              >
+                <option value="">Select a session…</option>
+                {sessions?.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={FIELD_LABEL_CLASS}>Division</label>
+              <select
+                className={FIELD_INPUT_CLASS}
+                value={tiDivision}
+                onChange={(e) => setTiDivision(e.target.value)}
+              >
+                {DIVISION_OPTIONS.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Leader first name</label>
+                <input
+                  className={FIELD_INPUT_CLASS}
+                  value={tiLeaderFirst}
+                  onChange={(e) => setTiLeaderFirst(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Leader last name</label>
+                <input
+                  className={FIELD_INPUT_CLASS}
+                  value={tiLeaderLast}
+                  onChange={(e) => setTiLeaderLast(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Follower first name</label>
+                <input
+                  className={FIELD_INPUT_CLASS}
+                  value={tiFollowerFirst}
+                  onChange={(e) => setTiFollowerFirst(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Follower last name</label>
+                <input
+                  className={FIELD_INPUT_CLASS}
+                  value={tiFollowerLast}
+                  onChange={(e) => setTiFollowerLast(e.target.value)}
+                />
+              </div>
+            </div>
+            <div>
+              <label className={FIELD_LABEL_CLASS}>Notes (optional)</label>
+              <input
+                className={FIELD_INPUT_CLASS}
+                value={tiNotes}
+                onChange={(e) => setTiNotes(e.target.value)}
+                placeholder="e.g. test priority promotion"
+              />
+            </div>
+            <Button type="submit" disabled={tiSubmitting} size="lg" className="w-full sm:w-auto">
+              {tiSubmitting ? "Injecting…" : "Inject check-in"}
+            </Button>
+          </form>
+
+          {/* Existing test data */}
+          <section className="space-y-3 pt-2">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <h2 className="text-base font-semibold">
+                Existing test data
+                {tiData !== null && (
+                  <span className="ml-2 text-sm text-muted-foreground font-normal">
+                    ({tiData.length})
+                  </span>
+                )}
+              </h2>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void loadTestInjections()}
+                  disabled={tiDeleting}
+                >
+                  Refresh
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => void deleteAllTestData()}
+                  disabled={tiDeleting || !tiData || tiData.length === 0}
+                >
+                  {tiDeleting ? "Deleting…" : "Delete all test data"}
+                </Button>
+              </div>
+            </div>
+
+            {tiData === null ? (
+              <Skeleton className="h-24 w-full" />
+            ) : tiData.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No test data in the system.</p>
+            ) : (
+              <div className="space-y-2">
+                {tiData.map((row) => {
+                  const queueLabel =
+                    row.queue_status === "active"
+                      ? `Active #${row.position ?? "?"}`
+                      : row.queue_status === "priority"
+                      ? `Priority #${row.position ?? "?"}`
+                      : row.queue_status === "non_priority"
+                      ? `Non-priority #${row.position ?? "?"}`
+                      : "Off queue";
+                  return (
+                    <div
+                      key={row.pair_id}
+                      className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm"
+                    >
+                      <div className="flex items-start justify-between gap-2 flex-wrap">
+                        <div className="min-w-0 space-y-0.5">
+                          <p className="font-medium">
+                            {row.leader_name}
+                            {row.follower_name ? ` & ${row.follower_name}` : ""}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {row.session_name ?? "No session"}
+                            {row.division_name ? ` · ${row.division_name}` : ""}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Injected {formatTime(row.created_at)}
+                          </p>
+                        </div>
+                        <Badge
+                          variant={row.queue_status === "off_queue" ? "outline" : "default"}
+                          className="shrink-0"
+                        >
+                          {queueLabel}
+                        </Badge>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
         </TabsContent>
 
         {/* ── Users tab ── */}
