@@ -20,8 +20,9 @@ import { db } from "../db/index.js";
 
 const logger = createLogger("legacy-songs-routes");
 
-// Inline table def — legacy_songs is read-only and not part of the main schema
-const legacySongs = pgTable(
+// Inline table def — legacy_songs is read-only and not part of the main schema.
+// Exported so other modules (e.g. claim-legacy in songs.ts) can read from it.
+export const legacySongs = pgTable(
   "legacy_songs",
   {
     id: text("id").primaryKey(),

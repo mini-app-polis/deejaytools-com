@@ -11,6 +11,7 @@ import { checkins, partners, queueEntries, songs, users } from "../db/schema.js"
 import { requireAuth } from "../middleware/auth.js";
 import { softDeleteOnDrive, uploadSongToDrive } from "../services/drive.js";
 import { tagSongBytes } from "../services/tagger.js";
+import { legacySongs } from "./legacy-songs.js";
 
 
 const listQuery = z.object({
@@ -484,6 +485,91 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
   await db.delete(songs).where(and(eq(songs.id, id), eq(songs.userId, userId)));
   return c.body(null, 204);
 });
+
+/**
+ * POST /v1/songs/claim-legacy
+ *
+ * Convenience for users who submitted music to past events: pick one of the
+ * historical entries from /v1/legacy-songs and materialize it as a regular
+ * song row owned by the current user. No audio is attached — the user can
+ * upload one later via the chunked upload flow if they want.
+ *
+ * Body: { legacy_song_id, partner_id? }
+ * Returns: the new song row (same shape as POST /).
+ */
+const claimLegacyBody = z.object({
+  legacy_song_id: z.string().min(1),
+  partner_id: z.string().nullable().optional(),
+});
+
+songRoutes.post(
+  "/claim-legacy",
+  requireAuth,
+  zValidator("json", claimLegacyBody),
+  async (c) => {
+    const userId = c.get("user").userId;
+    const body = c.req.valid("json");
+    const now = Date.now();
+
+    if (body.partner_id != null && body.partner_id !== "") {
+      const ok = await assertPartnerOwned(userId, body.partner_id);
+      if (!ok) {
+        return c.json(CommonErrors.badRequest("Partner not found or does not belong to you"), 400);
+      }
+    }
+
+    const [legacy] = await db
+      .select()
+      .from(legacySongs)
+      .where(eq(legacySongs.id, body.legacy_song_id))
+      .limit(1);
+    if (!legacy) return c.json(CommonErrors.notFound("Legacy song"), 404);
+
+    const id = crypto.randomUUID();
+    const partnerId =
+      body.partner_id && body.partner_id !== "" ? body.partner_id : null;
+    const displayName = legacy.routineName?.trim() || legacy.partnership.trim() || null;
+
+    await db.insert(songs).values({
+      id,
+      userId,
+      partnerId,
+      displayName,
+      originalFilename: null,
+      processedFilename: null,
+      driveFileId: null,
+      driveFolderId: null,
+      division: legacy.division ?? null,
+      routineName: legacy.routineName ?? null,
+      personalDescriptor: legacy.descriptor ?? null,
+      seasonYear: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const [r] = await db
+      .select({
+        song: songs,
+        partner_first_name: partners.firstName,
+        partner_last_name: partners.lastName,
+      })
+      .from(songs)
+      .leftJoin(partners, eq(partners.id, songs.partnerId))
+      .where(eq(songs.id, id))
+      .limit(1);
+
+    return c.json(
+      success(
+        mapSong({
+          ...r!.song,
+          partner_first_name: r!.partner_first_name,
+          partner_last_name: r!.partner_last_name,
+        })
+      ),
+      201
+    );
+  }
+);
 
 // POST /v1/songs/upload/chunk — atomic chunked upload: no song record is created until the
 // final chunk is processed and Drive confirms the upload. Song never exists in a broken state.

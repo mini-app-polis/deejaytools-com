@@ -83,6 +83,16 @@ type Partner = {
   partner_role: "leader" | "follower";
 };
 
+type LegacySong = {
+  id: string;
+  partnership: string;
+  division: string | null;
+  routine_name: string | null;
+  descriptor: string | null;
+  version: string | null;
+  submitted_at: string | null;
+};
+
 function partnerLabel(p: Partner) {
   return `${p.first_name} ${p.last_name}`.trim();
 }
@@ -110,6 +120,14 @@ export default function SongsPage() {
 
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // ── Claim from history ────────────────────────────────────────────────────
+  const [claimDialogOpen, setClaimDialogOpen] = useState(false);
+  const [claimPartnerId, setClaimPartnerId] = useState("");
+  const [claimQuery, setClaimQuery] = useState("");
+  const [claimResults, setClaimResults] = useState<LegacySong[]>([]);
+  const [claimSearching, setClaimSearching] = useState(false);
+  const [claimingId, setClaimingId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -257,6 +275,50 @@ export default function SongsPage() {
     }
   };
 
+  // Debounced legacy-songs search whenever the dialog is open and the query changes.
+  useEffect(() => {
+    if (!claimDialogOpen) return;
+    const t = setTimeout(async () => {
+      setClaimSearching(true);
+      try {
+        const params = new URLSearchParams();
+        if (claimQuery.trim()) params.set("q", claimQuery.trim());
+        const path = `/v1/legacy-songs${params.toString() ? `?${params.toString()}` : ""}`;
+        const data = await api.get<LegacySong[]>(path);
+        setClaimResults(data);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Search failed");
+      } finally {
+        setClaimSearching(false);
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [claimDialogOpen, claimQuery, api]);
+
+  const openClaimDialog = () => {
+    setClaimPartnerId("");
+    setClaimQuery("");
+    setClaimResults([]);
+    setClaimDialogOpen(true);
+  };
+
+  const handleClaim = async (legacyId: string) => {
+    setClaimingId(legacyId);
+    try {
+      const newSong = await api.post<Song>("/v1/songs/claim-legacy", {
+        legacy_song_id: legacyId,
+        partner_id: claimPartnerId || undefined,
+      });
+      setSongs((prev) => [newSong, ...prev]);
+      toast.success("Song added from history");
+      setClaimDialogOpen(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Claim failed");
+    } finally {
+      setClaimingId(null);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     try {
@@ -285,7 +347,12 @@ export default function SongsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="page-title text-2xl">Songs</h1>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h1 className="page-title text-2xl">Songs</h1>
+        <Button variant="outline" onClick={openClaimDialog}>
+          Claim from history
+        </Button>
+      </div>
 
       <Card>
         <CardHeader>
@@ -593,6 +660,118 @@ export default function SongsPage() {
           </TableBody>
         </Table>
       </div>
+
+      {/* ── Claim from history dialog ── */}
+      {claimDialogOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
+          onClick={() => setClaimDialogOpen(false)}
+        >
+          <div
+            className="rounded-t-2xl sm:rounded-lg border bg-background p-6 shadow-lg w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sm:hidden flex justify-center -mt-2 mb-2">
+              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">Claim from history</h2>
+                <p className="text-xs text-muted-foreground">
+                  Pick a partner, then a song you submitted in the past. It'll be added to
+                  your songs so you can check in with it.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setClaimDialogOpen(false)}
+              >
+                ✕
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="claim-partner">Partner</Label>
+              <Select
+                value={claimPartnerId === "" ? SOLO_PARTNER_VALUE : claimPartnerId}
+                onValueChange={(v) =>
+                  setClaimPartnerId(v === SOLO_PARTNER_VALUE ? "" : v)
+                }
+              >
+                <SelectTrigger id="claim-partner">
+                  <SelectValue placeholder="Solo / No partner" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SOLO_PARTNER_VALUE}>Solo / No partner</SelectItem>
+                  {partners.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {partnerLabel(p)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Add partners on the{" "}
+                <Link to="/partners" className="underline">
+                  Partners
+                </Link>{" "}
+                page if your partner isn't listed.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="claim-search">Search past songs</Label>
+              <Input
+                id="claim-search"
+                value={claimQuery}
+                onChange={(e) => setClaimQuery(e.target.value)}
+                placeholder="Search by partnership or routine name…"
+                autoFocus
+              />
+            </div>
+
+            <div className="space-y-2">
+              {claimSearching ? (
+                <Skeleton className="h-32 w-full" />
+              ) : claimResults.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {claimQuery.trim()
+                    ? "No matches. Try a different search."
+                    : "Type a partnership or routine name to search."}
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  {claimResults.map((row) => (
+                    <div
+                      key={row.id}
+                      className="rounded-lg border px-3 py-2 text-sm flex items-start justify-between gap-3"
+                    >
+                      <div className="min-w-0 space-y-0.5">
+                        <p className="font-medium">{row.partnership}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {[row.division, row.routine_name, row.descriptor]
+                            .filter(Boolean)
+                            .join(" · ") || "No details"}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => void handleClaim(row.id)}
+                        disabled={claimingId !== null}
+                      >
+                        {claimingId === row.id ? "Claiming…" : "Claim"}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
