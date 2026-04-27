@@ -1,3 +1,10 @@
+# [1.27.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.26.3...v1.27.0) (2026-04-27)
+
+
+### Features
+
+* changing page setup for more seemless transition ([b7073ff](https://github.com/mini-app-polis/deejaytools-com/commit/b7073ffd67d2b29d6004ba3b91fba943bab9f1a4))
+
 ## [1.26.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.26.2...v1.26.3) (2026-04-27)
 
 
