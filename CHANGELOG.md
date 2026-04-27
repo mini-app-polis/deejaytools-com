@@ -1,3 +1,10 @@
+# [1.23.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.22.6...v1.23.0) (2026-04-27)
+
+
+### Features
+
+* test data admin panel for checkin plus new endpoint ([925a0eb](https://github.com/mini-app-polis/deejaytools-com/commit/925a0eb3159a20b0c4f1131abd6d65aef72a19c5))
+
 ## [1.22.6](https://github.com/mini-app-polis/deejaytools-com/compare/v1.22.5...v1.22.6) (2026-04-26)
 
 
