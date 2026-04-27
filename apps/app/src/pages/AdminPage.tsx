@@ -146,6 +146,16 @@ const FIELD_INPUT_CLASS =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
 const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
 
+function randomFourDigitTag(): string {
+  return Math.floor(Math.random() * 10000)
+    .toString()
+    .padStart(4, "0");
+}
+
+function randomDivision(): string {
+  return DIVISION_OPTIONS[Math.floor(Math.random() * DIVISION_OPTIONS.length)];
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
@@ -191,13 +201,14 @@ export default function AdminPage() {
   lqSessionRef.current = lqSessionId;
 
   // ── Test injection tab ──────────────────────────────────────────────────────
+  // Defaults are randomized on mount and after every successful injection.
+  // Users can override any field before submitting.
   const [tiSessionId, setTiSessionId] = useState("");
-  const [tiDivision, setTiDivision] = useState<string>(DIVISION_OPTIONS[0]);
-  const [tiLeaderFirst, setTiLeaderFirst] = useState("");
-  const [tiLeaderLast, setTiLeaderLast] = useState("");
-  const [tiFollowerFirst, setTiFollowerFirst] = useState("");
-  const [tiFollowerLast, setTiFollowerLast] = useState("");
-  const [tiNotes, setTiNotes] = useState("");
+  const [tiDivision, setTiDivision] = useState<string>(() => randomDivision());
+  const [tiLeaderFirst, setTiLeaderFirst] = useState("Leader");
+  const [tiLeaderLast, setTiLeaderLast] = useState(() => randomFourDigitTag());
+  const [tiFollowerFirst, setTiFollowerFirst] = useState("Follower");
+  const [tiFollowerLast, setTiFollowerLast] = useState(() => randomFourDigitTag());
   const [tiSubmitting, setTiSubmitting] = useState(false);
   const [tiData, setTiData] = useState<TestInjection[] | null>(null);
   const [tiDeleting, setTiDeleting] = useState(false);
@@ -505,7 +516,6 @@ export default function AdminPage() {
         leaderLastName: tiLeaderLast.trim(),
         followerFirstName: tiFollowerFirst.trim(),
         followerLastName: tiFollowerLast.trim(),
-        notes: tiNotes.trim() || undefined,
       });
 
       // Append the synthetic pair to the local map so the queue tab renders
@@ -521,12 +531,13 @@ export default function AdminPage() {
         void loadLiveQueues(tiSessionId).catch(() => {});
       }
 
-      // Reset only the names so the same session/division stay selected for repeat injects.
-      setTiLeaderFirst("");
-      setTiLeaderLast("");
-      setTiFollowerFirst("");
-      setTiFollowerLast("");
-      setTiNotes("");
+      // Regenerate randomized defaults so the next injection gets fresh names + division.
+      // Session stays selected for repeat injects against the same session.
+      setTiLeaderFirst("Leader");
+      setTiLeaderLast(randomFourDigitTag());
+      setTiFollowerFirst("Follower");
+      setTiFollowerLast(randomFourDigitTag());
+      setTiDivision(randomDivision());
 
       void loadTestInjections().catch(() => {});
     } catch (err) {
@@ -950,15 +961,6 @@ export default function AdminPage() {
                   onChange={(e) => setTiFollowerLast(e.target.value)}
                 />
               </div>
-            </div>
-            <div>
-              <label className={FIELD_LABEL_CLASS}>Notes (optional)</label>
-              <input
-                className={FIELD_INPUT_CLASS}
-                value={tiNotes}
-                onChange={(e) => setTiNotes(e.target.value)}
-                placeholder="e.g. test priority promotion"
-              />
             </div>
             <Button type="submit" disabled={tiSubmitting} size="lg" className="w-full sm:w-auto">
               {tiSubmitting ? "Injecting…" : "Inject check-in"}
