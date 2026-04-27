@@ -1,3 +1,10 @@
+## [1.24.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.24.0...v1.24.1) (2026-04-27)
+
+
+### Bug Fixes
+
+* updating session display ([3077e09](https://github.com/mini-app-polis/deejaytools-com/commit/3077e09e9a6c8d3e809b2665f17c0ff6e6121e3f))
+
 # [1.24.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.23.0...v1.24.0) (2026-04-27)
 
 
