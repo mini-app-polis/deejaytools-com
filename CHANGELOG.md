@@ -1,3 +1,10 @@
+## [1.27.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.27.0...v1.27.1) (2026-04-27)
+
+
+### Bug Fixes
+
+* updating nav bar functioning ([23517ad](https://github.com/mini-app-polis/deejaytools-com/commit/23517adca1630e77bd7de7d7a0f6397e2d3495fd))
+
 # [1.27.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.26.3...v1.27.0) (2026-04-27)
 
 
