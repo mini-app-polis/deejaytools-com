@@ -1,3 +1,10 @@
+# [1.24.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.23.0...v1.24.0) (2026-04-27)
+
+
+### Features
+
+* making injection easier for random data, or override ([31e7f16](https://github.com/mini-app-polis/deejaytools-com/commit/31e7f16eb45563535144e18a460683e957a76b42))
+
 # [1.23.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.22.6...v1.23.0) (2026-04-27)
 
 
