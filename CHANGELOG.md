@@ -1,3 +1,10 @@
+## [1.26.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.26.1...v1.26.2) (2026-04-27)
+
+
+### Bug Fixes
+
+* sort order ([2a3bff0](https://github.com/mini-app-polis/deejaytools-com/commit/2a3bff0c977f454031e0572f7d759f1bfb97267d))
+
 ## [1.26.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.26.0...v1.26.1) (2026-04-27)
 
 
