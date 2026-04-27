@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatSessionTitle, formatTimeOnly } from "@/lib/sessionFormat";
+import { compareSessionChrono } from "@/lib/chronoSort";
 
 type SessionRow = {
   id: string;
@@ -74,21 +75,24 @@ export default function SessionsPage() {
     );
   }
 
+  // Sort: active first, then upcoming (soonest first), then past (most recent first).
+  const sortedSessions = sessions?.slice().sort(compareSessionChrono);
+
   return (
     <div className="space-y-4">
       <div>
         <h1 className="page-title text-2xl">Sessions</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          All floor trials, newest first. Open a session to check in or view the live queue.
+          All floor trials. Active and upcoming first; past sessions at the bottom.
         </p>
       </div>
 
       {/* Mobile card list */}
       <div className={`sm:hidden space-y-3${loading ? " opacity-60" : ""}`}>
-        {sessions?.length === 0 && (
+        {sortedSessions?.length === 0 && (
           <p className="text-sm text-muted-foreground py-4 text-center">No sessions yet.</p>
         )}
-        {sessions?.map((s) => (
+        {sortedSessions?.map((s) => (
           <Link
             key={s.id}
             to={`/sessions/${s.id}`}
@@ -123,14 +127,14 @@ export default function SessionsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sessions?.length === 0 && (
+            {sortedSessions?.length === 0 && (
               <TableRow>
                 <TableCell colSpan={6} className="text-muted-foreground">
                   No sessions yet.
                 </TableCell>
               </TableRow>
             )}
-            {sessions?.map((s) => (
+            {sortedSessions?.map((s) => (
               <TableRow key={s.id}>
                 <TableCell className="font-medium">{formatSessionTitle(s)}</TableCell>
                 <TableCell>{sessionStatusBadge(s.status)}</TableCell>

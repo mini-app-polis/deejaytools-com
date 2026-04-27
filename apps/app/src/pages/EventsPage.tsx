@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { compareEventChrono } from "@/lib/chronoSort";
 
 type EventRow = {
   id: string;
@@ -69,6 +70,9 @@ export default function EventsPage() {
     );
   }
 
+  // Active events first, then upcoming (soonest first), then past (most recent first).
+  const sortedEvents = events?.slice().sort(compareEventChrono);
+
   return (
     <div className="space-y-4">
       <div>
@@ -77,10 +81,10 @@ export default function EventsPage() {
 
       {/* Mobile card list */}
       <div className={`sm:hidden space-y-3${loading ? " opacity-60 pointer-events-none" : ""}`}>
-        {events?.length === 0 && (
+        {sortedEvents?.length === 0 && (
           <p className="text-sm text-muted-foreground py-4 text-center">No events yet.</p>
         )}
-        {events?.map((ev) => (
+        {sortedEvents?.map((ev) => (
           <button
             key={ev.id}
             type="button"
@@ -113,14 +117,14 @@ export default function EventsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {events?.length === 0 && (
+            {sortedEvents?.length === 0 && (
               <TableRow>
                 <TableCell colSpan={4} className="text-muted-foreground">
                   No events yet.
                 </TableCell>
               </TableRow>
             )}
-            {events?.map((ev) => (
+            {sortedEvents?.map((ev) => (
               <TableRow
                 key={ev.id}
                 className="cursor-pointer"

@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatSessionTitle, formatTimeOnly } from "@/lib/sessionFormat";
+import { compareSessionChrono } from "@/lib/chronoSort";
 
 type EventRow = {
   id: string;
@@ -131,7 +132,10 @@ export default function EventDetailPage() {
           <p className="text-sm text-muted-foreground">No sessions for this event.</p>
         )}
         <div className="grid gap-3 md:grid-cols-2">
-          {sessions?.map((sess) => (
+          {sessions
+            ?.slice()
+            .sort(compareSessionChrono)
+            .map((sess) => (
             <Card key={sess.id}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex flex-wrap items-center gap-2">

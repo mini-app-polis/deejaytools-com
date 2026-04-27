@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatSessionTitle, formatTimeOnly } from "@/lib/sessionFormat";
+import { compareEventChrono, compareSessionChrono } from "@/lib/chronoSort";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -615,7 +616,10 @@ export default function AdminPage() {
                       </TableCell>
                     </TableRow>
                   )}
-                  {events?.map((ev) => (
+                  {events
+                    ?.slice()
+                    .sort(compareEventChrono)
+                    .map((ev) => (
                     <TableRow
                       key={ev.id}
                       className="cursor-pointer"
@@ -673,7 +677,10 @@ export default function AdminPage() {
                       </TableCell>
                     </TableRow>
                   )}
-                  {sessions?.map((s) => {
+                  {sessions
+                    ?.slice()
+                    .sort(compareSessionChrono)
+                    .map((s) => {
                     const eventName =
                       events?.find((ev) => ev.id === s.event_id)?.name ?? "—";
                     return (
@@ -716,7 +723,10 @@ export default function AdminPage() {
                 onChange={(e) => setLqSessionId(e.target.value)}
               >
                 <option value="">Select a session…</option>
-                {sessions?.map((s) => (
+                {sessions
+                  ?.slice()
+                  .sort(compareSessionChrono)
+                  .map((s) => (
                   <option key={s.id} value={s.id}>
                     {formatSessionTitle(s)}
                   </option>
@@ -918,7 +928,10 @@ export default function AdminPage() {
                 onChange={(e) => setTiSessionId(e.target.value)}
               >
                 <option value="">Select a session…</option>
-                {sessions?.map((s) => (
+                {sessions
+                  ?.slice()
+                  .sort(compareSessionChrono)
+                  .map((s) => (
                   <option key={s.id} value={s.id}>
                     {formatSessionTitle(s)}
                   </option>
