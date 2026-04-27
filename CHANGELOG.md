@@ -1,3 +1,10 @@
+# [1.25.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.24.1...v1.25.0) (2026-04-27)
+
+
+### Features
+
+* adding legacy song pairing to users ([d63155d](https://github.com/mini-app-polis/deejaytools-com/commit/d63155d26d2944fbc55ce63f3b03b04eb7c73a11))
+
 ## [1.24.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.24.0...v1.24.1) (2026-04-27)
 
 
