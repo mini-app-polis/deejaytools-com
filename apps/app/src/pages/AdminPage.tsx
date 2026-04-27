@@ -658,6 +658,7 @@ export default function AdminPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Session</TableHead>
+                    <TableHead>Event</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Open</TableHead>
                     <TableHead>Start</TableHead>
@@ -667,30 +668,37 @@ export default function AdminPage() {
                 <TableBody>
                   {sessions?.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-muted-foreground">
+                      <TableCell colSpan={6} className="text-muted-foreground">
                         No sessions yet.
                       </TableCell>
                     </TableRow>
                   )}
-                  {sessions?.map((s) => (
-                    <TableRow
-                      key={s.id}
-                      className="cursor-pointer"
-                      onClick={() => navigate(`/sessions/${s.id}`)}
-                    >
-                      <TableCell className="font-medium">{formatSessionTitle(s)}</TableCell>
-                      <TableCell>{sessionStatusBadge(s.status)}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {formatTimeOnly(s.checkin_opens_at)}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {formatTimeOnly(s.floor_trial_starts_at)}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {formatTimeOnly(s.floor_trial_ends_at)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {sessions?.map((s) => {
+                    const eventName =
+                      events?.find((ev) => ev.id === s.event_id)?.name ?? "—";
+                    return (
+                      <TableRow
+                        key={s.id}
+                        className="cursor-pointer"
+                        onClick={() => navigate(`/sessions/${s.id}`)}
+                      >
+                        <TableCell className="font-medium">{formatSessionTitle(s)}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                          {eventName}
+                        </TableCell>
+                        <TableCell>{sessionStatusBadge(s.status)}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                          {formatTimeOnly(s.checkin_opens_at)}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                          {formatTimeOnly(s.floor_trial_starts_at)}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                          {formatTimeOnly(s.floor_trial_ends_at)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

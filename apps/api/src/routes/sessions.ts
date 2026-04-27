@@ -81,7 +81,23 @@ async function validateSessionWithinEvent(
 type SessionRow = typeof sessions.$inferSelect;
 type DivisionRow = typeof sessionDivisions.$inferSelect;
 
-function mapSessionBase(row: SessionRow) {
+/**
+ * Status returned to clients is computed at response time so it's always
+ * correct relative to the wall clock — independent of whether the
+ * tickSessionStatuses cron has run recently. The persisted DB status is
+ * still updated by the cron (used for any side effects); we only override
+ * the display value here. "cancelled" is a manual admin override and is
+ * always preserved.
+ */
+function deriveSessionStatus(row: SessionRow, now: number): SessionRow["status"] {
+  if (row.status === "cancelled") return "cancelled";
+  if (now < row.checkinOpensAt) return "scheduled";
+  if (now < row.floorTrialStartsAt) return "checkin_open";
+  if (now < row.floorTrialEndsAt) return "in_progress";
+  return "completed";
+}
+
+function mapSessionBase(row: SessionRow, now: number = Date.now()) {
   return {
     id: row.id,
     event_id: row.eventId,
@@ -92,7 +108,7 @@ function mapSessionBase(row: SessionRow) {
     floor_trial_ends_at: row.floorTrialEndsAt,
     active_priority_max: row.activePriorityMax,
     active_non_priority_max: row.activeNonPriorityMax,
-    status: row.status,
+    status: deriveSessionStatus(row, now),
     created_by: row.createdBy,
     created_at: row.createdAt,
   };
@@ -184,16 +200,18 @@ sessionRoutes.get("/", zValidator("query", listQuery), async (c) => {
   const { event_id } = c.req.valid("query");
   const userId = await getOptionalSyncedUserId(c);
 
+  // Sort by session date (newest first), then by floor-trial start time within
+  // a single date so multiple sessions on the same day order by time-of-day.
   const rows = event_id
     ? await db
         .select()
         .from(sessions)
         .where(eq(sessions.eventId, event_id))
-        .orderBy(desc(sessions.date), desc(sessions.createdAt))
+        .orderBy(desc(sessions.date), desc(sessions.floorTrialStartsAt))
     : await db
         .select()
         .from(sessions)
-        .orderBy(desc(sessions.date), desc(sessions.createdAt));
+        .orderBy(desc(sessions.date), desc(sessions.floorTrialStartsAt));
 
   const sessionIds = rows.map((r) => r.id);
   const divisionsBySession = await loadDivisionsForSessions(sessionIds);
