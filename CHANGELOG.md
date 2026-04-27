@@ -1,3 +1,10 @@
+## [1.25.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.25.0...v1.25.1) (2026-04-27)
+
+
+### Bug Fixes
+
+* ui display cleanup ([05b61b1](https://github.com/mini-app-polis/deejaytools-com/commit/05b61b194d4fd8b0e13bb967d68a353303bec535))
+
 # [1.25.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.24.1...v1.25.0) (2026-04-27)
 
 
