@@ -15,7 +15,7 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
   }
 
   if (!isAdmin || !me) {
-    return <Navigate to="/events" replace />;
+    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;

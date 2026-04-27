@@ -110,21 +110,26 @@ export default function LandingPage() {
 
       {/* Nav */}
       <nav className="border-b border-white/[0.07] bg-black/50 backdrop-blur-md sticky top-0 z-40">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
           <span
             className="text-sm font-medium tracking-wide text-foreground"
             style={{ fontFamily: "'DM Mono', monospace" }}
           >
             DeejayTools.com
           </span>
-          <SignedOut>
-            <SignInButton forceRedirectUrl="/partners" signUpForceRedirectUrl="/partners">
-              <Button variant="outline" size="sm">Sign in</Button>
-            </SignInButton>
-          </SignedOut>
-          <SignedIn>
-            <Button size="sm" onClick={() => navigate("/partners")}>Go to app</Button>
-          </SignedIn>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => navigate("/floor-trials")}>
+              Floor Trials
+            </Button>
+            <SignedOut>
+              <SignInButton forceRedirectUrl="/partners" signUpForceRedirectUrl="/partners">
+                <Button variant="outline" size="sm">Sign in</Button>
+              </SignInButton>
+            </SignedOut>
+            <SignedIn>
+              <Button size="sm" onClick={() => navigate("/partners")}>Go to app</Button>
+            </SignedIn>
+          </div>
         </div>
       </nav>
 

@@ -1,12 +1,11 @@
-import { SignedIn, SignedOut } from "@clerk/clerk-react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import AdminGuard from "@/components/AdminGuard";
-import AuthSync from "@/components/AuthSync";
 import Layout from "@/components/Layout";
+import RequireAuth from "@/components/RequireAuth";
 import LandingPage from "./LandingPage";
 import AdminPage from "./AdminPage";
-import CheckInPage from "./CheckInPage";
+import FloorTrialsPage from "./FloorTrialsPage";
 import EventDetailPage from "./EventDetailPage";
 import EventsPage from "./EventsPage";
 import PartnersPage from "./PartnersPage";
@@ -22,28 +21,64 @@ export default function App() {
         {/* Public landing page — always accessible */}
         <Route path="/" element={<LandingPage />} />
 
-        {/* Authenticated app */}
-        <Route
-          path="/*"
-          element={
-            <>
-              <SignedOut>
-                <Navigate to="/" replace />
-              </SignedOut>
-              <SignedIn>
-                <AuthSync />
-                <Layout />
-              </SignedIn>
-            </>
-          }
-        >
-          <Route path="check-in" element={<CheckInPage />} />
-          <Route path="events" element={<EventsPage />} />
-          <Route path="events/:id" element={<EventDetailPage />} />
-          <Route path="sessions" element={<SessionsPage />} />
-          <Route path="sessions/:id" element={<SessionDetailPage />} />
-          <Route path="partners" element={<PartnersPage />} />
-          <Route path="songs" element={<SongsPage />} />
+        {/* Shared layout. Floor Trials is public; everything else is gated below. */}
+        <Route element={<Layout />}>
+          {/* Public app routes */}
+          <Route path="floor-trials" element={<FloorTrialsPage />} />
+          {/* Back-compat for the old /check-in URL — re-render Floor Trials. */}
+          <Route path="check-in" element={<FloorTrialsPage />} />
+
+          {/* Auth-required routes */}
+          <Route
+            path="partners"
+            element={
+              <RequireAuth>
+                <PartnersPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="songs"
+            element={
+              <RequireAuth>
+                <SongsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="sessions"
+            element={
+              <RequireAuth>
+                <SessionsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="sessions/:id"
+            element={
+              <RequireAuth>
+                <SessionDetailPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="events"
+            element={
+              <RequireAuth>
+                <EventsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="events/:id"
+            element={
+              <RequireAuth>
+                <EventDetailPage />
+              </RequireAuth>
+            }
+          />
+
+          {/* Admin-required */}
           <Route
             path="admin"
             element={
