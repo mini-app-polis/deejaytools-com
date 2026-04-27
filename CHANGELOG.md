@@ -1,3 +1,10 @@
+# [1.26.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.25.1...v1.26.0) (2026-04-27)
+
+
+### Features
+
+* check in page to replace events ([5821bbe](https://github.com/mini-app-polis/deejaytools-com/commit/5821bbe39d9bd0f44ab914ef2781aeba38d43fd1))
+
 ## [1.25.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.25.0...v1.25.1) (2026-04-27)
 
 
