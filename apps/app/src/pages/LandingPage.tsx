@@ -118,12 +118,12 @@ export default function LandingPage() {
             DeejayTools.com
           </span>
           <SignedOut>
-            <SignInButton>
+            <SignInButton forceRedirectUrl="/partners" signUpForceRedirectUrl="/partners">
               <Button variant="outline" size="sm">Sign in</Button>
             </SignInButton>
           </SignedOut>
           <SignedIn>
-            <Button size="sm" onClick={() => navigate("/events")}>Go to app</Button>
+            <Button size="sm" onClick={() => navigate("/partners")}>Go to app</Button>
           </SignedIn>
         </div>
       </nav>
@@ -296,12 +296,12 @@ export default function LandingPage() {
             </div>
             <div className="shrink-0">
               <SignedOut>
-                <SignInButton>
+                <SignInButton forceRedirectUrl="/partners" signUpForceRedirectUrl="/partners">
                   <Button>Sign in to DeejayTools</Button>
                 </SignInButton>
               </SignedOut>
               <SignedIn>
-                <Button onClick={() => navigate("/events")}>Go to app</Button>
+                <Button onClick={() => navigate("/partners")}>Go to app</Button>
               </SignedIn>
             </div>
           </div>

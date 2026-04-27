@@ -6,9 +6,9 @@ import { useAuthMe } from "@/hooks/useAuthMe";
 import pkg from "../../../../package.json";
 
 const NAV_ITEMS = [
-  { to: "/check-in", label: "Check In" },
   { to: "/partners", label: "Partners" },
   { to: "/songs", label: "Songs" },
+  { to: "/check-in", label: "Check In" },
 ];
 
 export default function Layout() {
