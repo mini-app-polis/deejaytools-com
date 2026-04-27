@@ -1,3 +1,10 @@
+## [1.26.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.26.0...v1.26.1) (2026-04-27)
+
+
+### Bug Fixes
+
+* nav bar order and redirect ([5f69bef](https://github.com/mini-app-polis/deejaytools-com/commit/5f69bef0c57ad15ae757f5bff030882c626ab011))
+
 # [1.26.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.25.1...v1.26.0) (2026-04-27)
 
 
