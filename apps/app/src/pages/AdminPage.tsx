@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { formatSessionTitle, formatTimeOnly } from "@/lib/sessionFormat";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -656,16 +657,17 @@ export default function AdminPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
+                    <TableHead>Session</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Check-in opens</TableHead>
-                    <TableHead>Floor trial ends</TableHead>
+                    <TableHead>Open</TableHead>
+                    <TableHead>Start</TableHead>
+                    <TableHead>End</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sessions?.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-muted-foreground">
+                      <TableCell colSpan={5} className="text-muted-foreground">
                         No sessions yet.
                       </TableCell>
                     </TableRow>
@@ -676,13 +678,16 @@ export default function AdminPage() {
                       className="cursor-pointer"
                       onClick={() => navigate(`/sessions/${s.id}`)}
                     >
-                      <TableCell className="font-medium">{s.name}</TableCell>
+                      <TableCell className="font-medium">{formatSessionTitle(s)}</TableCell>
                       <TableCell>{sessionStatusBadge(s.status)}</TableCell>
                       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {formatTime(s.checkin_opens_at)}
+                        {formatTimeOnly(s.checkin_opens_at)}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {formatTime(s.floor_trial_ends_at)}
+                        {formatTimeOnly(s.floor_trial_starts_at)}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                        {formatTimeOnly(s.floor_trial_ends_at)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -705,7 +710,7 @@ export default function AdminPage() {
                 <option value="">Select a session…</option>
                 {sessions?.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.name}
+                    {formatSessionTitle(s)}
                   </option>
                 ))}
               </select>
@@ -907,7 +912,7 @@ export default function AdminPage() {
                 <option value="">Select a session…</option>
                 {sessions?.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.name}
+                    {formatSessionTitle(s)}
                   </option>
                 ))}
               </select>
@@ -1013,6 +1018,8 @@ export default function AdminPage() {
                       : row.queue_status === "non_priority"
                       ? `Non-priority #${row.position ?? "?"}`
                       : "Off queue";
+                  const sessionRow = sessions?.find((s) => s.id === row.session_id);
+                  const sessionLabel = sessionRow ? formatSessionTitle(sessionRow) : "No session";
                   return (
                     <div
                       key={row.pair_id}
@@ -1025,7 +1032,7 @@ export default function AdminPage() {
                             {row.follower_name ? ` & ${row.follower_name}` : ""}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {row.session_name ?? "No session"}
+                            {sessionLabel}
                             {row.division_name ? ` · ${row.division_name}` : ""}
                           </p>
                           <p className="text-xs text-muted-foreground">

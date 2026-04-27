@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatSessionTitle, formatTimeOnly } from "@/lib/sessionFormat";
 
 type SessionRow = {
   id: string;
@@ -44,13 +45,6 @@ function sessionStatusBadge(status: string) {
     default:
       return <Badge variant="outline">{status}</Badge>;
   }
-}
-
-function formatTime(ts: number): string {
-  return new Date(ts).toLocaleString(undefined, {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
 }
 
 export default function SessionsPage() {
@@ -101,16 +95,13 @@ export default function SessionsPage() {
             className="block rounded-lg border bg-card p-4 space-y-2 shadow-sm active:opacity-70 transition-opacity"
           >
             <div className="flex items-start justify-between gap-2">
-              <p className="font-medium text-base leading-snug">{s.name}</p>
+              <p className="font-medium text-base leading-snug">{formatSessionTitle(s)}</p>
               {sessionStatusBadge(s.status)}
             </div>
             <div className="text-sm text-muted-foreground space-y-0.5">
-              {s.date && <p>{s.date}</p>}
+              <p>Open {formatTimeOnly(s.checkin_opens_at)}</p>
               <p>
-                Check-in {formatTime(s.checkin_opens_at)}
-              </p>
-              <p>
-                Floor trial ends {formatTime(s.floor_trial_ends_at)}
+                Floor trial {formatTimeOnly(s.floor_trial_starts_at)} – {formatTimeOnly(s.floor_trial_ends_at)}
               </p>
             </div>
             <p className="text-sm font-medium text-primary pt-1">Open →</p>
@@ -123,28 +114,34 @@ export default function SessionsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Date</TableHead>
+              <TableHead>Session</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Check-in / floor trial</TableHead>
+              <TableHead>Open</TableHead>
+              <TableHead>Start</TableHead>
+              <TableHead>End</TableHead>
               <TableHead className="w-[120px]"> </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {sessions?.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-muted-foreground">
+                <TableCell colSpan={6} className="text-muted-foreground">
                   No sessions yet.
                 </TableCell>
               </TableRow>
             )}
             {sessions?.map((s) => (
               <TableRow key={s.id}>
-                <TableCell className="font-medium">{s.name}</TableCell>
-                <TableCell>{s.date ?? "—"}</TableCell>
+                <TableCell className="font-medium">{formatSessionTitle(s)}</TableCell>
                 <TableCell>{sessionStatusBadge(s.status)}</TableCell>
                 <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                  {formatTime(s.checkin_opens_at)} — {formatTime(s.floor_trial_ends_at)}
+                  {formatTimeOnly(s.checkin_opens_at)}
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                  {formatTimeOnly(s.floor_trial_starts_at)}
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                  {formatTimeOnly(s.floor_trial_ends_at)}
                 </TableCell>
                 <TableCell>
                   <Button variant="outline" size="sm" asChild>

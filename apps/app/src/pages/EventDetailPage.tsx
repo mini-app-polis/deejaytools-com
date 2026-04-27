@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatSessionTitle, formatTimeOnly } from "@/lib/sessionFormat";
 
 type EventRow = {
   id: string;
@@ -48,13 +49,6 @@ function sessionStatusBadge(status: string) {
     default:
       return <Badge variant="outline">{status}</Badge>;
   }
-}
-
-function formatTime(ts: number): string {
-  return new Date(ts).toLocaleString(undefined, {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
 }
 
 export default function EventDetailPage() {
@@ -141,15 +135,15 @@ export default function EventDetailPage() {
             <Card key={sess.id}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex flex-wrap items-center gap-2">
-                  {sess.name}
+                  {formatSessionTitle(sess)}
                   {sessionStatusBadge(sess.status)}
                 </CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground space-y-1">
-                <p>Check-in: {formatTime(sess.checkin_opens_at)}</p>
+                <p>Open: {formatTimeOnly(sess.checkin_opens_at)}</p>
                 <p>
-                  Floor trial: {formatTime(sess.floor_trial_starts_at)} –{" "}
-                  {formatTime(sess.floor_trial_ends_at)}
+                  Floor trial: {formatTimeOnly(sess.floor_trial_starts_at)} –{" "}
+                  {formatTimeOnly(sess.floor_trial_ends_at)}
                 </p>
                 <Separator className="my-2" />
                 <Button variant="link" className="px-0 h-auto" asChild>

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatSessionTitle, formatTimeOnly } from "@/lib/sessionFormat";
 
 type SessionDetail = {
   id: string;
@@ -57,13 +58,6 @@ type SongRow = {
   partner_first_name: string | null;
   partner_last_name: string | null;
 };
-
-function formatTime(ts: number): string {
-  return new Date(ts).toLocaleString(undefined, {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
-}
 
 function derivedStatus(s: SessionDetail, now: number): string {
   if (now < s.checkin_opens_at) return "scheduled";
@@ -318,11 +312,11 @@ export default function SessionDetailPage() {
         </Button>
         <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="page-title text-2xl">{session.name}</h1>
+            <h1 className="page-title text-2xl">{formatSessionTitle(session)}</h1>
             <p className="text-sm text-muted-foreground">
-              Opens {formatTime(session.checkin_opens_at)} · Floor trial{" "}
-              {formatTime(session.floor_trial_starts_at)} –{" "}
-              {formatTime(session.floor_trial_ends_at)}
+              Open {formatTimeOnly(session.checkin_opens_at)} · Floor trial{" "}
+              {formatTimeOnly(session.floor_trial_starts_at)} –{" "}
+              {formatTimeOnly(session.floor_trial_ends_at)}
             </p>
           </div>
           {derivedStatusBadge(derivedStatus(session, now))}
@@ -417,7 +411,7 @@ export default function SessionDetailPage() {
         {!canCheckIn && !checkinWindowOpen && (
           <p className="text-sm text-muted-foreground">
             {now < session.checkin_opens_at
-              ? `Check-in opens ${formatTime(session.checkin_opens_at)}`
+              ? `Check-in opens at ${formatTimeOnly(session.checkin_opens_at)}`
               : "Check-in closed"}
           </p>
         )}
