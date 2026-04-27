@@ -6,6 +6,7 @@ import AuthSync from "@/components/AuthSync";
 import Layout from "@/components/Layout";
 import LandingPage from "./LandingPage";
 import AdminPage from "./AdminPage";
+import CheckInPage from "./CheckInPage";
 import EventDetailPage from "./EventDetailPage";
 import EventsPage from "./EventsPage";
 import PartnersPage from "./PartnersPage";
@@ -36,6 +37,7 @@ export default function App() {
             </>
           }
         >
+          <Route path="check-in" element={<CheckInPage />} />
           <Route path="events" element={<EventsPage />} />
           <Route path="events/:id" element={<EventDetailPage />} />
           <Route path="sessions" element={<SessionsPage />} />
