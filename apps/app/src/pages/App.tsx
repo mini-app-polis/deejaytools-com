@@ -53,14 +53,9 @@ export default function App() {
               </RequireAuth>
             }
           />
-          <Route
-            path="sessions/:id"
-            element={
-              <RequireAuth>
-                <SessionDetailPage />
-              </RequireAuth>
-            }
-          />
+          {/* Session detail is public-readable; the page itself shows a
+              sign-in CTA in place of the check-in form when signed out. */}
+          <Route path="sessions/:id" element={<SessionDetailPage />} />
           <Route
             path="events"
             element={

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { useUser } from "@clerk/clerk-react";
+import { SignedIn, SignedOut, SignInButton, useAuth, useUser } from "@clerk/clerk-react";
 import { useApiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -91,6 +91,7 @@ export default function SessionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const api = useApiClient();
   const { user } = useUser();
+  const { isSignedIn } = useAuth();
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [active, setActive] = useState<QueueRow[]>([]);
   const [waiting, setWaiting] = useState<QueueRow[]>([]);
@@ -123,13 +124,20 @@ export default function SessionDetailPage() {
   }, [api, id]);
 
   const loadExtras = useCallback(async () => {
+    // /v1/partners/leading-pairs and /v1/songs both require auth — skip when
+    // viewing as a signed-out visitor. The session info and queues stay visible.
+    if (!isSignedIn) {
+      setPairs([]);
+      setSongs([]);
+      return;
+    }
     const [p, s] = await Promise.all([
       api.get<LeadingPair[]>("/v1/partners/leading-pairs"),
       api.get<SongRow[]>("/v1/songs"),
     ]);
     setPairs(p);
     setSongs(s);
-  }, [api]);
+  }, [api, isSignedIn]);
 
   const refresh = useCallback(() => {
     if (!id) return;
@@ -394,34 +402,51 @@ export default function SessionDetailPage() {
         </CardContent>
       </Card>
 
-      <div className="space-y-2">
-        <Button
-          disabled={!canCheckIn}
-          onClick={openCheckin}
-          size="lg"
-          className="w-full sm:w-auto"
-        >
-          Check in
-        </Button>
-        {!canCheckIn && session.has_active_checkin && (
+      <SignedIn>
+        <div className="space-y-2">
+          <Button
+            disabled={!canCheckIn}
+            onClick={openCheckin}
+            size="lg"
+            className="w-full sm:w-auto"
+          >
+            Check in
+          </Button>
+          {!canCheckIn && session.has_active_checkin && (
+            <p className="text-sm text-muted-foreground">
+              Already in queue (division: {session.active_checkin_division ?? "?"})
+            </p>
+          )}
+          {!canCheckIn && !checkinWindowOpen && (
+            <p className="text-sm text-muted-foreground">
+              {now < session.checkin_opens_at
+                ? `Check-in opens at ${formatTimeOnly(session.checkin_opens_at)}`
+                : "Check-in closed"}
+            </p>
+          )}
+          {!canCheckIn && checkinWindowOpen && songs.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              You have no songs uploaded —{" "}
+              <Link to="/songs" className="underline">add a song first</Link>.
+            </p>
+          )}
+        </div>
+      </SignedIn>
+      <SignedOut>
+        <div className="space-y-2">
+          <SignInButton
+            forceRedirectUrl={id ? `/sessions/${id}` : "/partners"}
+            signUpForceRedirectUrl={id ? `/sessions/${id}` : "/partners"}
+          >
+            <Button size="lg" className="w-full sm:w-auto">
+              Sign in to check in
+            </Button>
+          </SignInButton>
           <p className="text-sm text-muted-foreground">
-            Already in queue (division: {session.active_checkin_division ?? "?"})
+            You can browse this session as a visitor. Sign in to check in or upload a song.
           </p>
-        )}
-        {!canCheckIn && !checkinWindowOpen && (
-          <p className="text-sm text-muted-foreground">
-            {now < session.checkin_opens_at
-              ? `Check-in opens at ${formatTimeOnly(session.checkin_opens_at)}`
-              : "Check-in closed"}
-          </p>
-        )}
-        {!canCheckIn && checkinWindowOpen && songs.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            You have no songs uploaded —{" "}
-            <Link to="/songs" className="underline">add a song first</Link>.
-          </p>
-        )}
-      </div>
+        </div>
+      </SignedOut>
 
       {checkinOpen && (
         <div
