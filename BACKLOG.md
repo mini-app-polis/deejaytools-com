@@ -11,6 +11,24 @@ left out of the initial build and need to come back.
   frontend updated. Replaces the original `floor_slots` design with
   three queues, audit trail, and run-history tables. See
   `apps/api/docs/decisions/ADR-004-floor-trial-queue-model.md`.
+- **Two-step queue compaction.** `compactAfterRemoval` now moves rows
+  to sentinel positions before settling them at their final values, to
+  avoid unique-index conflicts during concurrent withdraw/promote/
+  complete operations. Covered by `lib/queue/compaction.test.ts`.
+- **Comprehensive error logging.** Every route handler that maps an
+  exception to a 4xx/5xx response now logs the underlying error via
+  `createLogger("deejaytools-api")` with a route-specific event name
+  (`queue_withdraw_failed`, `checkin_create_failed`, `auth_sync_failed`,
+  `admin_checkin_inject_failed`, etc.) so production failures are
+  debuggable without losing the user-facing status.
+- **Frontend test suite.** `apps/app` now has Vitest set up with
+  pure-function tests (Node env) and component tests (jsdom env)
+  covering the api client, auth hooks, route guards, NavBar, and the
+  critical pages (FloorTrials, SessionDetail, Songs/AddSong, Landing,
+  Partners). Integrated into CI via `pnpm -r test:coverage`.
+- **Public-readable session detail.** Visitors can browse Floor Trials
+  and individual session pages without signing in; the check-in form
+  is replaced with a "Sign in to check in" CTA when unauthenticated.
 
 ---
 
@@ -42,11 +60,22 @@ should be managed from the same place.
 
 ## Contract test coverage
 
-Current coverage: ~68% statements, 70% functions.
-Remaining gaps: queue mutation edge cases, check-in admission branches,
-optional-user helper, middleware JWT verification path.
+The previously-listed gaps (queue mutation edge cases, check-in
+admission branches, middleware JWT verification path) are now closed.
+The auth middleware has its own test file; queue endpoints
+(`/promote`, `/complete`, `/incomplete`, `/withdraw`) cover auth +
+sad paths; admin endpoints (`/v1/admin/checkins`, `/v1/runs`) and the
+song claim-legacy flow each have dedicated tests; queue helpers
+(`admission`, `compaction`, `runCounts`, `singleEntry`, `songLabel`)
+have unit-level coverage.
 
-Target: 75% statements.
+Remaining intentional gaps:
+
+- `optional-user.ts` — fail-soft contract; nothing meaningful to
+  assert beyond "returns undefined for invalid input".
+- `apps/app/src/pages/AdminPage.tsx` — large, tab-heavy admin surface
+  whose API endpoints are all tested. Manual QA covers the UI side.
+- `apps/app/src/components/ui/*` — shadcn primitives (third-party).
 
 ---
 
@@ -86,33 +115,41 @@ rationale and a revisit trigger.
 
 ---
 
-## Sentry setup (deferred — code is wired, projects pending)
+## Sentry — operational notes
 
-Both services are instrumented with Sentry SDKs that no-op until a DSN is
-set. When ready to enable error tracking:
+Both services are live and shipping errors to Sentry. This section is
+preserved as an operational reference for anyone tuning the setup.
 
-**1. Create two Sentry projects** under one Sentry org:
-   - `deejaytools-com-api` — Node platform
-   - `deejaytools-com-app` — Browser/React platform
+### Current state
 
-**2. Add DSNs to Doppler** under the deejaytools-com Doppler project:
-   - `SENTRY_DSN` — for the API service (syncs to Railway)
-   - `VITE_SENTRY_DSN` — for the React app (syncs to Cloudflare Pages)
+- **API: live.** `SENTRY_DSN` is set in Doppler `prd` (syncs to
+  Railway). `app.onError` calls `Sentry.captureException` on every
+  unhandled exception.
+- **Frontend: live.** `VITE_SENTRY_DSN` is set in Doppler `prd`
+  (syncs to Cloudflare Pages). `apps/app/src/lib/instrument.ts`
+  initializes `@sentry/react`, and `src/main.tsx` wires React 19
+  error hooks (`onUncaughtError`, `onCaughtError`, `onRecoverableError`)
+  through `Sentry.reactErrorHandler()`. `lib/logger.ts` also forwards
+  `logger.error` calls.
+- **Topology:** decided per the FE rollout (single shared
+  `deejaytools-com` project, or split into a separate
+  `deejaytools-com-app` browser project). Events are tagged with
+  `platform:node` vs `platform:javascript` either way, so filtering by
+  source always works.
 
-**3. Configure rate limits** in each Sentry project:
-   `Project → Settings → Client Keys (DSN) → Configure → Rate Limits`
-   Set ~150–200 events/day per project. The Developer plan ceiling is
-   5,000 errors/month total across the org; per-day limits prevent a
-   single bad deploy from burning the whole month's quota.
+### Configuration to confirm in the dashboard
 
-**4. Enable Spike Protection** at the org level. Auto-throttles on
-   abnormal traffic spikes. Free-tier-friendly. Worth turning on day one.
+- **Rate limits.** `Project → Settings → Client Keys (DSN) → Configure
+  → Rate Limits`. ~150–200 events/day per DSN keeps a single bad deploy
+  from burning the 5,000-events/month free-tier quota.
+- **Spike Protection.** Org-level toggle. Auto-throttles abnormal
+  traffic spikes. Worth keeping on.
+- **What we deliberately do NOT enable:** `tracesSampleRate`
+  (performance monitoring) and `replaysSessionSampleRate` (session
+  replay). Both share the 5,000-event quota with errors. Add only when
+  there's a specific reason to.
 
-**5. Do not enable** performance monitoring (`tracesSampleRate`) or
-   session replay (`replaysSessionSampleRate`) yet. Both share the same
-   5,000-event quota with errors. The current `instrument.ts` and the
-   API-side `Sentry.init()` deliberately omit these — keep it that way
-   until there's a clear reason to add them.
+### Cost and failure-mode notes
 
 **Expected cost:** $0/month indefinitely on the Developer plan
 (5K errors/month, 1 dashboard user). Upgrade triggers: more than one
@@ -121,9 +158,20 @@ retention beyond 30 days. Team plan is $26/mo (50K errors,
 unlimited seats).
 
 **Failure mode if quota is exhausted:** Sentry silently drops new
-events for the rest of the billing cycle. No surprise bill. Rate limits
-above are designed to make this granular (lose visibility for a day,
-not the month).
+events for the rest of the billing cycle. No surprise bill. The
+per-project rate limit above is designed to make a quota burn
+granular (lose visibility for a day, not the month).
+
+### Optional next polish
+
+- **Release tagging.** Pass `release` to both `Sentry.init` calls so
+  errors link to the deployed version. API: `release:
+  process.env.RAILWAY_DEPLOYMENT_ID ?? process.env.npm_package_version`.
+  App: inject the version at build time via `vite.config.ts` and read
+  from `import.meta.env.VITE_APP_VERSION`. Without this, every error is
+  associated with `unknown@*` and you can't tell which deploy
+  introduced a bug — matters more once releases ship multiple times
+  per week.
 
 ---
 

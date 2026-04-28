@@ -25,8 +25,7 @@ vi.mock("@clerk/clerk-react", () => ({
 const fetchMock = vi.fn();
 
 beforeEach(() => {
-  // @ts-expect-error - assign to global for the test environment
-  globalThis.fetch = fetchMock;
+  globalThis.fetch = fetchMock as unknown as typeof fetch;
   fetchMock.mockReset();
 });
 
