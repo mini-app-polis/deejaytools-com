@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useApiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -52,6 +51,7 @@ function sessionStatusBadge(status: string) {
 
 export default function SessionsPage() {
   const api = useApiClient();
+  const navigate = useNavigate();
   const [sessions, setSessions] = useState<SessionRow[] | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -132,19 +132,25 @@ export default function SessionsPage() {
               <TableHead>Open</TableHead>
               <TableHead>Start</TableHead>
               <TableHead>End</TableHead>
-              <TableHead className="w-[120px]"> </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {sortedSessions?.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground">
+                <TableCell colSpan={5} className="text-muted-foreground">
                   No sessions yet.
                 </TableCell>
               </TableRow>
             )}
             {sortedSessions?.map((s) => (
-              <TableRow key={s.id}>
+              // The whole row is the click target — matches EventsPage and the
+              // mobile card layout above. Replaces the previous Open button
+              // column, which was redundant with row navigation.
+              <TableRow
+                key={s.id}
+                className="cursor-pointer"
+                onClick={() => navigate(`/sessions/${s.id}`)}
+              >
                 <TableCell className="font-medium">
                   <span className="flex flex-wrap items-center gap-2">
                     {formatSessionTitle(s, s.event_timezone)}
@@ -164,11 +170,6 @@ export default function SessionsPage() {
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                   {formatTimeOnly(s.floor_trial_ends_at, s.event_timezone)}
-                </TableCell>
-                <TableCell>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link to={`/sessions/${s.id}`}>Open</Link>
-                  </Button>
                 </TableCell>
               </TableRow>
             ))}

@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useApiClient } from "@/api/client";
+import { useAuthMe } from "@/hooks/useAuthMe";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -147,6 +149,15 @@ type RunRow = {
   completed_by_label: string;
 };
 
+type AdminUserRow = {
+  id: string;
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  role: "user" | "admin";
+  created_at: number;
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function eventStatusBadge(status: string) {
@@ -215,6 +226,9 @@ function randomDivision(): string {
 export default function AdminPage() {
   const api = useApiClient();
   const navigate = useNavigate();
+  // Used to identify the current admin so the Users tab can hide the role
+  // toggle on their own row (the API also rejects self-demotion).
+  const { me } = useAuthMe();
 
   // ── Events tab ──────────────────────────────────────────────────────────────
   const [events, setEvents] = useState<EventRow[] | null>(null);
@@ -274,6 +288,17 @@ export default function AdminPage() {
   const [runsSessionFilter, setRunsSessionFilter] = useState("");
   const [runs, setRuns] = useState<RunRow[] | null>(null);
   const [runsLoading, setRunsLoading] = useState(false);
+
+  // ── Users tab ───────────────────────────────────────────────────────────────
+  // `usersQuery` updates on every keystroke; `usersDebouncedQuery` is what
+  // actually fires the network request. 300 ms feels responsive without
+  // hammering the API on every character.
+  const [users, setUsers] = useState<AdminUserRow[] | null>(null);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersQuery, setUsersQuery] = useState("");
+  const [usersDebouncedQuery, setUsersDebouncedQuery] = useState("");
+  /** Per-row loading state while a role PATCH is in flight. */
+  const [userRoleSubmitting, setUserRoleSubmitting] = useState<Record<string, boolean>>({});
 
   // ── Data loaders ────────────────────────────────────────────────────────────
 
@@ -353,17 +378,49 @@ export default function AdminPage() {
     [api]
   );
 
+  const loadUsers = useCallback(
+    async (q: string) => {
+      setUsersLoading(true);
+      try {
+        const path = q
+          ? `/v1/admin/users?q=${encodeURIComponent(q)}`
+          : "/v1/admin/users";
+        const data = await api.get<AdminUserRow[]>(path);
+        setUsers(data);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Failed to load users");
+      } finally {
+        setUsersLoading(false);
+      }
+    },
+    [api]
+  );
+
   useEffect(() => {
     loadEvents();
     loadSessions();
     void loadLqExtras().catch(() => {});
     void loadTestInjections().catch(() => {});
-  }, [loadEvents, loadSessions, loadLqExtras, loadTestInjections]);
+    void loadUsers("").catch(() => {});
+  }, [loadEvents, loadSessions, loadLqExtras, loadTestInjections, loadUsers]);
 
   // Refetch run history whenever the session filter changes.
   useEffect(() => {
     void loadRuns(runsSessionFilter).catch(() => {});
   }, [runsSessionFilter, loadRuns]);
+
+  // Debounce keystrokes in the Users tab search box → only the trailing value
+  // wins, so typing "alic" hits the API once with q=alic instead of four
+  // requests for q, qa, qal, qali.
+  useEffect(() => {
+    const t = setTimeout(() => setUsersDebouncedQuery(usersQuery.trim()), 300);
+    return () => clearTimeout(t);
+  }, [usersQuery]);
+
+  // Refetch users whenever the debounced query changes (including initial empty).
+  useEffect(() => {
+    void loadUsers(usersDebouncedQuery).catch(() => {});
+  }, [usersDebouncedQuery, loadUsers]);
 
   // Auto-select the single active session when sessions load / change.
   useEffect(() => {
@@ -642,6 +699,40 @@ export default function AdminPage() {
       toast.error(err instanceof Error ? err.message : "Injection failed");
     } finally {
       setTiSubmitting(false);
+    }
+  };
+
+  // ── User role management ────────────────────────────────────────────────────
+
+  /**
+   * Patch a user's role server-side, then merge the response into local state
+   * so the UI reflects the change without a full refetch. The server is the
+   * source of truth — we mirror its response rather than predicting it. The
+   * self-demote case is also blocked server-side; the UI just hides the
+   * toggle for the current admin's own row to make it obvious.
+   */
+  const setUserRole = async (userId: string, nextRole: "user" | "admin") => {
+    setUserRoleSubmitting((prev) => ({ ...prev, [userId]: true }));
+    try {
+      const updated = await api.patch<AdminUserRow>(
+        `/v1/admin/users/${userId}/role`,
+        { role: nextRole }
+      );
+      setUsers((prev) =>
+        prev?.map((u) => (u.id === updated.id ? updated : u)) ?? null
+      );
+      toast.success(
+        nextRole === "admin"
+          ? `${updated.email} is now an admin`
+          : `${updated.email} is now a regular user`
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update role");
+    } finally {
+      setUserRoleSubmitting((prev) => {
+        const { [userId]: _, ...rest } = prev;
+        return rest;
+      });
     }
   };
 
@@ -1287,8 +1378,98 @@ export default function AdminPage() {
         </TabsContent>
 
         {/* ── Users tab ── */}
-        <TabsContent value="users" className="mt-4">
-          <p className="text-muted-foreground">User management coming soon</p>
+        <TabsContent value="users" className="mt-4 space-y-4">
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+            <div className="w-full sm:w-80">
+              <Input
+                placeholder="Search by name or email…"
+                value={usersQuery}
+                onChange={(e) => setUsersQuery(e.target.value)}
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void loadUsers(usersDebouncedQuery)}
+              disabled={usersLoading}
+            >
+              {usersLoading ? "Refreshing…" : "Refresh"}
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              {users === null ? "" : `${users.length} user${users.length === 1 ? "" : "s"}`}
+            </span>
+          </div>
+
+          {users === null ? (
+            <Skeleton className="h-32 w-full" />
+          ) : users.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {usersDebouncedQuery
+                ? `No users match "${usersDebouncedQuery}".`
+                : "No users yet."}
+            </p>
+          ) : (
+            <div className={usersLoading ? "opacity-60" : ""}>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {users.map((u) => {
+                    const fullName =
+                      [u.first_name, u.last_name].filter(Boolean).join(" ").trim() ||
+                      "—";
+                    const isSelf = me?.id === u.id;
+                    const isSubmitting = !!userRoleSubmitting[u.id];
+                    const nextRole: "user" | "admin" =
+                      u.role === "admin" ? "user" : "admin";
+                    return (
+                      <TableRow key={u.id}>
+                        <TableCell className="font-medium">{fullName}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {u.email}
+                        </TableCell>
+                        <TableCell>
+                          {u.role === "admin" ? (
+                            <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 border-transparent">
+                              admin
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary">user</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {isSelf ? (
+                            <span className="text-xs text-muted-foreground">
+                              (you)
+                            </span>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant={nextRole === "admin" ? "default" : "outline"}
+                              onClick={() => void setUserRole(u.id, nextRole)}
+                              disabled={isSubmitting}
+                            >
+                              {isSubmitting
+                                ? "Saving…"
+                                : nextRole === "admin"
+                                ? "Make admin"
+                                : "Revoke admin"}
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 

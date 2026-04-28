@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useApiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -116,40 +115,48 @@ export default function FloorTrialsPage() {
             const eventName = s.event_id ? eventNameById.get(s.event_id) ?? null : null;
             const eventTz = s.event_id ? eventTimezoneById.get(s.event_id) ?? null : null;
             return (
-              <Card key={s.id}>
-                <CardHeader className="pb-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {eventName && (
-                      <Badge
-                        variant="outline"
-                        className="border-primary/40 bg-primary/10 text-primary font-medium"
-                      >
-                        {eventName}
-                      </Badge>
-                    )}
-                    {sessionStatusBadge(s.status)}
-                  </div>
-                  <CardTitle className="text-base mt-1.5 flex flex-wrap items-center gap-2">
-                    {formatSessionTitle(s, eventTz)}
-                    {eventTz && (
-                      <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
-                        {formatTimezoneAbbr(eventTz, s.floor_trial_starts_at)}
-                      </Badge>
-                    )}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="text-sm text-muted-foreground space-y-1">
-                  <p>Open: {formatTimeOnly(s.checkin_opens_at, eventTz)}</p>
-                  <p>
-                    Floor trial: {formatTimeOnly(s.floor_trial_starts_at, eventTz)} –{" "}
-                    {formatTimeOnly(s.floor_trial_ends_at, eventTz)}
-                  </p>
-                  <Separator className="my-2" />
-                  <Button variant="link" className="px-0 h-auto" asChild>
-                    <Link to={`/sessions/${s.id}`}>Open session →</Link>
-                  </Button>
-                </CardContent>
-              </Card>
+              // The whole card is the click target — wrapping the Card in a
+              // Link makes any tap or click on the row navigate, matching the
+              // "Tap a session…" instruction in the page subtitle. The inner
+              // "Open session →" element is kept as a visual affordance.
+              <Link
+                key={s.id}
+                to={`/sessions/${s.id}`}
+                className="block rounded-xl transition-colors hover:bg-accent/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Card className="border-transparent group-hover:border-primary/30">
+                  <CardHeader className="pb-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {eventName && (
+                        <Badge
+                          variant="outline"
+                          className="border-primary/40 bg-primary/10 text-primary font-medium"
+                        >
+                          {eventName}
+                        </Badge>
+                      )}
+                      {sessionStatusBadge(s.status)}
+                    </div>
+                    <CardTitle className="text-base mt-1.5 flex flex-wrap items-center gap-2">
+                      {formatSessionTitle(s, eventTz)}
+                      {eventTz && (
+                        <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                          {formatTimezoneAbbr(eventTz, s.floor_trial_starts_at)}
+                        </Badge>
+                      )}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground space-y-1">
+                    <p>Open: {formatTimeOnly(s.checkin_opens_at, eventTz)}</p>
+                    <p>
+                      Floor trial: {formatTimeOnly(s.floor_trial_starts_at, eventTz)} –{" "}
+                      {formatTimeOnly(s.floor_trial_ends_at, eventTz)}
+                    </p>
+                    <Separator className="my-2" />
+                    <p className="text-sm font-medium text-primary">Open session →</p>
+                  </CardContent>
+                </Card>
+              </Link>
             );
           })}
         </div>
