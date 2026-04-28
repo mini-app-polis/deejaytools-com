@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatSessionTitle, formatTimeOnly } from "@/lib/sessionFormat";
+import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareSessionChrono } from "@/lib/chronoSort";
 
 type EventRow = {
@@ -143,6 +143,9 @@ export default function EventDetailPage() {
                 <CardTitle className="text-base flex flex-wrap items-center gap-2">
                   {formatSessionTitle(sess, event.timezone)}
                   {sessionStatusBadge(sess.status)}
+                  <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                    {formatTimezoneAbbr(event.timezone, sess.floor_trial_starts_at)}
+                  </Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground space-y-1">

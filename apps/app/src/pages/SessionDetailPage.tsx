@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatSessionTitle, formatTimeOnly } from "@/lib/sessionFormat";
+import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 
 type SessionDetail = {
   id: string;
@@ -445,6 +445,11 @@ export default function SessionDetailPage() {
         <div className="flex items-center gap-3 flex-wrap">
           {derivedStatusBadge(derivedStatus(session, now))}
           <h1 className="page-title text-2xl">{formatSessionTitle(session, session.event_timezone)}</h1>
+          {session.event_timezone && (
+            <Badge variant="outline" className="text-xs font-normal text-muted-foreground self-center">
+              {formatTimezoneAbbr(session.event_timezone, session.floor_trial_starts_at)}
+            </Badge>
+          )}
         </div>
 
         {/* Open / Start / End times as color-coded badges:

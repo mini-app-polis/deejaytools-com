@@ -37,6 +37,28 @@ export function formatTimeOnly(ts: number, timeZone?: string | null): string {
 }
 
 /**
+ * Returns the short timezone abbreviation for a given IANA timezone at a
+ * specific moment in time, e.g. "CDT", "CST", "PDT", "EST".
+ *
+ * @param tz  - IANA timezone identifier (e.g. "America/Chicago")
+ * @param ts  - Unix epoch ms. Defaults to now. Use the session's start time so
+ *              DST abbreviations are correct for the actual event date.
+ */
+export function formatTimezoneAbbr(tz: string | null | undefined, ts?: number): string {
+  if (!tz) return "";
+  try {
+    const date = new Date(ts ?? Date.now());
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      timeZoneName: "short",
+    }).formatToParts(date);
+    return parts.find((p) => p.type === "timeZoneName")?.value ?? tz;
+  } catch {
+    return tz;
+  }
+}
+
+/**
  * "Saturday - 7:30 PM - April 27, 2026"
  *
  * Day, then time, then date. Anchored to the floor-trial start time so the

@@ -14,7 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatSessionTitle, formatTimeOnly } from "@/lib/sessionFormat";
+import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareEventChrono, compareSessionChrono } from "@/lib/chronoSort";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -35,6 +35,38 @@ const DIVISION_OPTIONS = [
   "Exhibition",
   "Superstar",
 ] as const;
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Convert a "YYYY-MM-DD" date + "HH:MM" time string to a Unix epoch (ms),
+ * interpreting the wall-clock time as local time in the given IANA timezone.
+ *
+ * e.g. ("2026-04-27", "19:30", "America/Chicago") → epoch for 7:30 PM CDT.
+ * Falls back to browser local time if the timezone is empty or invalid.
+ */
+function toEpochInTz(dateStr: string, timeStr: string, tz: string): number {
+  try {
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const [hours, minutes] = timeStr.split(":").map(Number);
+    // Create a UTC epoch for the date+time as if it were UTC, then adjust.
+    const utcGuess = Date.UTC(year!, month! - 1, day!, hours!, minutes!, 0);
+    // Find what local time that UTC epoch corresponds to in `tz`.
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    }).formatToParts(new Date(utcGuess));
+    const tzHour = parseInt(parts.find((p) => p.type === "hour")!.value);
+    const tzMin  = parseInt(parts.find((p) => p.type === "minute")!.value);
+    // Difference between desired local time and what UTC gave us in `tz`.
+    const diffMs = ((hours! * 60 + minutes!) - (tzHour * 60 + tzMin)) * 60_000;
+    return utcGuess + diffMs;
+  } catch {
+    // Fallback: treat as browser local time.
+    return new Date(`${dateStr}T${timeStr}:00`).getTime();
+  }
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -201,9 +233,11 @@ export default function AdminPage() {
   const [sessSubmitting, setSessSubmitting] = useState(false);
   const [sessEventId, setSessEventId] = useState("");
   const [sessDate, setSessDate] = useState("");
-  const [sessCheckinOpensTime, setSessCheckinOpensTime] = useState("");
-  const [sessFloorStartsTime, setSessFloorStartsTime] = useState("");
-  const [sessFloorEndsTime, setSessFloorEndsTime] = useState("");
+  const [sessStartTime, setSessStartTime] = useState("");
+  /** Minutes before start that check-in opens. 0 = same moment as start. */
+  const [sessCheckinOffsetMins, setSessCheckinOffsetMins] = useState("30");
+  /** Floor trial duration in minutes. */
+  const [sessDurationMins, setSessDurationMins] = useState("120");
   const [sessPriorityMax, setSessPriorityMax] = useState("6");
   const [sessNonPriorityMax, setSessNonPriorityMax] = useState("4");
   const [sessPriorityRunLimit, setSessPriorityRunLimit] = useState("1");
@@ -421,9 +455,9 @@ export default function AdminPage() {
   const resetSessForm = () => {
     setSessEventId(events?.[0]?.id ?? "");
     setSessDate("");
-    setSessCheckinOpensTime("");
-    setSessFloorStartsTime("");
-    setSessFloorEndsTime("");
+    setSessStartTime("");
+    setSessCheckinOffsetMins("30");
+    setSessDurationMins("120");
     setSessPriorityMax("6");
     setSessNonPriorityMax("4");
     setSessPriorityRunLimit("1");
@@ -443,10 +477,8 @@ export default function AdminPage() {
     e.preventDefault();
     if (!sessEventId) { toast.error("Select an event"); return; }
     if (!sessDate) { toast.error("Date is required"); return; }
-    if (!sessCheckinOpensTime || !sessFloorStartsTime || !sessFloorEndsTime) {
-      toast.error("All three time fields are required");
-      return;
-    }
+    if (!sessStartTime) { toast.error("Start time is required"); return; }
+
     const priorityMaxNum = Number(sessPriorityMax);
     const nonPriorityMaxNum = Number(sessNonPriorityMax);
     if (Number.isNaN(priorityMaxNum) || priorityMaxNum < 0) {
@@ -462,20 +494,15 @@ export default function AdminPage() {
       return;
     }
 
-    // Build timestamps by combining the selected date with each time
-    const toTs = (time: string) => new Date(`${sessDate}T${time}`).getTime();
-    const checkinOpensAt = toTs(sessCheckinOpensTime);
-    const floorStartsAt = toTs(sessFloorStartsTime);
-    const floorEndsAt = toTs(sessFloorEndsTime);
+    // Interpret the start time in the event's timezone so times are always
+    // correct regardless of where the admin's browser is located.
+    const eventTz =
+      events?.find((ev) => ev.id === sessEventId)?.timezone ??
+      Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-    if (floorStartsAt >= floorEndsAt) {
-      toast.error("Floor trial end must be after floor trial start");
-      return;
-    }
-    if (checkinOpensAt >= floorStartsAt) {
-      toast.error("Check-in must open before floor trial starts");
-      return;
-    }
+    const floorStartsAt  = toEpochInTz(sessDate, sessStartTime, eventTz);
+    const checkinOpensAt = floorStartsAt - Number(sessCheckinOffsetMins) * 60_000;
+    const floorEndsAt    = floorStartsAt + Number(sessDurationMins) * 60_000;
 
     const priorityRunLimitNum = Number(sessPriorityRunLimit);
     if (Number.isNaN(priorityRunLimitNum) || priorityRunLimitNum < 0) {
@@ -662,6 +689,7 @@ export default function AdminPage() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Dates</TableHead>
+                    <TableHead>Timezone</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="w-[100px]" />
                   </TableRow>
@@ -669,7 +697,7 @@ export default function AdminPage() {
                 <TableBody>
                   {events?.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-muted-foreground">
+                      <TableCell colSpan={5} className="text-muted-foreground">
                         No events yet.
                       </TableCell>
                     </TableRow>
@@ -688,6 +716,12 @@ export default function AdminPage() {
                         {ev.start_date === ev.end_date
                           ? ev.start_date
                           : `${ev.start_date} – ${ev.end_date}`}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                        <Badge variant="outline" className="text-xs font-normal">
+                          {formatTimezoneAbbr(ev.timezone)}
+                        </Badge>
+                        <span className="ml-1.5 text-xs">{ev.timezone}</span>
                       </TableCell>
                       <TableCell>{eventStatusBadge(ev.status)}</TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
@@ -721,6 +755,7 @@ export default function AdminPage() {
                   <TableRow>
                     <TableHead>Session</TableHead>
                     <TableHead>Event</TableHead>
+                    <TableHead>TZ</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Open</TableHead>
                     <TableHead>Start</TableHead>
@@ -730,7 +765,7 @@ export default function AdminPage() {
                 <TableBody>
                   {sessions?.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-muted-foreground">
+                      <TableCell colSpan={7} className="text-muted-foreground">
                         No sessions yet.
                       </TableCell>
                     </TableRow>
@@ -750,6 +785,13 @@ export default function AdminPage() {
                         <TableCell className="font-medium">{formatSessionTitle(s, s.event_timezone)}</TableCell>
                         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                           {eventName}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                          {s.event_timezone && (
+                            <Badge variant="outline" className="text-xs font-normal">
+                              {formatTimezoneAbbr(s.event_timezone, s.floor_trial_starts_at)}
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell>{sessionStatusBadge(s.status)}</TableCell>
                         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
@@ -1365,33 +1407,59 @@ export default function AdminPage() {
                   required
                 />
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className={FIELD_LABEL_CLASS}>
+                  Start time
+                  {sessEventId && events?.find((ev) => ev.id === sessEventId)?.timezone && (
+                    <span className="ml-1.5 font-normal text-muted-foreground">
+                      ({formatTimezoneAbbr(
+                        events.find((ev) => ev.id === sessEventId)!.timezone
+                      )})
+                    </span>
+                  )}
+                </label>
+                <input
+                  type="time"
+                  className={FIELD_INPUT_CLASS}
+                  value={sessStartTime}
+                  onChange={(e) => setSessStartTime(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={FIELD_LABEL_CLASS}>Check-in opens</label>
-                  <input
-                    type="time"
+                  <select
                     className={FIELD_INPUT_CLASS}
-                    value={sessCheckinOpensTime}
-                    onChange={(e) => setSessCheckinOpensTime(e.target.value)}
-                  />
+                    value={sessCheckinOffsetMins}
+                    onChange={(e) => setSessCheckinOffsetMins(e.target.value)}
+                  >
+                    <option value="0">Same as start</option>
+                    <option value="15">15 min before</option>
+                    <option value="30">30 min before</option>
+                    <option value="45">45 min before</option>
+                    <option value="60">1 hour before</option>
+                    <option value="90">1.5 hours before</option>
+                    <option value="120">2 hours before</option>
+                  </select>
                 </div>
                 <div>
-                  <label className={FIELD_LABEL_CLASS}>Floor starts</label>
-                  <input
-                    type="time"
+                  <label className={FIELD_LABEL_CLASS}>Floor trial duration</label>
+                  <select
                     className={FIELD_INPUT_CLASS}
-                    value={sessFloorStartsTime}
-                    onChange={(e) => setSessFloorStartsTime(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className={FIELD_LABEL_CLASS}>Floor ends</label>
-                  <input
-                    type="time"
-                    className={FIELD_INPUT_CLASS}
-                    value={sessFloorEndsTime}
-                    onChange={(e) => setSessFloorEndsTime(e.target.value)}
-                  />
+                    value={sessDurationMins}
+                    onChange={(e) => setSessDurationMins(e.target.value)}
+                  >
+                    <option value="60">1 hour</option>
+                    <option value="90">1.5 hours</option>
+                    <option value="120">2 hours</option>
+                    <option value="150">2.5 hours</option>
+                    <option value="180">3 hours</option>
+                    <option value="210">3.5 hours</option>
+                    <option value="240">4 hours</option>
+                    <option value="270">4.5 hours</option>
+                    <option value="300">5 hours</option>
+                  </select>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">

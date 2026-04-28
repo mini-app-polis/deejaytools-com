@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatSessionTitle, formatTimeOnly } from "@/lib/sessionFormat";
+import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareSessionChrono } from "@/lib/chronoSort";
 
 type SessionRow = {
@@ -101,7 +101,14 @@ export default function SessionsPage() {
             className="block rounded-lg border bg-card p-4 space-y-2 shadow-sm active:opacity-70 transition-opacity"
           >
             <div className="flex items-start justify-between gap-2">
-              <p className="font-medium text-base leading-snug">{formatSessionTitle(s, s.event_timezone)}</p>
+              <p className="font-medium text-base leading-snug flex flex-wrap items-center gap-2">
+                {formatSessionTitle(s, s.event_timezone)}
+                {s.event_timezone && (
+                  <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                    {formatTimezoneAbbr(s.event_timezone, s.floor_trial_starts_at)}
+                  </Badge>
+                )}
+              </p>
               {sessionStatusBadge(s.status)}
             </div>
             <div className="text-sm text-muted-foreground space-y-0.5">
@@ -138,7 +145,16 @@ export default function SessionsPage() {
             )}
             {sortedSessions?.map((s) => (
               <TableRow key={s.id}>
-                <TableCell className="font-medium">{formatSessionTitle(s, s.event_timezone)}</TableCell>
+                <TableCell className="font-medium">
+                  <span className="flex flex-wrap items-center gap-2">
+                    {formatSessionTitle(s, s.event_timezone)}
+                    {s.event_timezone && (
+                      <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                        {formatTimezoneAbbr(s.event_timezone, s.floor_trial_starts_at)}
+                      </Badge>
+                    )}
+                  </span>
+                </TableCell>
                 <TableCell>{sessionStatusBadge(s.status)}</TableCell>
                 <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                   {formatTimeOnly(s.checkin_opens_at, s.event_timezone)}

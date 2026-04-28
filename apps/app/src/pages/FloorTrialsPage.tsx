@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatSessionTitle, formatTimeOnly } from "@/lib/sessionFormat";
+import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 
 type EventRow = {
   id: string;
@@ -129,8 +129,13 @@ export default function FloorTrialsPage() {
                     )}
                     {sessionStatusBadge(s.status)}
                   </div>
-                  <CardTitle className="text-base mt-1.5">
+                  <CardTitle className="text-base mt-1.5 flex flex-wrap items-center gap-2">
                     {formatSessionTitle(s, eventTz)}
+                    {eventTz && (
+                      <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                        {formatTimezoneAbbr(eventTz, s.floor_trial_starts_at)}
+                      </Badge>
+                    )}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm text-muted-foreground space-y-1">
