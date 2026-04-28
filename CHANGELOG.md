@@ -1,3 +1,10 @@
+## [1.30.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.30.1...v1.30.2) (2026-04-28)
+
+
+### Bug Fixes
+
+* visual convenience ([c284708](https://github.com/mini-app-polis/deejaytools-com/commit/c2847089490189d752b947c95b134a0ae6e1e2f0))
+
 ## [1.30.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.30.0...v1.30.1) (2026-04-28)
 
 
