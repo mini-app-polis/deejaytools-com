@@ -528,7 +528,14 @@ songRoutes.post(
     const id = crypto.randomUUID();
     const partnerId =
       body.partner_id && body.partner_id !== "" ? body.partner_id : null;
-    const displayName = legacy.routineName?.trim() || legacy.partnership.trim() || null;
+
+    // Legacy entries often have an empty routineName and stash event/season
+    // info in `version` (e.g. "The Open 2025"). Coalesce so the claimed song
+    // carries useful routine text into the structured label.
+    const claimedRoutineName =
+      legacy.routineName?.trim() || legacy.version?.trim() || null;
+
+    const displayName = claimedRoutineName || legacy.partnership.trim() || null;
 
     await db.insert(songs).values({
       id,
@@ -540,7 +547,7 @@ songRoutes.post(
       driveFileId: null,
       driveFolderId: null,
       division: legacy.division ?? null,
-      routineName: legacy.routineName ?? null,
+      routineName: claimedRoutineName,
       personalDescriptor: legacy.descriptor ?? null,
       seasonYear: null,
       createdAt: now,

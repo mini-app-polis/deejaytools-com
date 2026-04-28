@@ -95,6 +95,20 @@ type TestInjection = {
   position: number | null;
 };
 
+type RunRow = {
+  id: string;
+  completed_at: number;
+  division_name: string;
+  session_id: string;
+  session_floor_trial_starts_at: number | null;
+  event_id: string | null;
+  event_name: string | null;
+  song_id: string;
+  song_label: string;
+  entity_label: string;
+  completed_by_label: string;
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function eventStatusBadge(status: string) {
@@ -215,6 +229,11 @@ export default function AdminPage() {
   const [tiData, setTiData] = useState<TestInjection[] | null>(null);
   const [tiDeleting, setTiDeleting] = useState(false);
 
+  // ── Run history tab ─────────────────────────────────────────────────────────
+  const [runsSessionFilter, setRunsSessionFilter] = useState("");
+  const [runs, setRuns] = useState<RunRow[] | null>(null);
+  const [runsLoading, setRunsLoading] = useState(false);
+
   // ── Data loaders ────────────────────────────────────────────────────────────
 
   const loadEvents = useCallback(() => {
@@ -275,12 +294,35 @@ export default function AdminPage() {
     }
   }, [api]);
 
+  const loadRuns = useCallback(
+    async (sessionId: string) => {
+      setRunsLoading(true);
+      try {
+        const path = sessionId
+          ? `/v1/runs?session_id=${encodeURIComponent(sessionId)}`
+          : "/v1/runs";
+        const data = await api.get<RunRow[]>(path);
+        setRuns(data);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Failed to load run history");
+      } finally {
+        setRunsLoading(false);
+      }
+    },
+    [api]
+  );
+
   useEffect(() => {
     loadEvents();
     loadSessions();
     void loadLqExtras().catch(() => {});
     void loadTestInjections().catch(() => {});
   }, [loadEvents, loadSessions, loadLqExtras, loadTestInjections]);
+
+  // Refetch run history whenever the session filter changes.
+  useEffect(() => {
+    void loadRuns(runsSessionFilter).catch(() => {});
+  }, [runsSessionFilter, loadRuns]);
 
   // Auto-refresh live queue every 8 s when a session is selected
   useEffect(() => {
@@ -586,6 +628,7 @@ export default function AdminPage() {
           <TabsTrigger value="events">Events</TabsTrigger>
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
           <TabsTrigger value="queue">Live Queue</TabsTrigger>
+          <TabsTrigger value="runs">Run History</TabsTrigger>
           <TabsTrigger value="inject">Test Inject</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
         </TabsList>
@@ -909,6 +952,89 @@ export default function AdminPage() {
                 )}
               </section>
 
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ── Run History tab ── */}
+        <TabsContent value="runs" className="mt-4 space-y-4">
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+            <div className="w-full sm:w-72">
+              <select
+                className={FIELD_INPUT_CLASS}
+                value={runsSessionFilter}
+                onChange={(e) => setRunsSessionFilter(e.target.value)}
+              >
+                <option value="">All sessions</option>
+                {sessions
+                  ?.slice()
+                  .sort(compareSessionChrono)
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {formatSessionTitle(s)}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void loadRuns(runsSessionFilter)}
+              disabled={runsLoading}
+            >
+              {runsLoading ? "Refreshing…" : "Refresh"}
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              {runs === null ? "" : `${runs.length} run${runs.length === 1 ? "" : "s"}`}
+            </span>
+          </div>
+
+          {runs === null ? (
+            <Skeleton className="h-32 w-full" />
+          ) : runs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No runs recorded yet.</p>
+          ) : (
+            <div className={`space-y-2${runsLoading ? " opacity-60" : ""}`}>
+              {runs.map((row) => {
+                const sessionRow = sessions?.find((s) => s.id === row.session_id);
+                const sessionLabel = sessionRow
+                  ? formatSessionTitle(sessionRow)
+                  : row.session_floor_trial_starts_at
+                  ? formatSessionTitle({
+                      floor_trial_starts_at: row.session_floor_trial_starts_at,
+                    })
+                  : "Unknown session";
+                return (
+                  <div
+                    key={row.id}
+                    className="rounded-lg border px-3 py-3 text-sm space-y-1"
+                  >
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <div className="min-w-0 space-y-0.5">
+                        <p className="font-medium">
+                          {row.entity_label}
+                          <span className="text-muted-foreground"> · {row.division_name}</span>
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {row.song_label}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {sessionLabel}
+                          {row.event_name ? ` · ${row.event_name}` : ""}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-xs text-muted-foreground">
+                          {formatTime(row.completed_at)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          by {row.completed_by_label}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </TabsContent>

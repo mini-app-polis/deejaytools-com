@@ -79,7 +79,16 @@ legacySongRoutes.get("/", zValidator("query", listQuery), async (c) => {
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(legacySongs.partnership);
 
+  // Most legacy entries have an empty routine name and use the version field
+  // for event/season info (e.g. "The Open 2025"). Surface the version as the
+  // routine when routine is missing so downstream displays — including the
+  // structured song label used elsewhere — always have something useful.
+  const mapped = rows.map((r) => ({
+    ...r,
+    routine_name: r.routine_name?.trim() || r.version?.trim() || null,
+  }));
+
   logger.info({ event: "legacy_songs_listed", category: "api" });
 
-  return c.json(successList(rows));
+  return c.json(successList(mapped));
 });
