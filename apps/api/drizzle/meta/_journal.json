@@ -43,6 +43,13 @@
       "when": 1777334400000,
       "tag": "0005_song_soft_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1745870400000,
+      "tag": "0006_event_timezone",
+      "breakpoints": true
     }
   ]
 }
