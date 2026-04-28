@@ -433,11 +433,10 @@ export default function SessionDetailPage() {
           </Link>
         </Button>
 
-        {/* Event name — small uppercase label above the title. */}
+        {/* Event name — rendered with the same size/font as the session title
+            so it reads as a co-title rather than a small label. */}
         {session.event_name && (
-          <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">
-            {session.event_name}
-          </p>
+          <h2 className="page-title text-2xl">{session.event_name}</h2>
         )}
 
         {/* Status badge on the LEFT of the title. */}
@@ -447,25 +446,27 @@ export default function SessionDetailPage() {
         </div>
 
         {/* Open / Start / End times as color-coded badges:
-            yellow = check-in opens, green = floor trial starts, red = ends. */}
+            yellow = check-in opens, green = floor trial starts, red = ends.
+            Text stays foreground/white; only the background and border carry
+            the semantic color so the time itself is easy to read. */}
         <div className="flex flex-wrap items-center gap-2">
           <Badge
             variant="outline"
-            className="border-yellow-500/40 bg-yellow-500/10 text-yellow-600 dark:text-yellow-300 font-normal"
+            className="border-yellow-500/40 bg-yellow-500/15 text-foreground font-normal"
           >
             <span className="opacity-70 mr-1">Open:</span>
             {formatTimeOnly(session.checkin_opens_at)}
           </Badge>
           <Badge
             variant="outline"
-            className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 font-normal"
+            className="border-emerald-500/40 bg-emerald-500/15 text-foreground font-normal"
           >
             <span className="opacity-70 mr-1">Start:</span>
             {formatTimeOnly(session.floor_trial_starts_at)}
           </Badge>
           <Badge
             variant="outline"
-            className="border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-300 font-normal"
+            className="border-red-500/40 bg-red-500/15 text-foreground font-normal"
           >
             <span className="opacity-70 mr-1">End:</span>
             {formatTimeOnly(session.floor_trial_ends_at)}
