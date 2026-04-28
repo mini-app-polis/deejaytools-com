@@ -1,3 +1,10 @@
+## [1.32.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.32.1...v1.32.2) (2026-04-28)
+
+
+### Bug Fixes
+
+* removing legacy song from front page ([98d2aa3](https://github.com/mini-app-polis/deejaytools-com/commit/98d2aa3909beab85d69c881120bb72c83f1d6905))
+
 ## [1.32.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.32.0...v1.32.1) (2026-04-28)
 
 
