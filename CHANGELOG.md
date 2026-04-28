@@ -1,3 +1,10 @@
+## [1.27.7](https://github.com/mini-app-polis/deejaytools-com/compare/v1.27.6...v1.27.7) (2026-04-28)
+
+
+### Bug Fixes
+
+* updating count/numbers and colors of times ([8b3c607](https://github.com/mini-app-polis/deejaytools-com/commit/8b3c607b305c34fe35d1e891a89663c0ce50aa12))
+
 ## [1.27.6](https://github.com/mini-app-polis/deejaytools-com/compare/v1.27.5...v1.27.6) (2026-04-28)
 
 
