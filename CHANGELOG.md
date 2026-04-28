@@ -1,3 +1,10 @@
+## [1.31.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.31.0...v1.31.1) (2026-04-28)
+
+
+### Bug Fixes
+
+* clickable cleanup and admin user setting ([65d3e15](https://github.com/mini-app-polis/deejaytools-com/commit/65d3e1543ada907a7dd8454a4e081e3174777ee7))
+
 # [1.31.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.30.8...v1.31.0) (2026-04-28)
 
 
