@@ -1,6 +1,4 @@
-import { SignInButton, SignedIn, SignedOut } from "@clerk/clerk-react";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import NavBar from "@/components/NavBar";
 import {
   Select,
@@ -10,7 +8,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const DIVISION_OPTIONS = [
@@ -69,8 +66,6 @@ const STEPS = [
 ];
 
 export default function LandingPage() {
-  const navigate = useNavigate();
-
   const [q, setQ] = useState("");
   const [division, setDivision] = useState(ALL_DIVISIONS);
   const [results, setResults] = useState<LegacySong[]>([]);
@@ -266,29 +261,12 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Operator CTA */}
-        <section className="py-10 sm:py-14">
-          <div className="rounded-xl border border-white/[0.07] bg-card px-6 py-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-            <div>
-              <h2 className="text-base font-medium text-foreground mb-1">
-                For DJs &amp; event operators
-              </h2>
-              <p className="text-sm text-muted-foreground font-light">
-                Manage events, sessions, music, and live check-in queues.
-              </p>
-            </div>
-            <div className="shrink-0">
-              <SignedOut>
-                <SignInButton forceRedirectUrl="/partners" signUpForceRedirectUrl="/partners">
-                  <Button>Sign in to DeejayTools</Button>
-                </SignInButton>
-              </SignedOut>
-              <SignedIn>
-                <Button onClick={() => navigate("/partners")}>Go to app</Button>
-              </SignedIn>
-            </div>
-          </div>
-        </section>
+        {/*
+         * Operator CTA was removed: the unified NavBar already exposes Sign in
+         * (signed out) and direct links to Partners / Songs / Admin (signed
+         * in), so a separate "go to app" block at the bottom of the landing
+         * page was redundant.
+         */}
 
       </main>
     </div>
