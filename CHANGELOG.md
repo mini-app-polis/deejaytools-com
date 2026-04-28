@@ -1,3 +1,10 @@
+## [1.30.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.30.0...v1.30.1) (2026-04-28)
+
+
+### Bug Fixes
+
+* adding timezone details and updating session creation form ([018db92](https://github.com/mini-app-polis/deejaytools-com/commit/018db92248d59147cb65a46a5ba18dd759a803d2))
+
 # [1.30.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.29.1...v1.30.0) (2026-04-28)
 
 
