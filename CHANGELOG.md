@@ -1,3 +1,11 @@
+## [1.30.5](https://github.com/mini-app-polis/deejaytools-com/compare/v1.30.4...v1.30.5) (2026-04-28)
+
+
+### Bug Fixes
+
+* testing improvements ([36b92b4](https://github.com/mini-app-polis/deejaytools-com/commit/36b92b49dd20394c58f1c075602e8319d24da601))
+* updated documentation and tests ([2f378d6](https://github.com/mini-app-polis/deejaytools-com/commit/2f378d645d9f617b74c108e3da57c92c1decac2c))
+
 ## [1.30.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.30.3...v1.30.4) (2026-04-28)
 
 
