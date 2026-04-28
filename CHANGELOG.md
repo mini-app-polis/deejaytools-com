@@ -1,3 +1,10 @@
+## [1.28.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.28.1...v1.28.2) (2026-04-28)
+
+
+### Bug Fixes
+
+* allow removal of song with history ([acd23f0](https://github.com/mini-app-polis/deejaytools-com/commit/acd23f0efe26b952a1b081a86735822e031e3518))
+
 ## [1.28.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.28.0...v1.28.1) (2026-04-28)
 
 
