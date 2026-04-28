@@ -572,3 +572,217 @@ describe("POST /v1/songs/upload/chunk", () => {
     expect(vi.mocked(drive.uploadSongToDrive)).toHaveBeenCalledOnce();
   });
 });
+
+// ---------------------------------------------------------------------------
+// POST /v1/songs/claim-legacy
+//
+// "Claim" copies a legacy_songs row into a real songs row owned by the user,
+// preserving division/routineName/descriptor and coalescing routine ← version
+// when the legacy row's routine name is empty.
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/songs/claim-legacy", () => {
+  const ENDPOINT = `${BASE}/claim-legacy`;
+
+  beforeEach(() => {
+    resetSelectQueue();
+    vi.clearAllMocks();
+  });
+
+  it("returns 401 without auth", async () => {
+    const res = await app.request(ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ legacy_song_id: "L1" }),
+    });
+    expect(res.status).toBe(401);
+    assertErrorEnvelope(await readJson<ErrorEnvelope>(res));
+  });
+
+  it("returns 400 when legacy_song_id is missing", async () => {
+    const res = await app.request(ENDPOINT, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+    assertValidation400(await readJson<ErrorEnvelope>(res));
+  });
+
+  it("returns 400 when partner_id is provided but not owned by the user", async () => {
+    // First select: partner ownership check → empty (not owned).
+    enqueueSelectResult([]);
+
+    const res = await app.request(ENDPOINT, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        legacy_song_id: "L1",
+        partner_id: "stranger-partner",
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await readJson<ErrorEnvelope>(res);
+    expect(body.error.message).toMatch(/Partner/i);
+  });
+
+  it("returns 404 when the legacy song id is unknown", async () => {
+    // Skipping partner_id (no partner ownership check needed).
+    // Legacy lookup → empty.
+    enqueueSelectResult([]);
+
+    const res = await app.request(ENDPOINT, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ legacy_song_id: "missing-legacy-id" }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("creates a song from a legacy entry that has a routine name", async () => {
+    // 1. Legacy lookup → returns the row.
+    enqueueSelectResult([
+      {
+        id: "L1",
+        partnership: "Alice & Bob",
+        division: "Classic",
+        routineName: "Sky High",
+        descriptor: null,
+        version: "The Open 2025",
+        submittedAt: "2025-01-01",
+        createdAt: 1,
+      },
+    ]);
+    // 2. Final select after insert → returns the new song joined with partner.
+    enqueueSelectResult([
+      {
+        song: {
+          id: "song-new",
+          userId: "user_test123",
+          partnerId: null,
+          displayName: "Sky High",
+          originalFilename: null,
+          processedFilename: null,
+          driveFileId: null,
+          driveFolderId: null,
+          division: "Classic",
+          routineName: "Sky High",
+          personalDescriptor: null,
+          seasonYear: null,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+        partner_first_name: null,
+        partner_last_name: null,
+      },
+    ]);
+
+    const res = await app.request(ENDPOINT, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ legacy_song_id: "L1" }),
+    });
+    expect(res.status).toBe(201);
+    const body = await readJson<SuccessEnvelope<Record<string, unknown>>>(res);
+    assertSuccessEnvelope(body);
+    expect(body.data.routine_name).toBe("Sky High");
+    expect(body.data.division).toBe("Classic");
+    // No audio uploaded yet — Drive ids stay null.
+    expect(body.data.drive_file_id).toBeNull();
+  });
+
+  it("coalesces routine_name to legacy.version when the legacy row has no routine name", async () => {
+    // 1. Legacy lookup → routine empty, version = "The Open 2025".
+    enqueueSelectResult([
+      {
+        id: "L2",
+        partnership: "Carol & Dave",
+        division: "Rising Star Classic",
+        routineName: null,
+        descriptor: null,
+        version: "The Open 2025",
+        submittedAt: null,
+        createdAt: 1,
+      },
+    ]);
+    // 2. Final select after insert: drizzle's mapSong reads back the inserted row.
+    enqueueSelectResult([
+      {
+        song: {
+          id: "song-new-2",
+          userId: "user_test123",
+          partnerId: null,
+          displayName: "The Open 2025",
+          originalFilename: null,
+          processedFilename: null,
+          driveFileId: null,
+          driveFolderId: null,
+          division: "Rising Star Classic",
+          routineName: "The Open 2025",
+          personalDescriptor: null,
+          seasonYear: null,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+        partner_first_name: null,
+        partner_last_name: null,
+      },
+    ]);
+
+    const res = await app.request(ENDPOINT, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ legacy_song_id: "L2" }),
+    });
+    expect(res.status).toBe(201);
+    const body = await readJson<SuccessEnvelope<Record<string, unknown>>>(res);
+    // The coalesce: stored routine_name should be the legacy version string.
+    expect(body.data.routine_name).toBe("The Open 2025");
+    expect(body.data.division).toBe("Rising Star Classic");
+  });
+
+  it("verifies an insert was issued into the songs table on success", async () => {
+    enqueueSelectResult([
+      {
+        id: "L3",
+        partnership: "Eve & Frank",
+        division: "Masters",
+        routineName: "Routine",
+        descriptor: null,
+        version: null,
+        submittedAt: null,
+        createdAt: 1,
+      },
+    ]);
+    enqueueSelectResult([
+      {
+        song: {
+          id: "song-new-3",
+          userId: "user_test123",
+          partnerId: null,
+          displayName: "Routine",
+          originalFilename: null,
+          processedFilename: null,
+          driveFileId: null,
+          driveFolderId: null,
+          division: "Masters",
+          routineName: "Routine",
+          personalDescriptor: null,
+          seasonYear: null,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+        partner_first_name: null,
+        partner_last_name: null,
+      },
+    ]);
+
+    const res = await app.request(ENDPOINT, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ legacy_song_id: "L3" }),
+    });
+    expect(res.status).toBe(201);
+    expect(mockDb.insert).toHaveBeenCalled();
+  });
+});
