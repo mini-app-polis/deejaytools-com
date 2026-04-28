@@ -533,6 +533,18 @@ sessionRoutes.get("/:id", async (c) => {
     return c.json(CommonErrors.notFound("Session"), 404);
   }
 
+  // Pull the event name (if any) so the page header can show which event this
+  // session belongs to without a second client-side fetch.
+  let eventName: string | null = null;
+  if (row.eventId) {
+    const [ev] = await db
+      .select({ name: events.name })
+      .from(events)
+      .where(eq(events.id, row.eventId))
+      .limit(1);
+    eventName = ev?.name ?? null;
+  }
+
   const divs = (await loadDivisionsForSession(id)).map(mapDivision);
   const depth = await loadQueueDepthsForSession(id);
 
@@ -566,6 +578,7 @@ sessionRoutes.get("/:id", async (c) => {
   return c.json(
     success({
       ...mapSessionBase(row),
+      event_name: eventName,
       divisions: divs,
       queue_depth: depth,
       ...(has_active_checkin !== undefined && { has_active_checkin }),

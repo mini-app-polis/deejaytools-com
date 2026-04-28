@@ -25,10 +25,11 @@ export function formatTimeOnly(ts: number): string {
 }
 
 /**
- * "7:30 PM - Saturday - April 27, 2026"
+ * "Saturday - 7:30 PM - April 27, 2026"
  *
- * Anchored to the floor-trial start time so the displayed time matches when the
- * session actually starts (not when check-in opens).
+ * Day, then time, then date. Anchored to the floor-trial start time so the
+ * displayed time matches when the session actually starts (not when check-in
+ * opens).
  */
 export function formatSessionTitle(session: SessionTimes): string {
   const d = new Date(session.floor_trial_starts_at);
@@ -42,5 +43,5 @@ export function formatSessionTitle(session: SessionTimes): string {
     day: "numeric",
     year: "numeric",
   });
-  return `${time} - ${dayOfWeek} - ${date}`;
+  return `${dayOfWeek} - ${time} - ${date}`;
 }

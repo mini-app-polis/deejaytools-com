@@ -12,6 +12,7 @@ import { formatSessionTitle, formatTimeOnly } from "@/lib/sessionFormat";
 type SessionDetail = {
   id: string;
   event_id: string | null;
+  event_name: string | null;
   name: string;
   date: string | null;
   checkin_opens_at: number;
@@ -370,6 +371,7 @@ export default function SessionDetailPage() {
             Check in
           </Button>
           {userQueuePosition ? (
+            // Found the user's actual queue entry — show their precise position.
             <p className="text-sm">
               <span className="font-medium">
                 #{userQueuePosition.overall} in queue
@@ -381,6 +383,16 @@ export default function SessionDetailPage() {
                   : ""}
                 )
               </span>
+            </p>
+          ) : session.has_active_checkin ? (
+            // Server says the user has a check-in but we couldn't find the
+            // exact entry locally (e.g. admin submitted on behalf of a synthetic
+            // pair). Fall back to the simpler "already in queue" message.
+            <p className="text-sm text-muted-foreground">
+              Already in queue
+              {session.active_checkin_division
+                ? ` (division: ${session.active_checkin_division})`
+                : ""}
             </p>
           ) : !canCheckIn && !checkinWindowOpen ? (
             <p className="text-sm text-muted-foreground">
@@ -414,21 +426,91 @@ export default function SessionDetailPage() {
 
   return (
     <div className={`space-y-6 ${loading ? "opacity-60" : ""}`}>
-      <div>
-        <Button variant="ghost" size="sm" className="mb-2 px-0" asChild>
-          <Link to={session.event_id ? `/events/${session.event_id}` : "/events"}>← Back</Link>
+      <div className="space-y-3">
+        <Button variant="ghost" size="sm" className="px-0" asChild>
+          <Link to={session.event_id ? `/events/${session.event_id}` : "/floor-trials"}>
+            ← Back
+          </Link>
         </Button>
-        <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="page-title text-2xl">{formatSessionTitle(session)}</h1>
-            <p className="text-sm text-muted-foreground">
-              Open {formatTimeOnly(session.checkin_opens_at)} · Floor trial{" "}
-              {formatTimeOnly(session.floor_trial_starts_at)} –{" "}
-              {formatTimeOnly(session.floor_trial_ends_at)}
-            </p>
-          </div>
+
+        {/* Event name — small uppercase label above the title. */}
+        {session.event_name && (
+          <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">
+            {session.event_name}
+          </p>
+        )}
+
+        {/* Status badge on the LEFT of the title. */}
+        <div className="flex items-center gap-3 flex-wrap">
           {derivedStatusBadge(derivedStatus(session, now))}
+          <h1 className="page-title text-2xl">{formatSessionTitle(session)}</h1>
         </div>
+
+        {/* Open / Start / End times as badges. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className="font-normal">
+            <span className="text-muted-foreground mr-1">Open:</span>
+            {formatTimeOnly(session.checkin_opens_at)}
+          </Badge>
+          <Badge variant="outline" className="font-normal">
+            <span className="text-muted-foreground mr-1">Start:</span>
+            {formatTimeOnly(session.floor_trial_starts_at)}
+          </Badge>
+          <Badge variant="outline" className="font-normal">
+            <span className="text-muted-foreground mr-1">End:</span>
+            {formatTimeOnly(session.floor_trial_ends_at)}
+          </Badge>
+        </div>
+
+        {/* Priority and standard divisions for this session. */}
+        {session.divisions && session.divisions.length > 0 && (
+          <div className="space-y-1.5 pt-1">
+            {(() => {
+              const priorityDivs = session.divisions
+                .filter((d) => d.is_priority)
+                .map((d) => d.division_name);
+              const standardDivs = session.divisions
+                .filter((d) => !d.is_priority)
+                .map((d) => d.division_name);
+              return (
+                <>
+                  {priorityDivs.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                      <span className="text-amber-500 dark:text-amber-400 font-medium uppercase tracking-wide mr-1">
+                        Priority:
+                      </span>
+                      {priorityDivs.map((d) => (
+                        <Badge
+                          key={d}
+                          variant="outline"
+                          className="border-amber-500/30 text-amber-600 dark:text-amber-300 font-normal"
+                        >
+                          {d}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  {standardDivs.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                      <span className="text-sky-500 dark:text-sky-400 font-medium uppercase tracking-wide mr-1">
+                        Standard:
+                      </span>
+                      {standardDivs.map((d) => (
+                        <Badge
+                          key={d}
+                          variant="outline"
+                          className="border-sky-500/30 text-sky-600 dark:text-sky-300 font-normal"
+                        >
+                          {d}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        )}
       </div>
 
       {/* ── Check-in action (top) ── */}
