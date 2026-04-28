@@ -1,3 +1,10 @@
+## [1.30.7](https://github.com/mini-app-polis/deejaytools-com/compare/v1.30.6...v1.30.7) (2026-04-28)
+
+
+### Bug Fixes
+
+* logo updates ([f47c524](https://github.com/mini-app-polis/deejaytools-com/commit/f47c524d9f20ad7cf867361a8f843ecf97afb359))
+
 ## [1.30.6](https://github.com/mini-app-polis/deejaytools-com/compare/v1.30.5...v1.30.6) (2026-04-28)
 
 
