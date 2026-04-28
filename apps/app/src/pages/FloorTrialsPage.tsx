@@ -108,20 +108,25 @@ export default function FloorTrialsPage() {
           No active or upcoming sessions.
         </p>
       ) : (
-        <div className={`grid gap-3 md:grid-cols-2${loading ? " opacity-60" : ""}`}>
+        <div className={`space-y-3${loading ? " opacity-60" : ""}`}>
           {upcoming.map((s) => {
             const eventName = s.event_id ? eventNameById.get(s.event_id) ?? null : null;
             return (
               <Card key={s.id}>
                 <CardHeader className="pb-2">
-                  {eventName && (
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">
-                      {eventName}
-                    </p>
-                  )}
-                  <CardTitle className="text-base flex flex-wrap items-center gap-2">
-                    {formatSessionTitle(s)}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {eventName && (
+                      <Badge
+                        variant="outline"
+                        className="border-primary/40 bg-primary/10 text-primary font-medium"
+                      >
+                        {eventName}
+                      </Badge>
+                    )}
                     {sessionStatusBadge(s.status)}
+                  </div>
+                  <CardTitle className="text-base mt-1.5">
+                    {formatSessionTitle(s)}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm text-muted-foreground space-y-1">
