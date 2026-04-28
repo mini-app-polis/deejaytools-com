@@ -365,6 +365,17 @@ export default function AdminPage() {
     void loadRuns(runsSessionFilter).catch(() => {});
   }, [runsSessionFilter, loadRuns]);
 
+  // Auto-select the single active session when sessions load / change.
+  useEffect(() => {
+    if (!sessions) return;
+    const active = sessions.filter(
+      (s) => s.status === "checkin_open" || s.status === "in_progress"
+    );
+    if (active.length === 1 && !lqSessionId) {
+      setLqSessionId(active[0]!.id);
+    }
+  }, [sessions]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Auto-refresh live queue every 8 s when a session is selected
   useEffect(() => {
     if (!lqSessionId) return;
@@ -689,7 +700,8 @@ export default function AdminPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
-                    <TableHead>Dates</TableHead>
+                    <TableHead>Start date</TableHead>
+                    <TableHead>End date</TableHead>
                     <TableHead>Timezone</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="w-[100px]" />
@@ -698,7 +710,7 @@ export default function AdminPage() {
                 <TableBody>
                   {events?.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-muted-foreground">
+                      <TableCell colSpan={6} className="text-muted-foreground">
                         No events yet.
                       </TableCell>
                     </TableRow>
@@ -714,9 +726,10 @@ export default function AdminPage() {
                     >
                       <TableCell className="font-medium">{ev.name}</TableCell>
                       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {ev.start_date === ev.end_date
-                          ? ev.start_date
-                          : `${ev.start_date} – ${ev.end_date}`}
+                        {ev.start_date}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                        {ev.end_date}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                         <Badge variant="outline" className="text-xs font-normal">
@@ -818,21 +831,31 @@ export default function AdminPage() {
           {/* Session selector */}
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
             <div className="w-full sm:w-72">
-              <select
-                className={FIELD_INPUT_CLASS}
-                value={lqSessionId}
-                onChange={(e) => setLqSessionId(e.target.value)}
-              >
-                <option value="">Select a session…</option>
-                {sessions
-                  ?.slice()
-                  .sort(compareSessionChrono)
-                  .map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {formatSessionTitle(s, s.event_timezone)}
-                  </option>
-                ))}
-              </select>
+              {(() => {
+                const activeSessions = (sessions ?? []).filter(
+                  (s) => s.status === "checkin_open" || s.status === "in_progress"
+                );
+                if (!sessions) return null;
+                if (activeSessions.length === 0) {
+                  return (
+                    <p className="text-sm text-muted-foreground">No active sessions right now.</p>
+                  );
+                }
+                return (
+                  <select
+                    className={FIELD_INPUT_CLASS}
+                    value={lqSessionId}
+                    onChange={(e) => setLqSessionId(e.target.value)}
+                  >
+                    <option value="">Select a session…</option>
+                    {activeSessions.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {formatSessionTitle(s, s.event_timezone)}
+                      </option>
+                    ))}
+                  </select>
+                );
+              })()}
             </div>
             {lqSessionId && (
               <Button
