@@ -102,7 +102,7 @@ describe("NavBar — wordmark", () => {
     signedIn = false;
     isAdmin = false;
     renderNav();
-    expect(screen.getByText("DeejayTools.com")).toBeInTheDocument();
+    expect(screen.getByAltText("DeejayTools.com")).toBeInTheDocument();
     expect(screen.getByText(/^v\d/)).toBeInTheDocument();
   });
 });

@@ -57,7 +57,7 @@ export default function NavBar() {
             <img
               src="/assets/logo/deejaytools-logo-header-320.png"
               alt="DeejayTools.com"
-              className="h-7 w-auto object-contain transition-opacity group-hover:opacity-80"
+              className="h-12 w-auto object-contain transition-opacity group-hover:opacity-80"
             />
           </picture>
           <span
