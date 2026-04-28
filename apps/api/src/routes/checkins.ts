@@ -1,4 +1,4 @@
-import { CommonErrors, error, success } from "common-typescript-utils";
+import { CommonErrors, createLogger, error, success } from "common-typescript-utils";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -9,6 +9,8 @@ import { determineInitialQueue, loadAdmissionContext } from "../lib/queue/admiss
 import { entityHasLiveEntry } from "../lib/queue/singleEntry.js";
 import { nextBottomPosition } from "../lib/queue/compaction.js";
 import { requireAuth } from "../middleware/auth.js";
+
+const logger = createLogger("deejaytools-api");
 
 export const checkinRoutes = new Hono();
 
@@ -131,7 +133,19 @@ checkinRoutes.post(
           createdAt: now,
         });
       });
-    } catch {
+    } catch (err) {
+      logger.error({
+        event: "checkin_create_failed",
+        category: "api",
+        context: {
+          sessionId: body.sessionId,
+          divisionName: body.divisionName,
+          userId,
+          entityPairId: body.entityPairId ?? null,
+          entitySoloUserId: body.entitySoloUserId ?? null,
+        },
+        error: err,
+      });
       return c.json(
         error("conflict", "Check-in conflicted with concurrent activity; please retry"),
         409

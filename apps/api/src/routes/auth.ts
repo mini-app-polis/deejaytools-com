@@ -1,4 +1,4 @@
-import { CommonErrors, success, verifyClerkToken } from "common-typescript-utils";
+import { CommonErrors, createLogger, success, verifyClerkToken } from "common-typescript-utils";
 import { zValidator } from "../lib/validate.js";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -6,6 +6,8 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
 import { bearerToken, jwksUrl, requireAuth } from "../middleware/auth.js";
+
+const logger = createLogger("deejaytools-api");
 
 const syncBody = z.object({
   email: z.string().email(),
@@ -19,12 +21,27 @@ export const authRoutes = new Hono();
 authRoutes.post("/sync", zValidator("json", syncBody), async (c) => {
   const token = bearerToken(c);
   if (!token) {
+    logger.warn({
+      event: "auth_sync_failed",
+      category: "api",
+      context: { reason: "missing_token" },
+    });
     return c.json(CommonErrors.unauthorized(), 401);
   }
   let payload;
   try {
     payload = await verifyClerkToken(token, jwksUrl());
-  } catch {
+  } catch (err) {
+    logger.warn({
+      event: "auth_sync_failed",
+      category: "api",
+      context: {
+        reason: "invalid_token",
+        // Embed the verifier's error message in context since logger.warn
+        // doesn't take an error field.
+        message: err instanceof Error ? err.message : String(err),
+      },
+    });
     return c.json(CommonErrors.unauthorized(), 401);
   }
 

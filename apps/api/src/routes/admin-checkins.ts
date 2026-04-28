@@ -1,4 +1,4 @@
-import { CommonErrors, error, success, successList } from "common-typescript-utils";
+import { CommonErrors, createLogger, error, success, successList } from "common-typescript-utils";
 import { and, desc, eq, inArray, like } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -19,6 +19,8 @@ import { determineInitialQueue, loadAdmissionContext } from "../lib/queue/admiss
 import { entityHasLiveEntry } from "../lib/queue/singleEntry.js";
 import { nextBottomPosition } from "../lib/queue/compaction.js";
 import { requireAdmin } from "../middleware/auth.js";
+
+const logger = createLogger("deejaytools-api");
 
 export const adminCheckinRoutes = new Hono();
 
@@ -196,7 +198,20 @@ adminCheckinRoutes.post("/", requireAdmin, zValidator("json", injectBody), async
         createdAt: now,
       });
     });
-  } catch {
+  } catch (err) {
+    logger.error({
+      event: "admin_checkin_inject_failed",
+      category: "api",
+      context: {
+        sessionId: body.sessionId,
+        divisionName: body.divisionName,
+        adminUserId,
+        stubUserId,
+        stubPartnerId,
+        pairId,
+      },
+      error: err,
+    });
     return c.json(
       error("conflict", "Check-in conflicted with concurrent activity; please retry"),
       409
