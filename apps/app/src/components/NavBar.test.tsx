@@ -98,11 +98,14 @@ describe("NavBar — signed in (admin)", () => {
 });
 
 describe("NavBar — wordmark", () => {
-  it("renders the DeejayTools.com wordmark and version label", () => {
+  it("renders the DJT icon, DeejayTools.com wordmark and version label", () => {
     signedIn = false;
     isAdmin = false;
     renderNav();
-    expect(screen.getByAltText("DeejayTools.com")).toBeInTheDocument();
+    // The new layout uses a square DJT icon (alt="DeejayTools") next to a
+    // visible "DeejayTools.com" text wordmark, with a small version label.
+    expect(screen.getByAltText("DeejayTools")).toBeInTheDocument();
+    expect(screen.getByText("DeejayTools.com")).toBeInTheDocument();
     expect(screen.getByText(/^v\d/)).toBeInTheDocument();
   });
 });
