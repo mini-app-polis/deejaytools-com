@@ -1,3 +1,10 @@
+# [1.31.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.30.8...v1.31.0) (2026-04-28)
+
+
+### Features
+
+* updated homepage ([f27812d](https://github.com/mini-app-polis/deejaytools-com/commit/f27812d17de6adecd7f0f5d4b044c15683290792))
+
 ## [1.30.8](https://github.com/mini-app-polis/deejaytools-com/compare/v1.30.7...v1.30.8) (2026-04-28)
 
 
