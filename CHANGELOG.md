@@ -1,3 +1,11 @@
+## [1.30.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.30.3...v1.30.4) (2026-04-28)
+
+
+### Bug Fixes
+
+* moving pages ([c05b67e](https://github.com/mini-app-polis/deejaytools-com/commit/c05b67e8143ceffc4403f583b4e67bb9c6b0170f))
+* moving pages ([63ef8e8](https://github.com/mini-app-polis/deejaytools-com/commit/63ef8e88dea11561c6230ef3e824cffb231943c4))
+
 ## [1.30.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.30.2...v1.30.3) (2026-04-28)
 
 
