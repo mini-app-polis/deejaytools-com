@@ -19,16 +19,35 @@ import { requireAdmin, requireAuth } from "../middleware/auth.js";
 // YYYY-MM-DD
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD");
 
+/** Validate that a string is a recognised IANA timezone identifier. */
+const ianaTimezone = z
+  .string()
+  .min(1)
+  .refine(
+    (tz) => {
+      try {
+        Intl.DateTimeFormat(undefined, { timeZone: tz });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    { message: "Must be a valid IANA timezone (e.g. 'America/Chicago')" }
+  );
+
 const createEvent = z.object({
   name: z.string().min(1),
   start_date: dateString,
   end_date: dateString,
+  /** IANA timezone for this event. All session times are displayed in this zone. */
+  timezone: ianaTimezone.default("America/Chicago"),
 });
 
 const patchEvent = z.object({
   name: z.string().min(1).optional(),
   start_date: dateString.optional(),
   end_date: dateString.optional(),
+  timezone: ianaTimezone.optional(),
 });
 
 export const eventRoutes = new Hono();
@@ -47,6 +66,7 @@ function mapEvent(row: typeof events.$inferSelect) {
     name: row.name,
     start_date: row.startDate,
     end_date: row.endDate,
+    timezone: row.timezone,
     status: computeStatus(row.startDate, row.endDate),
     created_by: row.createdBy,
     created_at: row.createdAt,
@@ -84,6 +104,7 @@ eventRoutes.post("/", requireAdmin, zValidator("json", createEvent), async (c) =
     name: body.name,
     startDate: body.start_date,
     endDate: body.end_date,
+    timezone: body.timezone,
     createdBy: uid,
     createdAt: now,
     updatedAt: now,
@@ -111,6 +132,7 @@ eventRoutes.patch("/:id", requireAdmin, zValidator("json", patchEvent), async (c
       ...(body.name !== undefined && { name: body.name }),
       ...(body.start_date !== undefined && { startDate: body.start_date }),
       ...(body.end_date !== undefined && { endDate: body.end_date }),
+      ...(body.timezone !== undefined && { timezone: body.timezone }),
       updatedAt: now,
     })
     .where(eq(events.id, id));

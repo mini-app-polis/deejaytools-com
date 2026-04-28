@@ -15,6 +15,8 @@ type EventRow = {
   start_date: string;
   end_date: string;
   status: string;
+  /** IANA timezone for this event (e.g. "America/Chicago"). */
+  timezone: string;
 };
 
 type SessionRow = {
@@ -84,6 +86,7 @@ export default function FloorTrialsPage() {
     .sort((a, b) => a.floor_trial_starts_at - b.floor_trial_starts_at);
 
   const eventNameById = new Map(events.map((e) => [e.id, e.name]));
+  const eventTimezoneById = new Map(events.map((e) => [e.id, e.timezone]));
 
   if (loading && sessions === null) {
     return (
@@ -111,6 +114,7 @@ export default function FloorTrialsPage() {
         <div className={`space-y-3${loading ? " opacity-60" : ""}`}>
           {upcoming.map((s) => {
             const eventName = s.event_id ? eventNameById.get(s.event_id) ?? null : null;
+            const eventTz = s.event_id ? eventTimezoneById.get(s.event_id) ?? null : null;
             return (
               <Card key={s.id}>
                 <CardHeader className="pb-2">
@@ -126,14 +130,14 @@ export default function FloorTrialsPage() {
                     {sessionStatusBadge(s.status)}
                   </div>
                   <CardTitle className="text-base mt-1.5">
-                    {formatSessionTitle(s)}
+                    {formatSessionTitle(s, eventTz)}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm text-muted-foreground space-y-1">
-                  <p>Open: {formatTimeOnly(s.checkin_opens_at)}</p>
+                  <p>Open: {formatTimeOnly(s.checkin_opens_at, eventTz)}</p>
                   <p>
-                    Floor trial: {formatTimeOnly(s.floor_trial_starts_at)} –{" "}
-                    {formatTimeOnly(s.floor_trial_ends_at)}
+                    Floor trial: {formatTimeOnly(s.floor_trial_starts_at, eventTz)} –{" "}
+                    {formatTimeOnly(s.floor_trial_ends_at, eventTz)}
                   </p>
                   <Separator className="my-2" />
                   <Button variant="link" className="px-0 h-auto" asChild>

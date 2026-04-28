@@ -13,6 +13,8 @@ type SessionDetail = {
   id: string;
   event_id: string | null;
   event_name: string | null;
+  /** IANA timezone from the parent event (e.g. "America/Chicago"). Null for standalone sessions. */
+  event_timezone: string | null;
   name: string;
   date: string | null;
   checkin_opens_at: number;
@@ -397,7 +399,7 @@ export default function SessionDetailPage() {
           ) : !canCheckIn && !checkinWindowOpen ? (
             <p className="text-sm text-muted-foreground">
               {now < session.checkin_opens_at
-                ? `Check-in opens at ${formatTimeOnly(session.checkin_opens_at)}`
+                ? `Check-in opens at ${formatTimeOnly(session.checkin_opens_at, session.event_timezone)}`
                 : "Check-in closed"}
             </p>
           ) : !canCheckIn && checkinWindowOpen && songs.length === 0 ? (
@@ -442,7 +444,7 @@ export default function SessionDetailPage() {
         {/* Status badge on the LEFT of the title. */}
         <div className="flex items-center gap-3 flex-wrap">
           {derivedStatusBadge(derivedStatus(session, now))}
-          <h1 className="page-title text-2xl">{formatSessionTitle(session)}</h1>
+          <h1 className="page-title text-2xl">{formatSessionTitle(session, session.event_timezone)}</h1>
         </div>
 
         {/* Open / Start / End times as color-coded badges:
@@ -455,21 +457,21 @@ export default function SessionDetailPage() {
             className="border-yellow-500/40 bg-yellow-500/15 text-foreground font-normal"
           >
             <span className="opacity-70 mr-1">Open:</span>
-            {formatTimeOnly(session.checkin_opens_at)}
+            {formatTimeOnly(session.checkin_opens_at, session.event_timezone)}
           </Badge>
           <Badge
             variant="outline"
             className="border-emerald-500/40 bg-emerald-500/15 text-foreground font-normal"
           >
             <span className="opacity-70 mr-1">Start:</span>
-            {formatTimeOnly(session.floor_trial_starts_at)}
+            {formatTimeOnly(session.floor_trial_starts_at, session.event_timezone)}
           </Badge>
           <Badge
             variant="outline"
             className="border-red-500/40 bg-red-500/15 text-foreground font-normal"
           >
             <span className="opacity-70 mr-1">End:</span>
-            {formatTimeOnly(session.floor_trial_ends_at)}
+            {formatTimeOnly(session.floor_trial_ends_at, session.event_timezone)}
           </Badge>
         </div>
 

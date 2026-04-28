@@ -114,6 +114,9 @@ export const events = pgTable(
     name: text("name").notNull(),
     startDate: text("start_date").notNull(),
     endDate: text("end_date").notNull(),
+    /** IANA timezone identifier, e.g. "America/Chicago". All session timestamps
+     *  for this event are interpreted and displayed in this timezone. */
+    timezone: text("timezone").notNull().default("America/Chicago"),
     createdBy: text("created_by").references(() => users.id),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),

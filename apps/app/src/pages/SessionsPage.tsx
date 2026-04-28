@@ -19,6 +19,8 @@ import { compareSessionChrono } from "@/lib/chronoSort";
 type SessionRow = {
   id: string;
   event_id: string | null;
+  /** IANA timezone from the parent event. Null for standalone sessions. */
+  event_timezone: string | null;
   name: string;
   date: string | null;
   status: string;
@@ -99,13 +101,13 @@ export default function SessionsPage() {
             className="block rounded-lg border bg-card p-4 space-y-2 shadow-sm active:opacity-70 transition-opacity"
           >
             <div className="flex items-start justify-between gap-2">
-              <p className="font-medium text-base leading-snug">{formatSessionTitle(s)}</p>
+              <p className="font-medium text-base leading-snug">{formatSessionTitle(s, s.event_timezone)}</p>
               {sessionStatusBadge(s.status)}
             </div>
             <div className="text-sm text-muted-foreground space-y-0.5">
-              <p>Open {formatTimeOnly(s.checkin_opens_at)}</p>
+              <p>Open {formatTimeOnly(s.checkin_opens_at, s.event_timezone)}</p>
               <p>
-                Floor trial {formatTimeOnly(s.floor_trial_starts_at)} – {formatTimeOnly(s.floor_trial_ends_at)}
+                Floor trial {formatTimeOnly(s.floor_trial_starts_at, s.event_timezone)} – {formatTimeOnly(s.floor_trial_ends_at, s.event_timezone)}
               </p>
             </div>
             <p className="text-sm font-medium text-primary pt-1">Open →</p>
@@ -136,16 +138,16 @@ export default function SessionsPage() {
             )}
             {sortedSessions?.map((s) => (
               <TableRow key={s.id}>
-                <TableCell className="font-medium">{formatSessionTitle(s)}</TableCell>
+                <TableCell className="font-medium">{formatSessionTitle(s, s.event_timezone)}</TableCell>
                 <TableCell>{sessionStatusBadge(s.status)}</TableCell>
                 <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                  {formatTimeOnly(s.checkin_opens_at)}
+                  {formatTimeOnly(s.checkin_opens_at, s.event_timezone)}
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                  {formatTimeOnly(s.floor_trial_starts_at)}
+                  {formatTimeOnly(s.floor_trial_starts_at, s.event_timezone)}
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                  {formatTimeOnly(s.floor_trial_ends_at)}
+                  {formatTimeOnly(s.floor_trial_ends_at, s.event_timezone)}
                 </TableCell>
                 <TableCell>
                   <Button variant="outline" size="sm" asChild>

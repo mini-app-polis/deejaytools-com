@@ -16,6 +16,8 @@ type EventRow = {
   start_date: string;
   end_date: string;
   status: string;
+  /** IANA timezone for this event (e.g. "America/Chicago"). */
+  timezone: string;
 };
 
 type SessionRow = {
@@ -139,15 +141,15 @@ export default function EventDetailPage() {
             <Card key={sess.id}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex flex-wrap items-center gap-2">
-                  {formatSessionTitle(sess)}
+                  {formatSessionTitle(sess, event.timezone)}
                   {sessionStatusBadge(sess.status)}
                 </CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground space-y-1">
-                <p>Open: {formatTimeOnly(sess.checkin_opens_at)}</p>
+                <p>Open: {formatTimeOnly(sess.checkin_opens_at, event.timezone)}</p>
                 <p>
-                  Floor trial: {formatTimeOnly(sess.floor_trial_starts_at)} –{" "}
-                  {formatTimeOnly(sess.floor_trial_ends_at)}
+                  Floor trial: {formatTimeOnly(sess.floor_trial_starts_at, event.timezone)} –{" "}
+                  {formatTimeOnly(sess.floor_trial_ends_at, event.timezone)}
                 </p>
                 <Separator className="my-2" />
                 <Button variant="link" className="px-0 h-auto" asChild>

@@ -1,60 +1,78 @@
 import { describe, expect, it } from "vitest";
 import { formatSessionTitle, formatTimeOnly } from "./sessionFormat";
 
-// Most tests pass an explicit timestamp built from a local-time ISO string so
-// they're stable regardless of the host's timezone.
+// All tests pass an explicit IANA timezone so results are stable regardless of
+// the host machine's locale or timezone setting.
+const TZ = "America/New_York";
 
 describe("formatTimeOnly", () => {
   it("renders just the hour and minute (no seconds, no date)", () => {
-    const ts = new Date("2026-04-27T07:30:00").getTime();
-    expect(formatTimeOnly(ts)).toBe("7:30 AM");
+    // 7:30 AM Eastern = 12:30 UTC
+    const ts = new Date("2026-04-27T12:30:00Z").getTime();
+    expect(formatTimeOnly(ts, TZ)).toBe("8:30 AM");
   });
 
   it("renders PM times in 12-hour form", () => {
-    const ts = new Date("2026-04-27T19:30:00").getTime();
-    expect(formatTimeOnly(ts)).toBe("7:30 PM");
+    // 7:30 PM Eastern = 23:30 UTC
+    const ts = new Date("2026-04-27T23:30:00Z").getTime();
+    expect(formatTimeOnly(ts, TZ)).toBe("7:30 PM");
   });
 
   it("zero-pads the minutes", () => {
-    const ts = new Date("2026-04-27T19:05:00").getTime();
-    expect(formatTimeOnly(ts)).toBe("7:05 PM");
+    // 7:05 PM Eastern = 23:05 UTC
+    const ts = new Date("2026-04-27T23:05:00Z").getTime();
+    expect(formatTimeOnly(ts, TZ)).toBe("7:05 PM");
   });
 
-  it("handles noon and midnight", () => {
-    const noon = new Date("2026-04-27T12:00:00").getTime();
-    const midnight = new Date("2026-04-27T00:00:00").getTime();
-    expect(formatTimeOnly(noon)).toBe("12:00 PM");
-    expect(formatTimeOnly(midnight)).toBe("12:00 AM");
+  it("handles noon and midnight in the given timezone", () => {
+    // Noon Eastern = 16:00 UTC; midnight Eastern = 04:00 UTC
+    const noon = new Date("2026-04-27T16:00:00Z").getTime();
+    const midnight = new Date("2026-04-27T04:00:00Z").getTime();
+    expect(formatTimeOnly(noon, TZ)).toBe("12:00 PM");
+    expect(formatTimeOnly(midnight, TZ)).toBe("12:00 AM");
+  });
+
+  it("falls back gracefully when no timezone is passed (does not throw)", () => {
+    const ts = new Date("2026-04-27T12:00:00Z").getTime();
+    expect(() => formatTimeOnly(ts)).not.toThrow();
+    expect(() => formatTimeOnly(ts, null)).not.toThrow();
   });
 });
 
 describe("formatSessionTitle", () => {
   it("formats as 'Day - Time - Date' anchored to floor_trial_starts_at", () => {
-    const ts = new Date("2026-04-27T08:00:00").getTime();
-    expect(formatSessionTitle({ floor_trial_starts_at: ts }))
+    // Monday April 27 2026, 8:00 AM Eastern = 12:00 UTC
+    const ts = new Date("2026-04-27T12:00:00Z").getTime();
+    expect(formatSessionTitle({ floor_trial_starts_at: ts }, TZ))
       .toBe("Monday - 8:00 AM - April 27, 2026");
   });
 
   it("uses the floor-trial start time, not check-in opens", () => {
-    // The function intentionally only looks at floor_trial_starts_at — even
-    // if the type allows other fields, they shouldn't influence the output.
-    const ts = new Date("2026-05-23T19:30:00").getTime();
-    expect(formatSessionTitle({ floor_trial_starts_at: ts }))
+    // Saturday May 23 2026, 7:30 PM Eastern = 23:30 UTC
+    const ts = new Date("2026-05-23T23:30:00Z").getTime();
+    expect(formatSessionTitle({ floor_trial_starts_at: ts }, TZ))
       .toBe("Saturday - 7:30 PM - May 23, 2026");
   });
 
-  it("renders Sunday correctly (i.e., does not slip a day due to UTC)", () => {
-    const ts = new Date("2026-05-24T07:00:00").getTime();
-    expect(formatSessionTitle({ floor_trial_starts_at: ts }))
+  it("renders Sunday correctly (timezone boundary must not slip the day)", () => {
+    // Sunday May 24 2026, 7:00 AM Eastern = 11:00 UTC
+    const ts = new Date("2026-05-24T11:00:00Z").getTime();
+    expect(formatSessionTitle({ floor_trial_starts_at: ts }, TZ))
       .toBe("Sunday - 7:00 AM - May 24, 2026");
   });
 
   it("renders the full month name, not abbreviated", () => {
-    // Use February so the abbreviation ("Feb") isn't a substring of the full name.
-    const ts = new Date("2026-02-15T13:00:00").getTime();
-    const out = formatSessionTitle({ floor_trial_starts_at: ts });
+    // Feb 15 2026, 1:00 PM Eastern = 18:00 UTC
+    const ts = new Date("2026-02-15T18:00:00Z").getTime();
+    const out = formatSessionTitle({ floor_trial_starts_at: ts }, TZ);
     expect(out).toContain("February");
     expect(out).not.toContain("Feb,");
     expect(out).not.toContain("Feb ");
+  });
+
+  it("falls back gracefully when no timezone is passed (does not throw)", () => {
+    const ts = new Date("2026-04-27T12:00:00Z").getTime();
+    expect(() => formatSessionTitle({ floor_trial_starts_at: ts })).not.toThrow();
+    expect(() => formatSessionTitle({ floor_trial_starts_at: ts }, null)).not.toThrow();
   });
 });

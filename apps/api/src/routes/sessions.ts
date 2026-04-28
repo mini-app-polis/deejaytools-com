@@ -54,12 +54,26 @@ const statusBody = z.object({
 
 export const sessionRoutes = new Hono();
 
-/** Convert epoch ms to "YYYY-MM-DD" (UTC). */
-function msToDate(ms: number): string {
-  return new Date(ms).toISOString().slice(0, 10);
+/**
+ * Convert epoch ms to "YYYY-MM-DD" in a specific IANA timezone.
+ * Uses en-CA locale which produces YYYY-MM-DD format natively.
+ * Falls back to UTC if the timezone is invalid.
+ */
+function msToDateInTz(ms: number, tz: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(ms));
+  } catch {
+    return new Date(ms).toISOString().slice(0, 10);
+  }
 }
 
-/** Validate that session timestamps fall within the event's date range. */
+/** Validate that session timestamps fall within the event's date range,
+ *  converting epoch ms to the event's local timezone for comparison. */
 async function validateSessionWithinEvent(
   eventId: string,
   checkinOpensAt: number,
@@ -67,13 +81,14 @@ async function validateSessionWithinEvent(
 ): Promise<string | null> {
   const [ev] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
   if (!ev) return "Event not found";
-  const sessionStart = msToDate(checkinOpensAt);
-  const sessionEnd = msToDate(floorTrialEndsAt);
+  const tz = ev.timezone;
+  const sessionStart = msToDateInTz(checkinOpensAt, tz);
+  const sessionEnd = msToDateInTz(floorTrialEndsAt, tz);
   if (sessionStart < ev.startDate) {
-    return `Session starts (${sessionStart}) before event start date (${ev.startDate})`;
+    return `Session starts (${sessionStart}) before event start date (${ev.startDate}) in timezone ${tz}`;
   }
   if (sessionEnd > ev.endDate) {
-    return `Session ends (${sessionEnd}) after event end date (${ev.endDate})`;
+    return `Session ends (${sessionEnd}) after event end date (${ev.endDate}) in timezone ${tz}`;
   }
   return null;
 }
@@ -217,6 +232,20 @@ sessionRoutes.get("/", zValidator("query", listQuery), async (c) => {
   const divisionsBySession = await loadDivisionsForSessions(sessionIds);
   const queueMap = await loadQueueDepthsForSessions(sessionIds);
 
+  // Build a timezone map keyed by event ID so every session can carry the
+  // event's timezone — used by clients for consistent time display.
+  const eventIds = [...new Set(rows.map((r) => r.eventId).filter(Boolean))] as string[];
+  const eventTimezoneMap = new Map<string, string>();
+  if (eventIds.length > 0) {
+    const eventRows = await db
+      .select({ id: events.id, timezone: events.timezone })
+      .from(events)
+      .where(inArray(events.id, eventIds));
+    for (const ev of eventRows) {
+      eventTimezoneMap.set(ev.id, ev.timezone);
+    }
+  }
+
   let activeSet = new Set<string>();
   if (userId && sessionIds.length > 0) {
     const userPairs = await db.select({ id: pairs.id }).from(pairs).where(eq(pairs.userAId, userId));
@@ -239,8 +268,10 @@ sessionRoutes.get("/", zValidator("query", listQuery), async (c) => {
   const results = rows.map((row) => {
     const divs = (divisionsBySession.get(row.id) ?? []).map(mapDivision);
     const depth = queueMap.get(row.id) ?? { priority: 0, non_priority: 0, active: 0 };
+    const eventTimezone = row.eventId ? (eventTimezoneMap.get(row.eventId) ?? null) : null;
     const base = {
       ...mapSessionBase(row),
+      event_timezone: eventTimezone,
       divisions: divs,
       queue_depth: depth,
     };
@@ -533,16 +564,19 @@ sessionRoutes.get("/:id", async (c) => {
     return c.json(CommonErrors.notFound("Session"), 404);
   }
 
-  // Pull the event name (if any) so the page header can show which event this
-  // session belongs to without a second client-side fetch.
+  // Pull the event name and timezone (if any) so the page header can show
+  // which event this session belongs to, and so times can be displayed in the
+  // correct timezone — all without a second client-side fetch.
   let eventName: string | null = null;
+  let eventTimezone: string | null = null;
   if (row.eventId) {
     const [ev] = await db
-      .select({ name: events.name })
+      .select({ name: events.name, timezone: events.timezone })
       .from(events)
       .where(eq(events.id, row.eventId))
       .limit(1);
     eventName = ev?.name ?? null;
+    eventTimezone = ev?.timezone ?? null;
   }
 
   const divs = (await loadDivisionsForSession(id)).map(mapDivision);
@@ -579,6 +613,7 @@ sessionRoutes.get("/:id", async (c) => {
     success({
       ...mapSessionBase(row),
       event_name: eventName,
+      event_timezone: eventTimezone,
       divisions: divs,
       queue_depth: depth,
       ...(has_active_checkin !== undefined && { has_active_checkin }),

@@ -44,11 +44,15 @@ type EventRow = {
   start_date: string;
   end_date: string;
   status: string; // computed server-side
+  /** IANA timezone for this event (e.g. "America/Chicago"). */
+  timezone: string;
 };
 
 type SessionRow = {
   id: string;
   event_id: string | null;
+  /** IANA timezone from the parent event. Null for standalone sessions. */
+  event_timezone: string | null;
   name: string;
   date: string | null;
   status: string;
@@ -737,19 +741,19 @@ export default function AdminPage() {
                         className="cursor-pointer"
                         onClick={() => navigate(`/sessions/${s.id}`)}
                       >
-                        <TableCell className="font-medium">{formatSessionTitle(s)}</TableCell>
+                        <TableCell className="font-medium">{formatSessionTitle(s, s.event_timezone)}</TableCell>
                         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                           {eventName}
                         </TableCell>
                         <TableCell>{sessionStatusBadge(s.status)}</TableCell>
                         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                          {formatTimeOnly(s.checkin_opens_at)}
+                          {formatTimeOnly(s.checkin_opens_at, s.event_timezone)}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                          {formatTimeOnly(s.floor_trial_starts_at)}
+                          {formatTimeOnly(s.floor_trial_starts_at, s.event_timezone)}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                          {formatTimeOnly(s.floor_trial_ends_at)}
+                          {formatTimeOnly(s.floor_trial_ends_at, s.event_timezone)}
                         </TableCell>
                       </TableRow>
                     );
@@ -776,7 +780,7 @@ export default function AdminPage() {
                   .sort(compareSessionChrono)
                   .map((s) => (
                   <option key={s.id} value={s.id}>
-                    {formatSessionTitle(s)}
+                    {formatSessionTitle(s, s.event_timezone)}
                   </option>
                 ))}
               </select>
@@ -976,7 +980,7 @@ export default function AdminPage() {
                   .sort(compareSessionChrono)
                   .map((s) => (
                     <option key={s.id} value={s.id}>
-                      {formatSessionTitle(s)}
+                      {formatSessionTitle(s, s.event_timezone)}
                     </option>
                   ))}
               </select>
@@ -1002,12 +1006,16 @@ export default function AdminPage() {
             <div className={`space-y-2${runsLoading ? " opacity-60" : ""}`}>
               {runs.map((row) => {
                 const sessionRow = sessions?.find((s) => s.id === row.session_id);
+                const runEventTz = row.event_id
+                  ? (events?.find((e) => e.id === row.event_id)?.timezone ?? null)
+                  : null;
                 const sessionLabel = sessionRow
-                  ? formatSessionTitle(sessionRow)
+                  ? formatSessionTitle(sessionRow, sessionRow.event_timezone)
                   : row.session_floor_trial_starts_at
-                  ? formatSessionTitle({
-                      floor_trial_starts_at: row.session_floor_trial_starts_at,
-                    })
+                  ? formatSessionTitle(
+                      { floor_trial_starts_at: row.session_floor_trial_starts_at },
+                      runEventTz
+                    )
                   : "Unknown session";
                 return (
                   <div
@@ -1064,7 +1072,7 @@ export default function AdminPage() {
                   .sort(compareSessionChrono)
                   .map((s) => (
                   <option key={s.id} value={s.id}>
-                    {formatSessionTitle(s)}
+                    {formatSessionTitle(s, s.event_timezone)}
                   </option>
                 ))}
               </select>
@@ -1171,7 +1179,7 @@ export default function AdminPage() {
                       ? `Non-priority #${row.position ?? "?"}`
                       : "Off queue";
                   const sessionRow = sessions?.find((s) => s.id === row.session_id);
-                  const sessionLabel = sessionRow ? formatSessionTitle(sessionRow) : "No session";
+                  const sessionLabel = sessionRow ? formatSessionTitle(sessionRow, sessionRow.event_timezone) : "No session";
                   return (
                     <div
                       key={row.pair_id}
