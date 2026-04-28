@@ -23,27 +23,22 @@ type CardDef = {
   body: string;
 };
 
-// Cards render in this order. Floor Trials first because it's the in-the-
-// moment action; the long-form guide trails because most visitors with a
-// concrete task to do don't need to read it.
+// Card order — the long-form guide leads, then the in-the-moment action,
+// then the user's own data, then the read-only catalog. This top-down
+// reading order matches how a competitor would naturally use the site:
+// learn, then act, then look up.
 const CARDS: CardDef[] = [
+  {
+    to: "/how-it-works",
+    eyebrow: "Start here",
+    title: "How Floor Trials Work",
+    body: "What a floor trial is, how to submit music, what happens at the event, and how the queue is ordered.",
+  },
   {
     to: "/floor-trials",
     eyebrow: "Now / next",
-    title: "Floor Trials",
+    title: "Active Floor Trials",
     body: "See active and upcoming sessions. Open one to check in and watch the live queue.",
-  },
-  {
-    to: "/music-history",
-    eyebrow: "Past submissions",
-    title: "Music history",
-    body: "Search the catalog of submitted music to confirm yours is on file.",
-  },
-  {
-    to: "/songs",
-    eyebrow: "Signed in",
-    title: "My Songs",
-    body: "Manage the music files you've submitted for your routines.",
   },
   {
     to: "/partners",
@@ -52,10 +47,16 @@ const CARDS: CardDef[] = [
     body: "Add and manage the partners you check in with.",
   },
   {
-    to: "/how-it-works",
-    eyebrow: "First time?",
-    title: "How floor trials work",
-    body: "What a floor trial is, how to submit music, what happens at the event, and how the queue is ordered.",
+    to: "/songs",
+    eyebrow: "Signed in",
+    title: "My Songs",
+    body: "Manage the music files you've submitted for your routines.",
+  },
+  {
+    to: "/music-history",
+    eyebrow: "Catalog",
+    title: "Previously Submitted Songs",
+    body: "Search across past submissions to confirm a song is on file with the deejay.",
   },
 ];
 

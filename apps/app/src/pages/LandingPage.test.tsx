@@ -28,28 +28,26 @@ describe("LandingPage — hero", () => {
 });
 
 describe("LandingPage — entry-point cards", () => {
-  it("renders cards for every entry point including How floor trials work", () => {
+  it("renders all five entry-point cards in the expected order", () => {
     renderPage();
     // Each card title appears exactly once on the page.
-    expect(screen.getByText("Floor Trials")).toBeInTheDocument();
-    expect(screen.getByText("Music history")).toBeInTheDocument();
-    expect(screen.getByText("My Songs")).toBeInTheDocument();
+    expect(screen.getByText("How Floor Trials Work")).toBeInTheDocument();
+    expect(screen.getByText("Active Floor Trials")).toBeInTheDocument();
     expect(screen.getByText("My Partners")).toBeInTheDocument();
-    expect(screen.getByText("How floor trials work")).toBeInTheDocument();
+    expect(screen.getByText("My Songs")).toBeInTheDocument();
+    expect(screen.getByText("Previously Submitted Songs")).toBeInTheDocument();
   });
 
   it("links each card to its destination route", () => {
     renderPage();
-    // Cards are <a> elements (rendered by react-router's Link). We use
-    // exact-string matches on the card titles (not regex) because the hero
-    // copy contains the substring "Floor Trials" — a loose match would
-    // collide. Walk up from the title element to the wrapping anchor.
+    // Cards are <a> elements (rendered by react-router's Link). Walk up from
+    // the title element to the wrapping anchor and assert href.
     const cards = [
-      { title: "Floor Trials", href: "/floor-trials" },
-      { title: "Music history", href: "/music-history" },
-      { title: "My Songs", href: "/songs" },
+      { title: "How Floor Trials Work", href: "/how-it-works" },
+      { title: "Active Floor Trials", href: "/floor-trials" },
       { title: "My Partners", href: "/partners" },
-      { title: "How floor trials work", href: "/how-it-works" },
+      { title: "My Songs", href: "/songs" },
+      { title: "Previously Submitted Songs", href: "/music-history" },
     ];
     for (const { title, href } of cards) {
       const titleEl = screen.getByText(title);
