@@ -1,4 +1,4 @@
-import { CommonErrors, error, success } from "common-typescript-utils";
+import { CommonErrors, createLogger, error, success } from "common-typescript-utils";
 import { and, asc, count, eq } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
@@ -18,6 +18,8 @@ import { zValidator } from "../lib/validate.js";
 import { canPromoteNonPriority, canPromotePriority } from "../lib/queue/admission.js";
 import { compactAfterRemoval, nextBottomPosition } from "../lib/queue/compaction.js";
 import { requireAdmin } from "../middleware/auth.js";
+
+const logger = createLogger("deejaytools-api");
 
 export const queueRoutes = new Hono();
 
@@ -126,7 +128,13 @@ queueRoutes.post("/promote", requireAdmin, zValidator("json", promoteBody), asyn
         createdAt: now,
       });
     });
-  } catch {
+  } catch (err) {
+    logger.error({
+      event: "queue_promote_failed",
+      category: "api",
+      context: { queueEntryId },
+      error: err,
+    });
     return c.json(error("conflict", "Promotion conflicted with concurrent activity; please retry"), 409);
   }
 
@@ -210,7 +218,13 @@ queueRoutes.post("/complete", requireAdmin, zValidator("json", slotOneBody), asy
         createdAt: now,
       });
     });
-  } catch {
+  } catch (err) {
+    logger.error({
+      event: "queue_complete_failed",
+      category: "api",
+      context: { sessionId },
+      error: err,
+    });
     return c.json(error("conflict", "Completion conflicted with concurrent activity; please retry"), 409);
   }
 
@@ -278,6 +292,12 @@ queueRoutes.post("/incomplete", requireAdmin, zValidator("json", slotOneBody), a
     if (e instanceof Error && e.message === "slot_one_missing") {
       return c.json(CommonErrors.badRequest("No entry currently running"), 400);
     }
+    logger.error({
+      event: "queue_incomplete_failed",
+      category: "api",
+      context: { sessionId },
+      error: e,
+    });
     return c.json(error("conflict", "Rotation conflicted with concurrent activity; please retry"), 409);
   }
 
@@ -321,7 +341,18 @@ queueRoutes.post("/withdraw", requireAdmin, zValidator("json", withdrawBody), as
         createdAt: now,
       });
     });
-  } catch {
+  } catch (err) {
+    logger.error({
+      event: "queue_withdraw_failed",
+      category: "api",
+      context: {
+        queueEntryId,
+        entry_session_id: entry.sessionId,
+        entry_queue_type: entry.queueType,
+        entry_position: entry.position,
+      },
+      error: err,
+    });
     return c.json(error("conflict", "Withdraw conflicted with concurrent activity; please retry"), 409);
   }
 
