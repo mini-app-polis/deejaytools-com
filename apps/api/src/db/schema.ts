@@ -98,6 +98,7 @@ export const songs = pgTable(
     routineName: text("routine_name"),
     personalDescriptor: text("personal_descriptor"),
     seasonYear: text("season_year"),
+    deletedAt: bigint("deleted_at", { mode: "number" }),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
   },

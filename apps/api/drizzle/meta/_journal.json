@@ -36,6 +36,13 @@
       "when": 1777233600000,
       "tag": "0004_event_date_range",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1745798400000,
+      "tag": "0005_song_soft_delete",
+      "breakpoints": true
     }
   ]
 }

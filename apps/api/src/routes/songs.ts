@@ -5,7 +5,7 @@ import { CommonErrors, createLogger, error, success, successList } from "common-
 import { zValidator } from "../lib/validate.js";
 import { Hono } from "hono";
 import { z } from "zod";
-import { and, desc, eq, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { checkins, partners, queueEntries, songs, users } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
@@ -274,8 +274,8 @@ songRoutes.get("/", requireAuth, zValidator("query", listQuery), async (c) => {
   const visibility = or(eq(songs.userId, userId), eq(partners.linkedUserId, userId));
   const partnerFilter =
     partner_id !== undefined && partner_id !== ""
-      ? and(visibility, eq(songs.partnerId, partner_id))
-      : visibility;
+      ? and(visibility, eq(songs.partnerId, partner_id), isNull(songs.deletedAt))
+      : and(visibility, isNull(songs.deletedAt));
 
   const rows = await db
     .select({
@@ -353,7 +353,7 @@ songRoutes.get("/:id", requireAuth, async (c) => {
     })
     .from(songs)
     .leftJoin(partners, eq(partners.id, songs.partnerId))
-    .where(and(eq(songs.id, id), or(eq(songs.userId, userId), eq(partners.linkedUserId, userId))))
+    .where(and(eq(songs.id, id), or(eq(songs.userId, userId), eq(partners.linkedUserId, userId)), isNull(songs.deletedAt)))
     .limit(1);
   if (!r) {
     return c.json(CommonErrors.notFound("Song"), 404);
@@ -376,7 +376,7 @@ songRoutes.patch("/:id", requireAuth, zValidator("json", patchBody), async (c) =
   const [existing] = await db
     .select()
     .from(songs)
-    .where(and(eq(songs.id, id), eq(songs.userId, userId)))
+    .where(and(eq(songs.id, id), eq(songs.userId, userId), isNull(songs.deletedAt)))
     .limit(1);
   if (!existing) {
     return c.json(CommonErrors.notFound("Song"), 404);
@@ -441,14 +441,14 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
   const [existing] = await db
     .select()
     .from(songs)
-    .where(and(eq(songs.id, id), eq(songs.userId, userId)))
+    .where(and(eq(songs.id, id), eq(songs.userId, userId), isNull(songs.deletedAt)))
     .limit(1);
 
   if (!existing) {
     return c.json(CommonErrors.notFound("Song"), 404);
   }
 
-  // Block if song is actively in the queue
+  // Block if song is actively in the queue — must withdraw first
   const [activeHit] = await db
     .select({ id: checkins.id })
     .from(checkins)
@@ -466,23 +466,7 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
     );
   }
 
-  // Block if song has any historical check-in (completed runs) — FK constraint would reject anyway
-  const [historicalHit] = await db
-    .select({ id: checkins.id })
-    .from(checkins)
-    .where(eq(checkins.songId, id))
-    .limit(1);
-
-  if (historicalHit) {
-    return c.json(
-      error(
-        "SONG_HAS_HISTORY",
-        "This song has been used in a completed run and is part of the event history. It cannot be deleted."
-      ),
-      409
-    );
-  }
-
+  // Soft-delete on Drive (best-effort)
   if (existing.driveFileId && existing.driveFolderId) {
     try {
       await softDeleteOnDrive(existing.driveFileId, existing.driveFolderId);
@@ -500,7 +484,12 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
     }
   }
 
-  await db.delete(songs).where(and(eq(songs.id, id), eq(songs.userId, userId)));
+  // Soft-delete: stamp deleted_at, keep the row for historical FK references
+  await db
+    .update(songs)
+    .set({ deletedAt: Date.now() })
+    .where(and(eq(songs.id, id), eq(songs.userId, userId)));
+
   return c.body(null, 204);
 });
 
