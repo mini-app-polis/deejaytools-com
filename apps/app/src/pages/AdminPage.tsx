@@ -233,7 +233,7 @@ export default function AdminPage() {
   const [sessSubmitting, setSessSubmitting] = useState(false);
   const [sessEventId, setSessEventId] = useState("");
   const [sessDate, setSessDate] = useState("");
-  const [sessStartTime, setSessStartTime] = useState("");
+  const [sessStartTime, setSessStartTime] = useState("07:00");
   /** Minutes before start that check-in opens. 0 = same moment as start. */
   const [sessCheckinOffsetMins, setSessCheckinOffsetMins] = useState("30");
   /** Floor trial duration in minutes. */
@@ -453,9 +453,10 @@ export default function AdminPage() {
   // ── Session CRUD ─────────────────────────────────────────────────────────────
 
   const resetSessForm = () => {
-    setSessEventId(events?.[0]?.id ?? "");
-    setSessDate("");
-    setSessStartTime("");
+    const defaultEvent = events?.[0];
+    setSessEventId(defaultEvent?.id ?? "");
+    setSessDate(defaultEvent?.start_date ?? "");
+    setSessStartTime("07:00");
     setSessCheckinOffsetMins("30");
     setSessDurationMins("120");
     setSessPriorityMax("6");
@@ -1389,7 +1390,12 @@ export default function AdminPage() {
                 <select
                   className={FIELD_INPUT_CLASS}
                   value={sessEventId}
-                  onChange={(e) => setSessEventId(e.target.value)}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setSessEventId(id);
+                    const ev = events?.find((ev) => ev.id === id);
+                    if (ev) setSessDate(ev.start_date);
+                  }}
                 >
                   <option value="">Select event…</option>
                   {events?.map((ev) => (
@@ -1499,9 +1505,9 @@ export default function AdminPage() {
               </div>
               <div>
                 <label className={FIELD_LABEL_CLASS}>Divisions</label>
-                <div className="space-y-1 mt-1">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
                   {DIVISION_OPTIONS.map((d) => (
-                    <label key={d} className="flex items-center gap-3 text-sm cursor-pointer py-0.5">
+                    <label key={d} className="flex items-center gap-2 text-sm cursor-pointer py-0.5">
                       <input
                         type="checkbox"
                         checked={sessDivisionPriority[d] ?? false}
