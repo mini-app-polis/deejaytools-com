@@ -1,3 +1,10 @@
+# [1.32.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.31.3...v1.32.0) (2026-04-28)
+
+
+### Features
+
+* adding instruction details ([ba15a38](https://github.com/mini-app-polis/deejaytools-com/commit/ba15a3899af5b660d55f6f4045e75d0ec33de81a))
+
 ## [1.31.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.31.2...v1.31.3) (2026-04-28)
 
 
