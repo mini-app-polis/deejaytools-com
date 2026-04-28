@@ -1,3 +1,10 @@
+## [1.30.6](https://github.com/mini-app-polis/deejaytools-com/compare/v1.30.5...v1.30.6) (2026-04-28)
+
+
+### Bug Fixes
+
+* sentry release tagging and logo updates ([9422df3](https://github.com/mini-app-polis/deejaytools-com/commit/9422df304b997d897fc50bb938177ad7e2194bfc))
+
 ## [1.30.5](https://github.com/mini-app-polis/deejaytools-com/compare/v1.30.4...v1.30.5) (2026-04-28)
 
 
