@@ -52,8 +52,10 @@ describe("SongsPage", () => {
     apiGet.mockResolvedValue([]);
     renderPage();
 
+    // Both the mobile card list and the desktop table render "No songs yet." —
+    // use getAllByText and confirm at least one instance is present.
     await waitFor(() =>
-      expect(screen.getByText(/no songs yet/i)).toBeInTheDocument()
+      expect(screen.getAllByText(/no songs yet/i).length).toBeGreaterThan(0)
     );
   });
 
@@ -73,11 +75,12 @@ describe("SongsPage", () => {
     ]);
     renderPage();
 
+    // Mobile card + desktop table both render the same data, so use getAllByText.
     await waitFor(() =>
-      expect(screen.getByText("my_song.mp3")).toBeInTheDocument()
+      expect(screen.getAllByText("my_song.mp3").length).toBeGreaterThan(0)
     );
-    expect(screen.getByText("Classic")).toBeInTheDocument();
-    expect(screen.getByText("The Open 2025")).toBeInTheDocument();
-    expect(screen.getByText("98%")).toBeInTheDocument();
+    expect(screen.getAllByText("Classic").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("The Open 2025").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("98%").length).toBeGreaterThan(0);
   });
 });
