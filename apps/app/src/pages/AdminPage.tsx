@@ -192,6 +192,7 @@ export default function AdminPage() {
   const [evName, setEvName] = useState("");
   const [evStartDate, setEvStartDate] = useState("");
   const [evEndDate, setEvEndDate] = useState("");
+  const [evTimezone, setEvTimezone] = useState("America/Chicago");
 
   // ── Sessions tab ────────────────────────────────────────────────────────────
   const [sessions, setSessions] = useState<SessionRow[] | null>(null);
@@ -399,9 +400,14 @@ export default function AdminPage() {
         name: evName.trim(),
         start_date: evStartDate,
         end_date: evEndDate,
+        timezone: evTimezone,
       });
       toast.success("Event created");
       setEvDialogOpen(false);
+      setEvName("");
+      setEvStartDate("");
+      setEvEndDate("");
+      setEvTimezone("America/Chicago");
       setEvents((prev) => (prev ? [created, ...prev] : [created]));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create event");
@@ -1272,6 +1278,43 @@ export default function AdminPage() {
                     required
                   />
                 </div>
+              </div>
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Timezone</label>
+                <select
+                  className={FIELD_INPUT_CLASS}
+                  value={evTimezone}
+                  onChange={(e) => setEvTimezone(e.target.value)}
+                >
+                  <optgroup label="United States">
+                    <option value="America/New_York">Eastern — New York / Miami</option>
+                    <option value="America/Chicago">Central — Chicago / Dallas</option>
+                    <option value="America/Denver">Mountain — Denver / Salt Lake City</option>
+                    <option value="America/Phoenix">Mountain (no DST) — Phoenix</option>
+                    <option value="America/Los_Angeles">Pacific — Los Angeles / Seattle</option>
+                    <option value="America/Anchorage">Alaska — Anchorage</option>
+                    <option value="Pacific/Honolulu">Hawaii — Honolulu</option>
+                  </optgroup>
+                  <optgroup label="Canada">
+                    <option value="America/Toronto">Eastern — Toronto</option>
+                    <option value="America/Winnipeg">Central — Winnipeg</option>
+                    <option value="America/Edmonton">Mountain — Edmonton</option>
+                    <option value="America/Vancouver">Pacific — Vancouver</option>
+                  </optgroup>
+                  <optgroup label="Europe">
+                    <option value="Europe/London">London / Dublin</option>
+                    <option value="Europe/Paris">Central European — Paris / Berlin</option>
+                    <option value="Europe/Helsinki">Eastern European — Helsinki / Kyiv</option>
+                  </optgroup>
+                  <optgroup label="Asia / Pacific">
+                    <option value="Asia/Tokyo">Tokyo / Osaka</option>
+                    <option value="Asia/Seoul">Seoul</option>
+                    <option value="Asia/Shanghai">Shanghai / Beijing</option>
+                    <option value="Asia/Singapore">Singapore / Kuala Lumpur</option>
+                    <option value="Australia/Sydney">Sydney / Melbourne</option>
+                    <option value="Pacific/Auckland">Auckland</option>
+                  </optgroup>
+                </select>
               </div>
               <Button type="submit" disabled={evSubmitting} size="lg" className="w-full">
                 {evSubmitting ? "Creating…" : "Create event"}

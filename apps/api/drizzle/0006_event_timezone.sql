@@ -3,4 +3,4 @@
 -- IANA timezone. Existing events default to "America/Chicago".
 
 ALTER TABLE "events"
-  ADD COLUMN "timezone" text NOT NULL DEFAULT 'America/Chicago';
+  ADD COLUMN IF NOT EXISTS "timezone" text NOT NULL DEFAULT 'America/Chicago';
