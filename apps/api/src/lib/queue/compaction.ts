@@ -1,4 +1,4 @@
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, asc, eq, gt, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { queueEntries } from "../../db/schema.js";
 
@@ -10,6 +10,11 @@ export type QueueType = "priority" | "non_priority" | "active";
  * After deleting a queue_entries row at `removedPosition`, shift everything below
  * up by one. Caller is responsible for invoking this inside the same transaction
  * as the delete.
+ *
+ * Uses a two-step approach: first move affected rows to large sentinel positions
+ * (avoiding any unique constraint clash with existing rows), then shift them to
+ * their final positions. This prevents the duplicate-key race that occurs when
+ * a concurrent transaction has already compacted the same queue.
  */
 export async function compactAfterRemoval(
   tx: DbTransaction,
@@ -17,16 +22,37 @@ export async function compactAfterRemoval(
   queueType: QueueType,
   removedPosition: number
 ): Promise<void> {
-  await tx
-    .update(queueEntries)
-    .set({ position: sql`${queueEntries.position} - 1` })
+  // Fetch affected rows ordered from lowest to highest position.
+  const rows = await tx
+    .select({ id: queueEntries.id, position: queueEntries.position })
+    .from(queueEntries)
     .where(
       and(
         eq(queueEntries.sessionId, sessionId),
         eq(queueEntries.queueType, queueType),
         gt(queueEntries.position, removedPosition)
       )
-    );
+    )
+    .orderBy(asc(queueEntries.position));
+
+  if (rows.length === 0) return;
+
+  // Step 1: move each row to a sentinel position (position + 1_000_000) so
+  // the target positions are unoccupied before we fill them.
+  for (const row of rows) {
+    await tx
+      .update(queueEntries)
+      .set({ position: row.position + 1_000_000 })
+      .where(eq(queueEntries.id, row.id));
+  }
+
+  // Step 2: move each row to its final compacted position (original - 1).
+  for (const row of rows) {
+    await tx
+      .update(queueEntries)
+      .set({ position: row.position - 1 })
+      .where(eq(queueEntries.id, row.id));
+  }
 }
 
 /**
