@@ -11,6 +11,7 @@ import EventsPage from "./EventsPage";
 import PartnersPage from "./PartnersPage";
 import SessionDetailPage from "./SessionDetailPage";
 import SessionsPage from "./SessionsPage";
+import AddSongPage from "./AddSongPage";
 import SongsPage from "./SongsPage";
 
 export default function App() {
@@ -42,6 +43,14 @@ export default function App() {
             element={
               <RequireAuth>
                 <SongsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="songs/add"
+            element={
+              <RequireAuth>
+                <AddSongPage />
               </RequireAuth>
             }
           />

@@ -60,22 +60,22 @@ describe("NavBar — signed out", () => {
     // Sign in CTA renders.
     expect(screen.getByTestId("sign-in-button")).toBeInTheDocument();
     // Authenticated-only items must not appear.
-    expect(screen.queryByRole("link", { name: /^partners$/i })).toBeNull();
-    expect(screen.queryByRole("link", { name: /^songs$/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^my partners$/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^my songs$/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /^admin$/i })).toBeNull();
     expect(screen.queryByTestId("user-button")).toBeNull();
   });
 });
 
 describe("NavBar — signed in (regular user)", () => {
-  it("shows Floor Trials, Partners, Songs and the UserButton; no Admin link", () => {
+  it("shows Floor Trials, My Partners, My Songs and the UserButton; no Admin link", () => {
     signedIn = true;
     isAdmin = false;
     renderNav();
 
     expect(screen.getAllByRole("link", { name: /floor trials/i }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("link", { name: /^partners$/i }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("link", { name: /^songs$/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /^my partners$/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /^my songs$/i }).length).toBeGreaterThan(0);
     expect(screen.getByTestId("user-button")).toBeInTheDocument();
 
     expect(screen.queryByRole("link", { name: /^admin$/i })).toBeNull();
@@ -91,8 +91,8 @@ describe("NavBar — signed in (admin)", () => {
 
     expect(screen.getAllByRole("link", { name: /^admin$/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /floor trials/i }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("link", { name: /^partners$/i }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("link", { name: /^songs$/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /^my partners$/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /^my songs$/i }).length).toBeGreaterThan(0);
     expect(screen.getByTestId("user-button")).toBeInTheDocument();
   });
 });

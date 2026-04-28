@@ -13,8 +13,8 @@ const PUBLIC_ITEMS: NavItem[] = [{ to: "/floor-trials", label: "Floor Trials" }]
 
 // Signed-in only.
 const SIGNED_IN_ITEMS: NavItem[] = [
-  { to: "/partners", label: "Partners" },
-  { to: "/songs", label: "Songs" },
+  { to: "/partners", label: "My Partners" },
+  { to: "/songs", label: "My Songs" },
 ];
 
 /**
