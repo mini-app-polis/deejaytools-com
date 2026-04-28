@@ -374,7 +374,7 @@ export default function AdminPage() {
     if (active.length === 1 && !lqSessionId) {
       setLqSessionId(active[0]!.id);
     }
-  }, [sessions]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sessions]); // intentionally omit lqSessionId — only auto-select on initial session load
 
   // Auto-refresh live queue every 8 s when a session is selected
   useEffect(() => {
