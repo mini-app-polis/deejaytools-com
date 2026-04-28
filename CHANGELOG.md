@@ -1,3 +1,10 @@
+## [1.29.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.29.0...v1.29.1) (2026-04-28)
+
+
+### Bug Fixes
+
+* to apply sql migration ([a8bf65c](https://github.com/mini-app-polis/deejaytools-com/commit/a8bf65c90429394266bf0fa1feb5d316953afe79))
+
 # [1.29.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.28.3...v1.29.0) (2026-04-28)
 
 
