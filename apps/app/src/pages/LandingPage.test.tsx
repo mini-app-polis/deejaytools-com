@@ -28,14 +28,18 @@ describe("LandingPage — hero", () => {
 });
 
 describe("LandingPage — entry-point cards", () => {
-  it("renders all five entry-point cards in the expected order", () => {
+  it("renders the four entry-point cards in the expected order", () => {
     renderPage();
     // Each card title appears exactly once on the page.
     expect(screen.getByText("How Floor Trials Work")).toBeInTheDocument();
     expect(screen.getByText("Active Floor Trials")).toBeInTheDocument();
     expect(screen.getByText("My Partners")).toBeInTheDocument();
     expect(screen.getByText("My Songs")).toBeInTheDocument();
-    expect(screen.getByText("Previously Submitted Songs")).toBeInTheDocument();
+    // The historical catalog used to be its own card linking to
+    // /music-history. That page + card were removed because the same
+    // search lives inside AddSongPage's "Claim from history" dialog and a
+    // separate top-level entry was redundant.
+    expect(screen.queryByText("Previously Submitted Songs")).toBeNull();
   });
 
   it("links each card to its destination route", () => {
@@ -47,7 +51,6 @@ describe("LandingPage — entry-point cards", () => {
       { title: "Active Floor Trials", href: "/floor-trials" },
       { title: "My Partners", href: "/partners" },
       { title: "My Songs", href: "/songs" },
-      { title: "Previously Submitted Songs", href: "/music-history" },
     ];
     for (const { title, href } of cards) {
       const titleEl = screen.getByText(title);

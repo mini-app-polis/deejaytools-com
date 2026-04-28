@@ -52,12 +52,6 @@ const CARDS: CardDef[] = [
     title: "My Songs",
     body: "Manage the music files you've submitted for your routines.",
   },
-  {
-    to: "/music-history",
-    eyebrow: "Catalog",
-    title: "Previously Submitted Songs",
-    body: "Search across past submissions to confirm a song is on file with the deejay.",
-  },
 ];
 
 export default function LandingPage() {

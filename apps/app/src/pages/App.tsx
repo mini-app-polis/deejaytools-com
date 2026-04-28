@@ -9,7 +9,6 @@ import FloorTrialsPage from "./FloorTrialsPage";
 import EventDetailPage from "./EventDetailPage";
 import EventsPage from "./EventsPage";
 import HowItWorksPage from "./HowItWorksPage";
-import MusicHistoryPage from "./MusicHistoryPage";
 import PartnersPage from "./PartnersPage";
 import SessionDetailPage from "./SessionDetailPage";
 import SessionsPage from "./SessionsPage";
@@ -30,12 +29,13 @@ export default function App() {
           <Route path="floor-trials" element={<FloorTrialsPage />} />
           {/* Back-compat for the old /check-in URL — re-render Floor Trials. */}
           <Route path="check-in" element={<FloorTrialsPage />} />
-          {/* Public legacy-songs catalog search — extracted from the homepage
-              so the landing page can stay a thin orientation layer. */}
-          <Route path="music-history" element={<MusicHistoryPage />} />
-          {/* Long-form floor-trial process guide. Moved off the homepage so
-              the home stays card-first; linked from the homepage card grid
-              and from contextual tips on FloorTrialsPage / AddSongPage. */}
+          {/* Long-form floor-trial process guide. Linked from the homepage
+              card grid and from contextual tips on FloorTrialsPage /
+              AddSongPage. The legacy-songs catalog used to live at
+              /music-history; that page was removed because the same search
+              already exists as the "Claim from history" dialog inside
+              AddSongPage and a separate top-level entry just confused
+              first-time visitors. */}
           <Route path="how-it-works" element={<HowItWorksPage />} />
 
           {/* Auth-required routes */}

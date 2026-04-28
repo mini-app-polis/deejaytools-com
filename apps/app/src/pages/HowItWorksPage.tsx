@@ -174,22 +174,20 @@ export default function HowItWorksPage() {
         <Section section={SECTIONS[3]!}>
           <p>
             After you've submitted, confirm the deejay actually has your
-            file. There are two ways:
+            file by checking{" "}
+            <Link to="/songs" className="text-primary hover:underline">My Songs</Link>{" "}
+            — it lists everything you've uploaded under your account. If
+            your routine doesn't appear there, the deejay does not have it
+            and you should re-upload before the floor trial starts.
           </p>
-          <ul className="list-disc pl-5 space-y-2">
-            <li>
-              <strong className="text-foreground">Your own list:</strong>{" "}
-              <Link to="/songs" className="text-primary hover:underline">My Songs</Link>{" "}
-              shows everything you've uploaded under your account.
-            </li>
-            <li>
-              <strong className="text-foreground">The full catalog:</strong>{" "}
-              <Link to="/music-history" className="text-primary hover:underline">Previously Submitted Songs</Link>{" "}
-              is searchable across every submission for the event. If your
-              partnership doesn't appear there, the deejay does not have
-              your music — re-upload it before the floor trial starts.
-            </li>
-          </ul>
+          <p>
+            If a song was submitted under a previous account, by a former
+            partner, or before this site existed, you can also claim it
+            from the historical catalog: open{" "}
+            <Link to="/songs/add" className="text-primary hover:underline">Add a song</Link>{" "}
+            and use the <em>Claim from history</em> option to search past
+            submissions and attach one to your account.
+          </p>
         </Section>
 
         <Section section={SECTIONS[4]!}>
