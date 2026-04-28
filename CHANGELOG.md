@@ -1,3 +1,10 @@
+## [1.27.8](https://github.com/mini-app-polis/deejaytools-com/compare/v1.27.7...v1.27.8) (2026-04-28)
+
+
+### Bug Fixes
+
+* font changes ([591ad71](https://github.com/mini-app-polis/deejaytools-com/commit/591ad7163a0e183f9bbcbd2b351899501c1a7d48))
+
 ## [1.27.7](https://github.com/mini-app-polis/deejaytools-com/compare/v1.27.6...v1.27.7) (2026-04-28)
 
 
