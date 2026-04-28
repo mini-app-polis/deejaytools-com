@@ -24,6 +24,12 @@ Sentry.init({
   dsn: process.env.SENTRY_DSN,
   environment: process.env.NODE_ENV ?? "development",
   enabled: !!process.env.SENTRY_DSN,
+  // Tag every event with the deployed version so errors link back to a
+  // specific release. Railway sets RAILWAY_DEPLOYMENT_ID per deploy; the
+  // npm fallback uses the version semantic-release bumps in package.json.
+  release:
+    process.env.RAILWAY_DEPLOYMENT_ID ??
+    process.env.npm_package_version,
 });
 
 export const app = new Hono();

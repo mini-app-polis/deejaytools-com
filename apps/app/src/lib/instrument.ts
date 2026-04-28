@@ -16,6 +16,9 @@ Sentry.init({
   environment: import.meta.env.MODE,
   enabled: Boolean(import.meta.env.VITE_SENTRY_DSN),
   sendDefaultPii: false,
+  // Tag every event with the deployed release. VITE_APP_VERSION is injected
+  // at build time by vite.config.ts from the monorepo-root package.json.
+  release: import.meta.env.VITE_APP_VERSION,
 });
 
 export { Sentry };
