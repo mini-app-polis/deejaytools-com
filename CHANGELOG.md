@@ -1,3 +1,13 @@
+## [1.30.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.30.2...v1.30.3) (2026-04-28)
+
+
+### Bug Fixes
+
+* build ([2878337](https://github.com/mini-app-polis/deejaytools-com/commit/2878337db44a565233a5f207e9320ccf9ad85dca))
+* build and logo size ([a80cb8c](https://github.com/mini-app-polis/deejaytools-com/commit/a80cb8c9baf637e52d43a3389c189c036fe87958))
+* style changes including icon assets ([92a963a](https://github.com/mini-app-polis/deejaytools-com/commit/92a963aa0aead69e269e21d1e3b5580fd3934bbd))
+* visual convenience ([df089f8](https://github.com/mini-app-polis/deejaytools-com/commit/df089f84954caceef1c29965c7eb68145b6318a8))
+
 ## [1.30.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.30.1...v1.30.2) (2026-04-28)
 
 
