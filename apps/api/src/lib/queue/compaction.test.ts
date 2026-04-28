@@ -53,24 +53,33 @@ describe("compactAfterRemoval", () => {
     vi.clearAllMocks();
   });
 
-  it("issues a single UPDATE that decrements positions", async () => {
+  it("issues two UPDATEs per row (sentinel then final) that decrement positions", async () => {
+    // Enqueue one row so the SELECT returns data and updates proceed.
+    enqueueSelectResult([{ id: "e1", position: 4 }]);
     await compactAfterRemoval(tx, "session-1", "active", 3);
-    // Verify update was called and chained through .set().where()
-    expect(mockDb.update).toHaveBeenCalledTimes(1);
+    // Step 1: move to sentinel (position + 1_000_000); Step 2: move to final (position - 1).
+    // 2 updates × 1 row = 2 total.
+    expect(mockDb.update).toHaveBeenCalledTimes(2);
   });
 
-  it("does not throw when there are no rows below the removed position", async () => {
-    // The mock's update().set().where() always resolves; we're just confirming
-    // the call signature works for the no-op case (caller still invokes it).
+  it("does not call UPDATE when there are no rows below the removed position", async () => {
+    // Enqueue an empty result so the SELECT returns [] and we return early.
+    enqueueSelectResult([]);
     await expect(
       compactAfterRemoval(tx, "session-1", "non_priority", 100)
     ).resolves.toBeUndefined();
+    expect(mockDb.update).toHaveBeenCalledTimes(0);
   });
 
   it("can be called for any of the three queue types", async () => {
+    // Each call needs its own SELECT result enqueued (one row each).
+    enqueueSelectResult([{ id: "e1", position: 2 }]);
     await compactAfterRemoval(tx, "s1", "active", 1);
+    enqueueSelectResult([{ id: "e2", position: 2 }]);
     await compactAfterRemoval(tx, "s1", "priority", 1);
+    enqueueSelectResult([{ id: "e3", position: 2 }]);
     await compactAfterRemoval(tx, "s1", "non_priority", 1);
-    expect(mockDb.update).toHaveBeenCalledTimes(3);
+    // 2 updates × 1 row × 3 calls = 6 total.
+    expect(mockDb.update).toHaveBeenCalledTimes(6);
   });
 });
