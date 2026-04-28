@@ -446,18 +446,28 @@ export default function SessionDetailPage() {
           <h1 className="page-title text-2xl">{formatSessionTitle(session)}</h1>
         </div>
 
-        {/* Open / Start / End times as badges. */}
+        {/* Open / Start / End times as color-coded badges:
+            yellow = check-in opens, green = floor trial starts, red = ends. */}
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className="font-normal">
-            <span className="text-muted-foreground mr-1">Open:</span>
+          <Badge
+            variant="outline"
+            className="border-yellow-500/40 bg-yellow-500/10 text-yellow-600 dark:text-yellow-300 font-normal"
+          >
+            <span className="opacity-70 mr-1">Open:</span>
             {formatTimeOnly(session.checkin_opens_at)}
           </Badge>
-          <Badge variant="outline" className="font-normal">
-            <span className="text-muted-foreground mr-1">Start:</span>
+          <Badge
+            variant="outline"
+            className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 font-normal"
+          >
+            <span className="opacity-70 mr-1">Start:</span>
             {formatTimeOnly(session.floor_trial_starts_at)}
           </Badge>
-          <Badge variant="outline" className="font-normal">
-            <span className="text-muted-foreground mr-1">End:</span>
+          <Badge
+            variant="outline"
+            className="border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-300 font-normal"
+          >
+            <span className="opacity-70 mr-1">End:</span>
             {formatTimeOnly(session.floor_trial_ends_at)}
           </Badge>
         </div>
@@ -564,7 +574,7 @@ export default function SessionDetailPage() {
             priorityWaiting.map((r, i) => (
               <div key={r.queueEntryId} className="flex items-start gap-3">
                 <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
-                  #{i + 1}
+                  #{active.length + i + 1}
                 </span>
                 <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
                   <p className="font-medium">{renderEntityLabel(r)}</p>
@@ -590,7 +600,7 @@ export default function SessionDetailPage() {
             standardWaiting.map((r, i) => (
               <div key={r.queueEntryId} className="flex items-start gap-3">
                 <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
-                  #{i + 1}
+                  #{active.length + priorityWaiting.length + i + 1}
                 </span>
                 <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
                   <p className="font-medium">{renderEntityLabel(r)}</p>
