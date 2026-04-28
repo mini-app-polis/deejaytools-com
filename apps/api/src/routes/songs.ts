@@ -448,6 +448,7 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
     return c.json(CommonErrors.notFound("Song"), 404);
   }
 
+  // Block if song is actively in the queue
   const [activeHit] = await db
     .select({ id: checkins.id })
     .from(checkins)
@@ -460,6 +461,23 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
       error(
         "SONG_IN_ACTIVE_CHECKIN",
         "This song is referenced by an active check-in. Complete or withdraw the check-in first."
+      ),
+      409
+    );
+  }
+
+  // Block if song has any historical check-in (completed runs) — FK constraint would reject anyway
+  const [historicalHit] = await db
+    .select({ id: checkins.id })
+    .from(checkins)
+    .where(eq(checkins.songId, id))
+    .limit(1);
+
+  if (historicalHit) {
+    return c.json(
+      error(
+        "SONG_HAS_HISTORY",
+        "This song has been used in a completed run and is part of the event history. It cannot be deleted."
       ),
       409
     );
