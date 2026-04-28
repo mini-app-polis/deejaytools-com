@@ -6,7 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
+import { cn } from "@/lib/utils";
 
 type EventRow = {
   id: string;
@@ -122,9 +124,9 @@ export default function FloorTrialsPage() {
               <Link
                 key={s.id}
                 to={`/sessions/${s.id}`}
-                className="block rounded-xl transition-colors hover:bg-accent/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={cn("block rounded-xl border border-transparent", CLICKABLE_CARD_CLASS)}
               >
-                <Card className="border-transparent group-hover:border-primary/30">
+                <Card className="bg-transparent border-transparent shadow-none">
                   <CardHeader className="pb-2">
                     <div className="flex flex-wrap items-center gap-2">
                       {eventName && (

@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 import NavBar from "@/components/NavBar";
+import { cn } from "@/lib/utils";
+import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
 
 /**
  * Public landing page.
@@ -111,7 +113,10 @@ export default function LandingPage() {
               <Link
                 key={card.to}
                 to={card.to}
-                className="group rounded-xl border border-white/[0.07] bg-card px-5 py-5 transition-colors hover:border-white/20 hover:bg-card/80 flex flex-col"
+                className={cn(
+                  "rounded-xl border border-white/[0.07] bg-card px-5 py-5 flex flex-col",
+                  CLICKABLE_CARD_CLASS
+                )}
               >
                 <p
                   className="text-[10px] font-medium tracking-[0.18em] uppercase text-primary/60 mb-3"

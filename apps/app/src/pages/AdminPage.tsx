@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useApiClient } from "@/api/client";
 import { useAuthMe } from "@/hooks/useAuthMe";
+import { CLICKABLE_ROW_CLASS } from "@/lib/clickable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -812,7 +813,7 @@ export default function AdminPage() {
                     .map((ev) => (
                     <TableRow
                       key={ev.id}
-                      className="cursor-pointer"
+                      className={CLICKABLE_ROW_CLASS}
                       onClick={() => navigate(`/events/${ev.id}`)}
                     >
                       <TableCell className="font-medium">{ev.name}</TableCell>
@@ -884,7 +885,7 @@ export default function AdminPage() {
                     return (
                       <TableRow
                         key={s.id}
-                        className="cursor-pointer"
+                        className={CLICKABLE_ROW_CLASS}
                         onClick={() => navigate(`/sessions/${s.id}`)}
                       >
                         <TableCell className="font-medium">{formatSessionTitle(s, s.event_timezone)}</TableCell>

@@ -14,6 +14,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { compareEventChrono } from "@/lib/chronoSort";
+import { CLICKABLE_CARD_CLASS, CLICKABLE_ROW_CLASS } from "@/lib/clickable";
+import { cn } from "@/lib/utils";
 
 type EventRow = {
   id: string;
@@ -88,7 +90,10 @@ export default function EventsPage() {
           <button
             key={ev.id}
             type="button"
-            className="w-full text-left rounded-lg border bg-card p-4 space-y-2 shadow-sm active:opacity-70 transition-opacity"
+            className={cn(
+              "w-full text-left rounded-lg border bg-card p-4 space-y-2 shadow-sm",
+              CLICKABLE_CARD_CLASS
+            )}
             onClick={() => navigate(`/events/${ev.id}`)}
           >
             <div className="flex items-start justify-between gap-2">
@@ -127,7 +132,7 @@ export default function EventsPage() {
             {sortedEvents?.map((ev) => (
               <TableRow
                 key={ev.id}
-                className="cursor-pointer"
+                className={CLICKABLE_ROW_CLASS}
                 onClick={() => navigate(`/events/${ev.id}`)}
               >
                 <TableCell className="font-medium">{ev.name}</TableCell>

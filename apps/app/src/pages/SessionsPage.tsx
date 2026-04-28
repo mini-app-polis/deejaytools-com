@@ -12,8 +12,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { CLICKABLE_CARD_CLASS, CLICKABLE_ROW_CLASS } from "@/lib/clickable";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareSessionChrono } from "@/lib/chronoSort";
+import { cn } from "@/lib/utils";
 
 type SessionRow = {
   id: string;
@@ -98,7 +100,10 @@ export default function SessionsPage() {
           <Link
             key={s.id}
             to={`/sessions/${s.id}`}
-            className="block rounded-lg border bg-card p-4 space-y-2 shadow-sm active:opacity-70 transition-opacity"
+            className={cn(
+              "block rounded-lg border bg-card p-4 space-y-2 shadow-sm",
+              CLICKABLE_CARD_CLASS
+            )}
           >
             <div className="flex items-start justify-between gap-2">
               <p className="font-medium text-base leading-snug flex flex-wrap items-center gap-2">
@@ -148,7 +153,7 @@ export default function SessionsPage() {
               // column, which was redundant with row navigation.
               <TableRow
                 key={s.id}
-                className="cursor-pointer"
+                className={CLICKABLE_ROW_CLASS}
                 onClick={() => navigate(`/sessions/${s.id}`)}
               >
                 <TableCell className="font-medium">
