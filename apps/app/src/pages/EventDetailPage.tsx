@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareSessionChrono } from "@/lib/chronoSort";
+import { cn } from "@/lib/utils";
 
 type EventRow = {
   id: string;
@@ -138,28 +140,34 @@ export default function EventDetailPage() {
             ?.slice()
             .sort(compareSessionChrono)
             .map((sess) => (
-            <Card key={sess.id}>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex flex-wrap items-center gap-2">
-                  {formatSessionTitle(sess, event.timezone)}
-                  {sessionStatusBadge(sess.status)}
-                  <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
-                    {formatTimezoneAbbr(event.timezone, sess.floor_trial_starts_at)}
-                  </Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground space-y-1">
-                <p>Open: {formatTimeOnly(sess.checkin_opens_at, event.timezone)}</p>
-                <p>
-                  Floor trial: {formatTimeOnly(sess.floor_trial_starts_at, event.timezone)} –{" "}
-                  {formatTimeOnly(sess.floor_trial_ends_at, event.timezone)}
-                </p>
-                <Separator className="my-2" />
-                <Button variant="link" className="px-0 h-auto" asChild>
-                  <Link to={`/sessions/${sess.id}`}>Open session →</Link>
-                </Button>
-              </CardContent>
-            </Card>
+            // Whole-card click target — matches FloorTrialsPage. The inner
+            // "Open session →" line stays as a visual affordance.
+            <Link
+              key={sess.id}
+              to={`/sessions/${sess.id}`}
+              className={cn("block rounded-xl border border-transparent", CLICKABLE_CARD_CLASS)}
+            >
+              <Card className="bg-transparent border-transparent shadow-none">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex flex-wrap items-center gap-2">
+                    {formatSessionTitle(sess, event.timezone)}
+                    {sessionStatusBadge(sess.status)}
+                    <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                      {formatTimezoneAbbr(event.timezone, sess.floor_trial_starts_at)}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="text-sm text-muted-foreground space-y-1">
+                  <p>Open: {formatTimeOnly(sess.checkin_opens_at, event.timezone)}</p>
+                  <p>
+                    Floor trial: {formatTimeOnly(sess.floor_trial_starts_at, event.timezone)} –{" "}
+                    {formatTimeOnly(sess.floor_trial_ends_at, event.timezone)}
+                  </p>
+                  <Separator className="my-2" />
+                  <p className="text-sm font-medium text-primary">Open session →</p>
+                </CardContent>
+              </Card>
+            </Link>
           ))}
         </div>
       </div>
