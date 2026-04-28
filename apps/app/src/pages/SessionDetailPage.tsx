@@ -35,6 +35,8 @@ type QueueRow = {
   enteredQueueAt: number;
   entityPairId: string | null;
   entitySoloUserId: string | null;
+  /** Server-rendered partnership label, e.g. "Alice Smith & Bob Jones". */
+  entityLabel: string;
   divisionName: string;
   songId: string;
   notes: string | null;
@@ -217,9 +219,12 @@ export default function SessionDetailPage() {
   }, [pairs]);
 
   const renderEntityLabel = (row: QueueRow): string => {
-    if (row.entityPairId) return pairMap.get(row.entityPairId) ?? "Pair";
-    if (row.entitySoloUserId) return "Solo dancer";
-    return "Entity";
+    // Prefer server-provided partnership label; fall back to the local pair
+    // map (only useful for the current user's own pairs) and then to a generic
+    // placeholder if no name data is available at all.
+    if (row.entityLabel && row.entityLabel !== "—") return row.entityLabel;
+    if (row.entityPairId) return pairMap.get(row.entityPairId) ?? row.entityLabel;
+    return row.entityLabel;
   };
 
   const renderSongLabel = (songId: string): string => songMap.get(songId) ?? songId;
@@ -232,6 +237,44 @@ export default function SessionDetailPage() {
   // subQueue field. Each has its own card.
   const priorityWaiting = waiting.filter((r) => r.subQueue === "priority");
   const standardWaiting = waiting.filter((r) => r.subQueue !== "priority");
+
+  // Find the current user's own queue entry — either as a solo entity or as
+  // user A in one of their pairs. Used to show their place in line above the
+  // check-in button.
+  const userQueueEntry = useMemo(() => {
+    if (!user?.id) return null;
+    const userPairIds = new Set(pairs.map((p) => p.id));
+    return (
+      [...active, ...waiting].find(
+        (r) =>
+          r.entitySoloUserId === user.id ||
+          (r.entityPairId !== null && userPairIds.has(r.entityPairId))
+      ) ?? null
+    );
+  }, [active, waiting, pairs, user?.id]);
+
+  // Compute overall queue position counting active first, then priority, then
+  // standard — so all priority entries land before any standard ones in the
+  // overall ordering.
+  const userQueuePosition = useMemo(() => {
+    if (!userQueueEntry) return null;
+    const isInActive = active.some(
+      (r) => r.queueEntryId === userQueueEntry.queueEntryId
+    );
+    if (isInActive) {
+      return { subQueue: "active" as const, overall: userQueueEntry.position };
+    }
+    if (userQueueEntry.subQueue === "priority") {
+      return {
+        subQueue: "priority" as const,
+        overall: active.length + userQueueEntry.position,
+      };
+    }
+    return {
+      subQueue: "standard" as const,
+      overall: active.length + priorityWaiting.length + userQueueEntry.position,
+    };
+  }, [userQueueEntry, active, priorityWaiting]);
 
   const checkinWindowOpen =
     !!session &&
@@ -334,6 +377,58 @@ export default function SessionDetailPage() {
           {derivedStatusBadge(derivedStatus(session, now))}
         </div>
       </div>
+
+      {/* ── Check-in action — at the top so it's the first thing you see ── */}
+      <SignedIn>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            disabled={!canCheckIn}
+            onClick={openCheckin}
+            size="lg"
+          >
+            Check in
+          </Button>
+          {/* Status / disabled reason — exactly one of these renders. */}
+          {userQueuePosition ? (
+            <p className="text-sm">
+              <span className="font-medium">
+                #{userQueuePosition.overall} in queue
+              </span>
+              <span className="text-muted-foreground">
+                {" "}({userQueuePosition.subQueue}
+                {session.active_checkin_division
+                  ? `, ${session.active_checkin_division}`
+                  : ""}
+                )
+              </span>
+            </p>
+          ) : !canCheckIn && !checkinWindowOpen ? (
+            <p className="text-sm text-muted-foreground">
+              {now < session.checkin_opens_at
+                ? `Check-in opens at ${formatTimeOnly(session.checkin_opens_at)}`
+                : "Check-in closed"}
+            </p>
+          ) : !canCheckIn && checkinWindowOpen && songs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              You have no songs uploaded —{" "}
+              <Link to="/songs" className="underline">add a song first</Link>.
+            </p>
+          ) : null}
+        </div>
+      </SignedIn>
+      <SignedOut>
+        <div className="flex flex-wrap items-center gap-3">
+          <SignInButton
+            forceRedirectUrl={id ? `/sessions/${id}` : "/partners"}
+            signUpForceRedirectUrl={id ? `/sessions/${id}` : "/partners"}
+          >
+            <Button size="lg">Sign in to check in</Button>
+          </SignInButton>
+          <p className="text-sm text-muted-foreground">
+            Sign in to check in or upload a song.
+          </p>
+        </div>
+      </SignedOut>
 
       {/* ── Active queue ── */}
       <Card className="border-primary/30">

@@ -64,6 +64,8 @@ type QueueRow = {
   enteredQueueAt: number;
   entityPairId: string | null;
   entitySoloUserId: string | null;
+  /** Server-rendered partnership label, e.g. "Alice Smith & Bob Jones". */
+  entityLabel: string;
   divisionName: string;
   songId: string;
   notes: string | null;
@@ -351,9 +353,12 @@ export default function AdminPage() {
   }, [lqSongs]);
 
   const renderEntityLabel = (row: QueueRow) => {
-    if (row.entityPairId) return pairMap.get(row.entityPairId) ?? "Pair";
-    if (row.entitySoloUserId) return "Solo dancer";
-    return "Entity";
+    // Prefer server-provided partnership label; fall back to local pair map
+    // (only useful for the current admin's own pairs / freshly-injected test
+    // pairs that we appended client-side).
+    if (row.entityLabel && row.entityLabel !== "—") return row.entityLabel;
+    if (row.entityPairId) return pairMap.get(row.entityPairId) ?? row.entityLabel;
+    return row.entityLabel;
   };
 
   const renderSongLabel = (songId: string) => songMap.get(songId) ?? songId;

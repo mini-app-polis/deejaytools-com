@@ -1,9 +1,19 @@
 import { CommonErrors, error, success } from "common-typescript-utils";
 import { and, asc, count, eq } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
 import { z } from "zod";
 import { db } from "../db/index.js";
-import { checkins, queueEntries, queueEvents, runs, sessions } from "../db/schema.js";
+import {
+  checkins,
+  pairs,
+  partners,
+  queueEntries,
+  queueEvents,
+  runs,
+  sessions,
+  users,
+} from "../db/schema.js";
 import { zValidator } from "../lib/validate.js";
 import { canPromoteNonPriority, canPromotePriority } from "../lib/queue/admission.js";
 import { compactAfterRemoval, nextBottomPosition } from "../lib/queue/compaction.js";
@@ -318,8 +328,16 @@ queueRoutes.post("/withdraw", requireAdmin, zValidator("json", withdrawBody), as
   return c.json(success({ withdrawn: true }));
 });
 
-/** Internal: list a queue's entries with check-in details. */
+/**
+ * Internal: list a queue's entries with check-in details and a server-rendered
+ * entity label so the UI doesn't have to resolve names client-side. Joins
+ * through pairs → leader user + follower partner for pair entities, and
+ * directly to users for solo entities.
+ */
 async function listQueue(sessionId: string, queueType: "priority" | "non_priority" | "active") {
+  const pairUser = alias(users, "pair_user");
+  const soloUser = alias(users, "solo_user");
+
   const rows = await db
     .select({
       queueEntryId: queueEntries.id,
@@ -333,12 +351,48 @@ async function listQueue(sessionId: string, queueType: "priority" | "non_priorit
       notes: checkins.notes,
       initialQueue: checkins.initialQueue,
       checkedInAt: checkins.createdAt,
+      pairUserFirst: pairUser.firstName,
+      pairUserLast: pairUser.lastName,
+      pairPartnerFirst: partners.firstName,
+      pairPartnerLast: partners.lastName,
+      soloUserFirst: soloUser.firstName,
+      soloUserLast: soloUser.lastName,
     })
     .from(queueEntries)
     .innerJoin(checkins, eq(queueEntries.checkinId, checkins.id))
+    .leftJoin(pairs, eq(pairs.id, queueEntries.entityPairId))
+    .leftJoin(pairUser, eq(pairUser.id, pairs.userAId))
+    .leftJoin(partners, eq(partners.id, pairs.partnerBId))
+    .leftJoin(soloUser, eq(soloUser.id, queueEntries.entitySoloUserId))
     .where(and(eq(queueEntries.sessionId, sessionId), eq(queueEntries.queueType, queueType)))
     .orderBy(asc(queueEntries.position));
-  return rows;
+
+  return rows.map((r) => {
+    let entityLabel: string;
+    if (r.entityPairId && (r.pairUserFirst || r.pairUserLast)) {
+      const a = [r.pairUserFirst, r.pairUserLast].filter(Boolean).join(" ").trim();
+      const b = [r.pairPartnerFirst, r.pairPartnerLast].filter(Boolean).join(" ").trim();
+      entityLabel = b ? `${a} & ${b}` : a;
+    } else if (r.entitySoloUserId && (r.soloUserFirst || r.soloUserLast)) {
+      entityLabel = [r.soloUserFirst, r.soloUserLast].filter(Boolean).join(" ").trim();
+    } else {
+      entityLabel = "—";
+    }
+    return {
+      queueEntryId: r.queueEntryId,
+      checkinId: r.checkinId,
+      position: r.position,
+      enteredQueueAt: r.enteredQueueAt,
+      entityPairId: r.entityPairId,
+      entitySoloUserId: r.entitySoloUserId,
+      entityLabel,
+      divisionName: r.divisionName,
+      songId: r.songId,
+      notes: r.notes,
+      initialQueue: r.initialQueue,
+      checkedInAt: r.checkedInAt,
+    };
+  });
 }
 
 /** GET /v1/queue/:sessionId/active */
