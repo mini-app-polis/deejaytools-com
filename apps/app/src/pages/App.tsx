@@ -8,6 +8,7 @@ import AdminPage from "./AdminPage";
 import FloorTrialsPage from "./FloorTrialsPage";
 import EventDetailPage from "./EventDetailPage";
 import EventsPage from "./EventsPage";
+import MusicHistoryPage from "./MusicHistoryPage";
 import PartnersPage from "./PartnersPage";
 import SessionDetailPage from "./SessionDetailPage";
 import SessionsPage from "./SessionsPage";
@@ -28,6 +29,9 @@ export default function App() {
           <Route path="floor-trials" element={<FloorTrialsPage />} />
           {/* Back-compat for the old /check-in URL — re-render Floor Trials. */}
           <Route path="check-in" element={<FloorTrialsPage />} />
+          {/* Public legacy-songs catalog search — extracted from the homepage
+              so the landing page can stay a thin orientation layer. */}
+          <Route path="music-history" element={<MusicHistoryPage />} />
 
           {/* Auth-required routes */}
           <Route

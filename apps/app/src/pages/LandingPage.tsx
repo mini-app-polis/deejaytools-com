@@ -1,46 +1,19 @@
-import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import NavBar from "@/components/NavBar";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 
-const DIVISION_OPTIONS = [
-  "Classic",
-  "Showcase",
-  "Rising Star Classic",
-  "Rising Star Showcase",
-  "Sophisticated",
-  "Masters",
-  "Teams",
-  "ProAm LeaderAm",
-  "ProAm FollowerAm",
-  "NovInt Routines",
-  "Juniors",
-  "Young Adult",
-  "Exhibition",
-  "Superstar",
-];
-
-type LegacySong = {
-  id: string;
-  partnership: string;
-  division: string | null;
-  routine_name: string | null;
-  descriptor: string | null;
-  version: string | null;
-  submitted_at: string | null;
-};
-
-type ApiList<T> = { data: T[] };
-
-const apiBase = import.meta.env.VITE_API_URL ?? "";
-const ALL_DIVISIONS = "__all__";
+/**
+ * Public landing page.
+ *
+ * The page intentionally does very little: it orients first-time visitors
+ * with a short pitch, points them at the four real entry points via a card
+ * grid, and ends with a 4-step "how it works" reference. Auth-gated cards
+ * (My Songs, My Partners) link straight to their routes — Clerk's
+ * RequireAuth wrapper will redirect signed-out users to sign-in.
+ *
+ * Earlier iterations bundled the legacy-songs search and an Operator CTA
+ * here. The search now lives at /music-history and the CTA collapsed into
+ * the shared NavBar's Sign in button.
+ */
 
 const STEPS = [
   {
@@ -65,48 +38,49 @@ const STEPS = [
   },
 ];
 
+type CardDef = {
+  to: string;
+  eyebrow: string;
+  title: string;
+  body: string;
+};
+
+// Cards render in this order. Floor Trials first because it's the in-the-
+// moment action; the two signed-in cards trail because most visitors land
+// here in a checked-out state.
+const CARDS: CardDef[] = [
+  {
+    to: "/floor-trials",
+    eyebrow: "Now / next",
+    title: "Floor Trials",
+    body: "See active and upcoming sessions. Open one to check in and watch the live queue.",
+  },
+  {
+    to: "/music-history",
+    eyebrow: "Past submissions",
+    title: "Music history",
+    body: "Search the catalog of submitted music to confirm yours is on file.",
+  },
+  {
+    to: "/songs",
+    eyebrow: "Signed in",
+    title: "My Songs",
+    body: "Manage the music files you've submitted for your routines.",
+  },
+  {
+    to: "/partners",
+    eyebrow: "Signed in",
+    title: "My Partners",
+    body: "Add and manage the partners you check in with.",
+  },
+];
+
 export default function LandingPage() {
-  const [q, setQ] = useState("");
-  const [division, setDivision] = useState(ALL_DIVISIONS);
-  const [results, setResults] = useState<LegacySong[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
-
-  useEffect(() => {
-    if (!q.trim() && division === ALL_DIVISIONS) {
-      setResults([]);
-      setSearched(false);
-      return;
-    }
-    const timer = setTimeout(() => {
-      void doSearch(q.trim(), division === ALL_DIVISIONS ? "" : division);
-    }, 350);
-    return () => clearTimeout(timer);
-  }, [q, division]);
-
-  async function doSearch(query: string, div: string) {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (query) params.set("q", query);
-      if (div) params.set("division", div);
-      const res = await fetch(`${apiBase}/v1/legacy-songs?${params.toString()}`);
-      const json = (await res.json()) as ApiList<LegacySong>;
-      setResults(json.data);
-      setSearched(true);
-    } catch {
-      setResults([]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   return (
     <div className="min-h-screen bg-background text-foreground">
-
       <NavBar />
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 pb-24">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 pb-24">
 
         {/* Hero */}
         <section className="py-14 sm:py-20 border-b border-white/[0.07]">
@@ -129,112 +103,41 @@ export default function LandingPage() {
           </p>
         </section>
 
-        {/* Music lookup */}
+        {/* Card grid — main entry points */}
         <section className="py-10 sm:py-14 border-b border-white/[0.07]">
-          <SectionLabel>Music lookup</SectionLabel>
-          <h2 className="text-xl sm:text-2xl font-light tracking-tight mb-1">
-            Is your music on file?
-          </h2>
-          <p className="text-sm text-muted-foreground mb-6 font-light">
-            If you appear below, the DJ already has your music — no resubmission needed.
-          </p>
-
-          {/* Search inputs */}
-          <div className="flex flex-col sm:flex-row gap-3 mb-5">
-            <Input
-              className="flex-1 bg-card border-white/[0.07] text-sm font-light placeholder:text-muted-foreground"
-              placeholder="Search by partnership or name…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-            <div className="sm:w-48">
-              <Select value={division} onValueChange={setDivision}>
-                <SelectTrigger className="bg-card border-white/[0.07] text-sm font-light w-full">
-                  <SelectValue placeholder="All divisions" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL_DIVISIONS}>All divisions</SelectItem>
-                  {DIVISION_OPTIONS.map((d) => (
-                    <SelectItem key={d} value={d}>{d}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <SectionLabel>Where do you want to go?</SectionLabel>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {CARDS.map((card) => (
+              <Link
+                key={card.to}
+                to={card.to}
+                className="group rounded-xl border border-white/[0.07] bg-card px-5 py-5 transition-colors hover:border-white/20 hover:bg-card/80 flex flex-col"
+              >
+                <p
+                  className="text-[10px] font-medium tracking-[0.18em] uppercase text-primary/60 mb-3"
+                  style={{ fontFamily: "'DM Mono', monospace" }}
+                >
+                  {card.eyebrow}
+                </p>
+                <p className="text-base font-medium text-foreground mb-1 transition-colors group-hover:text-primary">
+                  {card.title}
+                </p>
+                <p className="text-sm text-muted-foreground font-light leading-relaxed flex-1">
+                  {card.body}
+                </p>
+                <p
+                  className="mt-4 text-xs text-muted-foreground/60 transition-colors group-hover:text-primary"
+                  style={{ fontFamily: "'DM Mono', monospace" }}
+                >
+                  → open
+                </p>
+              </Link>
+            ))}
           </div>
-
-          {/* Results */}
-          {loading && (
-            <div className="space-y-2">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-5/6" />
-              <Skeleton className="h-10 w-4/6" />
-            </div>
-          )}
-
-          {!loading && searched && results.length === 0 && (
-            <p className="text-sm text-muted-foreground py-4 font-light">
-              No results found. If you haven't submitted your music yet, reach out to the event DJ.
-            </p>
-          )}
-
-          {!loading && results.length > 0 && (
-            <div className="rounded-lg border border-white/[0.07] overflow-hidden">
-              {/* Mobile: card-style rows */}
-              <div className="sm:hidden divide-y divide-border">
-                {results.map((s) => (
-                  <div key={s.id} className="px-4 py-3 space-y-0.5">
-                    <p className="text-sm font-medium text-foreground">{s.partnership}</p>
-                    <p className="text-xs text-muted-foreground font-light">
-                      {[s.division, s.routine_name].filter(Boolean).join(" · ") || "—"}
-                      {s.version && (
-                        <span
-                          className="ml-2 text-muted-foreground/50"
-                          style={{ fontFamily: "'DM Mono', monospace", fontSize: "11px" }}
-                        >
-                          v{s.version}
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                ))}
-              </div>
-              {/* Desktop: table */}
-              <table className="hidden sm:table w-full text-sm border-collapse">
-                <thead>
-                  <tr className="border-b border-white/[0.07]">
-                    {["Partnership", "Division", "Routine", "Ver."].map((h) => (
-                      <th
-                        key={h}
-                        className="px-4 py-2.5 text-left font-medium text-muted-foreground/60 text-xs tracking-widest uppercase"
-                        style={{ fontFamily: "'DM Mono', monospace" }}
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {results.map((s) => (
-                    <tr key={s.id} className="hover:bg-accent/30 transition-colors">
-                      <td className="px-4 py-3 font-medium text-foreground">{s.partnership}</td>
-                      <td className="px-4 py-3 text-muted-foreground font-light">{s.division ?? "—"}</td>
-                      <td className="px-4 py-3 text-muted-foreground font-light">{s.routine_name ?? "—"}</td>
-                      <td
-                        className="px-4 py-3 text-muted-foreground/50 text-xs"
-                        style={{ fontFamily: "'DM Mono', monospace" }}
-                      >
-                        {s.version ?? "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </section>
 
         {/* How it works */}
-        <section className="py-10 sm:py-14 border-b border-white/[0.07]">
+        <section className="py-10 sm:py-14">
           <SectionLabel>How it works</SectionLabel>
           <h2 className="text-xl sm:text-2xl font-light tracking-tight mb-1">
             Floor trial process
@@ -261,13 +164,6 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/*
-         * Operator CTA was removed: the unified NavBar already exposes Sign in
-         * (signed out) and direct links to Partners / Songs / Admin (signed
-         * in), so a separate "go to app" block at the bottom of the landing
-         * page was redundant.
-         */}
-
       </main>
     </div>
   );
@@ -275,7 +171,7 @@ export default function LandingPage() {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-3 mb-4">
+    <div className="flex items-center gap-3 mb-6">
       <span
         className="text-[10px] font-medium tracking-[0.18em] uppercase text-primary/60 shrink-0"
         style={{ fontFamily: "'DM Mono', monospace" }}

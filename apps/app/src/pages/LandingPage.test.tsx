@@ -1,37 +1,13 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 // NavBar pulls in Clerk hooks + useAuthMe — replace with a stub so the test
-// only exercises the LandingPage logic.
+// only exercises the LandingPage's own content.
 vi.mock("@/components/NavBar", () => ({
   default: () => <nav data-testid="navbar-stub" />,
 }));
-
-// LandingPage's footer CTA renders <SignedIn> / <SignedOut> directly, so we
-// also need to mock @clerk/clerk-react. Default to "signed out" so the
-// SignInButton path renders (and we can verify it doesn't crash).
-vi.mock("@clerk/clerk-react", () => ({
-  SignedIn: () => null,
-  SignedOut: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  SignInButton: ({ children }: { children: React.ReactNode }) => (
-    <span data-testid="sign-in-button">{children}</span>
-  ),
-}));
-
-// Real LandingPage uses the global fetch (not the api client wrapper).
-const fetchMock = vi.fn();
-
-beforeEach(() => {
-  globalThis.fetch = fetchMock as unknown as typeof fetch;
-  fetchMock.mockReset();
-});
-
-afterEach(() => {
-  vi.useRealTimers();
-});
 
 import LandingPage from "./LandingPage";
 
@@ -43,88 +19,51 @@ function renderPage() {
   );
 }
 
-function legacyJsonResponse(rows: unknown[]) {
-  return new Response(JSON.stringify({ data: rows }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
-describe("LandingPage — initial state", () => {
-  it("renders hero copy and the music-lookup form", () => {
+describe("LandingPage — hero", () => {
+  it("renders the headline and intro paragraph", () => {
     renderPage();
     expect(screen.getByText(/Music management/i)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/search by partnership/i)).toBeInTheDocument();
-    // No fetch on mount — search is empty + division=All.
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("does not render any results until the user types or picks a division", () => {
-    renderPage();
-    expect(screen.queryByText(/no results found/i)).toBeNull();
+    expect(screen.getByText(/Look up your submitted music/i)).toBeInTheDocument();
   });
 });
 
-describe("LandingPage — debounced search", () => {
-  it("issues a single fetch with q=<term> after the debounce window", async () => {
-    fetchMock.mockResolvedValue(legacyJsonResponse([]));
+describe("LandingPage — entry-point cards", () => {
+  it("renders cards for Floor Trials, Music history, My Songs, and My Partners", () => {
     renderPage();
-
-    const user = userEvent.setup();
-    await user.type(
-      screen.getByPlaceholderText(/search by partnership/i),
-      "Smith"
-    );
-
-    // The 350ms debounce + microtasks settle within ~1s in jsdom.
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalled();
-    }, { timeout: 2000 });
-
-    const url = fetchMock.mock.calls.at(-1)![0] as string;
-    expect(url).toContain("q=Smith");
+    // Each card title appears exactly once on the page.
+    expect(screen.getByText("Floor Trials")).toBeInTheDocument();
+    expect(screen.getByText("Music history")).toBeInTheDocument();
+    expect(screen.getByText("My Songs")).toBeInTheDocument();
+    expect(screen.getByText("My Partners")).toBeInTheDocument();
   });
 
-  it("renders 'No results found' when search returns an empty list", async () => {
-    fetchMock.mockResolvedValue(legacyJsonResponse([]));
+  it("links each card to its destination route", () => {
     renderPage();
-
-    const user = userEvent.setup();
-    await user.type(
-      screen.getByPlaceholderText(/search by partnership/i),
-      "asdfqwerty"
-    );
-
-    // Wait past debounce + fetch.
-    await waitFor(() => {
-      expect(screen.getByText(/no results found/i)).toBeInTheDocument();
-    }, { timeout: 2000 });
+    // Cards are <a> elements (rendered by react-router's Link). We use
+    // exact-string matches on the card titles (not regex) because the hero
+    // copy contains the substring "Floor Trials" — a loose match would
+    // collide. Walk up from the title element to the wrapping anchor.
+    const cards = [
+      { title: "Floor Trials", href: "/floor-trials" },
+      { title: "Music history", href: "/music-history" },
+      { title: "My Songs", href: "/songs" },
+      { title: "My Partners", href: "/partners" },
+    ];
+    for (const { title, href } of cards) {
+      const titleEl = screen.getByText(title);
+      const anchor = titleEl.closest("a");
+      expect(anchor).not.toBeNull();
+      expect(anchor!.getAttribute("href")).toBe(href);
+    }
   });
+});
 
-  it("renders matching rows when the search returns data", async () => {
-    fetchMock.mockResolvedValue(
-      legacyJsonResponse([
-        {
-          id: "L1",
-          partnership: "Alice & Bob",
-          division: "Classic",
-          routine_name: "Sky High",
-          descriptor: null,
-          version: "1",
-          submitted_at: null,
-        },
-      ])
-    );
+describe("LandingPage — how it works", () => {
+  it("renders all four numbered steps", () => {
     renderPage();
-
-    const user = userEvent.setup();
-    await user.type(
-      screen.getByPlaceholderText(/search by partnership/i),
-      "Alice"
-    );
-
-    await waitFor(() => {
-      expect(screen.getAllByText("Alice & Bob").length).toBeGreaterThan(0);
-    }, { timeout: 2000 });
+    expect(screen.getByText("Submit your music")).toBeInTheDocument();
+    expect(screen.getByText("Check in")).toBeInTheDocument();
+    expect(screen.getByText("Watch the queue")).toBeInTheDocument();
+    expect(screen.getByText("Run your routine")).toBeInTheDocument();
   });
 });
