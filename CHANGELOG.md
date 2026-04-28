@@ -1,3 +1,10 @@
+## [1.27.6](https://github.com/mini-app-polis/deejaytools-com/compare/v1.27.5...v1.27.6) (2026-04-28)
+
+
+### Bug Fixes
+
+* adding division list to header ([094087e](https://github.com/mini-app-polis/deejaytools-com/commit/094087ec9ed2e643fd762fe1159c551806d9446a))
+
 ## [1.27.5](https://github.com/mini-app-polis/deejaytools-com/compare/v1.27.4...v1.27.5) (2026-04-28)
 
 
