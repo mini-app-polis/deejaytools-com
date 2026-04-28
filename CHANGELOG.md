@@ -1,3 +1,10 @@
+## [1.31.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.31.2...v1.31.3) (2026-04-28)
+
+
+### Bug Fixes
+
+* hover functionality unified ([2764358](https://github.com/mini-app-polis/deejaytools-com/commit/276435885255f2fe11069726983fa24592cb2757))
+
 ## [1.31.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.31.1...v1.31.2) (2026-04-28)
 
 
