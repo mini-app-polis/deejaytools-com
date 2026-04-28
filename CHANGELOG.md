@@ -1,3 +1,10 @@
+## [1.27.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.27.1...v1.27.2) (2026-04-28)
+
+
+### Bug Fixes
+
+* updating song display name format ([f5b0d9f](https://github.com/mini-app-polis/deejaytools-com/commit/f5b0d9f559ddda809232cdf865d2a57814debdbf))
+
 ## [1.27.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.27.0...v1.27.1) (2026-04-27)
 
 
