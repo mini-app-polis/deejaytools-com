@@ -50,16 +50,18 @@ export default function NavBar() {
   return (
     <nav className="border-b border-white/[0.07] bg-black/50 backdrop-blur-md sticky top-0 z-40">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
-        {/* Wordmark — links to root. */}
-        <a href="/" className="flex flex-col leading-tight shrink-0 group">
+        {/* Logo — links to root. */}
+        <a href="/" className="flex items-center gap-2 shrink-0 group">
+          <picture>
+            <source srcSet="/assets/logo/deejaytools-logo-header-320.webp" type="image/webp" />
+            <img
+              src="/assets/logo/deejaytools-logo-header-320.png"
+              alt="DeejayTools.com"
+              className="h-7 w-auto object-contain transition-opacity group-hover:opacity-80"
+            />
+          </picture>
           <span
-            className="font-medium text-sm tracking-wide text-foreground transition-colors group-hover:text-primary"
-            style={{ fontFamily: "'DM Mono', monospace" }}
-          >
-            DeejayTools.com
-          </span>
-          <span
-            className="text-[10px] text-muted-foreground"
+            className="text-[10px] text-muted-foreground hidden sm:inline"
             style={{ fontFamily: "'DM Mono', monospace" }}
           >
             v{pkg.version}

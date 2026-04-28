@@ -61,11 +61,11 @@
     letter-spacing: -0.015em;
   }
 
-  /* Page-level h1 titles get the Fraunces serif treatment */
-  h1.page-title {
+  /* Page-level titles get the Fraunces serif treatment */
+  .page-title {
     font-family: 'Fraunces', ui-serif, Georgia, serif;
-    font-style: italic;
-    font-weight: 900;
+    font-style: normal;
+    font-weight: 700;
     font-variation-settings: 'opsz' 72;
     letter-spacing: -0.02em;
   }

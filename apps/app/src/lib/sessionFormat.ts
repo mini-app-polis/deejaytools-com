@@ -59,6 +59,28 @@ export function formatTimezoneAbbr(tz: string | null | undefined, ts?: number): 
 }
 
 /**
+ * "May 22 at 6:30 AM" — a compact date+time label for status messages.
+ *
+ * @param ts        - Unix epoch ms
+ * @param timeZone  - IANA timezone (e.g. "America/Chicago"). Defaults to browser timezone.
+ */
+export function formatDateTimeShort(ts: number, timeZone?: string | null): string {
+  const d = new Date(ts);
+  const tzOpts = timeZone ? { timeZone } : {};
+  const datePart = d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    ...tzOpts,
+  });
+  const timePart = d.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    ...tzOpts,
+  });
+  return `${datePart} at ${timePart}`;
+}
+
+/**
  * "Saturday - 7:30 PM - April 27, 2026"
  *
  * Day, then time, then date. Anchored to the floor-trial start time so the

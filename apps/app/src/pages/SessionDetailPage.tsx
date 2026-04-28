@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
+import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr, formatDateTimeShort } from "@/lib/sessionFormat";
 
 type SessionDetail = {
   id: string;
@@ -399,7 +399,7 @@ export default function SessionDetailPage() {
           ) : !canCheckIn && !checkinWindowOpen ? (
             <p className="text-sm text-muted-foreground">
               {now < session.checkin_opens_at
-                ? `Check-in opens at ${formatTimeOnly(session.checkin_opens_at, session.event_timezone)}`
+                ? `Check-in opens ${formatDateTimeShort(session.checkin_opens_at, session.event_timezone)}`
                 : "Check-in closed"}
             </p>
           ) : !canCheckIn && checkinWindowOpen && songs.length === 0 ? (
