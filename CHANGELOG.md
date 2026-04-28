@@ -1,3 +1,10 @@
+## [1.27.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.27.2...v1.27.3) (2026-04-28)
+
+
+### Bug Fixes
+
+* making floor trial board more obvious visually ([fff1a01](https://github.com/mini-app-polis/deejaytools-com/commit/fff1a018b86999749a0c51568dd43313ce53c9a7))
+
 ## [1.27.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.27.1...v1.27.2) (2026-04-28)
 
 
