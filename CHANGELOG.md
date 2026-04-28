@@ -1,3 +1,10 @@
+# [1.30.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.29.1...v1.30.0) (2026-04-28)
+
+
+### Features
+
+* making times universal and setting at event setup ([06d8a7b](https://github.com/mini-app-polis/deejaytools-com/commit/06d8a7b7312e5a5765a0ea1e01090dfd6bffd9aa))
+
 ## [1.29.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.29.0...v1.29.1) (2026-04-28)
 
 
