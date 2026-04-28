@@ -28,13 +28,14 @@ describe("LandingPage — hero", () => {
 });
 
 describe("LandingPage — entry-point cards", () => {
-  it("renders cards for Floor Trials, Music history, My Songs, and My Partners", () => {
+  it("renders cards for every entry point including How floor trials work", () => {
     renderPage();
     // Each card title appears exactly once on the page.
     expect(screen.getByText("Floor Trials")).toBeInTheDocument();
     expect(screen.getByText("Music history")).toBeInTheDocument();
     expect(screen.getByText("My Songs")).toBeInTheDocument();
     expect(screen.getByText("My Partners")).toBeInTheDocument();
+    expect(screen.getByText("How floor trials work")).toBeInTheDocument();
   });
 
   it("links each card to its destination route", () => {
@@ -48,6 +49,7 @@ describe("LandingPage — entry-point cards", () => {
       { title: "Music history", href: "/music-history" },
       { title: "My Songs", href: "/songs" },
       { title: "My Partners", href: "/partners" },
+      { title: "How floor trials work", href: "/how-it-works" },
     ];
     for (const { title, href } of cards) {
       const titleEl = screen.getByText(title);
@@ -58,12 +60,14 @@ describe("LandingPage — entry-point cards", () => {
   });
 });
 
-describe("LandingPage — how it works", () => {
-  it("renders all four numbered steps", () => {
+describe("LandingPage — no inline how-it-works", () => {
+  it("does not render the old 4-step process list inline anymore", () => {
     renderPage();
-    expect(screen.getByText("Submit your music")).toBeInTheDocument();
-    expect(screen.getByText("Check in")).toBeInTheDocument();
-    expect(screen.getByText("Watch the queue")).toBeInTheDocument();
-    expect(screen.getByText("Run your routine")).toBeInTheDocument();
+    // These were the four step titles in the old vague section. They moved
+    // to /how-it-works. The homepage should no longer render them.
+    expect(screen.queryByText("Submit your music")).toBeNull();
+    expect(screen.queryByText("Check in")).toBeNull();
+    expect(screen.queryByText("Watch the queue")).toBeNull();
+    expect(screen.queryByText("Run your routine")).toBeNull();
   });
 });

@@ -8,6 +8,7 @@ import AdminPage from "./AdminPage";
 import FloorTrialsPage from "./FloorTrialsPage";
 import EventDetailPage from "./EventDetailPage";
 import EventsPage from "./EventsPage";
+import HowItWorksPage from "./HowItWorksPage";
 import MusicHistoryPage from "./MusicHistoryPage";
 import PartnersPage from "./PartnersPage";
 import SessionDetailPage from "./SessionDetailPage";
@@ -32,6 +33,10 @@ export default function App() {
           {/* Public legacy-songs catalog search — extracted from the homepage
               so the landing page can stay a thin orientation layer. */}
           <Route path="music-history" element={<MusicHistoryPage />} />
+          {/* Long-form floor-trial process guide. Moved off the homepage so
+              the home stays card-first; linked from the homepage card grid
+              and from contextual tips on FloorTrialsPage / AddSongPage. */}
+          <Route path="how-it-works" element={<HowItWorksPage />} />
 
           {/* Auth-required routes */}
           <Route

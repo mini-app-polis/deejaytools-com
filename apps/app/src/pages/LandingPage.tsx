@@ -6,39 +6,15 @@ import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
 /**
  * Public landing page.
  *
- * The page intentionally does very little: it orients first-time visitors
- * with a short pitch, points them at the four real entry points via a card
- * grid, and ends with a 4-step "how it works" reference. Auth-gated cards
- * (My Songs, My Partners) link straight to their routes — Clerk's
- * RequireAuth wrapper will redirect signed-out users to sign-in.
+ * The page is deliberately thin: a short pitch in the hero, then a card
+ * grid that points visitors at every real entry point on the site. There's
+ * no inline how-it-works section anymore — that material moved to its own
+ * /how-it-works page (linked from one of the cards) where each step has
+ * room to actually be useful instead of a one-line summary.
  *
- * Earlier iterations bundled the legacy-songs search and an Operator CTA
- * here. The search now lives at /music-history and the CTA collapsed into
- * the shared NavBar's Sign in button.
+ * Auth-gated cards (My Songs, My Partners) link straight to their routes;
+ * Clerk's RequireAuth wrapper redirects signed-out users to sign-in.
  */
-
-const STEPS = [
-  {
-    num: "01",
-    title: "Submit your music",
-    body: "File should contain only your routine — no bow music. DJ starts from the top unless you note a cue during check-in.",
-  },
-  {
-    num: "02",
-    title: "Check in",
-    body: "Opens 30 min before the session. Submit once per run. Include any special instructions in the form.",
-  },
-  {
-    num: "03",
-    title: "Watch the queue",
-    body: "Same-day runs 1–3 get priority. Run 4+ moves to standard queue. Watch the live display for your name.",
-  },
-  {
-    num: "04",
-    title: "Run your routine",
-    body: "~5 min per couple, ~10 for teams. Restart available if you're under halfway through. Re-queue with a new check-in.",
-  },
-];
 
 type CardDef = {
   to: string;
@@ -48,8 +24,8 @@ type CardDef = {
 };
 
 // Cards render in this order. Floor Trials first because it's the in-the-
-// moment action; the two signed-in cards trail because most visitors land
-// here in a checked-out state.
+// moment action; the long-form guide trails because most visitors with a
+// concrete task to do don't need to read it.
 const CARDS: CardDef[] = [
   {
     to: "/floor-trials",
@@ -74,6 +50,12 @@ const CARDS: CardDef[] = [
     eyebrow: "Signed in",
     title: "My Partners",
     body: "Add and manage the partners you check in with.",
+  },
+  {
+    to: "/how-it-works",
+    eyebrow: "First time?",
+    title: "How floor trials work",
+    body: "What a floor trial is, how to submit music, what happens at the event, and how the queue is ordered.",
   },
 ];
 
@@ -106,7 +88,7 @@ export default function LandingPage() {
         </section>
 
         {/* Card grid — main entry points */}
-        <section className="py-10 sm:py-14 border-b border-white/[0.07]">
+        <section className="py-10 sm:py-14">
           <SectionLabel>Where do you want to go?</SectionLabel>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {CARDS.map((card) => (
@@ -137,34 +119,6 @@ export default function LandingPage() {
                   → open
                 </p>
               </Link>
-            ))}
-          </div>
-        </section>
-
-        {/* How it works */}
-        <section className="py-10 sm:py-14">
-          <SectionLabel>How it works</SectionLabel>
-          <h2 className="text-xl sm:text-2xl font-light tracking-tight mb-1">
-            Floor trial process
-          </h2>
-          <p className="text-sm text-muted-foreground mb-8 font-light">
-            The short version — everything you need to know to run.
-          </p>
-
-          <div className="divide-y divide-border">
-            {STEPS.map((step) => (
-              <div key={step.num} className="py-5 grid grid-cols-[40px_1fr] gap-4 items-start">
-                <span
-                  className="text-xs font-medium text-primary/50 pt-0.5 tabular-nums"
-                  style={{ fontFamily: "'DM Mono', monospace" }}
-                >
-                  {step.num}
-                </span>
-                <div>
-                  <p className="text-sm font-medium text-foreground mb-1">{step.title}</p>
-                  <p className="text-sm text-muted-foreground font-light leading-relaxed">{step.body}</p>
-                </div>
-              </div>
             ))}
           </div>
         </section>

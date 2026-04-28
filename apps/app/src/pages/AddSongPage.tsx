@@ -326,6 +326,11 @@ export default function AddSongPage() {
           <CardTitle>Upload a song</CardTitle>
           <CardDescription>
             Create your song record and upload one audio file in a single step.
+            The file should contain only your routine — no bow music or
+            intro buffer; the DJ starts playback at 0:00.{" "}
+            <Link to="/how-it-works#submitting-music" className="text-primary hover:underline">
+              File requirements →
+            </Link>
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
