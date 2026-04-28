@@ -359,36 +359,16 @@ export default function SessionDetailPage() {
     return <p className="text-muted-foreground">Session not found.</p>;
   }
 
-  return (
-    <div className={`space-y-6 ${loading ? "opacity-60" : ""}`}>
-      <div>
-        <Button variant="ghost" size="sm" className="mb-2 px-0" asChild>
-          <Link to={session.event_id ? `/events/${session.event_id}` : "/events"}>← Back</Link>
-        </Button>
-        <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="page-title text-2xl">{formatSessionTitle(session)}</h1>
-            <p className="text-sm text-muted-foreground">
-              Open {formatTimeOnly(session.checkin_opens_at)} · Floor trial{" "}
-              {formatTimeOnly(session.floor_trial_starts_at)} –{" "}
-              {formatTimeOnly(session.floor_trial_ends_at)}
-            </p>
-          </div>
-          {derivedStatusBadge(derivedStatus(session, now))}
-        </div>
-      </div>
-
-      {/* ── Check-in action — at the top so it's the first thing you see ── */}
+  // Single source of truth for the check-in button + status text. Rendered at
+  // both top (above the queues) and bottom (after the queues) so the action is
+  // always reachable, with the same disabled-reason text in both places.
+  const checkInBlock = (
+    <>
       <SignedIn>
         <div className="flex flex-wrap items-center gap-3">
-          <Button
-            disabled={!canCheckIn}
-            onClick={openCheckin}
-            size="lg"
-          >
+          <Button disabled={!canCheckIn} onClick={openCheckin} size="lg">
             Check in
           </Button>
-          {/* Status / disabled reason — exactly one of these renders. */}
           {userQueuePosition ? (
             <p className="text-sm">
               <span className="font-medium">
@@ -429,6 +409,30 @@ export default function SessionDetailPage() {
           </p>
         </div>
       </SignedOut>
+    </>
+  );
+
+  return (
+    <div className={`space-y-6 ${loading ? "opacity-60" : ""}`}>
+      <div>
+        <Button variant="ghost" size="sm" className="mb-2 px-0" asChild>
+          <Link to={session.event_id ? `/events/${session.event_id}` : "/events"}>← Back</Link>
+        </Button>
+        <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="page-title text-2xl">{formatSessionTitle(session)}</h1>
+            <p className="text-sm text-muted-foreground">
+              Open {formatTimeOnly(session.checkin_opens_at)} · Floor trial{" "}
+              {formatTimeOnly(session.floor_trial_starts_at)} –{" "}
+              {formatTimeOnly(session.floor_trial_ends_at)}
+            </p>
+          </div>
+          {derivedStatusBadge(derivedStatus(session, now))}
+        </div>
+      </div>
+
+      {/* ── Check-in action (top) ── */}
+      {checkInBlock}
 
       {/* ── Active queue ── */}
       <Card className="border-primary/30">
@@ -442,19 +446,19 @@ export default function SessionDetailPage() {
             activeSorted.map((r) => {
               const isSlotOne = r.position === 1;
               return (
-                <div
-                  key={r.queueEntryId}
-                  className={
-                    isSlotOne
-                      ? "flex items-start gap-3 border border-primary/50 bg-primary/10 rounded-md px-3 py-2.5 text-sm"
-                      : "flex items-start gap-3 border rounded-md px-3 py-2.5 text-sm"
-                  }
-                >
-                  <div className="space-y-0.5 min-w-0">
-                    <p className="font-medium">
-                      {isSlotOne && <span className="text-primary mr-1.5">▶</span>}
-                      #{r.position} · {renderEntityLabel(r)}
-                    </p>
+                <div key={r.queueEntryId} className="flex items-start gap-3">
+                  <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
+                    {isSlotOne && <span className="text-primary mr-0.5">▶</span>}
+                    #{r.position}
+                  </span>
+                  <div
+                    className={
+                      isSlotOne
+                        ? "border border-primary/50 bg-primary/10 rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5"
+                        : "border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5"
+                    }
+                  >
+                    <p className="font-medium">{renderEntityLabel(r)}</p>
                     <p className="text-muted-foreground truncate">
                       {r.divisionName} · {renderSongLabel(r.songId)}
                     </p>
@@ -476,12 +480,12 @@ export default function SessionDetailPage() {
             <p className="text-sm text-muted-foreground">Priority queue is empty.</p>
           ) : (
             priorityWaiting.map((r, i) => (
-              <div
-                key={r.queueEntryId}
-                className="flex items-start gap-3 border rounded-md px-3 py-2.5 text-sm"
-              >
-                <div className="space-y-0.5 min-w-0">
-                  <p className="font-medium">#{i + 1} · {renderEntityLabel(r)}</p>
+              <div key={r.queueEntryId} className="flex items-start gap-3">
+                <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
+                  #{i + 1}
+                </span>
+                <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
+                  <p className="font-medium">{renderEntityLabel(r)}</p>
                   <p className="text-muted-foreground truncate">
                     {r.divisionName} · {renderSongLabel(r.songId)}
                   </p>
@@ -502,12 +506,12 @@ export default function SessionDetailPage() {
             <p className="text-sm text-muted-foreground">Standard queue is empty.</p>
           ) : (
             standardWaiting.map((r, i) => (
-              <div
-                key={r.queueEntryId}
-                className="flex items-start gap-3 border rounded-md px-3 py-2.5 text-sm"
-              >
-                <div className="space-y-0.5 min-w-0">
-                  <p className="font-medium">#{i + 1} · {renderEntityLabel(r)}</p>
+              <div key={r.queueEntryId} className="flex items-start gap-3">
+                <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
+                  #{i + 1}
+                </span>
+                <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
+                  <p className="font-medium">{renderEntityLabel(r)}</p>
                   <p className="text-muted-foreground truncate">
                     {r.divisionName} · {renderSongLabel(r.songId)}
                   </p>
@@ -518,51 +522,8 @@ export default function SessionDetailPage() {
         </CardContent>
       </Card>
 
-      <SignedIn>
-        <div className="space-y-2">
-          <Button
-            disabled={!canCheckIn}
-            onClick={openCheckin}
-            size="lg"
-            className="w-full sm:w-auto"
-          >
-            Check in
-          </Button>
-          {!canCheckIn && session.has_active_checkin && (
-            <p className="text-sm text-muted-foreground">
-              Already in queue (division: {session.active_checkin_division ?? "?"})
-            </p>
-          )}
-          {!canCheckIn && !checkinWindowOpen && (
-            <p className="text-sm text-muted-foreground">
-              {now < session.checkin_opens_at
-                ? `Check-in opens at ${formatTimeOnly(session.checkin_opens_at)}`
-                : "Check-in closed"}
-            </p>
-          )}
-          {!canCheckIn && checkinWindowOpen && songs.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              You have no songs uploaded —{" "}
-              <Link to="/songs" className="underline">add a song first</Link>.
-            </p>
-          )}
-        </div>
-      </SignedIn>
-      <SignedOut>
-        <div className="space-y-2">
-          <SignInButton
-            forceRedirectUrl={id ? `/sessions/${id}` : "/partners"}
-            signUpForceRedirectUrl={id ? `/sessions/${id}` : "/partners"}
-          >
-            <Button size="lg" className="w-full sm:w-auto">
-              Sign in to check in
-            </Button>
-          </SignInButton>
-          <p className="text-sm text-muted-foreground">
-            You can browse this session as a visitor. Sign in to check in or upload a song.
-          </p>
-        </div>
-      </SignedOut>
+      {/* ── Check-in action (bottom) — same block as top ── */}
+      {checkInBlock}
 
       {checkinOpen && (
         <div
