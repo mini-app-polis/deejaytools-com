@@ -1,3 +1,15 @@
+# [1.28.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.27.9...v1.28.0) (2026-04-28)
+
+
+### Bug Fixes
+
+* typecheck ([0419f7e](https://github.com/mini-app-polis/deejaytools-com/commit/0419f7e5c02f432a442d347606afc6635eed0acf))
+
+
+### Features
+
+* test suite update ([e43fe8b](https://github.com/mini-app-polis/deejaytools-com/commit/e43fe8bde3956bb5c1d5114c9be713ba61742753))
+
 ## [1.27.9](https://github.com/mini-app-polis/deejaytools-com/compare/v1.27.8...v1.27.9) (2026-04-28)
 
 
