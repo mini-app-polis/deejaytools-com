@@ -1,3 +1,10 @@
+## [1.27.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.27.3...v1.27.4) (2026-04-28)
+
+
+### Bug Fixes
+
+* partnership names and check in at the top ([0a49e23](https://github.com/mini-app-polis/deejaytools-com/commit/0a49e230e4fd35320900fdac8ea15b2dcad4973f))
+
 ## [1.27.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.27.2...v1.27.3) (2026-04-28)
 
 
