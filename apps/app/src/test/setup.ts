@@ -10,6 +10,9 @@
  * runtime and only imports Testing Library's setup when a DOM is available.
  */
 
+// export {} makes this a module so top-level await is valid
+export {};
+
 if (typeof window !== "undefined") {
   // jsdom environment — wire up Testing Library.
   await import("@testing-library/jest-dom/vitest");
