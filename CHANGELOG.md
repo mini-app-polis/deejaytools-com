@@ -1,3 +1,10 @@
+## [1.27.5](https://github.com/mini-app-polis/deejaytools-com/compare/v1.27.4...v1.27.5) (2026-04-28)
+
+
+### Bug Fixes
+
+* updating floor trial visuals ([2bdf34f](https://github.com/mini-app-polis/deejaytools-com/commit/2bdf34f50798a6b60fb80b21f0f7c52c90069a7c))
+
 ## [1.27.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.27.3...v1.27.4) (2026-04-28)
 
 
