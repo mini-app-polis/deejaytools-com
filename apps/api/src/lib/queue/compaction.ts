@@ -39,6 +39,10 @@ export async function compactAfterRemoval(
 
   // Step 1: move each row to a sentinel position (position + 1_000_000) so
   // the target positions are unoccupied before we fill them.
+  // 1_000_000 is chosen because queue positions are 1-based integers that grow
+  // by 1 per entry. A queue would never have anywhere near 1 000 000 entries in
+  // practice, so position + 1_000_000 is always safely above any real position
+  // in the same queue and cannot collide with another row.
   for (const row of rows) {
     await tx
       .update(queueEntries)

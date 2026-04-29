@@ -7,7 +7,7 @@ import {
   readJson,
   type SuccessEnvelope,
 } from "../test/helpers.js";
-import { enqueueSelectResult, resetSelectQueue } from "../test/mocks.js";
+import { enqueueSelectResult, mockDb, resetSelectQueue } from "../test/mocks.js";
 import { responseCache } from "../lib/cache.js";
 
 // Global pre-test setup: flush the response cache so that a cached result from
@@ -127,6 +127,29 @@ describe("POST /v1/queue/promote", () => {
     expect(res.status).toBe(200);
     const body = await res.json() as { data: { promoted: boolean } };
     expect(body.data.promoted).toBe(true);
+  });
+
+  it("acquires a FOR UPDATE lock on the session row inside the transaction", async () => {
+    // This test verifies that the concurrent-promote race guard is in place.
+    // The SELECT … FOR UPDATE on the session row is what prevents two simultaneous
+    // promotes from both seeing room in the active queue and both succeeding.
+    // We can't simulate actual DB-level blocking with a mock, but we can assert
+    // that .for("update") is called on the transaction chain — proving the lock
+    // instruction is issued to the DB driver every time a promotion runs.
+    mockDb.for.mockClear();
+
+    enqueueSelectResult([priorityEntry]);           // entry
+    enqueueSelectResult([sessionCaps]);             // tx: session FOR UPDATE
+    enqueueSelectResult([{ n: 0 }]);               // tx: active count
+    enqueueSelectResult([{ n: 0 }]);               // tx: priority count
+    enqueueSelectResult([]);                        // tx: nextBottomPosition
+    await app.request(`${BASE}/promote`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ queueEntryId: "qe1" }),
+    });
+
+    expect(mockDb.for).toHaveBeenCalledWith("update");
   });
 });
 
@@ -694,5 +717,86 @@ describe("GET /v1/queue/:session_id", () => {
     assertSuccessEnvelope(body);
     expect(Array.isArray(body.data)).toBe(true);
     expect(body.data.length).toBe(0);
+  });
+});
+
+// ─── Full-flow integration ─────────────────────────────────────────────────────
+//
+// These tests exercise the entire state machine in a single describe block:
+//   promote (waiting → active)  →  complete (active → run recorded)
+//
+// Each step calls a real route handler through app.request, exercising the
+// full middleware chain. Individual promote/complete unit tests cover edge cases;
+// these tests prove the two operations work in sequence.
+
+describe("full-flow: promote then complete", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+  });
+
+  it("promotes a priority entry then completes it, both returning 200", async () => {
+    // ── Step 1: promote ──────────────────────────────────────────────────────
+    enqueueSelectResult([priorityEntry]);                                   // entry lookup
+    enqueueSelectResult([sessionCaps]);                                     // tx: session FOR UPDATE
+    enqueueSelectResult([{ n: 0 }]);                                       // tx: active count
+    enqueueSelectResult([{ n: 0 }]);                                       // tx: priority count
+    enqueueSelectResult([]);                                                // tx: nextBottomPosition (MAX = 0)
+
+    const promoteRes = await app.request(`${BASE}/promote`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ queueEntryId: priorityEntry.id }),
+    });
+    expect(promoteRes.status).toBe(200);
+    const promoteBody = await readJson<SuccessEnvelope<{ promoted: boolean }>>(promoteRes);
+    expect(promoteBody.data.promoted).toBe(true);
+
+    // ── Step 2: complete (the entry is now in active at position 1) ──────────
+    // loadSlotOne: entry now active at position 1
+    enqueueSelectResult([{ id: "qe-active", checkinId: priorityEntry.checkinId, entityPairId: priorityEntry.entityPairId, entitySoloUserId: null, position: 1 }]);
+    // SELECT checkin
+    enqueueSelectResult([{ sessionId: priorityEntry.sessionId, divisionName: "Classic", songId: "song1" }]);
+    // SELECT session (eventId)
+    enqueueSelectResult([{ eventId: null }]);
+
+    const completeRes = await app.request(`${BASE}/complete`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: priorityEntry.sessionId }),
+    });
+    expect(completeRes.status).toBe(200);
+    const completeBody = await readJson<SuccessEnvelope<{ completed: boolean }>>(completeRes);
+    expect(completeBody.data.completed).toBe(true);
+  });
+
+  it("promote returns 400 when cap is full, then succeeds once a slot opens", async () => {
+    // Attempt 1: active queue at priority cap → blocked
+    enqueueSelectResult([priorityEntry]);
+    enqueueSelectResult([sessionCaps]);                      // caps: priority max = 6
+    enqueueSelectResult([{ n: sessionCaps.activePriorityMax }]); // active count = AT cap
+    enqueueSelectResult([{ n: 0 }]);
+
+    const blockedRes = await app.request(`${BASE}/promote`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ queueEntryId: priorityEntry.id }),
+    });
+    expect(blockedRes.status).toBe(400);
+
+    // Attempt 2: a slot has opened (active count now below cap) → succeeds
+    enqueueSelectResult([priorityEntry]);
+    enqueueSelectResult([sessionCaps]);
+    enqueueSelectResult([{ n: sessionCaps.activePriorityMax - 1 }]); // one slot open
+    enqueueSelectResult([{ n: 0 }]);
+    enqueueSelectResult([]);                                 // nextBottomPosition
+
+    const succeededRes = await app.request(`${BASE}/promote`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ queueEntryId: priorityEntry.id }),
+    });
+    expect(succeededRes.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<{ promoted: boolean }>>(succeededRes);
+    expect(body.data.promoted).toBe(true);
   });
 });

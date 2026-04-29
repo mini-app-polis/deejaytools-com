@@ -466,7 +466,16 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
     );
   }
 
-  // Soft-delete on Drive (best-effort)
+  // Soft-delete on Drive (intentionally best-effort).
+  //
+  // Drive cleanup is decoupled from the DB delete because Drive is external
+  // infrastructure that can be temporarily unavailable. The DB soft-delete is
+  // what controls visibility in the app — once deleted_at is stamped, the song
+  // disappears from every user-facing list regardless of Drive state.
+  //
+  // If Drive soft-delete fails: the file remains in the Drive folder (not
+  // trashed), Sentry captures the error, and an operator can clean it up
+  // manually. We do NOT block the user's delete action for this.
   if (existing.driveFileId && existing.driveFolderId) {
     try {
       await softDeleteOnDrive(existing.driveFileId, existing.driveFolderId);
@@ -603,7 +612,9 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   const userId = c.get("user").userId;
 
   // Best-effort cleanup of abandoned upload dirs — does not block the request.
-  void sweepStaleTmpDirs();
+  sweepStaleTmpDirs().catch((err) =>
+    logger.warn({ event: "sweep_tmp_dirs_failed", category: "infra", context: { error: String(err) } })
+  );
 
   const body = await c.req.parseBody();
   const uploadId = typeof body.upload_id === "string" ? body.upload_id.trim() : "";

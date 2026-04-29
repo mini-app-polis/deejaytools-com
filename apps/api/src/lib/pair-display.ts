@@ -9,8 +9,8 @@ export function buildPairDisplayName(
   ptFirst: string | null,
   ptLast: string | null
 ): string {
-  const left = [uaFirst, uaLast].filter(Boolean).join(" ").trim() || "—";
-  const right = [ptFirst, ptLast].filter(Boolean).join(" ").trim() || "—";
+  const left = [uaFirst, uaLast].map((s) => s?.trim()).filter(Boolean).join(" ") || "—";
+  const right = [ptFirst, ptLast].map((s) => s?.trim()).filter(Boolean).join(" ") || "—";
   return `${left} / ${right}`;
 }
 

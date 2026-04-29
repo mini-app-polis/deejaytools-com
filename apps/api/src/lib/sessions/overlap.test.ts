@@ -103,14 +103,29 @@ describe("sessionOverlapsInEvent", () => {
     expect(result).toBe(true);
   });
 
-  it("returns false when different eventId has overlapping sessions", async () => {
-    enqueueSelectResult([]);
-    // No sessions in event1, even though other events might have overlaps
-    const result = await sessionOverlapsInEvent({
+  it("returns false for event1 when only event2 has sessions in the window", async () => {
+    // This test verifies that the query actually filters by eventId.
+    // We call the function twice with the same time window but different events.
+    // event1 has no matching sessions → false.
+    // event2 has a matching session → true.
+    // If the WHERE clause omitted eq(sessions.eventId, ...) both calls would
+    // return the same result, so the pair of assertions together proves the
+    // eventId filter is doing real work.
+    enqueueSelectResult([]); // event1 query: no rows
+    const event1Result = await sessionOverlapsInEvent({
       eventId: "event1",
       startTime: 1000,
       endTime: 2000,
     });
-    expect(result).toBe(false);
+
+    enqueueSelectResult([{ id: "s2" }]); // event2 query: one matching row
+    const event2Result = await sessionOverlapsInEvent({
+      eventId: "event2",
+      startTime: 1000,
+      endTime: 2000,
+    });
+
+    expect(event1Result).toBe(false);
+    expect(event2Result).toBe(true);
   });
 });

@@ -55,7 +55,26 @@ class PromoteAbortError extends Error {
   }
 }
 
-/** POST /v1/queue/promote — move a priority or non-priority entry into active. */
+/**
+ * POST /v1/queue/promote — move a waiting entry (priority or non_priority) into
+ * the active queue, subject to the session's cap limits.
+ *
+ * Concurrency safety (see ADR-004):
+ *   The session row is locked with SELECT … FOR UPDATE at the start of the
+ *   transaction. Any concurrent promote targeting the same session blocks until
+ *   this transaction commits or rolls back, then re-reads the current counts.
+ *   This prevents two simultaneous promotes from both seeing room in the active
+ *   queue and both succeeding past the cap.
+ *
+ * Admission gates (evaluated inside the transaction, after the lock):
+ *   Priority entry   → allowed when activeCount < activePriorityMax
+ *   Non-priority entry → allowed when activeCount < activeNonPriorityMax
+ *                        AND priorityCount === 0 (priority queue must be empty)
+ *
+ * PromoteAbortError is a sentinel thrown from inside the transaction so the
+ * outer catch can map specific reasons to the correct HTTP status without
+ * accidentally masking real DB failures (which become 409s).
+ */
 queueRoutes.post("/promote", requireAdmin, zValidator("json", promoteBody), async (c) => {
   const adminId = c.get("user").userId;
   const { queueEntryId } = c.req.valid("json");
@@ -287,6 +306,9 @@ queueRoutes.post("/incomplete", requireAdmin, zValidator("json", slotOneBody), a
       }
 
       const n = rows.length;
+      // 2_000_000 is a safe out-of-range position — active queues never grow
+      // anywhere near this size, so it cannot collide with any real position
+      // while we shift the other entries down by one.
       const sentinel = 2_000_000;
       await tx
         .update(queueEntries)
@@ -399,6 +421,26 @@ queueRoutes.post("/withdraw", requireAdmin, zValidator("json", withdrawBody), as
  * entity label so the UI doesn't have to resolve names client-side. Joins
  * through pairs → leader user + follower partner for pair entities, and
  * directly to users for solo entities.
+ *
+ * Each returned item has the shape:
+ * ```
+ * {
+ *   queueEntryId:     string          // queue_entries.id
+ *   checkinId:        string
+ *   position:         number          // 1-based; lower = closer to front
+ *   enteredQueueAt:   number          // ms epoch when placed in this queue
+ *   entityPairId:     string | null
+ *   entitySoloUserId: string | null
+ *   entityLabel:      string          // "Leader & Follower", "Solo Name", or "—"
+ *   divisionName:     string
+ *   songId:           string | null
+ *   notes:            string | null
+ *   initialQueue:     string          // queue the entity checked into originally
+ *   checkedInAt:      number          // ms epoch of check-in creation
+ * }
+ * ```
+ * The `/waiting` endpoint adds a `subQueue: "priority" | "non_priority"` field
+ * so the UI can render the two sections without a second request.
  */
 async function listQueue(sessionId: string, queueType: "priority" | "non_priority" | "active") {
   const pairUser = alias(users, "pair_user");
