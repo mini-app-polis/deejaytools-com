@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import type { ApiEvent } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,14 +17,6 @@ import {
 import { compareEventChrono } from "@/lib/chronoSort";
 import { CLICKABLE_CARD_CLASS, CLICKABLE_ROW_CLASS } from "@/lib/clickable";
 import { cn } from "@/lib/utils";
-
-type EventRow = {
-  id: string;
-  name: string;
-  start_date: string;
-  end_date: string;
-  status: string;
-};
 
 function eventStatusBadge(status: string) {
   switch (status) {
@@ -47,13 +40,13 @@ function eventStatusBadge(status: string) {
 export default function EventsPage() {
   const api = useApiClient();
   const navigate = useNavigate();
-  const [events, setEvents] = useState<EventRow[] | null>(null);
+  const [events, setEvents] = useState<ApiEvent[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = () => {
     setLoading(true);
     api
-      .get<EventRow[]>("/v1/events")
+      .get<ApiEvent[]>("/v1/events")
       .then(setEvents)
       .catch((e: Error) => toast.error(e.message))
       .finally(() => setLoading(false));

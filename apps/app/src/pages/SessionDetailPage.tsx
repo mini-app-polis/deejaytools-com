@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { SignedIn, SignedOut, SignInButton, useAuth, useUser } from "@clerk/clerk-react";
+import type { ApiSession, ApiQueueEntry, ApiLeadingPair, ApiSong } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,62 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr, formatDateTimeShort } from "@/lib/sessionFormat";
 
-type SessionDetail = {
-  id: string;
-  event_id: string | null;
-  event_name: string | null;
-  /** IANA timezone from the parent event (e.g. "America/Chicago"). Null for standalone sessions. */
-  event_timezone: string | null;
-  name: string;
-  date: string | null;
-  checkin_opens_at: number;
-  floor_trial_starts_at: number;
-  floor_trial_ends_at: number;
-  status: string;
-  divisions?: {
-    division_name: string;
-    is_priority: boolean;
-    priority_run_limit?: number;
-  }[];
-  has_active_checkin?: boolean;
-  active_checkin_division?: string;
-  queue_depth?: { priority: number; non_priority: number; active: number };
-};
-
-type QueueRow = {
-  queueEntryId: string;
-  checkinId: string;
-  position: number;
-  enteredQueueAt: number;
-  entityPairId: string | null;
-  entitySoloUserId: string | null;
-  /** Server-rendered partnership label, e.g. "Alice Smith & Bob Jones". */
-  entityLabel: string;
-  divisionName: string;
-  songId: string;
-  notes: string | null;
-  initialQueue: string;
-  checkedInAt: number;
-  subQueue?: "priority" | "non_priority";
-};
-
-type LeadingPair = {
-  id: string;
-  partner_b_id: string | null;
-  display_name: string;
-};
-
-type SongRow = {
-  id: string;
-  display_name: string | null;
-  processed_filename: string | null;
-  division: string | null;
-  partner_id: string | null;
-  partner_first_name: string | null;
-  partner_last_name: string | null;
-};
-
-function derivedStatus(s: SessionDetail, now: number): string {
+function derivedStatus(s: ApiSession, now: number): string {
   if (now < s.checkin_opens_at) return "scheduled";
   if (now <= s.floor_trial_ends_at) return "open";
   return "ended";
@@ -92,16 +38,16 @@ const FIELD_INPUT_CLASS =
 
 const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
 
-export default function SessionDetailPage() {
+export default function ApiSessionPage() {
   const { id } = useParams<{ id: string }>();
   const api = useApiClient();
   const { user } = useUser();
   const { isSignedIn } = useAuth();
-  const [session, setSession] = useState<SessionDetail | null>(null);
-  const [active, setActive] = useState<QueueRow[]>([]);
-  const [waiting, setWaiting] = useState<QueueRow[]>([]);
-  const [pairs, setPairs] = useState<LeadingPair[]>([]);
-  const [songs, setSongs] = useState<SongRow[]>([]);
+  const [session, setSession] = useState<ApiSession | null>(null);
+  const [active, setActive] = useState<ApiQueueEntry[]>([]);
+  const [waiting, setWaiting] = useState<ApiQueueEntry[]>([]);
+  const [pairs, setPairs] = useState<ApiLeadingPair[]>([]);
+  const [songs, setSongs] = useState<ApiSong[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkinOpen, setCheckinOpen] = useState(false);
 
@@ -115,14 +61,14 @@ export default function SessionDetailPage() {
 
   const loadSession = useCallback(() => {
     if (!id) return;
-    return api.get<SessionDetail>(`/v1/sessions/${id}`).then(setSession);
+    return api.get<ApiSession>(`/v1/sessions/${id}`).then(setSession);
   }, [api, id]);
 
   const loadQueue = useCallback(async () => {
     if (!id) return;
     const [a, w] = await Promise.all([
-      api.get<QueueRow[]>(`/v1/queue/${id}/active`),
-      api.get<QueueRow[]>(`/v1/queue/${id}/waiting`),
+      api.get<ApiQueueEntry[]>(`/v1/queue/${id}/active`),
+      api.get<ApiQueueEntry[]>(`/v1/queue/${id}/waiting`),
     ]);
     setActive(a);
     setWaiting(w);
@@ -137,8 +83,8 @@ export default function SessionDetailPage() {
       return;
     }
     const [p, s] = await Promise.all([
-      api.get<LeadingPair[]>("/v1/partners/leading-pairs"),
-      api.get<SongRow[]>("/v1/songs"),
+      api.get<ApiLeadingPair[]>("/v1/partners/leading-pairs"),
+      api.get<ApiSong[]>("/v1/songs"),
     ]);
     setPairs(p);
     setSongs(s);
@@ -173,7 +119,7 @@ export default function SessionDetailPage() {
 
   // Index pairs by partner_b_id for fast lookup
   const pairByPartnerId = useMemo(() => {
-    const m = new Map<string, LeadingPair>();
+    const m = new Map<string, ApiLeadingPair>();
     for (const p of pairs) {
       if (p.partner_b_id) m.set(p.partner_b_id, p);
     }
@@ -221,7 +167,7 @@ export default function SessionDetailPage() {
     return m;
   }, [pairs]);
 
-  const renderEntityLabel = (row: QueueRow): string => {
+  const renderEntityLabel = (row: ApiQueueEntry): string => {
     // Prefer server-provided partnership label; fall back to the local pair
     // map (only useful for the current user's own pairs) and then to a generic
     // placeholder if no name data is available at all.
@@ -230,7 +176,8 @@ export default function SessionDetailPage() {
     return row.entityLabel;
   };
 
-  const renderSongLabel = (songId: string): string => songMap.get(songId) ?? songId;
+  const renderSongLabel = (songId: string | null | undefined): string =>
+    songId ? (songMap.get(songId) ?? songId) : "—";
 
   // Sorted active queue (slot 1 first). The first item is "on deck right now"
   // and gets a visual highlight inside the Active card.

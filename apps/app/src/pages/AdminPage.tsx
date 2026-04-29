@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import type {
+  ApiEvent,
+  ApiSession,
+  ApiQueueEntry,
+  ApiLeadingPair,
+  ApiSong,
+  ApiTestInjection,
+  ApiRun,
+  ApiAdminUser,
+} from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import { CLICKABLE_ROW_CLASS } from "@/lib/clickable";
@@ -70,94 +80,6 @@ function toEpochInTz(dateStr: string, timeStr: string, tz: string): number {
     return new Date(`${dateStr}T${timeStr}:00`).getTime();
   }
 }
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type EventRow = {
-  id: string;
-  name: string;
-  start_date: string;
-  end_date: string;
-  status: string; // computed server-side
-  /** IANA timezone for this event (e.g. "America/Chicago"). */
-  timezone: string;
-};
-
-type SessionRow = {
-  id: string;
-  event_id: string | null;
-  /** IANA timezone from the parent event. Null for standalone sessions. */
-  event_timezone: string | null;
-  name: string;
-  date: string | null;
-  status: string;
-  checkin_opens_at: number;
-  floor_trial_starts_at: number;
-  floor_trial_ends_at: number;
-};
-
-type QueueRow = {
-  queueEntryId: string;
-  checkinId: string;
-  position: number;
-  enteredQueueAt: number;
-  entityPairId: string | null;
-  entitySoloUserId: string | null;
-  /** Server-rendered partnership label, e.g. "Alice Smith & Bob Jones". */
-  entityLabel: string;
-  divisionName: string;
-  songId: string;
-  notes: string | null;
-  initialQueue: string;
-  checkedInAt: number;
-};
-
-type LeadingPair = {
-  id: string;
-  partner_b_id: string | null;
-  display_name: string;
-};
-
-type SongRow = {
-  id: string;
-  display_name: string | null;
-  processed_filename?: string | null;
-};
-
-type TestInjection = {
-  pair_id: string;
-  created_at: number;
-  leader_name: string;
-  follower_name: string | null;
-  session_id: string | null;
-  session_name: string | null;
-  division_name: string | null;
-  queue_status: "active" | "priority" | "non_priority" | "off_queue";
-  position: number | null;
-};
-
-type RunRow = {
-  id: string;
-  completed_at: number;
-  division_name: string;
-  session_id: string;
-  session_floor_trial_starts_at: number | null;
-  event_id: string | null;
-  event_name: string | null;
-  song_id: string;
-  song_label: string;
-  entity_label: string;
-  completed_by_label: string;
-};
-
-type AdminUserRow = {
-  id: string;
-  email: string;
-  first_name: string | null;
-  last_name: string | null;
-  role: "user" | "admin";
-  created_at: number;
-};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -232,7 +154,7 @@ export default function AdminPage() {
   const { me } = useAuthMe();
 
   // ── Events tab ──────────────────────────────────────────────────────────────
-  const [events, setEvents] = useState<EventRow[] | null>(null);
+  const [events, setEvents] = useState<ApiEvent[] | null>(null);
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [evDialogOpen, setEvDialogOpen] = useState(false);
   const [evSubmitting, setEvSubmitting] = useState(false);
@@ -242,7 +164,7 @@ export default function AdminPage() {
   const [evTimezone, setEvTimezone] = useState("America/Chicago");
 
   // ── Sessions tab ────────────────────────────────────────────────────────────
-  const [sessions, setSessions] = useState<SessionRow[] | null>(null);
+  const [sessions, setSessions] = useState<ApiSession[] | null>(null);
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [sessDialogOpen, setSessDialogOpen] = useState(false);
   const [sessSubmitting, setSessSubmitting] = useState(false);
@@ -263,11 +185,11 @@ export default function AdminPage() {
 
   // ── Live queue tab ──────────────────────────────────────────────────────────
   const [lqSessionId, setLqSessionId] = useState("");
-  const [lqActive, setLqActive] = useState<QueueRow[]>([]);
-  const [lqPriority, setLqPriority] = useState<QueueRow[]>([]);
-  const [lqNonPriority, setLqNonPriority] = useState<QueueRow[]>([]);
-  const [lqPairs, setLqPairs] = useState<LeadingPair[]>([]);
-  const [lqSongs, setLqSongs] = useState<SongRow[]>([]);
+  const [lqActive, setLqActive] = useState<ApiQueueEntry[]>([]);
+  const [lqPriority, setLqPriority] = useState<ApiQueueEntry[]>([]);
+  const [lqNonPriority, setLqNonPriority] = useState<ApiQueueEntry[]>([]);
+  const [lqPairs, setLqPairs] = useState<ApiLeadingPair[]>([]);
+  const [lqSongs, setLqSongs] = useState<ApiSong[]>([]);
   const [lqLoading, setLqLoading] = useState(false);
   const lqSessionRef = useRef(lqSessionId);
   lqSessionRef.current = lqSessionId;
@@ -282,19 +204,19 @@ export default function AdminPage() {
   const [tiFollowerFirst, setTiFollowerFirst] = useState("Follower");
   const [tiFollowerLast, setTiFollowerLast] = useState(() => randomFourDigitTag());
   const [tiSubmitting, setTiSubmitting] = useState(false);
-  const [tiData, setTiData] = useState<TestInjection[] | null>(null);
+  const [tiData, setTiData] = useState<ApiTestInjection[] | null>(null);
   const [tiDeleting, setTiDeleting] = useState(false);
 
   // ── Run history tab ─────────────────────────────────────────────────────────
   const [runsSessionFilter, setRunsSessionFilter] = useState("");
-  const [runs, setRuns] = useState<RunRow[] | null>(null);
+  const [runs, setRuns] = useState<ApiRun[] | null>(null);
   const [runsLoading, setRunsLoading] = useState(false);
 
   // ── Users tab ───────────────────────────────────────────────────────────────
   // `usersQuery` updates on every keystroke; `usersDebouncedQuery` is what
   // actually fires the network request. 300 ms feels responsive without
   // hammering the API on every character.
-  const [users, setUsers] = useState<AdminUserRow[] | null>(null);
+  const [users, setUsers] = useState<ApiAdminUser[] | null>(null);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersQuery, setUsersQuery] = useState("");
   const [usersDebouncedQuery, setUsersDebouncedQuery] = useState("");
@@ -306,7 +228,7 @@ export default function AdminPage() {
   const loadEvents = useCallback(() => {
     setLoadingEvents(true);
     api
-      .get<EventRow[]>("/v1/events")
+      .get<ApiEvent[]>("/v1/events")
       .then(setEvents)
       .catch((e: Error) => toast.error(e.message))
       .finally(() => setLoadingEvents(false));
@@ -315,7 +237,7 @@ export default function AdminPage() {
   const loadSessions = useCallback(() => {
     setLoadingSessions(true);
     api
-      .get<SessionRow[]>("/v1/sessions")
+      .get<ApiSession[]>("/v1/sessions")
       .then(setSessions)
       .catch((e: Error) => toast.error(e.message))
       .finally(() => setLoadingSessions(false));
@@ -327,9 +249,9 @@ export default function AdminPage() {
       setLqLoading(true);
       try {
         const [active, priority, nonPriority] = await Promise.all([
-          api.get<QueueRow[]>(`/v1/queue/${sessionId}/active`),
-          api.get<QueueRow[]>(`/v1/queue/${sessionId}/priority`),
-          api.get<QueueRow[]>(`/v1/queue/${sessionId}/non-priority`),
+          api.get<ApiQueueEntry[]>(`/v1/queue/${sessionId}/active`),
+          api.get<ApiQueueEntry[]>(`/v1/queue/${sessionId}/priority`),
+          api.get<ApiQueueEntry[]>(`/v1/queue/${sessionId}/non-priority`),
         ]);
         setLqActive(active);
         setLqPriority(priority);
@@ -345,16 +267,16 @@ export default function AdminPage() {
 
   const loadLqExtras = useCallback(async () => {
     const [pairs, songs] = await Promise.all([
-      api.get<LeadingPair[]>("/v1/partners/leading-pairs"),
-      api.get<SongRow[]>("/v1/songs"),
+      api.get<ApiLeadingPair[]>("/v1/partners/leading-pairs"),
+      api.get<ApiSong[]>("/v1/songs"),
     ]);
     setLqPairs(pairs);
     setLqSongs(songs);
   }, [api]);
 
-  const loadTestInjections = useCallback(async () => {
+  const loadApiTestInjections = useCallback(async () => {
     try {
-      const data = await api.get<TestInjection[]>("/v1/admin/checkins/test");
+      const data = await api.get<ApiTestInjection[]>("/v1/admin/checkins/test");
       setTiData(data);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load test data");
@@ -368,7 +290,7 @@ export default function AdminPage() {
         const path = sessionId
           ? `/v1/runs?session_id=${encodeURIComponent(sessionId)}`
           : "/v1/runs";
-        const data = await api.get<RunRow[]>(path);
+        const data = await api.get<ApiRun[]>(path);
         setRuns(data);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to load run history");
@@ -386,7 +308,7 @@ export default function AdminPage() {
         const path = q
           ? `/v1/admin/users?q=${encodeURIComponent(q)}`
           : "/v1/admin/users";
-        const data = await api.get<AdminUserRow[]>(path);
+        const data = await api.get<ApiAdminUser[]>(path);
         setUsers(data);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to load users");
@@ -401,9 +323,9 @@ export default function AdminPage() {
     loadEvents();
     loadSessions();
     void loadLqExtras().catch(() => {});
-    void loadTestInjections().catch(() => {});
+    void loadApiTestInjections().catch(() => {});
     void loadUsers("").catch(() => {});
-  }, [loadEvents, loadSessions, loadLqExtras, loadTestInjections, loadUsers]);
+  }, [loadEvents, loadSessions, loadLqExtras, loadApiTestInjections, loadUsers]);
 
   // Refetch run history whenever the session filter changes.
   useEffect(() => {
@@ -468,7 +390,7 @@ export default function AdminPage() {
     return m;
   }, [lqSongs]);
 
-  const renderEntityLabel = (row: QueueRow) => {
+  const renderEntityLabel = (row: ApiQueueEntry) => {
     // Prefer server-provided partnership label; fall back to local pair map
     // (only useful for the current admin's own pairs / freshly-injected test
     // pairs that we appended client-side).
@@ -477,7 +399,8 @@ export default function AdminPage() {
     return row.entityLabel;
   };
 
-  const renderSongLabel = (songId: string) => songMap.get(songId) ?? songId;
+  const renderSongLabel = (songId: string | null | undefined) =>
+    songId ? (songMap.get(songId) ?? songId) : "—";
 
   // ── Event CRUD ──────────────────────────────────────────────────────────────
 
@@ -507,7 +430,7 @@ export default function AdminPage() {
     if (evEndDate < evStartDate) { toast.error("End date must be on or after start date"); return; }
     setEvSubmitting(true);
     try {
-      const created = await api.post<EventRow>("/v1/events", {
+      const created = await api.post<ApiEvent>("/v1/events", {
         name: evName.trim(),
         start_date: evStartDate,
         end_date: evEndDate,
@@ -606,7 +529,7 @@ export default function AdminPage() {
 
     setSessSubmitting(true);
     try {
-      await api.post<SessionRow>("/v1/sessions", {
+      await api.post<ApiSession>("/v1/sessions", {
         event_id: sessEventId,
         name: sessionName,
         date: sessDate,
@@ -652,7 +575,7 @@ export default function AdminPage() {
 
   // ── Test injection ──────────────────────────────────────────────────────────
 
-  const submitTestInjection = async (e: React.FormEvent) => {
+  const submitApiTestInjection = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tiSessionId) { toast.error("Select a session"); return; }
     if (!tiDivision) { toast.error("Select a division"); return; }
@@ -703,7 +626,7 @@ export default function AdminPage() {
       setTiFollowerLast(randomFourDigitTag());
       setTiDivision(randomDivision());
 
-      void loadTestInjections().catch(() => {});
+      void loadApiTestInjections().catch(() => {});
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Injection failed");
     } finally {
@@ -723,7 +646,7 @@ export default function AdminPage() {
   const setUserRole = async (userId: string, nextRole: "user" | "admin") => {
     setUserRoleSubmitting((prev) => ({ ...prev, [userId]: true }));
     try {
-      const updated = await api.patch<AdminUserRow>(
+      const updated = await api.patch<ApiAdminUser>(
         `/v1/admin/users/${userId}/role`,
         { role: nextRole }
       );
@@ -1007,9 +930,9 @@ export default function AdminPage() {
                                 <p className="text-muted-foreground truncate">
                                   {row.divisionName} · {renderSongLabel(row.songId)}
                                 </p>
-                                {songFilenameMap.get(row.songId) && (
+                                {(row.songId ? songFilenameMap.get(row.songId) : undefined) && (
                                   <p className="text-xs text-muted-foreground/70 truncate font-mono">
-                                    {songFilenameMap.get(row.songId)}
+                                    {(row.songId ? songFilenameMap.get(row.songId) : undefined)}
                                   </p>
                                 )}
                                 {row.notes && (
@@ -1069,9 +992,9 @@ export default function AdminPage() {
                             <p className="text-muted-foreground truncate">
                               {row.divisionName} · {renderSongLabel(row.songId)}
                             </p>
-                            {songFilenameMap.get(row.songId) && (
+                            {(row.songId ? songFilenameMap.get(row.songId) : undefined) && (
                               <p className="text-xs text-muted-foreground/70 truncate font-mono">
-                                {songFilenameMap.get(row.songId)}
+                                {(row.songId ? songFilenameMap.get(row.songId) : undefined)}
                               </p>
                             )}
                             {row.notes && (
@@ -1120,9 +1043,9 @@ export default function AdminPage() {
                             <p className="text-muted-foreground truncate">
                               {row.divisionName} · {renderSongLabel(row.songId)}
                             </p>
-                            {songFilenameMap.get(row.songId) && (
+                            {(row.songId ? songFilenameMap.get(row.songId) : undefined) && (
                               <p className="text-xs text-muted-foreground/70 truncate font-mono">
-                                {songFilenameMap.get(row.songId)}
+                                {(row.songId ? songFilenameMap.get(row.songId) : undefined)}
                               </p>
                             )}
                             {row.notes && (
@@ -1245,7 +1168,7 @@ export default function AdminPage() {
             Testing-only bypass. Creates throwaway user/partner/pair rows and uses a placeholder song.
             Skips the check-in time window. Each submission adds one entry to the selected session's queue.
           </div>
-          <form onSubmit={submitTestInjection} className="space-y-4 max-w-lg">
+          <form onSubmit={submitApiTestInjection} className="space-y-4 max-w-lg">
             <div>
               <label className={FIELD_LABEL_CLASS}>Session</label>
               <select
@@ -1334,7 +1257,7 @@ export default function AdminPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => void loadTestInjections()}
+                  onClick={() => void loadApiTestInjections()}
                   disabled={tiDeleting}
                 >
                   Refresh

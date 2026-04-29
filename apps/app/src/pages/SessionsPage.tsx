@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import type { ApiSession } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,19 +17,6 @@ import { CLICKABLE_CARD_CLASS, CLICKABLE_ROW_CLASS } from "@/lib/clickable";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareSessionChrono } from "@/lib/chronoSort";
 import { cn } from "@/lib/utils";
-
-type SessionRow = {
-  id: string;
-  event_id: string | null;
-  /** IANA timezone from the parent event. Null for standalone sessions. */
-  event_timezone: string | null;
-  name: string;
-  date: string | null;
-  status: string;
-  checkin_opens_at: number;
-  floor_trial_starts_at: number;
-  floor_trial_ends_at: number;
-};
 
 function sessionStatusBadge(status: string) {
   switch (status) {
@@ -54,14 +42,14 @@ function sessionStatusBadge(status: string) {
 export default function SessionsPage() {
   const api = useApiClient();
   const navigate = useNavigate();
-  const [sessions, setSessions] = useState<SessionRow[] | null>(null);
+  const [sessions, setSessions] = useState<ApiSession[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let on = true;
     setLoading(true);
     api
-      .get<SessionRow[]>("/v1/sessions")
+      .get<ApiSession[]>("/v1/sessions")
       .then((rows) => on && setSessions(rows))
       .catch((e: Error) => on && toast.error(e.message))
       .finally(() => on && setLoading(false));

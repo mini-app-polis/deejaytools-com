@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import type { ApiEvent, ApiSession } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,27 +10,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { cn } from "@/lib/utils";
-
-type EventRow = {
-  id: string;
-  name: string;
-  start_date: string;
-  end_date: string;
-  status: string;
-  /** IANA timezone for this event (e.g. "America/Chicago"). */
-  timezone: string;
-};
-
-type SessionRow = {
-  id: string;
-  event_id: string | null;
-  name: string;
-  date: string | null;
-  status: string;
-  checkin_opens_at: number;
-  floor_trial_starts_at: number;
-  floor_trial_ends_at: number;
-};
 
 /** Statuses that count as "active or upcoming" — what shows on this page. */
 const ACTIVE_STATUSES = new Set(["scheduled", "checkin_open", "in_progress"]);
@@ -57,8 +37,8 @@ function sessionStatusBadge(status: string) {
 
 export default function FloorTrialsPage() {
   const api = useApiClient();
-  const [sessions, setSessions] = useState<SessionRow[] | null>(null);
-  const [events, setEvents] = useState<EventRow[]>([]);
+  const [sessions, setSessions] = useState<ApiSession[] | null>(null);
+  const [events, setEvents] = useState<ApiEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -67,8 +47,8 @@ export default function FloorTrialsPage() {
     const fetchData = () => {
       setLoading(true);
       Promise.all([
-        api.get<SessionRow[]>("/v1/sessions"),
-        api.get<EventRow[]>("/v1/events"),
+        api.get<ApiSession[]>("/v1/sessions"),
+        api.get<ApiEvent[]>("/v1/events"),
       ])
         .then(([s, e]) => {
           if (cancelled) return;

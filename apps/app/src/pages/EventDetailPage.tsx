@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
+import type { ApiEvent, ApiSession } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,29 +12,6 @@ import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareSessionChrono } from "@/lib/chronoSort";
 import { cn } from "@/lib/utils";
-
-type EventRow = {
-  id: string;
-  name: string;
-  start_date: string;
-  end_date: string;
-  status: string;
-  /** IANA timezone for this event (e.g. "America/Chicago"). */
-  timezone: string;
-};
-
-type SessionRow = {
-  id: string;
-  event_id: string | null;
-  name: string;
-  date: string | null;
-  checkin_opens_at: number;
-  floor_trial_starts_at: number;
-  floor_trial_ends_at: number;
-  active_priority_max?: number;
-  active_non_priority_max?: number;
-  status: string;
-};
 
 function sessionStatusBadge(status: string) {
   switch (status) {
@@ -59,16 +37,16 @@ function sessionStatusBadge(status: string) {
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
   const api = useApiClient();
-  const [event, setEvent] = useState<EventRow | null>(null);
-  const [sessions, setSessions] = useState<SessionRow[] | null>(null);
+  const [event, setEvent] = useState<ApiEvent | null>(null);
+  const [sessions, setSessions] = useState<ApiSession[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = () => {
     if (!id) return;
     setLoading(true);
     Promise.all([
-      api.get<EventRow>(`/v1/events/${id}`),
-      api.get<SessionRow[]>(`/v1/sessions?event_id=${encodeURIComponent(id)}`),
+      api.get<ApiEvent>(`/v1/events/${id}`),
+      api.get<ApiSession[]>(`/v1/sessions?event_id=${encodeURIComponent(id)}`),
     ])
       .then(([ev, sess]) => {
         setEvent(ev);

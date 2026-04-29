@@ -1,23 +1,16 @@
 import { useAuth } from "@clerk/clerk-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import type { ApiAuthMe } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 
-export type AuthMe = {
-  id: string;
-  email: string | null;
-  display_name: string | null;
-  first_name: string | null;
-  last_name: string | null;
-  role: string;
-  created_at: number;
-  updated_at: number;
-};
+/** Re-exported alias so callers can import `AuthMe` from this module. */
+export type AuthMe = ApiAuthMe;
 
 export function useAuthMe() {
   const { isLoaded, isSignedIn } = useAuth();
   const api = useApiClient();
-  const [me, setMe] = useState<AuthMe | null>(null);
+  const [me, setMe] = useState<ApiAuthMe | null>(null);
   const [fetching, setFetching] = useState(false);
 
   const reload = useCallback(async () => {
@@ -27,7 +20,7 @@ export function useAuthMe() {
     }
     setFetching(true);
     try {
-      const row = await api.get<AuthMe>("/v1/auth/me");
+      const row = await api.get<ApiAuthMe>("/v1/auth/me");
       setMe(row);
     } catch (e) {
       setMe(null);

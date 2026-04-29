@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import type { ApiSong } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,22 +14,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-type Song = {
-  id: string;
-  partner_id: string | null;
-  processed_filename: string | null;
-  division: string | null;
-  routine_name: string | null;
-  personal_descriptor: string | null;
-  created_at: number;
-  partner_first_name?: string | null;
-  partner_last_name?: string | null;
-};
-
 export default function SongsPage() {
   const api = useApiClient();
 
-  const [songs, setSongs] = useState<Song[]>([]);
+  const [songs, setSongs] = useState<ApiSong[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -37,7 +26,7 @@ export default function SongsPage() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    api.get<Song[]>("/v1/songs")
+    api.get<ApiSong[]>("/v1/songs")
       .then((s) => { if (!cancelled) setSongs(s); })
       .catch((e: Error) => toast.error(e.message))
       .finally(() => { if (!cancelled) setLoading(false); });
