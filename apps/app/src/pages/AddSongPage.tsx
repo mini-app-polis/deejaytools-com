@@ -41,7 +41,7 @@ const DIVISION_OPTIONS = [
   "My Division Is Not Listed",
 ] as const;
 
-const SOLO_ALLOWED_DIVISIONS = new Set<string>(["Teams", "My Division Is Not Listed"]);
+const SOLO_ALLOWED_DIVISIONS = new Set<string>(["Teams", "Exhibition", "My Division Is Not Listed"]);
 
 const SOLO_PARTNER_VALUE = "__solo__";
 
@@ -51,6 +51,7 @@ const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB per chunk
 const MAX_FILE_BYTES = 100 * 1024 * 1024; // 100 MB
 
 type UploadStage = "idle" | "uploading" | "processing" | "finishing";
+type PageMode = "upload" | "claim";
 
 function formatMB(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1);
@@ -95,6 +96,10 @@ export default function AddSongPage() {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // ── Mode toggle ────────────────────────────────────────────────────────────
+  const [mode, setMode] = useState<PageMode>("upload");
+
+  // ── Upload form ────────────────────────────────────────────────────────────
   const [file, setFile] = useState<File | null>(null);
   const [division, setDivision] = useState("");
   const [routineName, setRoutineName] = useState("");
@@ -108,12 +113,13 @@ export default function AddSongPage() {
   const [uploadBytesSent, setUploadBytesSent] = useState(0);
 
   // ── Claim from history ────────────────────────────────────────────────────
-  const [claimDialogOpen, setClaimDialogOpen] = useState(false);
   const [claimPartnerId, setClaimPartnerId] = useState("");
+  const [claimPartnerError, setClaimPartnerError] = useState(false);
   const [claimQuery, setClaimQuery] = useState("");
   const [claimResults, setClaimResults] = useState<LegacySong[]>([]);
   const [claimSearching, setClaimSearching] = useState(false);
   const [claimingId, setClaimingId] = useState<string | null>(null);
+  const [pendingClaimId, setPendingClaimId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -253,9 +259,9 @@ export default function AddSongPage() {
     }
   };
 
-  // Debounced legacy-songs search whenever the dialog is open and the query changes.
+  // Debounced legacy-songs search whenever the claim panel is active.
   useEffect(() => {
-    if (!claimDialogOpen) return;
+    if (mode !== "claim") return;
     const t = setTimeout(async () => {
       setClaimSearching(true);
       try {
@@ -271,13 +277,14 @@ export default function AddSongPage() {
       }
     }, 250);
     return () => clearTimeout(t);
-  }, [claimDialogOpen, claimQuery, api]);
+  }, [mode, claimQuery, api]);
 
-  const openClaimDialog = () => {
-    setClaimPartnerId("");
-    setClaimQuery("");
-    setClaimResults([]);
-    setClaimDialogOpen(true);
+  const requestClaim = (legacyId: string) => {
+    if (!claimPartnerId) {
+      setClaimPartnerError(true);
+      return;
+    }
+    setPendingClaimId(legacyId);
   };
 
   const handleClaim = async (legacyId: string) => {
@@ -285,12 +292,17 @@ export default function AddSongPage() {
     try {
       await api.post<Song>("/v1/songs/claim-legacy", {
         legacy_song_id: legacyId,
-        partner_id: claimPartnerId || undefined,
+        partner_id: claimPartnerId,
       });
       toast.success("Song added from history");
-      setClaimDialogOpen(false);
+      // Reset claim panel
+      setClaimQuery("");
+      setClaimResults([]);
+      setClaimPartnerId("");
+      setPendingClaimId(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Claim failed");
+      setPendingClaimId(null);
     } finally {
       setClaimingId(null);
     }
@@ -313,209 +325,240 @@ export default function AddSongPage() {
         <Button variant="ghost" size="sm" className="px-0 mb-2" asChild>
           <Link to="/songs">← Back to My Songs</Link>
         </Button>
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <h1 className="page-title text-2xl">Add Song</h1>
-          <Button variant="outline" onClick={openClaimDialog}>
-            Claim from history
-          </Button>
-        </div>
+        <h1 className="page-title text-2xl">Add Song</h1>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Upload a song</CardTitle>
-          <CardDescription>
-            Create your song record and upload one audio file in a single step.
-            The file should contain only your routine — no bow music or
-            intro buffer; the DJ starts playback at 0:00.{" "}
-            <Link to="/how-it-works#submitting-music" className="text-primary hover:underline">
-              File requirements →
-            </Link>
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {hasFullName ? (
-            <p className="text-sm text-muted-foreground">
-              Uploading as:{" "}
-              <span className="font-medium text-foreground">
-                {me!.first_name} {me!.last_name}
-              </span>
-            </p>
-          ) : (
-            <p className="text-sm text-amber-600 dark:text-amber-500">
-              Set your first and last name on the{" "}
-              <Link to="/partners" className="underline font-medium">
-                My Partners
-              </Link>{" "}
-              page so we can label your uploads correctly.
-            </p>
-          )}
+      {/* ── Mode toggle ── */}
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={() => setMode("upload")}
+          className={[
+            "rounded-lg border p-4 text-left transition-colors",
+            mode === "upload"
+              ? "border-primary bg-primary/5 ring-1 ring-primary"
+              : "border-border bg-card hover:bg-muted/50",
+          ].join(" ")}
+        >
+          <p className={`font-semibold text-sm ${mode === "upload" ? "text-primary" : ""}`}>
+            Upload new audio
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            You have a new audio file ready to submit.
+          </p>
+        </button>
 
-          <form onSubmit={(e) => void handleUpload(e)} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="song-partner">Partner</Label>
-              <Select
-                key={formKey}
-                value={selectedPartnerId === "" ? SOLO_PARTNER_VALUE : selectedPartnerId}
-                onValueChange={(v) =>
-                  setSelectedPartnerId(v === SOLO_PARTNER_VALUE ? "" : v)
-                }
-              >
-                <SelectTrigger id="song-partner">
-                  <SelectValue placeholder="Solo / No partner" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={SOLO_PARTNER_VALUE}>Solo / No partner</SelectItem>
-                  {partners.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {partnerLabel(p)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Add partners on the{" "}
-                <Link to="/partners" className="underline">
+        <button
+          type="button"
+          onClick={() => setMode("claim")}
+          className={[
+            "rounded-lg border p-4 text-left transition-colors",
+            mode === "claim"
+              ? "border-primary bg-primary/5 ring-1 ring-primary"
+              : "border-border bg-card hover:bg-muted/50",
+          ].join(" ")}
+        >
+          <p className={`font-semibold text-sm ${mode === "claim" ? "text-primary" : ""}`}>
+            Claim from history
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            You submitted this song before — add it from past records.
+          </p>
+        </button>
+      </div>
+
+      {/* ── Upload panel ── */}
+      {mode === "upload" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Upload a song</CardTitle>
+            <CardDescription>
+              Select your audio file, fill in the details below, and hit Upload.
+              The file should contain only your routine — no bow music or intro
+              buffer; the DJ starts playback at 0:00.{" "}
+              <Link to="/how-it-works#submitting-music" className="text-primary hover:underline">
+                File requirements →
+              </Link>
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {hasFullName ? (
+              <p className="text-sm text-muted-foreground">
+                Uploading as:{" "}
+                <span className="font-medium text-foreground">
+                  {me!.first_name} {me!.last_name}
+                </span>
+              </p>
+            ) : (
+              <p className="text-sm text-amber-600 dark:text-amber-500">
+                Set your first and last name on the{" "}
+                <Link to="/partners" className="underline font-medium">
                   My Partners
                 </Link>{" "}
-                page.
+                page so we can label your uploads correctly.
               </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="song-division">Division</Label>
-              <Select key={formKey} value={division || undefined} onValueChange={setDivision}>
-                <SelectTrigger id="song-division">
-                  <SelectValue placeholder="Select a division" />
-                </SelectTrigger>
-                <SelectContent>
-                  {DIVISION_OPTIONS.map((d) => (
-                    <SelectItem key={d} value={d}>
-                      {d}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="song-routine">Routine / Song name</Label>
-              <Input
-                id="song-routine"
-                value={routineName}
-                onChange={(e) => setRoutineName(e.target.value)}
-                placeholder="Optional — recommended"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="song-descriptor">Personal descriptor</Label>
-              <Input
-                id="song-descriptor"
-                value={descriptor}
-                onChange={(e) => setDescriptor(e.target.value)}
-                placeholder="e.g. 98%, -2%, v3, 2026-02-01"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="song-file">Audio file</Label>
-              <Input
-                key={fileInputKey}
-                id="song-file"
-                type="file"
-                accept="audio/*"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                className="cursor-pointer"
-              />
-              <p className="text-xs text-muted-foreground">MP3, WAV, FLAC, or M4A — max 100 MB</p>
-            </div>
-
-            <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
-              {isSubmitting ? "Uploading…" : "Upload song"}
-            </Button>
-            {uploadStage !== "idle" && (
-              <div className="mt-3 space-y-1">
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>
-                    {uploadStage === "uploading" && file
-                      ? `Uploading… ${formatMB(uploadBytesSent)} of ${formatMB(file.size)} MB`
-                      : uploadStage === "processing"
-                        ? "Processing your file… this may take a moment"
-                        : "Saving…"}
-                  </span>
-                  <span>{uploadProgress}%</span>
-                </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full bg-primary transition-all duration-300"
-                    style={{ width: `${uploadProgress}%` }}
-                  />
-                </div>
-              </div>
             )}
-          </form>
-        </CardContent>
-      </Card>
 
-      {/* ── Claim from history dialog ── */}
-      {claimDialogOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
-          onClick={() => setClaimDialogOpen(false)}
-        >
-          <div
-            className="rounded-t-2xl sm:rounded-lg border bg-background p-6 shadow-lg w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto space-y-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="sm:hidden flex justify-center -mt-2 mb-2">
-              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold">Claim from history</h2>
+            <form onSubmit={(e) => void handleUpload(e)} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="song-partner">Partner</Label>
+                <Select
+                  key={formKey}
+                  value={selectedPartnerId === "" ? SOLO_PARTNER_VALUE : selectedPartnerId}
+                  onValueChange={(v) =>
+                    setSelectedPartnerId(v === SOLO_PARTNER_VALUE ? "" : v)
+                  }
+                >
+                  <SelectTrigger id="song-partner">
+                    <SelectValue placeholder="No partner" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={SOLO_PARTNER_VALUE}>No partner</SelectItem>
+                    {partners.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {partnerLabel(p)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <p className="text-xs text-muted-foreground">
-                  Pick a partner, then a song you submitted in the past. It'll be added to
-                  your songs so you can check in with it.
+                  Add partners on the{" "}
+                  <Link to="/partners" className="underline">
+                    My Partners
+                  </Link>{" "}
+                  page.
                 </p>
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setClaimDialogOpen(false)}
-              >
-                ✕
-              </Button>
-            </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="song-division">Division</Label>
+                <Select key={formKey} value={division || undefined} onValueChange={setDivision}>
+                  <SelectTrigger id="song-division">
+                    <SelectValue placeholder="Select a division" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DIVISION_OPTIONS.map((d) => (
+                      <SelectItem key={d} value={d}>
+                        {d}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="song-routine">Routine / Song name</Label>
+                <Input
+                  id="song-routine"
+                  value={routineName}
+                  onChange={(e) => setRoutineName(e.target.value)}
+                  placeholder="Optional — recommended"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="song-descriptor">Personal descriptor</Label>
+                <Input
+                  id="song-descriptor"
+                  value={descriptor}
+                  onChange={(e) => setDescriptor(e.target.value)}
+                  placeholder="e.g. 98%, -2%, v3, 2026-02-01"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="song-file">Audio file</Label>
+                <Input
+                  key={fileInputKey}
+                  id="song-file"
+                  type="file"
+                  accept="audio/*"
+                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                  className="cursor-pointer"
+                />
+                <p className="text-xs text-muted-foreground">MP3, WAV, FLAC, or M4A — max 100 MB</p>
+              </div>
+
+              <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
+                {isSubmitting ? "Uploading…" : "Upload song"}
+              </Button>
+              {uploadStage !== "idle" && (
+                <div className="mt-3 space-y-1">
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>
+                      {uploadStage === "uploading" && file
+                        ? `Uploading… ${formatMB(uploadBytesSent)} of ${formatMB(file.size)} MB`
+                        : uploadStage === "processing"
+                          ? "Processing your file… this may take a moment"
+                          : "Saving…"}
+                    </span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full bg-primary transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Claim from history panel ── */}
+      {mode === "claim" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Claim from history</CardTitle>
+            <CardDescription>
+              Search for a song you've submitted before and add it to your library.
+              No audio file needed — we'll pull the details from the original submission.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="claim-partner">Partner</Label>
+              <Label htmlFor="claim-partner">
+                Partner <span className="text-destructive">*</span>
+              </Label>
               <Select
-                value={claimPartnerId === "" ? SOLO_PARTNER_VALUE : claimPartnerId}
-                onValueChange={(v) =>
-                  setClaimPartnerId(v === SOLO_PARTNER_VALUE ? "" : v)
-                }
+                value={claimPartnerId}
+                onValueChange={(v) => {
+                  setClaimPartnerId(v);
+                  setClaimPartnerError(false);
+                }}
               >
-                <SelectTrigger id="claim-partner">
-                  <SelectValue placeholder="Solo / No partner" />
+                <SelectTrigger
+                  id="claim-partner"
+                  className={claimPartnerError ? "border-destructive ring-destructive" : ""}
+                >
+                  <SelectValue placeholder="Select a partner" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={SOLO_PARTNER_VALUE}>Solo / No partner</SelectItem>
-                  {partners.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {partnerLabel(p)}
-                    </SelectItem>
-                  ))}
+                  {partners.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-muted-foreground">
+                      No partners yet.
+                    </div>
+                  ) : (
+                    partners.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {partnerLabel(p)}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                Add partners on the{" "}
-                <Link to="/partners" className="underline">
-                  My Partners
-                </Link>{" "}
-                page if your partner isn't listed.
-              </p>
+              {claimPartnerError ? (
+                <p className="text-xs text-destructive">A partner is required to claim a song.</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  <Link to="/partners" className="underline">
+                    Add a partner
+                  </Link>{" "}
+                  if they're not listed.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -533,41 +576,69 @@ export default function AddSongPage() {
               {claimSearching ? (
                 <Skeleton className="h-32 w-full" />
               ) : claimResults.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground py-2">
                   {claimQuery.trim()
                     ? "No matches. Try a different search."
                     : "Type a partnership or routine name to search."}
                 </p>
               ) : (
-                <div className="space-y-2 max-h-80 overflow-y-auto">
+                <div className="space-y-2">
                   {claimResults.map((row) => (
                     <div
                       key={row.id}
-                      className="rounded-lg border px-3 py-2 text-sm flex items-start justify-between gap-3"
+                      className="rounded-lg border px-3 py-2 text-sm"
                     >
-                      <div className="min-w-0 space-y-0.5">
-                        <p className="font-medium">{row.partnership}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {[row.division, row.routine_name, row.descriptor]
-                            .filter(Boolean)
-                            .join(" · ") || "No details"}
-                        </p>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 space-y-0.5">
+                          <p className="font-medium">{row.partnership}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {[row.division, row.routine_name, row.descriptor]
+                              .filter(Boolean)
+                              .join(" · ") || "No details"}
+                          </p>
+                        </div>
+                        {pendingClaimId !== row.id && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => requestClaim(row.id)}
+                            disabled={claimingId !== null}
+                          >
+                            Claim
+                          </Button>
+                        )}
                       </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => void handleClaim(row.id)}
-                        disabled={claimingId !== null}
-                      >
-                        {claimingId === row.id ? "Claiming…" : "Claim"}
-                      </Button>
+                      {pendingClaimId === row.id && (
+                        <div className="flex items-center gap-2 mt-2 pt-2 border-t">
+                          <span className="text-xs text-muted-foreground flex-1">
+                            Add this song to your library?
+                          </span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => void handleClaim(row.id)}
+                            disabled={claimingId === row.id}
+                          >
+                            {claimingId === row.id ? "Claiming…" : "Confirm"}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setPendingClaimId(null)}
+                            disabled={claimingId === row.id}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
               )}
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
