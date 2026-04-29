@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/node";
 import { CommonErrors, createLogger, success } from "common-typescript-utils";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { logger as honoLogger } from "hono/logger";
 import { ZodError } from "zod";
@@ -52,6 +53,17 @@ app.use(
   })
 );
 app.use("*", honoLogger());
+
+// Global request body cap — 11 MB covers the maximum song-chunk upload (10 MB
+// of binary data + multipart envelope overhead) while rejecting truly oversized
+// requests before any handler allocates memory for them.
+app.use(
+  "*",
+  bodyLimit({
+    maxSize: 11 * 1024 * 1024,
+    onError: (c) => c.json(error("payload_too_large", "Request body exceeds the 11 MB limit."), 413),
+  })
+);
 
 // Rate limiting: 300 requests per minute per IP across all /v1 routes.
 // The /health and /internal/tick endpoints are exempt — they're not

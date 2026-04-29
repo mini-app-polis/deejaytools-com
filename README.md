@@ -110,7 +110,7 @@ The frontend pages map to these routes:
 
 ## Environment
 
-- **API**: `DATABASE_URL`, `CLERK_JWKS_URL`, `CORS_ORIGINS`, `PORT`, `TICK_SECRET`, `SENTRY_DSN`. Google Drive vars required for song upload: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`, `GOOGLE_DRIVE_PARENT_FOLDER_ID`.
+- **API**: `DATABASE_URL`, `CLERK_JWKS_URL`, `CORS_ORIGINS`, `PORT`, `TICK_SECRET`, `SENTRY_DSN`, `DB_POOL_MAX` (optional, defaults to 20), `DB_CONNECT_TIMEOUT` (optional, defaults to 10 s), `DB_IDLE_TIMEOUT` (optional, defaults to 30 s). Google Drive vars required for song upload: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`, `GOOGLE_DRIVE_PARENT_FOLDER_ID`.
 - **App**: `VITE_API_URL` (defaults to dev proxy), `VITE_CLERK_PUBLISHABLE_KEY`, `VITE_SENTRY_DSN` (optional).
 
 See `.env.example` in each app for the complete list.

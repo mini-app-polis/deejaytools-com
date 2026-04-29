@@ -11,8 +11,24 @@ if (!url) {
 }
 
 const poolMax = Number(process.env.DB_POOL_MAX ?? "20");
-const client = postgres(url, { max: poolMax });
+
+// connect_timeout: abort if a new connection isn't established within N seconds.
+// idle_timeout:    close connections that have been idle for N seconds, freeing
+//                  DB-side resources during quiet periods (e.g. overnight).
+// Both are overridable via env so Railway / local dev can tune without redeploy.
+const connectTimeout = Number(process.env.DB_CONNECT_TIMEOUT ?? "10");
+const idleTimeout = Number(process.env.DB_IDLE_TIMEOUT ?? "30");
+
+const client = postgres(url, {
+  max: poolMax,
+  connect_timeout: connectTimeout,
+  idle_timeout: idleTimeout,
+});
 export const db = drizzle(client, { schema });
 export { schema };
 
-logger.start("db_connected", { max_connections: poolMax });
+logger.start("db_connected", {
+  max_connections: poolMax,
+  connect_timeout: connectTimeout,
+  idle_timeout: idleTimeout,
+});

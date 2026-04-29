@@ -63,7 +63,7 @@ for rationale and revisit triggers.
 
 | Prefix | Purpose |
 |--------|---------|
-| `/health` | Liveness probe (public). |
+| `/health` | Liveness + readiness probe (public). Runs `SELECT 1` on each call — returns 200 `{ status: "ok" }` when the DB is reachable, 503 `{ status: "degraded" }` when it is not. |
 | `/internal/tick` | Railway cron hook, gated by `TICK_SECRET` header. |
 | `/v1/auth` | Clerk session sync / whoami. |
 | `/v1/events` | Event CRUD for event organizers. |
@@ -86,6 +86,9 @@ runtime:
 - `CLERK_JWKS_URL` — Clerk public key endpoint for JWT verification.
 - `CORS_ORIGINS` — comma-separated allowed origins.
 - `GOOGLE_SERVICE_ACCOUNT_*` — service account for Drive uploads.
+- `DB_POOL_MAX` — optional; maximum Postgres connections in the pool (default: `20`). Set below your Railway plan's connection limit to leave headroom for other services.
+- `DB_CONNECT_TIMEOUT` — optional; seconds to wait when opening a new connection before giving up (default: `10`).
+- `DB_IDLE_TIMEOUT` — optional; seconds an idle connection is kept open before being released (default: `30`).
 - `SENTRY_DSN` — optional; Sentry is enabled when set.
 - `TICK_SECRET` — optional; required to call `/internal/tick`.
 - `NODE_ENV` — defaults to `development`.
