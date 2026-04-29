@@ -1,3 +1,11 @@
+# [1.33.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.32.5...v1.33.0) (2026-04-29)
+
+
+### Features
+
+* adding caching and rate limiting with supporting tests ([c6d6781](https://github.com/mini-app-polis/deejaytools-com/commit/c6d6781c44c4b98043c3b5837078ac3fbb308965))
+* reliability update and test coverage ([35a6946](https://github.com/mini-app-polis/deejaytools-com/commit/35a69461a86db28c62d8b0959b4020f1cd90fa13))
+
 ## [1.32.5](https://github.com/mini-app-polis/deejaytools-com/compare/v1.32.4...v1.32.5) (2026-04-29)
 
 
