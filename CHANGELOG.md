@@ -1,3 +1,10 @@
+## [1.32.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.32.3...v1.32.4) (2026-04-29)
+
+
+### Bug Fixes
+
+* address doc requirements ([d61f1d7](https://github.com/mini-app-polis/deejaytools-com/commit/d61f1d75ae8c8ae333b3eec2ecb8356c2d7fd956))
+
 ## [1.32.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.32.2...v1.32.3) (2026-04-29)
 
 
