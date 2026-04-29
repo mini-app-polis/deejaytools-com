@@ -21,4 +21,20 @@ if (typeof window !== "undefined") {
   afterEach(() => {
     rtl.cleanup();
   });
+
+  // Radix UI (and other pointer-events-based libraries) call these methods on
+  // DOM elements. jsdom doesn't implement them, so stub them out so components
+  // that use Radix Select, Combobox, etc. can render without crashing.
+  Element.prototype.hasPointerCapture = () => false;
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  Element.prototype.setPointerCapture = () => {};
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  Element.prototype.releasePointerCapture = () => {};
+
+  // Radix Select scrolls the highlighted option into view — jsdom doesn't
+  // implement scrollIntoView, so provide a no-op.
+  if (!Element.prototype.scrollIntoView) {
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    Element.prototype.scrollIntoView = () => {};
+  }
 }
