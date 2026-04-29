@@ -1,3 +1,10 @@
+## [1.36.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.36.0...v1.36.1) (2026-04-29)
+
+
+### Bug Fixes
+
+* allowing users to remove song stuck in past session ([fb35118](https://github.com/mini-app-polis/deejaytools-com/commit/fb35118f45940a31a972b91d38863916e624812c))
+
 # [1.36.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.35.0...v1.36.0) (2026-04-29)
 
 
