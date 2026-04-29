@@ -1,3 +1,10 @@
+## [1.32.5](https://github.com/mini-app-polis/deejaytools-com/compare/v1.32.4...v1.32.5) (2026-04-29)
+
+
+### Bug Fixes
+
+* check in admin view ([ca3db1b](https://github.com/mini-app-polis/deejaytools-com/commit/ca3db1b641741ed534c6619a0173b372e9123215))
+
 ## [1.32.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.32.3...v1.32.4) (2026-04-29)
 
 
