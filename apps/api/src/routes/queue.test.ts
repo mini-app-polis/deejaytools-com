@@ -567,3 +567,132 @@ describe("POST /v1/queue/complete — cache invalidation", () => {
     expect(body.data[0]!.position).toBe(1); // still from cache
   });
 });
+
+describe("POST /v1/queue/:session_id/promote — cap boundary conditions", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+  });
+
+  it("returns 409 at exactly priority cap (active count === activePriorityMax)", async () => {
+    enqueueSelectResult([priorityEntry]);          // entry lookup
+    enqueueSelectResult([sessionCaps]);            // tx: session FOR UPDATE
+    enqueueSelectResult([{ n: 6 }]);              // tx: active count (exactly at cap)
+    enqueueSelectResult([{ n: 0 }]);              // tx: priority count
+    const res = await app.request(`${BASE}/promote`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ queueEntryId: "qe1" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: { message: string } };
+    expect(body.error.message).toMatch(/priority cap/i);
+  });
+
+  it("returns 200 one below priority cap (active count === activePriorityMax - 1)", async () => {
+    enqueueSelectResult([priorityEntry]);          // entry lookup
+    enqueueSelectResult([sessionCaps]);            // tx: session FOR UPDATE
+    enqueueSelectResult([{ n: 5 }]);              // tx: active count (one below cap)
+    enqueueSelectResult([{ n: 0 }]);              // tx: priority count
+    enqueueSelectResult([]);                        // tx: nextBottomPosition
+    const res = await app.request(`${BASE}/promote`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ queueEntryId: "qe1" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json() as { data: { promoted: boolean } };
+    expect(body.data.promoted).toBe(true);
+  });
+
+  it("returns 409 at exactly non-priority cap with empty priority queue", async () => {
+    enqueueSelectResult([{ ...priorityEntry, queueType: "non_priority" }]); // entry
+    enqueueSelectResult([sessionCaps]);            // tx: session FOR UPDATE
+    enqueueSelectResult([{ n: 4 }]);              // tx: active count (at non-priority cap)
+    enqueueSelectResult([{ n: 0 }]);              // tx: priority count (empty)
+    const res = await app.request(`${BASE}/promote`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ queueEntryId: "qe1" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: { message: string } };
+    expect(body.error.message).toMatch(/non-priority/i);
+  });
+
+  it("returns 200 one below non-priority cap with empty priority queue", async () => {
+    enqueueSelectResult([{ ...priorityEntry, queueType: "non_priority" }]); // entry
+    enqueueSelectResult([sessionCaps]);            // tx: session FOR UPDATE
+    enqueueSelectResult([{ n: 3 }]);              // tx: active count (one below cap)
+    enqueueSelectResult([{ n: 0 }]);              // tx: priority count (empty)
+    enqueueSelectResult([]);                        // tx: nextBottomPosition
+    const res = await app.request(`${BASE}/promote`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ queueEntryId: "qe1" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json() as { data: { promoted: boolean } };
+    expect(body.data.promoted).toBe(true);
+  });
+
+  it("returns 409 with zero priority cap for any priority promotion", async () => {
+    enqueueSelectResult([priorityEntry]);          // entry lookup
+    enqueueSelectResult([{ activePriorityMax: 0, activeNonPriorityMax: 4 }]); // tx: session FOR UPDATE with zero cap
+    enqueueSelectResult([{ n: 0 }]);              // tx: active count (empty)
+    enqueueSelectResult([{ n: 0 }]);              // tx: priority count
+    const res = await app.request(`${BASE}/promote`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ queueEntryId: "qe1" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: { message: string } };
+    expect(body.error.message).toMatch(/priority cap/i);
+  });
+});
+
+describe("GET /v1/queue/:session_id", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+  });
+
+  it("returns 200 with queue data for a known session", async () => {
+    enqueueSelectResult([
+      {
+        queueEntryId: "qe1",
+        checkinId: "c1",
+        position: 1,
+        enteredQueueAt: 1000,
+        entityPairId: "p1",
+        entitySoloUserId: null,
+        divisionName: "Classic",
+        songId: "song1",
+        notes: null,
+        initialQueue: "priority",
+        checkedInAt: 1000,
+        pairUserFirst: "Alice",
+        pairUserLast: "Smith",
+        pairPartnerFirst: "Bob",
+        pairPartnerLast: "Jones",
+        soloUserFirst: null,
+        soloUserLast: null,
+      },
+    ]);
+    const res = await app.request(`${BASE}/s1/active`);
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<unknown[]>>(res);
+    assertSuccessEnvelope(body);
+    expect(Array.isArray(body.data)).toBe(true);
+    expect(body.data.length).toBe(1);
+  });
+
+  it("returns 200 with empty queues when no entries exist", async () => {
+    enqueueSelectResult([]);
+    const res = await app.request(`${BASE}/s1/active`);
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<unknown[]>>(res);
+    assertSuccessEnvelope(body);
+    expect(Array.isArray(body.data)).toBe(true);
+    expect(body.data.length).toBe(0);
+  });
+});

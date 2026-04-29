@@ -228,4 +228,56 @@ describe("POST /v1/checkins", () => {
     });
     expect(res.status).toBe(400);
   });
+
+  it("returns 201 for valid solo check-in for current user", async () => {
+    enqueueSelectResult([openSession]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([openSession]);
+    enqueueSelectResult([{ isPriority: false, priorityRunLimit: 0 }]);
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "sess1",
+        divisionName: "Classic",
+        entitySoloUserId: "user_test123",
+        songId: "song1",
+      }),
+    });
+    expect(res.status).toBe(201);
+    const body = await readJson<SuccessEnvelope<{ initialQueue: string }>>(res);
+    assertSuccessEnvelope(body);
+    expect(body.data.initialQueue).toBe("non_priority");
+  });
+
+  it("returns 404 when session not found", async () => {
+    enqueueSelectResult([]);
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "missing_session",
+        divisionName: "Classic",
+        entityPairId: "p1",
+        songId: "song1",
+      }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 400 when both entityPairId and entitySoloUserId provided", async () => {
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "sess1",
+        divisionName: "Classic",
+        entityPairId: "p1",
+        entitySoloUserId: "user_test123",
+        songId: "song1",
+      }),
+    });
+    expect(res.status).toBe(400);
+    assertValidation400(await readJson<ErrorEnvelope>(res));
+  });
 });

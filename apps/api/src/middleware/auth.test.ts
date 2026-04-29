@@ -197,3 +197,95 @@ describe("requireAdmin middleware", () => {
     expect(body).toEqual({ id: "user_3", role: "admin" });
   });
 });
+
+describe("requireAuth — edge cases", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+    verifyClerkToken.mockReset();
+  });
+
+  it("returns 401 USER_NOT_SYNCED when token sub is empty string", async () => {
+    verifyClerkToken.mockResolvedValueOnce({
+      sub: "",
+    } as unknown as Awaited<ReturnType<typeof ctu.verifyClerkToken>>);
+    enqueueSelectResult([]);
+    const app = makeAuthApp();
+    const res = await app.request("/whoami", {
+      headers: { Authorization: "Bearer good.token" },
+    });
+    expect(res.status).toBe(401);
+    const body = (await res.json()) as { error?: { code?: string } };
+    expect(body.error?.code).toBe("USER_NOT_SYNCED");
+  });
+
+  it("returns 401 when verifyClerkToken throws an error", async () => {
+    verifyClerkToken.mockRejectedValueOnce(
+      new Error("Clerk verification failed")
+    );
+    const app = makeAuthApp();
+    const res = await app.request("/whoami", {
+      headers: { Authorization: "Bearer bad.token" },
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 200 when valid token and valid user with admin role", async () => {
+    verifyClerkToken.mockResolvedValueOnce({
+      sub: "user_admin",
+    } as unknown as Awaited<ReturnType<typeof ctu.verifyClerkToken>>);
+    enqueueSelectResult([
+      {
+        id: "user_admin",
+        email: "admin@example.com",
+        role: "admin" as const,
+      },
+    ]);
+    const app = makeAuthApp();
+    const res = await app.request("/whoami", {
+      headers: { Authorization: "Bearer good.token" },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { id: string; role: string; email: string };
+    expect(body).toEqual({
+      id: "user_admin",
+      role: "admin",
+      email: "admin@example.com",
+    });
+  });
+});
+
+describe("requireAdmin — edge cases", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+    verifyClerkToken.mockReset();
+  });
+
+  it("passes when user has admin role and sets c.get('user') correctly", async () => {
+    verifyClerkToken.mockResolvedValueOnce({
+      sub: "user_admin",
+    } as unknown as Awaited<ReturnType<typeof ctu.verifyClerkToken>>);
+    enqueueSelectResult([
+      {
+        id: "user_admin",
+        email: "admin@example.com",
+        role: "admin" as const,
+      },
+    ]);
+    const app = makeAdminApp();
+    const res = await app.request("/admin-only", {
+      headers: { Authorization: "Bearer good.token" },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { id: string; role: string };
+    expect(body.id).toBe("user_admin");
+    expect(body.role).toBe("admin");
+  });
+
+  it("returns 401 when token has no Bearer prefix", async () => {
+    const app = makeAdminApp();
+    const res = await app.request("/admin-only", {
+      headers: { Authorization: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" },
+    });
+    expect(res.status).toBe(401);
+  });
+});

@@ -63,20 +63,28 @@ export default function FloorTrialsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    Promise.all([
-      api.get<SessionRow[]>("/v1/sessions"),
-      api.get<EventRow[]>("/v1/events"),
-    ])
-      .then(([s, e]) => {
-        if (cancelled) return;
-        setSessions(s);
-        setEvents(e);
-      })
-      .catch((err: Error) => !cancelled && toast.error(err.message))
-      .finally(() => !cancelled && setLoading(false));
+
+    const fetchData = () => {
+      setLoading(true);
+      Promise.all([
+        api.get<SessionRow[]>("/v1/sessions"),
+        api.get<EventRow[]>("/v1/events"),
+      ])
+        .then(([s, e]) => {
+          if (cancelled) return;
+          setSessions(s);
+          setEvents(e);
+        })
+        .catch((err: Error) => !cancelled && toast.error(err.message))
+        .finally(() => !cancelled && setLoading(false));
+    };
+
+    fetchData();
+    const intervalId = setInterval(fetchData, 10_000);
+
     return () => {
       cancelled = true;
+      clearInterval(intervalId);
     };
   }, [api]);
 

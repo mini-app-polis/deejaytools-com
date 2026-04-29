@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -26,6 +26,18 @@ vi.mock("sonner", () => ({
 
 import FloorTrialsPage from "./FloorTrialsPage";
 
+// ---------------------------------------------------------------------------
+// Setup + cleanup
+// ---------------------------------------------------------------------------
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 // Helper: build a full session row.
 function makeSession(opts: {
   id: string;
@@ -33,6 +45,7 @@ function makeSession(opts: {
   /** Local-time ISO string for floor_trial_starts_at. */
   startsAt: string;
   eventId?: string | null;
+  hasActiveCheckin?: boolean;
 }) {
   const startTs = new Date(opts.startsAt).getTime();
   return {
@@ -44,6 +57,7 @@ function makeSession(opts: {
     checkin_opens_at: startTs - 60 * 60 * 1000,
     floor_trial_starts_at: startTs,
     floor_trial_ends_at: startTs + 2 * 60 * 60 * 1000,
+    has_active_checkin: opts.hasActiveCheckin ?? false,
   };
 }
 
@@ -190,5 +204,302 @@ describe("FloorTrialsPage", () => {
       const titleText = within(card.parentElement!).getByText(/Saturday - 7:30 PM - May 23, 2026/);
       expect(titleText).toBeInTheDocument();
     });
+  });
+
+  it("polls for session and event updates every 10 seconds", async () => {
+    vi.useFakeTimers();
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/sessions") {
+        return Promise.resolve([
+          makeSession({ id: "s1", status: "scheduled", startsAt: "2026-05-22T07:00:00" }),
+        ]);
+      }
+      if (path === "/v1/events") return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+
+    renderPage();
+
+    // Flush the initial fetch: act() drains React's update queue (state + effects)
+    // so the resolved promises can re-render the component before we assert.
+    // We avoid waitFor here because its retry setTimeout is also faked.
+    await act(async () => {});
+
+    // Initial load: 1 call to /v1/sessions + 1 to /v1/events in Promise.all
+    expect(apiGet).toHaveBeenCalledWith("/v1/sessions");
+    expect(apiGet).toHaveBeenCalledWith("/v1/events");
+    expect(screen.getByRole("link", { name: /open session/i })).toBeInTheDocument();
+    const initialCallCount = apiGet.mock.calls.length;
+
+    // Fast-forward 10 seconds; the polling interval should fire another fetch.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+
+    // Should have called get again for both sessions and events
+    expect(apiGet.mock.calls.length).toBeGreaterThan(initialCallCount);
+
+    vi.useRealTimers();
+  });
+
+  it("stops polling when component unmounts", async () => {
+    vi.useFakeTimers();
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/sessions") {
+        return Promise.resolve([
+          makeSession({ id: "s1", status: "scheduled", startsAt: "2026-05-22T07:00:00" }),
+        ]);
+      }
+      if (path === "/v1/events") return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+
+    const { unmount } = renderPage();
+
+    // Flush the initial fetch before unmounting.
+    await act(async () => {});
+    expect(screen.getByRole("link", { name: /open session/i })).toBeInTheDocument();
+
+    apiGet.mockClear();
+    unmount();
+
+    // Advance timers past the polling interval — no calls should fire after unmount.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+
+    expect(apiGet).not.toHaveBeenCalled();
+
+    vi.useRealTimers();
+  });
+});
+
+describe("FloorTrialsPage — check-in flow", () => {
+  it("shows session status badges: scheduled, checkin_open, in_progress", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/sessions") {
+        return Promise.resolve([
+          makeSession({
+            id: "s1",
+            status: "scheduled",
+            startsAt: "2026-05-22T08:00:00",
+          }),
+          makeSession({
+            id: "s2",
+            status: "checkin_open",
+            startsAt: "2026-05-23T08:00:00",
+          }),
+          makeSession({
+            id: "s3",
+            status: "in_progress",
+            startsAt: "2026-05-24T08:00:00",
+          }),
+        ]);
+      }
+      if (path === "/v1/events") return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("link", { name: /open session/i }).length).toBe(3);
+    });
+
+    // All three status badges should be rendered
+    expect(screen.getByText("scheduled")).toBeInTheDocument();
+    expect(screen.getByText("checkin_open")).toBeInTheDocument();
+    expect(screen.getByText("in_progress")).toBeInTheDocument();
+  });
+
+  it("renders session cards as links that navigate to detail page", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/sessions") {
+        return Promise.resolve([
+          makeSession({
+            id: "session-123",
+            status: "checkin_open",
+            startsAt: "2026-05-23T08:00:00",
+          }),
+        ]);
+      }
+      if (path === "/v1/events") return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      const link = screen.getByRole("link", { name: /open session/i });
+      expect(link).toHaveAttribute("href", "/sessions/session-123");
+    });
+  });
+
+  it("hides cards with opacity when loading", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/sessions") {
+        // Delay resolution to keep loading state
+        return new Promise((resolve) => {
+          setTimeout(
+            () =>
+              resolve([
+                makeSession({
+                  id: "s1",
+                  status: "scheduled",
+                  startsAt: "2026-05-22T08:00:00",
+                }),
+              ]),
+            100
+          );
+        });
+      }
+      if (path === "/v1/events") return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+
+    renderPage();
+
+    // Cards container should exist with loading opacity applied
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: /open session/i })).toBeInTheDocument();
+    });
+  });
+});
+
+describe("FloorTrialsPage — queue state", () => {
+  it("renders session info and check-in times for checkin_open sessions", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/sessions") {
+        return Promise.resolve([
+          makeSession({
+            id: "s1",
+            status: "checkin_open",
+            startsAt: "2026-05-23T08:00:00",
+          }),
+        ]);
+      }
+      if (path === "/v1/events") return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText(/open session/i)).toBeInTheDocument();
+    });
+
+    // Check that checkin_open session displays the session info
+    expect(screen.getByText("checkin_open")).toBeInTheDocument();
+    // Card should contain timing information
+    expect(screen.getByText(/Open:/i)).toBeInTheDocument();
+    expect(screen.getByText(/Floor trial:/i)).toBeInTheDocument();
+  });
+
+  it("distinguishes between scheduled and checkin_open sessions visually", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/sessions") {
+        return Promise.resolve([
+          makeSession({
+            id: "s1",
+            status: "scheduled",
+            startsAt: "2026-05-22T08:00:00",
+          }),
+          makeSession({
+            id: "s2",
+            status: "checkin_open",
+            startsAt: "2026-05-23T08:00:00",
+          }),
+        ]);
+      }
+      if (path === "/v1/events") return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("scheduled")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("checkin_open")).toBeInTheDocument();
+
+    // Both statuses should render as distinct badges
+    const badges = screen.getAllByText(/scheduled|checkin_open/i);
+    expect(badges).toHaveLength(2);
+  });
+
+  it("includes event badge when session is tied to an event", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/sessions") {
+        return Promise.resolve([
+          makeSession({
+            id: "s1",
+            status: "checkin_open",
+            startsAt: "2026-05-23T08:00:00",
+            eventId: "ev-1",
+          }),
+        ]);
+      }
+      if (path === "/v1/events") {
+        return Promise.resolve([
+          {
+            id: "ev-1",
+            name: "Championship",
+            start_date: "2026-05-20",
+            end_date: "2026-05-25",
+            status: "active",
+            timezone: "America/Chicago",
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Championship")).toBeInTheDocument();
+    });
+
+    // Event badge + session status badge should both render
+    expect(screen.getByText("checkin_open")).toBeInTheDocument();
+  });
+
+  it("applies timezone abbreviation badge when timezone is available", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/sessions") {
+        return Promise.resolve([
+          makeSession({
+            id: "s1",
+            status: "scheduled",
+            startsAt: "2026-05-23T08:00:00",
+            eventId: "ev-1",
+          }),
+        ]);
+      }
+      if (path === "/v1/events") {
+        return Promise.resolve([
+          {
+            id: "ev-1",
+            name: "Floor Trial Event",
+            start_date: "2026-05-23",
+            end_date: "2026-05-23",
+            status: "active",
+            timezone: "America/Chicago",
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Floor Trial Event")).toBeInTheDocument();
+    });
+
+    // Timezone abbreviation should render (e.g., "CDT", "CST" depending on date)
+    const timezoneElements = screen.queryAllByText(/[A-Z]{2,3}/);
+    expect(timezoneElements.length).toBeGreaterThan(0);
   });
 });

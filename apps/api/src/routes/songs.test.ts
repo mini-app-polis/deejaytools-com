@@ -853,3 +853,107 @@ describe("POST /v1/songs/claim-legacy", () => {
     expect(body.data.processed_filename).toBe("[Legacy] Grace & Hank · Showcase · The Open 2025");
   });
 });
+
+// ---------------------------------------------------------------------------
+// PATCH /v1/songs/:id — authorization
+// ---------------------------------------------------------------------------
+
+describe("PATCH /v1/songs/:id — authorization", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+  });
+
+  it("returns 404 when the song belongs to a different user", async () => {
+    const differentUserSong = songSelectRow({
+      id: "s_other_user",
+      userId: "user_different",
+    }).song;
+    enqueueSelectResult([]);
+    const res = await app.request(`${BASE}/s_other_user`, {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ display_name: "Updated" }),
+    });
+    expect(res.status).toBe(404);
+    assertErrorEnvelope(await readJson<ErrorEnvelope>(res));
+  });
+
+  it("returns 200 when the song belongs to the current user", async () => {
+    const ownedSong = songSelectRow({ id: "s_owned" }).song;
+    enqueueSelectResult([ownedSong]);
+    enqueueSelectResult([
+      {
+        song: { ...ownedSong, displayName: "Updated Name" },
+        partner_first_name: null,
+        partner_last_name: null,
+      },
+    ]);
+    const res = await app.request(`${BASE}/s_owned`, {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ display_name: "Updated Name" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<Record<string, unknown>>>(res);
+    assertSuccessEnvelope(body);
+    expect(body.data).toMatchObject({ id: "s_owned", display_name: "Updated Name" });
+  });
+
+  it("returns 400 when partner_id is provided but belongs to a different user", async () => {
+    const ownedSong = songSelectRow({ id: "s_owned" }).song;
+    enqueueSelectResult([ownedSong]);
+    enqueueSelectResult([]); // assertPartnerOwned → empty (not owned)
+    const res = await app.request(`${BASE}/s_owned`, {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ partner_id: "p_other" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await readJson<ErrorEnvelope>(res);
+    expect(body.error.message).toMatch(/Partner/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DELETE /v1/songs/:id — authorization
+// ---------------------------------------------------------------------------
+
+describe("DELETE /v1/songs/:id — authorization", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+  });
+
+  it("returns 404 when song belongs to a different user", async () => {
+    enqueueSelectResult([]);
+    const res = await app.request(`${BASE}/s_other_user`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(404);
+    assertErrorEnvelope(await readJson<ErrorEnvelope>(res));
+  });
+
+  it("returns 409 when song is in an active queue entry", async () => {
+    const ownedSong = songSelectRow({ id: "s_owned" }).song;
+    enqueueSelectResult([ownedSong]);
+    enqueueSelectResult([{ id: "chk_active" }]); // active checkin found
+    const res = await app.request(`${BASE}/s_owned`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(409);
+    const body = await readJson<ErrorEnvelope>(res);
+    expect(body.error.code).toBe("SONG_IN_ACTIVE_CHECKIN");
+  });
+
+  it("returns 204 on successful soft-delete", async () => {
+    const ownedSong = songSelectRow({ id: "s_owned" }).song;
+    enqueueSelectResult([ownedSong]);
+    enqueueSelectResult([]); // no active checkin
+    const res = await app.request(`${BASE}/s_owned`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(204);
+  });
+});

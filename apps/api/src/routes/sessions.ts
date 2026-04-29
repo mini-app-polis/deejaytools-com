@@ -364,6 +364,20 @@ sessionRoutes.post("/", requireAdmin, zValidator("json", createSessionBody), asy
     );
   }
 
+  if (body.floor_trial_starts_at <= body.checkin_opens_at) {
+    return c.json(
+      CommonErrors.badRequest("floor_trial_starts_at must be after checkin_opens_at"),
+      400
+    );
+  }
+
+  if (body.floor_trial_ends_at <= body.floor_trial_starts_at) {
+    return c.json(
+      CommonErrors.badRequest("floor_trial_ends_at must be after floor_trial_starts_at"),
+      400
+    );
+  }
+
   if (activeNonPriorityMax > activePriorityMax) {
     return c.json(
       CommonErrors.badRequest("active_non_priority_max must be <= active_priority_max"),
@@ -540,6 +554,22 @@ sessionRoutes.patch("/:id", requireAdmin, zValidator("json", patchSessionBody), 
       : existing.floorTrialStartsAt;
   const nextEnd =
     body.floor_trial_ends_at !== undefined ? body.floor_trial_ends_at : existing.floorTrialEndsAt;
+  const nextCheckinOpensAt =
+    body.checkin_opens_at !== undefined ? body.checkin_opens_at : existing.checkinOpensAt;
+
+  if (nextStart <= nextCheckinOpensAt) {
+    return c.json(
+      CommonErrors.badRequest("floor_trial_starts_at must be after checkin_opens_at"),
+      400
+    );
+  }
+
+  if (nextEnd <= nextStart) {
+    return c.json(
+      CommonErrors.badRequest("floor_trial_ends_at must be after floor_trial_starts_at"),
+      400
+    );
+  }
 
   if (updates.activePriorityMax !== undefined || updates.activeNonPriorityMax !== undefined) {
     const apm = updates.activePriorityMax ?? existing.activePriorityMax;
@@ -565,8 +595,6 @@ sessionRoutes.patch("/:id", requireAdmin, zValidator("json", patchSessionBody), 
         400
       );
     }
-    const nextCheckinOpensAt =
-      body.checkin_opens_at !== undefined ? body.checkin_opens_at : existing.checkinOpensAt;
     const dateErr = await validateSessionWithinEvent(nextEventId, nextCheckinOpensAt, nextEnd);
     if (dateErr) {
       return c.json(CommonErrors.badRequest(dateErr), 400);

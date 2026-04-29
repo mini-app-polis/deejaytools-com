@@ -26,6 +26,9 @@ vi.mock("../middleware/auth.js", async (importOriginal) => {
     requireAdmin: mockRequireAdmin(),
   };
 });
+vi.mock("../lib/sessions/overlap.js", () => ({
+  sessionOverlapsInEvent: vi.fn().mockResolvedValue(false),
+}));
 
 const BASE = "/v1/sessions";
 const futureTime = Date.now() + 3_600_000;
@@ -456,5 +459,146 @@ describe("PATCH /v1/sessions/:id/status — cache invalidation", () => {
     const after = await app.request(`${BASE}/s1`);
     const body = await readJson<SuccessEnvelope<{ name: string }>>(after);
     expect(body.data.name).toBe("Session B");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /v1/sessions — time-window validation
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/sessions — time-window validation", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+  });
+
+  it("returns 400 when floor_trial_starts_at <= checkin_opens_at (same value)", async () => {
+    const sameTime = futureTime;
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Test Session",
+        checkin_opens_at: sameTime,
+        floor_trial_starts_at: sameTime,
+        floor_trial_ends_at: sameTime + 7200000,
+        divisions: [],
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await readJson<ErrorEnvelope>(res);
+    expect(body.error.message).toBeTruthy();
+  });
+
+  it("returns 400 when floor_trial_ends_at <= floor_trial_starts_at", async () => {
+    const startTime = futureTime + 1000;
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Test Session",
+        checkin_opens_at: futureTime,
+        floor_trial_starts_at: startTime,
+        floor_trial_ends_at: startTime,
+        divisions: [],
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await readJson<ErrorEnvelope>(res);
+    expect(body.error.message).toBeTruthy();
+  });
+
+  it("returns 400 when sessionOverlapsInEvent returns true (overlap detected)", async () => {
+    const { sessionOverlapsInEvent } = await import("../lib/sessions/overlap.js");
+    vi.mocked(sessionOverlapsInEvent).mockResolvedValueOnce(true);
+
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Test Session",
+        event_id: "e1",
+        checkin_opens_at: futureTime,
+        floor_trial_starts_at: futureTime + 1000,
+        floor_trial_ends_at: futureTime + 7200000,
+        divisions: [],
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await readJson<ErrorEnvelope>(res);
+    expect(body.error.message).toMatch(/overlaps/i);
+  });
+
+  it("succeeds (201) when timestamps are valid (no event_id, no overlap check)", async () => {
+    // Without an event_id there is no overlap query or event-date validation, so
+    // the only DB reads after the transaction are the three post-insert selects.
+    const created = { ...mockSession, id: "sess_new" };
+    enqueueSelectResult([created]); // re-select created session
+    enqueueSelectResult([]);        // loadDivisionsForSession
+    enqueueSelectResult([]);        // loadQueueDepthsForSession
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Test Session",
+        checkin_opens_at: futureTime,
+        floor_trial_starts_at: futureTime + 1000,
+        floor_trial_ends_at: futureTime + 7200000,
+        divisions: [],
+      }),
+    });
+    expect(res.status).toBe(201);
+    const body = await readJson<SuccessEnvelope<Record<string, unknown>>>(res);
+    assertSuccessEnvelope(body);
+    expect(body.data).toMatchObject({ id: "sess_new", name: "Test Session" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /v1/sessions/:id — time-window validation
+// ---------------------------------------------------------------------------
+
+describe("PATCH /v1/sessions/:id — time-window validation", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+  });
+
+  it("returns 400 when patching floor_trial_ends_at to a value <= existing floor_trial_starts_at", async () => {
+    const existingSession = {
+      ...mockSession,
+      floorTrialStartsAt: futureTime + 2000,
+      floorTrialEndsAt: futureTime + 7200000,
+    };
+    enqueueSelectResult([existingSession]);
+
+    const res = await app.request(`${BASE}/s1`, {
+      method: "PATCH",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        floor_trial_ends_at: futureTime + 2000, // same as existing start
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await readJson<ErrorEnvelope>(res);
+    expect(body.error.message).toBeTruthy();
+  });
+
+  it("returns 400 when patching floor_trial_starts_at to a value >= existing floor_trial_ends_at", async () => {
+    const existingSession = {
+      ...mockSession,
+      floorTrialStartsAt: futureTime + 1000,
+      floorTrialEndsAt: futureTime + 7200000,
+    };
+    enqueueSelectResult([existingSession]);
+
+    const res = await app.request(`${BASE}/s1`, {
+      method: "PATCH",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        floor_trial_starts_at: futureTime + 7200000, // same as existing end
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await readJson<ErrorEnvelope>(res);
+    expect(body.error.message).toBeTruthy();
   });
 });
