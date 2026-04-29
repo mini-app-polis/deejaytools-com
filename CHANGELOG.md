@@ -1,3 +1,10 @@
+# [1.36.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.35.0...v1.36.0) (2026-04-29)
+
+
+### Features
+
+* adding contract tests ([0361bc2](https://github.com/mini-app-polis/deejaytools-com/commit/0361bc2974814068d79cb043a9dbfe7d6f6a870a))
+
 # [1.35.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.34.0...v1.35.0) (2026-04-29)
 
 
