@@ -1,3 +1,10 @@
+# [1.35.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.34.0...v1.35.0) (2026-04-29)
+
+
+### Features
+
+* type sharing added across app and api ([41a4358](https://github.com/mini-app-polis/deejaytools-com/commit/41a4358cfd3f01c36d8fec69b9e3ee742a7bc74a))
+
 # [1.34.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.33.2...v1.34.0) (2026-04-29)
 
 
