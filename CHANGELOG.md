@@ -1,3 +1,10 @@
+# [1.34.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.33.2...v1.34.0) (2026-04-29)
+
+
+### Features
+
+* testing, error reporting, and documentation ([3a02d02](https://github.com/mini-app-polis/deejaytools-com/commit/3a02d023a271676eecab6b906376ad8d63da0ebd))
+
 ## [1.33.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.33.1...v1.33.2) (2026-04-29)
 
 
