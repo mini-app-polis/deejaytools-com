@@ -30,17 +30,10 @@ import FloorTrialsPage from "./FloorTrialsPage";
 // Setup + cleanup
 // ---------------------------------------------------------------------------
 
-// Pin "today" to a fixed date so startsToday() filtering is deterministic
-// across local dev and CI. Tests that need to show sessions use TODAY_DATE;
-// tests that need sessions filtered out use a different date.
 const TODAY = "2026-04-29";
-const TODAY_DATE = `${TODAY}T`;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // Fake only Date so waitFor/setTimeout still work, but new Date() returns today.
-  vi.useFakeTimers({ toFake: ["Date"] });
-  vi.setSystemTime(new Date(`${TODAY}T12:00:00`));
 });
 
 afterEach(() => {
@@ -79,17 +72,13 @@ function renderPage() {
 }
 
 describe("FloorTrialsPage", () => {
-  it("shows all of today's sessions regardless of status, hides other days", async () => {
+  it("shows scheduled, checkin_open, and in_progress sessions", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/sessions") {
         return Promise.resolve([
-          // Today — all three should appear regardless of status
           makeSession({ id: "s1", status: "scheduled",    startsAt: `${TODAY}T08:00:00` }),
-          makeSession({ id: "s2", status: "completed",    startsAt: `${TODAY}T10:00:00` }),
+          makeSession({ id: "s2", status: "checkin_open", startsAt: `${TODAY}T10:00:00` }),
           makeSession({ id: "s3", status: "in_progress",  startsAt: `${TODAY}T12:00:00` }),
-          // Other days — should be filtered out
-          makeSession({ id: "s4", status: "cancelled",    startsAt: "2026-04-28T08:00:00" }),
-          makeSession({ id: "s5", status: "checkin_open", startsAt: "2026-04-30T08:00:00" }),
         ]);
       }
       if (path === "/v1/events") return Promise.resolve([]);
@@ -101,6 +90,32 @@ describe("FloorTrialsPage", () => {
     await waitFor(() => {
       expect(screen.queryAllByRole("link", { name: /open session/i })).toHaveLength(3);
     });
+  });
+
+  it("filters out completed and cancelled sessions", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/sessions") {
+        return Promise.resolve([
+          makeSession({ id: "s1", status: "scheduled",   startsAt: `${TODAY}T08:00:00` }),
+          makeSession({ id: "s2", status: "completed",   startsAt: `${TODAY}T06:00:00` }),
+          makeSession({ id: "s3", status: "cancelled",   startsAt: `${TODAY}T04:00:00` }),
+        ]);
+      }
+      if (path === "/v1/events") return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.queryAllByRole("link", { name: /open session/i })).toHaveLength(1);
+    });
+
+    // Only s1 (scheduled) should appear
+    expect(screen.getByRole("link", { name: /open session/i })).toHaveAttribute(
+      "href",
+      "/sessions/s1"
+    );
   });
 
   it("orders cards by floor_trial_starts_at ascending (soonest first)", async () => {
@@ -156,13 +171,12 @@ describe("FloorTrialsPage", () => {
     });
   });
 
-  it("renders the empty state when there are no sessions today", async () => {
+  it("renders the empty state when there are no active or upcoming sessions", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/sessions") {
         return Promise.resolve([
-          // Only sessions from other days — all filtered out.
-          makeSession({ id: "s1", status: "completed",  startsAt: "2026-04-28T08:00:00" }),
-          makeSession({ id: "s2", status: "scheduled",  startsAt: "2026-04-30T08:00:00" }),
+          makeSession({ id: "s1", status: "completed", startsAt: `${TODAY}T08:00:00` }),
+          makeSession({ id: "s2", status: "cancelled", startsAt: `${TODAY}T10:00:00` }),
         ]);
       }
       if (path === "/v1/events") return Promise.resolve([]);
@@ -172,7 +186,7 @@ describe("FloorTrialsPage", () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText(/no sessions scheduled for today/i)).toBeInTheDocument();
+      expect(screen.getByText(/no upcoming sessions right now/i)).toBeInTheDocument();
     });
   });
 
@@ -196,6 +210,10 @@ describe("FloorTrialsPage", () => {
   });
 
   it("shows session title in 'Day - Time - Date' order", async () => {
+    // Pin Date so the formatted title is deterministic
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(`${TODAY}T12:00:00`));
+
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/sessions") {
         return Promise.resolve([
@@ -261,11 +279,9 @@ describe("FloorTrialsPage", () => {
 
   it("stops polling when component unmounts", async () => {
     let capturedIntervalId = -1;
-    let capturedCallback: (() => void) | null = null;
     const setIntervalSpy = vi
       .spyOn(window, "setInterval")
       .mockImplementationOnce((cb: TimerHandler) => {
-        capturedCallback = cb as () => void;
         capturedIntervalId = 999;
         return capturedIntervalId as unknown as ReturnType<typeof setInterval>;
       });
@@ -289,8 +305,7 @@ describe("FloorTrialsPage", () => {
 
     unmount();
 
-    // clearInterval must have been called with the registered interval ID —
-    // this is the primary contract: the component cleans up its timer on unmount.
+    // clearInterval must have been called with the registered interval ID
     expect(clearIntervalSpy).toHaveBeenCalledWith(capturedIntervalId);
 
     setIntervalSpy.mockRestore();
@@ -323,28 +338,6 @@ describe("FloorTrialsPage — check-in flow", () => {
     expect(screen.getByText("in_progress")).toBeInTheDocument();
   });
 
-  it("also shows completed and cancelled badges for today's sessions", async () => {
-    apiGet.mockImplementation((path: string) => {
-      if (path === "/v1/sessions") {
-        return Promise.resolve([
-          makeSession({ id: "s1", status: "completed",  startsAt: `${TODAY}T08:00:00` }),
-          makeSession({ id: "s2", status: "cancelled",  startsAt: `${TODAY}T10:00:00` }),
-        ]);
-      }
-      if (path === "/v1/events") return Promise.resolve([]);
-      return Promise.resolve([]);
-    });
-
-    renderPage();
-
-    await waitFor(() => {
-      expect(screen.getAllByRole("link", { name: /open session/i }).length).toBe(2);
-    });
-
-    expect(screen.getByText("completed")).toBeInTheDocument();
-    expect(screen.getByText("cancelled")).toBeInTheDocument();
-  });
-
   it("renders session cards as links that navigate to detail page", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/sessions") {
@@ -361,27 +354,6 @@ describe("FloorTrialsPage — check-in flow", () => {
     await waitFor(() => {
       const link = screen.getByRole("link", { name: /open session/i });
       expect(link).toHaveAttribute("href", "/sessions/session-123");
-    });
-  });
-
-  it("hides cards with opacity when loading", async () => {
-    apiGet.mockImplementation((path: string) => {
-      if (path === "/v1/sessions") {
-        return new Promise((resolve) => {
-          setTimeout(
-            () => resolve([makeSession({ id: "s1", status: "scheduled", startsAt: `${TODAY}T08:00:00` })]),
-            100
-          );
-        });
-      }
-      if (path === "/v1/events") return Promise.resolve([]);
-      return Promise.resolve([]);
-    });
-
-    renderPage();
-
-    await waitFor(() => {
-      expect(screen.getByRole("link", { name: /open session/i })).toBeInTheDocument();
     });
   });
 

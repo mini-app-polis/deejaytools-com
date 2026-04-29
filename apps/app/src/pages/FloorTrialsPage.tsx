@@ -11,16 +11,7 @@ import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { cn } from "@/lib/utils";
 
-/** Returns true when a session's floor trial starts on today's calendar date (local time). */
-function startsToday(floorTrialStartsAt: number): boolean {
-  const d = new Date(floorTrialStartsAt);
-  const now = new Date();
-  return (
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate()
-  );
-}
+const ACTIVE_STATUSES = new Set(["scheduled", "checkin_open", "in_progress"]);
 
 function sessionStatusBadge(status: string) {
   switch (status) {
@@ -76,11 +67,10 @@ export default function FloorTrialsPage() {
     };
   }, [api]);
 
-  // Show all of today's sessions regardless of status — admins may need to
-  // manage queues for completed sessions, and users may want to review the
-  // day's runs. Sort by start time ascending so the day reads in order.
+  // Show active and upcoming sessions only — completed and cancelled sessions
+  // are not relevant to regular users. Sort by start time ascending.
   const todaySessions = (sessions ?? [])
-    .filter((s) => startsToday(s.floor_trial_starts_at))
+    .filter((s) => ACTIVE_STATUSES.has(s.status))
     .slice()
     .sort((a, b) => a.floor_trial_starts_at - b.floor_trial_starts_at);
 
@@ -101,8 +91,9 @@ export default function FloorTrialsPage() {
       <div>
         <h1 className="page-title text-2xl">Floor Trials</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Today's sessions, sorted by start time. Check-in opens 30 minutes
-          before each session — tap a session to check in or watch its queue.{" "}
+          Upcoming and active sessions, sorted by start time. Check-in opens
+          30 minutes before each session — tap a session to check in or watch
+          its queue.{" "}
           <Link to="/how-it-works" className="text-primary hover:underline">
             How this works →
           </Link>
@@ -111,7 +102,7 @@ export default function FloorTrialsPage() {
 
       {todaySessions.length === 0 ? (
         <p className="text-sm text-muted-foreground py-8 text-center">
-          No sessions scheduled for today.
+          No upcoming sessions right now.
         </p>
       ) : (
         <div className={`space-y-3${loading ? " opacity-60" : ""}`}>

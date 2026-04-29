@@ -346,6 +346,8 @@ export default function AdminPage() {
   }, [usersDebouncedQuery, loadUsers]);
 
   // Auto-select the single active session when sessions load / change.
+  // "Active" means checkin_open or in_progress; completed/cancelled sessions
+  // are accessible via the dropdown but not auto-selected.
   useEffect(() => {
     if (!sessions) return;
     const active = sessions.filter(
@@ -855,13 +857,29 @@ export default function AdminPage() {
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
             <div className="w-full sm:w-72">
               {(() => {
-                const activeSessions = (sessions ?? []).filter(
-                  (s) => s.status === "checkin_open" || s.status === "in_progress"
-                );
                 if (!sessions) return null;
-                if (activeSessions.length === 0) {
+                // Show all of today's sessions so admins can manage queues
+                // even after a session ends. Active sessions appear first.
+                const now = new Date();
+                const todaySessions = sessions
+                  .filter((s) => {
+                    const d = new Date(s.floor_trial_starts_at);
+                    return (
+                      d.getFullYear() === now.getFullYear() &&
+                      d.getMonth() === now.getMonth() &&
+                      d.getDate() === now.getDate()
+                    );
+                  })
+                  .sort((a, b) => {
+                    const isLive = (s: typeof a) =>
+                      s.status === "checkin_open" || s.status === "in_progress";
+                    if (isLive(a) && !isLive(b)) return -1;
+                    if (!isLive(a) && isLive(b)) return 1;
+                    return a.floor_trial_starts_at - b.floor_trial_starts_at;
+                  });
+                if (todaySessions.length === 0) {
                   return (
-                    <p className="text-sm text-muted-foreground">No active sessions right now.</p>
+                    <p className="text-sm text-muted-foreground">No sessions today.</p>
                   );
                 }
                 return (
@@ -871,9 +889,12 @@ export default function AdminPage() {
                     onChange={(e) => setLqSessionId(e.target.value)}
                   >
                     <option value="">Select a session…</option>
-                    {activeSessions.map((s) => (
+                    {todaySessions.map((s) => (
                       <option key={s.id} value={s.id}>
                         {formatSessionTitle(s, s.event_timezone)}
+                        {s.status === "completed" || s.status === "cancelled"
+                          ? ` (${s.status})`
+                          : ""}
                       </option>
                     ))}
                   </select>
