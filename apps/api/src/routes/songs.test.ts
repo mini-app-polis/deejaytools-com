@@ -653,7 +653,7 @@ describe("POST /v1/songs/claim-legacy", () => {
         createdAt: 1,
       },
     ]);
-    // 2. Final select after insert → returns the new song joined with partner.
+    // 2. Final select after insert — processedFilename mirrors what the handler computed.
     enqueueSelectResult([
       {
         song: {
@@ -662,7 +662,7 @@ describe("POST /v1/songs/claim-legacy", () => {
           partnerId: null,
           displayName: "Sky High",
           originalFilename: null,
-          processedFilename: null,
+          processedFilename: "[Legacy] Alice & Bob · Classic · The Open 2025",
           driveFileId: null,
           driveFolderId: null,
           division: "Classic",
@@ -687,6 +687,7 @@ describe("POST /v1/songs/claim-legacy", () => {
     assertSuccessEnvelope(body);
     expect(body.data.routine_name).toBe("Sky High");
     expect(body.data.division).toBe("Classic");
+    expect(body.data.processed_filename).toBe("[Legacy] Alice & Bob · Classic · The Open 2025");
     // No audio uploaded yet — Drive ids stay null.
     expect(body.data.drive_file_id).toBeNull();
   });
@@ -705,7 +706,7 @@ describe("POST /v1/songs/claim-legacy", () => {
         createdAt: 1,
       },
     ]);
-    // 2. Final select after insert: drizzle's mapSong reads back the inserted row.
+    // 2. Final select after insert — processedFilename mirrors what the handler computed.
     enqueueSelectResult([
       {
         song: {
@@ -714,7 +715,7 @@ describe("POST /v1/songs/claim-legacy", () => {
           partnerId: null,
           displayName: "The Open 2025",
           originalFilename: null,
-          processedFilename: null,
+          processedFilename: "[Legacy] Carol & Dave · Rising Star Classic · The Open 2025",
           driveFileId: null,
           driveFolderId: null,
           division: "Rising Star Classic",
@@ -739,9 +740,11 @@ describe("POST /v1/songs/claim-legacy", () => {
     // The coalesce: stored routine_name should be the legacy version string.
     expect(body.data.routine_name).toBe("The Open 2025");
     expect(body.data.division).toBe("Rising Star Classic");
+    expect(body.data.processed_filename).toBe("[Legacy] Carol & Dave · Rising Star Classic · The Open 2025");
   });
 
-  it("verifies an insert was issued into the songs table on success", async () => {
+  it("inserts with processedFilename built from partnership · division · version", async () => {
+    // version = null → only partnership + division in the filename.
     enqueueSelectResult([
       {
         id: "L3",
@@ -762,7 +765,7 @@ describe("POST /v1/songs/claim-legacy", () => {
           partnerId: null,
           displayName: "Routine",
           originalFilename: null,
-          processedFilename: null,
+          processedFilename: "[Legacy] Eve & Frank · Masters",
           driveFileId: null,
           driveFolderId: null,
           division: "Masters",
@@ -783,6 +786,70 @@ describe("POST /v1/songs/claim-legacy", () => {
       body: JSON.stringify({ legacy_song_id: "L3" }),
     });
     expect(res.status).toBe(201);
-    expect(mockDb.insert).toHaveBeenCalled();
+
+    // Verify the INSERT was called with the correct processedFilename.
+    const insertMock = mockDb.insert as ReturnType<typeof vi.fn>;
+    const valuesMock = insertMock.mock.results[0].value.values as ReturnType<typeof vi.fn>;
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ processedFilename: "[Legacy] Eve & Frank · Masters" })
+    );
+
+    const body = await readJson<SuccessEnvelope<Record<string, unknown>>>(res);
+    expect(body.data.processed_filename).toBe("[Legacy] Eve & Frank · Masters");
+  });
+
+  it("inserts with all three segments when partnership, division, and version are all present", async () => {
+    enqueueSelectResult([
+      {
+        id: "L4",
+        partnership: "Grace & Hank",
+        division: "Showcase",
+        routineName: null,
+        descriptor: null,
+        version: "The Open 2025",
+        submittedAt: null,
+        createdAt: 1,
+      },
+    ]);
+    enqueueSelectResult([
+      {
+        song: {
+          id: "song-new-4",
+          userId: "user_test123",
+          partnerId: null,
+          displayName: "The Open 2025",
+          originalFilename: null,
+          processedFilename: "[Legacy] Grace & Hank · Showcase · The Open 2025",
+          driveFileId: null,
+          driveFolderId: null,
+          division: "Showcase",
+          routineName: "The Open 2025",
+          personalDescriptor: null,
+          seasonYear: null,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+        partner_first_name: null,
+        partner_last_name: null,
+      },
+    ]);
+
+    const res = await app.request(ENDPOINT, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ legacy_song_id: "L4" }),
+    });
+    expect(res.status).toBe(201);
+
+    const insertMock = mockDb.insert as ReturnType<typeof vi.fn>;
+    const valuesMock = insertMock.mock.results[0].value.values as ReturnType<typeof vi.fn>;
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        processedFilename: "[Legacy] Grace & Hank · Showcase · The Open 2025",
+      })
+    );
+
+    const body = await readJson<SuccessEnvelope<Record<string, unknown>>>(res);
+    expect(body.data.processed_filename).toBe("[Legacy] Grace & Hank · Showcase · The Open 2025");
   });
 });

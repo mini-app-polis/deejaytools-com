@@ -547,10 +547,11 @@ songRoutes.post(
     // Build a human-readable filename from the legacy metadata so the song
     // shows something useful in the "Processed filename" column even though
     // no audio file has been attached yet.
-    const processedFilename =
+    const legacyMeta =
       [legacy.partnership.trim(), legacy.division?.trim(), legacy.version?.trim()]
         .filter(Boolean)
-        .join(" · ") || null;
+        .join(" · ");
+    const processedFilename = legacyMeta ? `[Legacy] ${legacyMeta}` : null;
 
     await db.insert(songs).values({
       id,
