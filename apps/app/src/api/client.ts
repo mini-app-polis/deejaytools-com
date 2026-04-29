@@ -11,6 +11,7 @@ export type Partner = {
 };
 import { useAuth } from "@clerk/clerk-react";
 import { useCallback, useMemo } from "react";
+import { Sentry } from "@/lib/instrument";
 
 const base = import.meta.env.VITE_API_URL ?? "";
 
@@ -19,7 +20,16 @@ async function parseEnvelope<T>(res: Response): Promise<T> {
   if (!res.ok || "error" in json) {
     const msg =
       "error" in json ? json.error.message : `Request failed: ${res.status}`;
-    throw new Error(msg);
+    const err = new Error(msg);
+    // 4xx are expected (validation, auth, not-found) — no need to track.
+    // 5xx are unexpected server failures: forward to Sentry so they surface
+    // even when the component swallows them with a toast.
+    if (res.status >= 500) {
+      Sentry.captureException(err, {
+        extra: { url: res.url, status: res.status },
+      });
+    }
+    throw err;
   }
   return json.data;
 }

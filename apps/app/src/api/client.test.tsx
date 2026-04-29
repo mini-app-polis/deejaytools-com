@@ -9,6 +9,18 @@ vi.mock("@clerk/clerk-react", () => ({
   useAuth: () => ({ getToken }),
 }));
 
+// Mock Sentry so captureException is a controllable spy and Sentry.init()
+// side-effects (network calls, global handlers) don't run during tests.
+// vi.hoisted() is required here: vi.mock() factories are hoisted above const
+// declarations, so a plain `const captureException = vi.fn()` would not yet
+// be initialized when the factory runs, causing a ReferenceError.
+const { captureException } = vi.hoisted(() => ({
+  captureException: vi.fn(),
+}));
+vi.mock("@/lib/instrument", () => ({
+  Sentry: { captureException },
+}));
+
 import { useApiClient } from "./client";
 
 // Mock global fetch — every test sets the response shape.
@@ -18,6 +30,7 @@ beforeEach(() => {
   globalThis.fetch = fetchMock as unknown as typeof fetch;
   fetchMock.mockReset();
   getToken.mockReset();
+  captureException.mockReset();
   getToken.mockResolvedValue("fake-token");
 });
 
@@ -185,5 +198,44 @@ describe("useApiClient — memoization", () => {
     await waitFor(() => {
       expect(result.current).toBe(first);
     });
+  });
+});
+
+describe("useApiClient — Sentry error capture", () => {
+  it("calls Sentry.captureException for 5xx server errors", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ unexpected: true }, { status: 500 }));
+    const { result } = renderHook(() => useApiClient());
+    await expect(result.current.get("/v1/foo")).rejects.toThrow("Request failed: 500");
+    expect(captureException).toHaveBeenCalledOnce();
+    const [err, opts] = captureException.mock.calls[0] as [Error, { extra: { url: string; status: number } }];
+    expect(err).toBeInstanceOf(Error);
+    expect(opts.extra.status).toBe(500);
+  });
+
+  it("calls Sentry.captureException for 5xx error-envelope responses", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ error: { code: "INTERNAL_ERROR", message: "Something broke" } }, { status: 503 })
+    );
+    const { result } = renderHook(() => useApiClient());
+    await expect(result.current.get("/v1/foo")).rejects.toThrow("Something broke");
+    expect(captureException).toHaveBeenCalledOnce();
+  });
+
+  it("does not call Sentry.captureException for 4xx client errors", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ error: { code: "BAD_REQUEST", message: "Bad input" } }, { status: 400 })
+    );
+    const { result } = renderHook(() => useApiClient());
+    await expect(result.current.get("/v1/foo")).rejects.toThrow("Bad input");
+    expect(captureException).not.toHaveBeenCalled();
+  });
+
+  it("does not call Sentry.captureException for 404 not-found", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ error: { code: "NOT_FOUND", message: "Not found" } }, { status: 404 })
+    );
+    const { result } = renderHook(() => useApiClient());
+    await expect(result.current.get("/v1/foo")).rejects.toThrow("Not found");
+    expect(captureException).not.toHaveBeenCalled();
   });
 });

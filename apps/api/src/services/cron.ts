@@ -49,5 +49,12 @@ export async function tickSessionStatuses(database: Db): Promise<number> {
       });
     }
   }
+  // Always log tick completion so operators can confirm the cron is running
+  // even during quiet periods when no sessions need updating.
+  logger.info({
+    event: "tick_completed",
+    category: "infra",
+    context: { sessions_checked: rows.length, sessions_updated: updated },
+  });
   return updated;
 }

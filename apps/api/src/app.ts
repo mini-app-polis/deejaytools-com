@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/node";
-import { CommonErrors, createLogger, success } from "common-typescript-utils";
+import { CommonErrors, createLogger, error, success } from "common-typescript-utils";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
@@ -91,8 +91,11 @@ app.get("/health", async (c) => {
 // Intentionally unversioned — Railway cron hits this at a stable path.
 // Not public: gated by TICK_SECRET header when TICK_SECRET is set.
 app.get("/internal/tick", async (c) => {
+  // Guard against an empty-string TICK_SECRET: `secret && ...` would be falsy
+  // for an empty string, bypassing the check entirely. Use `!== undefined`
+  // so any defined value — including "" — is treated as a required secret.
   const secret = process.env.TICK_SECRET;
-  if (secret && c.req.header("x-tick-secret") !== secret) {
+  if (secret !== undefined && c.req.header("x-tick-secret") !== secret) {
     return c.json(CommonErrors.forbidden(), 403);
   }
   await tickSessionStatuses(db);

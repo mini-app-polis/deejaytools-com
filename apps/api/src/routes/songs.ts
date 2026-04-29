@@ -719,7 +719,15 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
     return c.json(success({ received: true, complete: true, song: mappedSong }));
   } catch (err) {
     // Drive upload failed — remove the record so the user's list stays clean.
-    await db.delete(songs).where(eq(songs.id, songId)).catch(() => {});
+    // Log a warning if the cleanup delete itself fails: the row will be a zombie
+    // (no Drive file, orphaned in the DB) and an operator will need to remove it.
+    await db.delete(songs).where(eq(songs.id, songId)).catch((deleteErr) => {
+      logger.warn({
+        event: "song_cleanup_delete_failed",
+        category: "api",
+        context: { songId, uploadId, error: String(deleteErr) },
+      });
+    });
     logger.error({ event: "song_atomic_upload_failed", category: "api", context: { songId, uploadId }, error: err });
     throw err;
   }

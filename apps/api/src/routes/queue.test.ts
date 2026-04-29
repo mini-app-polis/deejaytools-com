@@ -362,6 +362,24 @@ describe("POST /v1/queue/complete", () => {
     });
     expect(res.status).toBe(400);
   });
+
+  it("returns 200 and { completed: true } on success", async () => {
+    // loadSlotOne → slot 1 entry
+    enqueueSelectResult([{ id: "qe1", checkinId: "c1", entityPairId: null, entitySoloUserId: "u1", position: 1 }]);
+    // SELECT checkin
+    enqueueSelectResult([{ sessionId: "s1", divisionName: "Classic", songId: "song1" }]);
+    // SELECT session (for eventId)
+    enqueueSelectResult([{ eventId: null }]);
+    // Transaction: delete + compactAfterRemoval (updates only) + insert runs + insert queueEvents — no drains
+    const res = await app.request(`${BASE}/complete`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: "s1" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<{ completed: boolean }>>(res);
+    expect(body.data.completed).toBe(true);
+  });
 });
 
 describe("POST /v1/queue/incomplete", () => {
@@ -396,6 +414,22 @@ describe("POST /v1/queue/incomplete", () => {
       body: JSON.stringify({ sessionId: "s1" }),
     });
     expect(res.status).toBe(400);
+  });
+
+  it("returns 200 and { rotated: true } on success", async () => {
+    // loadSlotOne → slot 1 entry
+    enqueueSelectResult([{ id: "qe1", checkinId: "c1", entityPairId: null, entitySoloUserId: "u1", position: 1 }]);
+    // tx: SELECT active entries for rotation (position 1 is the only entry)
+    enqueueSelectResult([{ id: "qe1", position: 1 }]);
+    // Transaction: updates only (sentinel swap, resequence, insert queueEvents) — no further drains
+    const res = await app.request(`${BASE}/incomplete`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: "s1" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<{ rotated: boolean }>>(res);
+    expect(body.data.rotated).toBe(true);
   });
 });
 
