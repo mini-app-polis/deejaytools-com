@@ -933,10 +933,10 @@ describe("DELETE /v1/songs/:id — authorization", () => {
     assertErrorEnvelope(await readJson<ErrorEnvelope>(res));
   });
 
-  it("returns 409 when song is in an active queue entry", async () => {
+  it("returns 409 when song is in an active queue entry in a live session", async () => {
     const ownedSong = songSelectRow({ id: "s_owned" }).song;
     enqueueSelectResult([ownedSong]);
-    enqueueSelectResult([{ id: "chk_active" }]); // active checkin found
+    enqueueSelectResult([{ id: "chk_active" }]); // live session — checkin found
     const res = await app.request(`${BASE}/s_owned`, {
       method: "DELETE",
       headers: authHeaders(),
@@ -946,7 +946,20 @@ describe("DELETE /v1/songs/:id — authorization", () => {
     expect(body.error.code).toBe("SONG_IN_ACTIVE_CHECKIN");
   });
 
-  it("returns 204 on successful soft-delete", async () => {
+  it("returns 204 when song was used in a completed session (not blocked)", async () => {
+    // Session is completed/cancelled — the guard's notInArray filter excludes it,
+    // so the join returns no rows and the soft-delete proceeds.
+    const ownedSong = songSelectRow({ id: "s_owned" }).song;
+    enqueueSelectResult([ownedSong]);
+    enqueueSelectResult([]); // completed session filtered out — no active hit
+    const res = await app.request(`${BASE}/s_owned`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(204);
+  });
+
+  it("returns 204 on successful soft-delete (no checkin history)", async () => {
     const ownedSong = songSelectRow({ id: "s_owned" }).song;
     enqueueSelectResult([ownedSong]);
     enqueueSelectResult([]); // no active checkin

@@ -5,9 +5,9 @@ import { CommonErrors, createLogger, error, success, successList } from "common-
 import { zValidator } from "../lib/validate.js";
 import { Hono } from "hono";
 import { z } from "zod";
-import { and, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { checkins, partners, queueEntries, songs, users } from "../db/schema.js";
+import { checkins, partners, queueEntries, sessions, songs, users } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
 import { softDeleteOnDrive, uploadSongToDrive } from "../services/drive.js";
 import { tagSongBytes } from "../services/tagger.js";
@@ -448,12 +448,20 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
     return c.json(CommonErrors.notFound("Song"), 404);
   }
 
-  // Block if song is actively in the queue — must withdraw first
+  // Block if song is actively in the queue in a live session.
+  // Completed or cancelled sessions are excluded — once a session is over
+  // the queue entries are historical and should not prevent song deletion.
   const [activeHit] = await db
     .select({ id: checkins.id })
     .from(checkins)
     .innerJoin(queueEntries, eq(queueEntries.checkinId, checkins.id))
-    .where(eq(checkins.songId, id))
+    .innerJoin(sessions, eq(sessions.id, checkins.sessionId))
+    .where(
+      and(
+        eq(checkins.songId, id),
+        notInArray(sessions.status, ["completed", "cancelled"])
+      )
+    )
     .limit(1);
 
   if (activeHit) {
