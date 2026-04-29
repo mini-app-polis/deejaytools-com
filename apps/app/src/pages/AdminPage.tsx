@@ -460,6 +460,14 @@ export default function AdminPage() {
     return m;
   }, [lqSongs]);
 
+  const songFilenameMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of lqSongs) {
+      if (s.processed_filename) m.set(s.id, s.processed_filename);
+    }
+    return m;
+  }, [lqSongs]);
+
   const renderEntityLabel = (row: QueueRow) => {
     // Prefer server-provided partnership label; fall back to local pair map
     // (only useful for the current admin's own pairs / freshly-injected test
@@ -999,6 +1007,11 @@ export default function AdminPage() {
                                 <p className="text-muted-foreground truncate">
                                   {row.divisionName} · {renderSongLabel(row.songId)}
                                 </p>
+                                {songFilenameMap.get(row.songId) && (
+                                  <p className="text-xs text-muted-foreground/70 truncate font-mono">
+                                    {songFilenameMap.get(row.songId)}
+                                  </p>
+                                )}
                                 {row.notes && (
                                   <p className="text-xs text-muted-foreground italic">
                                     Note: {row.notes}
@@ -1056,6 +1069,11 @@ export default function AdminPage() {
                             <p className="text-muted-foreground truncate">
                               {row.divisionName} · {renderSongLabel(row.songId)}
                             </p>
+                            {songFilenameMap.get(row.songId) && (
+                              <p className="text-xs text-muted-foreground/70 truncate font-mono">
+                                {songFilenameMap.get(row.songId)}
+                              </p>
+                            )}
                             {row.notes && (
                               <p className="text-xs text-muted-foreground italic">Note: {row.notes}</p>
                             )}
@@ -1102,6 +1120,11 @@ export default function AdminPage() {
                             <p className="text-muted-foreground truncate">
                               {row.divisionName} · {renderSongLabel(row.songId)}
                             </p>
+                            {songFilenameMap.get(row.songId) && (
+                              <p className="text-xs text-muted-foreground/70 truncate font-mono">
+                                {songFilenameMap.get(row.songId)}
+                              </p>
+                            )}
                             {row.notes && (
                               <p className="text-xs text-muted-foreground italic">Note: {row.notes}</p>
                             )}
