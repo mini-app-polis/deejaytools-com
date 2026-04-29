@@ -228,46 +228,84 @@ type SessionBaseCache = {
 /** Invalidate all cached data for a single session (call after any mutation). */
 export function invalidateSessionCache(sessionId: string): void {
   responseCache.invalidatePrefix(`sessions:base:${sessionId}`);
+  // Clear all list variants — a mutation to any session can affect every
+  // caller of GET /v1/sessions regardless of their event_id filter.
+  responseCache.invalidatePrefix(`sessions:list:`);
   // Also clear queue caches — session mutations (status changes, etc.) can
   // affect how clients interpret queue state.
   responseCache.invalidatePrefix(`queue:${sessionId}:`);
 }
 
+/**
+ * Shape stored in the cache for the expensive shared part of GET /.
+ * Excludes user-specific fields (has_active_checkin) which are always fresh.
+ */
+type SessionsListBaseCache = {
+  rows: SessionRow[];
+  divisionsMap: Map<string, ReturnType<typeof mapDivision>[]>;
+  queueMap: Map<string, { priority: number; non_priority: number; active: number }>;
+  eventTimezoneMap: Map<string, string>;
+};
+
 sessionRoutes.get("/", zValidator("query", listQuery), async (c) => {
   const { event_id } = c.req.valid("query");
   const userId = await getOptionalSyncedUserId(c);
 
-  // Sort by session date (newest first), then by floor-trial start time within
-  // a single date so multiple sessions on the same day order by time-of-day.
-  const rows = event_id
-    ? await db
-        .select()
-        .from(sessions)
-        .where(eq(sessions.eventId, event_id))
-        .orderBy(desc(sessions.date), desc(sessions.floorTrialStartsAt))
-    : await db
-        .select()
-        .from(sessions)
-        .orderBy(desc(sessions.date), desc(sessions.floorTrialStartsAt));
+  // ── Shared base data (cached) ────────────────────────────────────────────
+  // Sessions, their divisions, queue depths, and event timezones are identical
+  // for every caller.  We cache this batch of queries for SESSION_TTL ms so
+  // that 200 simultaneous pollers only hit the DB once per window.
+  const listCacheKey = `sessions:list:${event_id ?? "all"}`;
+  let listBase = responseCache.get<SessionsListBaseCache>(listCacheKey);
 
-  const sessionIds = rows.map((r) => r.id);
-  const divisionsBySession = await loadDivisionsForSessions(sessionIds);
-  const queueMap = await loadQueueDepthsForSessions(sessionIds);
+  if (!listBase) {
+    // Sort by session date (newest first), then by floor-trial start time
+    // within a single date so multiple sessions on the same day order by time.
+    const rows = event_id
+      ? await db
+          .select()
+          .from(sessions)
+          .where(eq(sessions.eventId, event_id))
+          .orderBy(desc(sessions.date), desc(sessions.floorTrialStartsAt))
+      : await db
+          .select()
+          .from(sessions)
+          .orderBy(desc(sessions.date), desc(sessions.floorTrialStartsAt));
 
-  // Build a timezone map keyed by event ID so every session can carry the
-  // event's timezone — used by clients for consistent time display.
-  const eventIds = [...new Set(rows.map((r) => r.eventId).filter(Boolean))] as string[];
-  const eventTimezoneMap = new Map<string, string>();
-  if (eventIds.length > 0) {
-    const eventRows = await db
-      .select({ id: events.id, timezone: events.timezone })
-      .from(events)
-      .where(inArray(events.id, eventIds));
-    for (const ev of eventRows) {
-      eventTimezoneMap.set(ev.id, ev.timezone);
+    const sessionIds = rows.map((r) => r.id);
+    const rawDivisions = await loadDivisionsForSessions(sessionIds);
+    const queueMap = await loadQueueDepthsForSessions(sessionIds);
+
+    // Pre-map divisions so cached data is already in wire format.
+    const divisionsMap = new Map<string, ReturnType<typeof mapDivision>[]>();
+    for (const [id, divs] of rawDivisions) {
+      divisionsMap.set(id, divs.map(mapDivision));
     }
+
+    // Build a timezone map keyed by event ID so every session can carry the
+    // event's timezone — used by clients for consistent time display.
+    const eventIds = [...new Set(rows.map((r) => r.eventId).filter(Boolean))] as string[];
+    const eventTimezoneMap = new Map<string, string>();
+    if (eventIds.length > 0) {
+      const eventRows = await db
+        .select({ id: events.id, timezone: events.timezone })
+        .from(events)
+        .where(inArray(events.id, eventIds));
+      for (const ev of eventRows) {
+        eventTimezoneMap.set(ev.id, ev.timezone);
+      }
+    }
+
+    listBase = { rows, divisionsMap, queueMap, eventTimezoneMap };
+    responseCache.set(listCacheKey, listBase, CACHE_TTL.SESSION);
   }
 
+  const { rows, divisionsMap, queueMap, eventTimezoneMap } = listBase;
+  const sessionIds = rows.map((r) => r.id);
+
+  // ── User-specific enrichment (always fresh) ──────────────────────────────
+  // has_active_checkin reflects real-time queue membership for the current
+  // user — it must never be served stale.
   let activeSet = new Set<string>();
   if (userId && sessionIds.length > 0) {
     const userPairs = await db.select({ id: pairs.id }).from(pairs).where(eq(pairs.userAId, userId));
@@ -288,7 +326,7 @@ sessionRoutes.get("/", zValidator("query", listQuery), async (c) => {
   }
 
   const results = rows.map((row) => {
-    const divs = (divisionsBySession.get(row.id) ?? []).map(mapDivision);
+    const divs = divisionsMap.get(row.id) ?? [];
     const depth = queueMap.get(row.id) ?? { priority: 0, non_priority: 0, active: 0 };
     const eventTimezone = row.eventId ? (eventTimezoneMap.get(row.eventId) ?? null) : null;
     const base = {

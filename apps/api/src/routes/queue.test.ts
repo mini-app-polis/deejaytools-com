@@ -10,6 +10,12 @@ import {
 import { enqueueSelectResult, resetSelectQueue } from "../test/mocks.js";
 import { responseCache } from "../lib/cache.js";
 
+// Global pre-test setup: flush the response cache so that a cached result from
+// one test can never bleed into the next test's enqueued mock rows.
+beforeEach(() => {
+  responseCache.invalidatePrefix("");
+});
+
 vi.mock("../db/index.js", async () => {
   const { mockDb: db } = await import("../test/mocks.js");
   return { db };
@@ -25,6 +31,21 @@ vi.mock("../middleware/auth.js", async (importOriginal) => {
 });
 
 const BASE = "/v1/queue";
+
+const priorityEntry = {
+  id: "qe1",
+  checkinId: "c1",
+  sessionId: "s1",
+  entityPairId: "p1",
+  entitySoloUserId: null,
+  queueType: "priority",
+  position: 1,
+};
+
+const sessionCaps = {
+  activePriorityMax: 6,
+  activeNonPriorityMax: 4,
+};
 
 describe("POST /v1/queue/promote", () => {
   beforeEach(() => {
@@ -42,23 +63,70 @@ describe("POST /v1/queue/promote", () => {
   });
 
   it("returns 400 when entry already active", async () => {
-    enqueueSelectResult([
-      {
-        id: "qe1",
-        checkinId: "c1",
-        sessionId: "s1",
-        entityPairId: "p1",
-        entitySoloUserId: null,
-        queueType: "active",
-        position: 2,
-      },
-    ]);
+    enqueueSelectResult([{ ...priorityEntry, queueType: "active" }]);
     const res = await app.request(`${BASE}/promote`, {
       method: "POST",
       headers: { ...adminHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ queueEntryId: "qe1" }),
     });
     expect(res.status).toBe(400);
+  });
+
+  it("returns 404 when the session row is missing inside the transaction", async () => {
+    enqueueSelectResult([priorityEntry]); // entry found
+    enqueueSelectResult([]);              // tx: session FOR UPDATE → not found
+    const res = await app.request(`${BASE}/promote`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ queueEntryId: "qe1" }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 400 when active queue is at priority cap", async () => {
+    enqueueSelectResult([priorityEntry]);          // entry
+    enqueueSelectResult([sessionCaps]);            // tx: session FOR UPDATE
+    enqueueSelectResult([{ n: 6 }]);              // tx: active count (at cap)
+    enqueueSelectResult([{ n: 0 }]);              // tx: priority count
+    const res = await app.request(`${BASE}/promote`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ queueEntryId: "qe1" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: { message: string } };
+    expect(body.error.message).toMatch(/priority cap/i);
+  });
+
+  it("returns 400 when non-priority promotion is blocked by priority queue entries", async () => {
+    enqueueSelectResult([{ ...priorityEntry, queueType: "non_priority" }]); // entry
+    enqueueSelectResult([sessionCaps]);              // tx: session FOR UPDATE
+    enqueueSelectResult([{ n: 0 }]);                // tx: active count
+    enqueueSelectResult([{ n: 2 }]);                // tx: priority count (blocks non-priority)
+    const res = await app.request(`${BASE}/promote`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ queueEntryId: "qe1" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: { message: string } };
+    expect(body.error.message).toMatch(/non-priority/i);
+  });
+
+  it("returns 200 when promotion succeeds", async () => {
+    enqueueSelectResult([priorityEntry]);           // entry
+    enqueueSelectResult([sessionCaps]);             // tx: session FOR UPDATE
+    enqueueSelectResult([{ n: 0 }]);               // tx: active count
+    enqueueSelectResult([{ n: 0 }]);               // tx: priority count
+    enqueueSelectResult([]);                        // tx: nextBottomPosition
+    const res = await app.request(`${BASE}/promote`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ queueEntryId: "qe1" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json() as { data: { promoted: boolean } };
+    expect(body.data.promoted).toBe(true);
   });
 });
 

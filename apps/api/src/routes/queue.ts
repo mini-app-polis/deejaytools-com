@@ -39,17 +39,20 @@ const withdrawBody = z.object({
   reason: z.string().nullish(),
 });
 
-/** Counts active and priority entries for a session. */
-async function getQueueCounts(sessionId: string) {
-  const [active] = await db
-    .select({ n: count() })
-    .from(queueEntries)
-    .where(and(eq(queueEntries.sessionId, sessionId), eq(queueEntries.queueType, "active")));
-  const [priority] = await db
-    .select({ n: count() })
-    .from(queueEntries)
-    .where(and(eq(queueEntries.sessionId, sessionId), eq(queueEntries.queueType, "priority")));
-  return { activeCount: active?.n ?? 0, priorityCount: priority?.n ?? 0 };
+/**
+ * Sentinel errors thrown from inside the promote transaction so the outer
+ * catch can return the right HTTP status without masking real DB failures.
+ */
+class PromoteAbortError extends Error {
+  constructor(
+    public readonly reason:
+      | "session_not_found"
+      | "priority_cap"
+      | "non_priority_cap"
+  ) {
+    super(reason);
+    this.name = "PromoteAbortError";
+  }
 }
 
 /** POST /v1/queue/promote — move a priority or non-priority entry into active. */
@@ -75,35 +78,45 @@ queueRoutes.post("/promote", requireAdmin, zValidator("json", promoteBody), asyn
   if (entry.queueType === "active")
     return c.json(CommonErrors.badRequest("Entry is already active"), 400);
 
-  const [session] = await db
-    .select({
-      activePriorityMax: sessions.activePriorityMax,
-      activeNonPriorityMax: sessions.activeNonPriorityMax,
-    })
-    .from(sessions)
-    .where(eq(sessions.id, entry.sessionId));
-  if (!session) return c.json(CommonErrors.notFound("Session"), 404);
-
-  const counts = await getQueueCounts(entry.sessionId);
-  const gate = {
-    activeCount: counts.activeCount,
-    priorityCount: counts.priorityCount,
-    activePriorityMax: session.activePriorityMax,
-    activeNonPriorityMax: session.activeNonPriorityMax,
-  };
-
-  if (entry.queueType === "priority" && !canPromotePriority(gate))
-    return c.json(CommonErrors.badRequest("Active queue is at priority cap"), 400);
-  if (entry.queueType === "non_priority" && !canPromoteNonPriority(gate))
-    return c.json(
-      CommonErrors.badRequest(
-        "Cannot promote non-priority while priority queue has entries or active is at non-priority cap"
-      ),
-      400
-    );
-
   try {
     await db.transaction(async (tx) => {
+      // Lock the session row for the duration of this transaction. Any
+      // concurrent promote targeting the same session will block here and
+      // re-read the up-to-date caps + counts, preventing the race where two
+      // simultaneous promotes both see an empty active queue and both succeed.
+      const [session] = await tx
+        .select({
+          activePriorityMax: sessions.activePriorityMax,
+          activeNonPriorityMax: sessions.activeNonPriorityMax,
+        })
+        .from(sessions)
+        .where(eq(sessions.id, entry.sessionId))
+        .for("update");
+      if (!session) throw new PromoteAbortError("session_not_found");
+
+      // Count active and priority entries inside the transaction, after the lock,
+      // so the numbers are consistent with the locked session row.
+      const [activeRow] = await tx
+        .select({ n: count() })
+        .from(queueEntries)
+        .where(and(eq(queueEntries.sessionId, entry.sessionId), eq(queueEntries.queueType, "active")));
+      const [priorityRow] = await tx
+        .select({ n: count() })
+        .from(queueEntries)
+        .where(and(eq(queueEntries.sessionId, entry.sessionId), eq(queueEntries.queueType, "priority")));
+
+      const gate = {
+        activeCount: Number(activeRow?.n ?? 0),
+        priorityCount: Number(priorityRow?.n ?? 0),
+        activePriorityMax: session.activePriorityMax,
+        activeNonPriorityMax: session.activeNonPriorityMax,
+      };
+
+      if (entry.queueType === "priority" && !canPromotePriority(gate))
+        throw new PromoteAbortError("priority_cap");
+      if (entry.queueType === "non_priority" && !canPromoteNonPriority(gate))
+        throw new PromoteAbortError("non_priority_cap");
+
       await tx.delete(queueEntries).where(eq(queueEntries.id, entry.id));
       await compactAfterRemoval(tx, entry.sessionId, entry.queueType, entry.position);
 
@@ -135,6 +148,18 @@ queueRoutes.post("/promote", requireAdmin, zValidator("json", promoteBody), asyn
       });
     });
   } catch (err) {
+    if (err instanceof PromoteAbortError) {
+      if (err.reason === "session_not_found")
+        return c.json(CommonErrors.notFound("Session"), 404);
+      if (err.reason === "priority_cap")
+        return c.json(CommonErrors.badRequest("Active queue is at priority cap"), 400);
+      return c.json(
+        CommonErrors.badRequest(
+          "Cannot promote non-priority while priority queue has entries or active is at non-priority cap"
+        ),
+        400
+      );
+    }
     logger.error({
       event: "queue_promote_failed",
       category: "api",

@@ -321,6 +321,109 @@ describe("GET /v1/sessions/:id — caching", () => {
   });
 });
 
+// ─── Sessions list cache ──────────────────────────────────────────────────────
+//
+// GET /v1/sessions caches shared base data (session rows, divisions, queue depths,
+// event timezones) and always computes user-specific fields (has_active_checkin)
+// fresh.  Write endpoints must clear the list cache.
+
+/** Minimal session row with distinct names for cache miss detection. */
+const listSessionA = {
+  id: "s1",
+  eventId: null as string | null,
+  name: "List Session A",
+  date: null as string | null,
+  checkinOpensAt: futureTime,
+  floorTrialStartsAt: futureTime + 1000,
+  floorTrialEndsAt: futureTime + 7_200_000,
+  activePriorityMax: 6,
+  activeNonPriorityMax: 4,
+  status: "scheduled" as const,
+  createdBy: "user_admin123",
+  createdAt: Date.now(),
+};
+const listSessionB = { ...listSessionA, name: "List Session B" };
+
+describe("GET /v1/sessions — caching", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+    responseCache.invalidatePrefix("");
+  });
+
+  it("serves the base list from cache on the second call", async () => {
+    // First request: cache miss.  Enqueue: sessions, divisions, queue depths.
+    enqueueSelectResult([listSessionA]);
+    enqueueSelectResult([]); // divisions
+    enqueueSelectResult([]); // queue depths
+    const first = await app.request(BASE);
+    expect(first.status).toBe(200);
+    const firstBody = await readJson<{ data: { name: string }[] }>(first);
+    expect(firstBody.data[0]!.name).toBe("List Session A");
+
+    // Enqueue different data — if the second request hits the DB it would
+    // return "List Session B", exposing a cache miss.
+    enqueueSelectResult([listSessionB]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([]);
+    const second = await app.request(BASE);
+    expect(second.status).toBe(200);
+    const secondBody = await readJson<{ data: { name: string }[] }>(second);
+    // Should still be "List Session A" (base data from cache).
+    expect(secondBody.data[0]!.name).toBe("List Session A");
+  });
+
+  it("uses separate cache entries for different event_id filters", async () => {
+    // Populate cache for event_id=e1.
+    enqueueSelectResult([listSessionA]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([]);
+    await app.request(`${BASE}?event_id=e1`);
+
+    // event_id=e2 should be a cache miss and return its own DB result.
+    enqueueSelectResult([listSessionB]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([]);
+    const resE2 = await app.request(`${BASE}?event_id=e2`);
+    const bodyE2 = await readJson<{ data: { name: string }[] }>(resE2);
+    expect(bodyE2.data[0]!.name).toBe("List Session B");
+  });
+});
+
+describe("PATCH /v1/sessions/:id/status — list cache invalidation", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+    responseCache.invalidatePrefix("");
+  });
+
+  it("clears the list cache so the next GET returns fresh data", async () => {
+    // Prime the list cache with List Session A.
+    enqueueSelectResult([listSessionA]);
+    enqueueSelectResult([]); // divisions
+    enqueueSelectResult([]); // queue depths
+    await app.request(BASE);
+
+    // Perform a status PATCH — should invalidate the list cache.
+    enqueueSelectResult([listSessionA]);          // existing check
+    enqueueSelectResult([listSessionB]);          // re-read after update
+    enqueueSelectResult([]);                      // divisions
+    enqueueSelectResult([]);                      // queue depths
+    const patch = await app.request(`${BASE}/s1/status`, {
+      method: "PATCH",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "checkin_open" }),
+    });
+    expect(patch.status).toBe(200);
+
+    // Cache was invalidated — next GET /v1/sessions is a fresh DB hit.
+    enqueueSelectResult([listSessionB]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([]);
+    const after = await app.request(BASE);
+    const body = await readJson<{ data: { name: string }[] }>(after);
+    expect(body.data[0]!.name).toBe("List Session B");
+  });
+});
+
 describe("PATCH /v1/sessions/:id/status — cache invalidation", () => {
   beforeEach(() => {
     resetSelectQueue();

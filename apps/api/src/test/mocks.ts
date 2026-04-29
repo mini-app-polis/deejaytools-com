@@ -25,9 +25,13 @@ type DbChain = {
   innerJoin: ReturnType<typeof vi.fn>;
   groupBy: ReturnType<typeof vi.fn>;
   limit: ReturnType<typeof vi.fn>;
+  /** Drizzle `.for("update")` — locks the row for the transaction. */
+  for: ReturnType<typeof vi.fn>;
   insert: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
   delete: ReturnType<typeof vi.fn>;
+  /** Raw SQL execution (e.g. `SELECT 1` health probe). */
+  execute: ReturnType<typeof vi.fn>;
   transaction: ReturnType<typeof vi.fn>;
   then: (
     onfulfilled?: ((value: unknown[]) => unknown) | null,
@@ -45,6 +49,8 @@ function createMockDb(): DbChain {
   chain.innerJoin = vi.fn(() => chain);
   chain.groupBy = vi.fn(() => chain);
   chain.limit = vi.fn(() => Promise.resolve(drainSelect()));
+  // `.for("update")` chains off `.where()` and is thenable via `chain.then`.
+  chain.for = vi.fn(() => chain);
   chain.insert = vi.fn(() => ({
     values: vi.fn(() => {
       const afterValues = {
@@ -67,6 +73,8 @@ function createMockDb(): DbChain {
   chain.delete = vi.fn(() => ({
     where: vi.fn(() => Promise.resolve(undefined)),
   }));
+  // Raw SQL execution used by the /health DB probe.
+  chain.execute = vi.fn(() => Promise.resolve([{ "?column?": 1 }]));
   chain.transaction = vi.fn((fn: (tx: DbChain) => unknown) => fn(chain));
   chain.then = (onfulfilled, onrejected) =>
     Promise.resolve(drainSelect()).then(onfulfilled, onrejected);

@@ -10,8 +10,9 @@ if (!url) {
   throw new Error("DATABASE_URL is required");
 }
 
-const client = postgres(url, { max: 10 });
+const poolMax = Number(process.env.DB_POOL_MAX ?? "20");
+const client = postgres(url, { max: poolMax });
 export const db = drizzle(client, { schema });
 export { schema };
 
-logger.start("db_connected", { max_connections: 10 });
+logger.start("db_connected", { max_connections: poolMax });

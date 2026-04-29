@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger as honoLogger } from "hono/logger";
 import { ZodError } from "zod";
+import { sql } from "drizzle-orm";
 import { db } from "./db/index.js";
 import { adminCheckinRoutes } from "./routes/admin-checkins.js";
 import { adminUserRoutes } from "./routes/admin-users.js";
@@ -19,6 +20,7 @@ import { runRoutes } from "./routes/runs.js";
 import { songRoutes } from "./routes/songs.js";
 import { tickSessionStatuses } from "./services/cron.js";
 import { rateLimitMiddleware } from "./middleware/rate-limit.js";
+import { timeoutMiddleware } from "./middleware/timeout.js";
 
 const logger = createLogger("deejaytools-api");
 
@@ -57,13 +59,22 @@ app.use("*", honoLogger());
 // 300/min is ~5 req/s sustained, well above any normal polling pattern
 // (admin page: ~23 req/min; regular user polling: ~6–12 req/min) but stops
 // runaway clients or scripts from hammering the DB.
-app.use(
-  "/v1/*",
-  rateLimitMiddleware(300, 60_000)
-);
+app.use("/v1/*", rateLimitMiddleware(300, 60_000));
 
-// Intentionally public — liveness probe for load balancers and uptime monitors.
-app.get("/health", (c) => c.json({ status: "ok" }));
+// Hard 30-second deadline on all API routes.  Prevents a slow DB query or
+// upstream call from holding the connection open indefinitely.
+app.use("/v1/*", timeoutMiddleware(30_000));
+
+// Liveness + readiness probe for Railway / uptime monitors.
+// Returns 200 when the DB is reachable, 503 when it is not.
+app.get("/health", async (c) => {
+  try {
+    await db.execute(sql`SELECT 1`);
+    return c.json({ status: "ok" });
+  } catch {
+    return c.json({ status: "degraded", detail: "db_unreachable" }, 503);
+  }
+});
 
 // Intentionally unversioned — Railway cron hits this at a stable path.
 // Not public: gated by TICK_SECRET header when TICK_SECRET is set.
