@@ -1,3 +1,12 @@
+## [1.32.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.32.2...v1.32.3) (2026-04-29)
+
+
+### Bug Fixes
+
+* updating add song process for UX ([e1af262](https://github.com/mini-app-polis/deejaytools-com/commit/e1af2624997578a726150a553f574fddd2232840))
+* updating add song process for UX ([8c70048](https://github.com/mini-app-polis/deejaytools-com/commit/8c70048c11e46e9caad9c684c8b633e81f959d8e))
+* updating add song process for UX ([a1a276f](https://github.com/mini-app-polis/deejaytools-com/commit/a1a276f31160d97d56298c2020f1f4aa6cedaba3))
+
 ## [1.32.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.32.1...v1.32.2) (2026-04-28)
 
 
