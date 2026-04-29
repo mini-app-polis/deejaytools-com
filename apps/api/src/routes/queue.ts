@@ -105,6 +105,7 @@ queueRoutes.post("/promote", requireAdmin, zValidator("json", promoteBody), asyn
       // simultaneous promotes both see an empty active queue and both succeed.
       const [session] = await tx
         .select({
+          status: sessions.status,
           activePriorityMax: sessions.activePriorityMax,
           activeNonPriorityMax: sessions.activeNonPriorityMax,
         })
@@ -113,28 +114,35 @@ queueRoutes.post("/promote", requireAdmin, zValidator("json", promoteBody), asyn
         .for("update");
       if (!session) throw new PromoteAbortError("session_not_found");
 
-      // Count active and priority entries inside the transaction, after the lock,
-      // so the numbers are consistent with the locked session row.
-      const [activeRow] = await tx
-        .select({ n: count() })
-        .from(queueEntries)
-        .where(and(eq(queueEntries.sessionId, entry.sessionId), eq(queueEntries.queueType, "active")));
-      const [priorityRow] = await tx
-        .select({ n: count() })
-        .from(queueEntries)
-        .where(and(eq(queueEntries.sessionId, entry.sessionId), eq(queueEntries.queueType, "priority")));
+      // Cap checks are only enforced during live sessions. Once a session is
+      // completed or cancelled, admins can promote freely to clear any remaining
+      // queue entries and record their runs.
+      const sessionIsLive = session.status !== "completed" && session.status !== "cancelled";
 
-      const gate = {
-        activeCount: Number(activeRow?.n ?? 0),
-        priorityCount: Number(priorityRow?.n ?? 0),
-        activePriorityMax: session.activePriorityMax,
-        activeNonPriorityMax: session.activeNonPriorityMax,
-      };
+      if (sessionIsLive) {
+        // Count active and priority entries inside the transaction, after the lock,
+        // so the numbers are consistent with the locked session row.
+        const [activeRow] = await tx
+          .select({ n: count() })
+          .from(queueEntries)
+          .where(and(eq(queueEntries.sessionId, entry.sessionId), eq(queueEntries.queueType, "active")));
+        const [priorityRow] = await tx
+          .select({ n: count() })
+          .from(queueEntries)
+          .where(and(eq(queueEntries.sessionId, entry.sessionId), eq(queueEntries.queueType, "priority")));
 
-      if (entry.queueType === "priority" && !canPromotePriority(gate))
-        throw new PromoteAbortError("priority_cap");
-      if (entry.queueType === "non_priority" && !canPromoteNonPriority(gate))
-        throw new PromoteAbortError("non_priority_cap");
+        const gate = {
+          activeCount: Number(activeRow?.n ?? 0),
+          priorityCount: Number(priorityRow?.n ?? 0),
+          activePriorityMax: session.activePriorityMax,
+          activeNonPriorityMax: session.activeNonPriorityMax,
+        };
+
+        if (entry.queueType === "priority" && !canPromotePriority(gate))
+          throw new PromoteAbortError("priority_cap");
+        if (entry.queueType === "non_priority" && !canPromoteNonPriority(gate))
+          throw new PromoteAbortError("non_priority_cap");
+      }
 
       await tx.delete(queueEntries).where(eq(queueEntries.id, entry.id));
       await compactAfterRemoval(tx, entry.sessionId, entry.queueType, entry.position);

@@ -43,6 +43,7 @@ const priorityEntry = {
 };
 
 const sessionCaps = {
+  status: "in_progress" as const,
   activePriorityMax: 6,
   activeNonPriorityMax: 4,
 };
@@ -150,6 +151,37 @@ describe("POST /v1/queue/promote", () => {
     });
 
     expect(mockDb.for).toHaveBeenCalledWith("update");
+  });
+
+  it("bypasses cap checks and promotes successfully when session is completed", async () => {
+    // After a session ends, admins must be able to promote remaining entries
+    // to clear the queue and record runs — cap limits no longer apply.
+    const completedSession = { ...sessionCaps, status: "completed" as const };
+    enqueueSelectResult([priorityEntry]);           // entry
+    enqueueSelectResult([completedSession]);        // tx: session FOR UPDATE (completed)
+    // No active/priority count queries — cap checks are skipped entirely
+    enqueueSelectResult([]);                        // tx: nextBottomPosition
+    const res = await app.request(`${BASE}/promote`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ queueEntryId: "qe1" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json() as { data: { promoted: boolean } };
+    expect(body.data.promoted).toBe(true);
+  });
+
+  it("bypasses cap checks when session is cancelled", async () => {
+    const cancelledSession = { ...sessionCaps, status: "cancelled" as const };
+    enqueueSelectResult([{ ...priorityEntry, queueType: "non_priority" }]); // entry
+    enqueueSelectResult([cancelledSession]);        // tx: session FOR UPDATE (cancelled)
+    enqueueSelectResult([]);                        // tx: nextBottomPosition
+    const res = await app.request(`${BASE}/promote`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ queueEntryId: "qe1" }),
+    });
+    expect(res.status).toBe(200);
   });
 });
 

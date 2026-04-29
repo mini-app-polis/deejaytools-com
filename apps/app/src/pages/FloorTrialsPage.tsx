@@ -11,8 +11,16 @@ import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { cn } from "@/lib/utils";
 
-/** Statuses that count as "active or upcoming" — what shows on this page. */
-const ACTIVE_STATUSES = new Set(["scheduled", "checkin_open", "in_progress"]);
+/** Returns true when a session's floor trial starts on today's calendar date (local time). */
+function startsToday(floorTrialStartsAt: number): boolean {
+  const d = new Date(floorTrialStartsAt);
+  const now = new Date();
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+}
 
 function sessionStatusBadge(status: string) {
   switch (status) {
@@ -68,9 +76,11 @@ export default function FloorTrialsPage() {
     };
   }, [api]);
 
-  // Filter to active/upcoming, sort by next-up first (earliest start time first).
-  const upcoming = (sessions ?? [])
-    .filter((s) => ACTIVE_STATUSES.has(s.status))
+  // Show all of today's sessions regardless of status — admins may need to
+  // manage queues for completed sessions, and users may want to review the
+  // day's runs. Sort by start time ascending so the day reads in order.
+  const todaySessions = (sessions ?? [])
+    .filter((s) => startsToday(s.floor_trial_starts_at))
     .slice()
     .sort((a, b) => a.floor_trial_starts_at - b.floor_trial_starts_at);
 
@@ -91,7 +101,7 @@ export default function FloorTrialsPage() {
       <div>
         <h1 className="page-title text-2xl">Floor Trials</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Active and upcoming sessions, soonest first. Check-in opens 30 minutes
+          Today's sessions, sorted by start time. Check-in opens 30 minutes
           before each session — tap a session to check in or watch its queue.{" "}
           <Link to="/how-it-works" className="text-primary hover:underline">
             How this works →
@@ -99,13 +109,13 @@ export default function FloorTrialsPage() {
         </p>
       </div>
 
-      {upcoming.length === 0 ? (
+      {todaySessions.length === 0 ? (
         <p className="text-sm text-muted-foreground py-8 text-center">
-          No active or upcoming sessions.
+          No sessions scheduled for today.
         </p>
       ) : (
         <div className={`space-y-3${loading ? " opacity-60" : ""}`}>
-          {upcoming.map((s) => {
+          {todaySessions.map((s) => {
             const eventName = s.event_id ? eventNameById.get(s.event_id) ?? null : null;
             const eventTz = s.event_id ? eventTimezoneById.get(s.event_id) ?? null : null;
             return (
