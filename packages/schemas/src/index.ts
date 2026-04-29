@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+// ---------------------------------------------------------------------------
+// Domain enums (used in request bodies / shared across API + frontend)
+// ---------------------------------------------------------------------------
+
 export const DivisionSchema = z.enum([
   "Newcomer",
   "Novice",
@@ -55,161 +59,178 @@ export const PartnerRoleSchema = z.enum(["leader", "follower"]);
 export type PartnerRole = z.infer<typeof PartnerRoleSchema>;
 
 // ---------------------------------------------------------------------------
-// API response types — canonical shapes returned by the Hono API routes.
-// Frontend pages and hooks should import from here instead of defining local
-// copies, so the compiler flags any drift between API and UI.
+// API response schemas — Zod validators for every GET endpoint payload.
+//
+// TypeScript types are derived via z.infer so there is a single source of
+// truth: the Zod schema drives both compile-time checking and runtime
+// validation in contract tests.
 // ---------------------------------------------------------------------------
 
-export type ApiEvent = {
-  id: string;
-  name: string;
-  start_date: string;
-  end_date: string;
-  timezone: string;
-  status: string;
-  created_by: string;
-  created_at: number;
-  updated_at: number;
-};
+export const ApiEventSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  start_date: z.string(),
+  end_date: z.string(),
+  timezone: z.string(),
+  status: z.string(),
+  created_by: z.string(),
+  created_at: z.number(),
+  updated_at: z.number(),
+});
+export type ApiEvent = z.infer<typeof ApiEventSchema>;
 
-export type ApiSessionDivision = {
-  id: string;
-  division_name: string;
-  is_priority: boolean;
-  sort_order: number;
-  priority_run_limit: number | null;
-};
+export const ApiSessionDivisionSchema = z.object({
+  id: z.string(),
+  division_name: z.string(),
+  is_priority: z.boolean(),
+  sort_order: z.number(),
+  priority_run_limit: z.number().nullable(),
+});
+export type ApiSessionDivision = z.infer<typeof ApiSessionDivisionSchema>;
 
-export type ApiSession = {
-  id: string;
-  event_id: string | null;
-  event_timezone: string | null;
-  name: string;
-  date: string | null;
-  status: string;
-  checkin_opens_at: number;
-  floor_trial_starts_at: number;
-  floor_trial_ends_at: number;
-  active_priority_max: number;
-  active_non_priority_max: number;
-  created_by: string;
-  created_at: number;
-  /**
-   * Populated on GET /v1/sessions/:id (detail endpoint) but not on the list.
-   * The name of the parent event, if any.
-   */
-  event_name?: string | null;
-  /**
-   * Populated on GET /v1/sessions/:id only. The division the current user's
-   * active check-in is in, if they have one for this session.
-   */
-  active_checkin_division?: string;
-  divisions?: ApiSessionDivision[];
-  queue_depth?: { priority: number; non_priority: number; active: number };
-  has_active_checkin?: boolean;
-};
+export const ApiSessionSchema = z.object({
+  id: z.string(),
+  event_id: z.string().nullable(),
+  name: z.string(),
+  date: z.string().nullable(),
+  checkin_opens_at: z.number(),
+  floor_trial_starts_at: z.number(),
+  floor_trial_ends_at: z.number(),
+  active_priority_max: z.number(),
+  active_non_priority_max: z.number(),
+  status: z.string(),
+  created_by: z.string(),
+  created_at: z.number(),
+  // Optional fields — present on GET /v1/sessions (list) and GET /v1/sessions/:id (detail)
+  event_timezone: z.string().nullable().optional(),
+  // Detail-endpoint-only fields
+  event_name: z.string().nullable().optional(),
+  active_checkin_division: z.string().optional(),
+  divisions: z.array(ApiSessionDivisionSchema).optional(),
+  queue_depth: z
+    .object({ priority: z.number(), non_priority: z.number(), active: z.number() })
+    .optional(),
+  has_active_checkin: z.boolean().optional(),
+});
+export type ApiSession = z.infer<typeof ApiSessionSchema>;
 
-export type ApiQueueEntry = {
-  queueEntryId: string;
-  checkinId: string;
-  position: number;
-  enteredQueueAt: number;
-  entityPairId: string | null;
-  entitySoloUserId: string | null;
-  entityLabel: string;
-  divisionName: string;
-  songId: string | null;
-  notes: string | null;
-  initialQueue: string;
-  checkedInAt: number;
-  subQueue?: "priority" | "non_priority";
-};
+export const ApiQueueEntrySchema = z.object({
+  queueEntryId: z.string(),
+  checkinId: z.string(),
+  position: z.number(),
+  enteredQueueAt: z.number(),
+  entityPairId: z.string().nullable(),
+  entitySoloUserId: z.string().nullable(),
+  entityLabel: z.string(),
+  divisionName: z.string(),
+  songId: z.string().nullable(),
+  notes: z.string().nullable(),
+  initialQueue: z.string(),
+  checkedInAt: z.number(),
+  /** Present on /waiting — distinguishes priority vs non-priority entries. */
+  subQueue: z.enum(["priority", "non_priority"]).optional(),
+});
+export type ApiQueueEntry = z.infer<typeof ApiQueueEntrySchema>;
 
-export type ApiSong = {
-  id: string;
-  user_id: string;
-  partner_id: string | null;
-  display_name: string | null;
-  original_filename: string | null;
-  drive_file_id: string | null;
-  drive_folder_id: string | null;
-  processed_filename: string | null;
-  division: string | null;
-  routine_name: string | null;
-  personal_descriptor: string | null;
-  season_year: string | null;
-  created_at: number;
-  updated_at: number;
-  partner_first_name?: string | null;
-  partner_last_name?: string | null;
-};
+export const ApiSongSchema = z.object({
+  id: z.string(),
+  user_id: z.string(),
+  partner_id: z.string().nullable(),
+  display_name: z.string().nullable(),
+  original_filename: z.string().nullable(),
+  drive_file_id: z.string().nullable(),
+  drive_folder_id: z.string().nullable(),
+  processed_filename: z.string().nullable(),
+  division: z.string().nullable(),
+  routine_name: z.string().nullable(),
+  personal_descriptor: z.string().nullable(),
+  season_year: z.string().nullable(),
+  created_at: z.number(),
+  updated_at: z.number(),
+  partner_first_name: z.string().nullable().optional(),
+  partner_last_name: z.string().nullable().optional(),
+});
+export type ApiSong = z.infer<typeof ApiSongSchema>;
 
-export type ApiPartner = {
-  id: string;
-  first_name: string | null;
-  last_name: string | null;
-  email: string | null;
-};
+export const ApiPartnerSchema = z.object({
+  id: z.string(),
+  user_id: z.string().nullable(),
+  first_name: z.string(),
+  last_name: z.string(),
+  partner_role: z.string(),
+  email: z.string().nullable(),
+  linked_user_id: z.string().nullable(),
+  created_at: z.number(),
+  updated_at: z.number(),
+  display_name: z.string(),
+});
+export type ApiPartner = z.infer<typeof ApiPartnerSchema>;
 
-export type ApiLeadingPair = {
-  id: string;
-  partner_b_id: string | null;
-  display_name: string;
-};
+export const ApiLeadingPairSchema = z.object({
+  id: z.string(),
+  partner_b_id: z.string().nullable(),
+  display_name: z.string(),
+});
+export type ApiLeadingPair = z.infer<typeof ApiLeadingPairSchema>;
 
-export type ApiRun = {
-  id: string;
-  completed_at: number;
-  division_name: string;
-  session_id: string;
-  session_floor_trial_starts_at: number | null;
-  event_id: string | null;
-  event_name: string | null;
-  song_id: string;
-  song_label: string;
-  entity_label: string;
-  completed_by_label: string;
-};
+export const ApiRunSchema = z.object({
+  id: z.string(),
+  completed_at: z.number(),
+  division_name: z.string(),
+  session_id: z.string(),
+  session_floor_trial_starts_at: z.number().nullable(),
+  event_id: z.string().nullable(),
+  event_name: z.string().nullable(),
+  song_id: z.string(),
+  song_label: z.string(),
+  entity_label: z.string(),
+  completed_by_label: z.string(),
+});
+export type ApiRun = z.infer<typeof ApiRunSchema>;
 
-export type ApiAdminUser = {
-  id: string;
-  email: string;
-  first_name: string | null;
-  last_name: string | null;
-  role: "user" | "admin";
-  created_at: number;
-};
+export const ApiAdminUserSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  first_name: z.string().nullable(),
+  last_name: z.string().nullable(),
+  role: z.enum(["user", "admin"]),
+  created_at: z.number(),
+});
+export type ApiAdminUser = z.infer<typeof ApiAdminUserSchema>;
 
-/** Shape returned by GET /v1/admin/test-injections (admin-checkins list). */
-export type ApiTestInjection = {
-  pair_id: string;
-  created_at: number;
-  leader_name: string;
-  follower_name: string | null;
-  session_id: string | null;
-  session_name: string | null;
-  division_name: string | null;
-  queue_status: "active" | "priority" | "non_priority" | "off_queue";
-  position: number | null;
-};
+/** Shape returned by GET /v1/admin/checkins/test */
+export const ApiTestInjectionSchema = z.object({
+  pair_id: z.string(),
+  created_at: z.number(),
+  leader_name: z.string(),
+  follower_name: z.string().nullable(),
+  session_id: z.string().nullable(),
+  session_name: z.string().nullable(),
+  division_name: z.string().nullable(),
+  queue_status: z.enum(["active", "priority", "non_priority", "off_queue"]),
+  position: z.number().nullable(),
+});
+export type ApiTestInjection = z.infer<typeof ApiTestInjectionSchema>;
 
-export type ApiAuthMe = {
-  id: string;
-  email: string | null;
-  display_name: string | null;
-  first_name: string | null;
-  last_name: string | null;
-  role: string;
-  created_at: number;
-  updated_at: number;
-};
+export const ApiAuthMeSchema = z.object({
+  id: z.string(),
+  email: z.string().nullable(),
+  display_name: z.string().nullable(),
+  first_name: z.string().nullable(),
+  last_name: z.string().nullable(),
+  role: z.string(),
+  created_at: z.number(),
+  updated_at: z.number(),
+});
+export type ApiAuthMe = z.infer<typeof ApiAuthMeSchema>;
 
-export type ApiLegacySong = {
-  id: string;
-  partnership: string;
-  division: string | null;
-  routine_name: string | null;
-  descriptor: string | null;
-  version: string | null;
-  submitted_at: string | null;
-};
+export const ApiLegacySongSchema = z.object({
+  id: z.string(),
+  partnership: z.string(),
+  division: z.string().nullable(),
+  routine_name: z.string().nullable(),
+  descriptor: z.string().nullable(),
+  version: z.string().nullable(),
+  submitted_at: z.string().nullable(),
+});
+export type ApiLegacySong = z.infer<typeof ApiLegacySongSchema>;
