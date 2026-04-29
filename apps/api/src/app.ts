@@ -18,6 +18,7 @@ import { queueRoutes } from "./routes/queue.js";
 import { runRoutes } from "./routes/runs.js";
 import { songRoutes } from "./routes/songs.js";
 import { tickSessionStatuses } from "./services/cron.js";
+import { rateLimitMiddleware } from "./middleware/rate-limit.js";
 
 const logger = createLogger("deejaytools-api");
 
@@ -49,6 +50,17 @@ app.use(
   })
 );
 app.use("*", honoLogger());
+
+// Rate limiting: 300 requests per minute per IP across all /v1 routes.
+// The /health and /internal/tick endpoints are exempt — they're not
+// user-facing and would skew the counters unfairly.
+// 300/min is ~5 req/s sustained, well above any normal polling pattern
+// (admin page: ~23 req/min; regular user polling: ~6–12 req/min) but stops
+// runaway clients or scripts from hammering the DB.
+app.use(
+  "/v1/*",
+  rateLimitMiddleware(300, 60_000)
+);
 
 // Intentionally public — liveness probe for load balancers and uptime monitors.
 app.get("/health", (c) => c.json({ status: "ok" }));

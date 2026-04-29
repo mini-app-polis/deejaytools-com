@@ -11,6 +11,7 @@ import {
   type SuccessEnvelope,
 } from "../test/helpers.js";
 import { enqueueSelectResult, resetSelectQueue } from "../test/mocks.js";
+import { responseCache } from "../lib/cache.js";
 
 vi.mock("../db/index.js", async () => {
   const { mockDb: db } = await import("../test/mocks.js");
@@ -272,5 +273,85 @@ describe("PUT /v1/sessions/:id/divisions", () => {
       }),
     });
     expect(res.status).toBe(200);
+  });
+});
+
+// ─── Cache integration ────────────────────────────────────────────────────────
+//
+// GET /v1/sessions/:id caches the expensive shared base data (session row,
+// event info, divisions, queue depths) and always computes user-specific fields
+// (has_active_checkin) fresh.  Write endpoints must clear the cache.
+
+/** Session row with two distinct name values to distinguish cached vs fresh. */
+const sessionA = { ...{ id: "s1", eventId: null as string | null, name: "Session A", date: null as string | null, checkinOpensAt: futureTime, floorTrialStartsAt: futureTime + 1000, floorTrialEndsAt: futureTime + 7_200_000, activePriorityMax: 6, activeNonPriorityMax: 4, status: "scheduled" as const, createdBy: "user_admin123", createdAt: Date.now() } };
+const sessionB = { ...sessionA, name: "Session B" };
+
+describe("GET /v1/sessions/:id — caching", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+    responseCache.invalidatePrefix("");
+  });
+
+  it("serves the base data from cache on the second call", async () => {
+    // First request: cache miss. Enqueue session row, event (none → 0), divisions, queue depths.
+    enqueueSelectResult([sessionA]); // session row
+    enqueueSelectResult([]);          // divisions
+    enqueueSelectResult([]);          // queue depths
+    const first = await app.request(`${BASE}/s1`);
+    expect(first.status).toBe(200);
+    const firstBody = await readJson<SuccessEnvelope<{ name: string }>>(first);
+    expect(firstBody.data.name).toBe("Session A");
+
+    // Enqueue different data — if the second request hits the DB it would
+    // return "Session B", exposing a cache miss.
+    enqueueSelectResult([sessionB]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([]);
+    const second = await app.request(`${BASE}/s1`);
+    expect(second.status).toBe(200);
+    const secondBody = await readJson<SuccessEnvelope<{ name: string }>>(second);
+    // Should still be "Session A" (base data from cache).
+    expect(secondBody.data.name).toBe("Session A");
+  });
+
+  it("returns 404 on a cache miss for a non-existent session", async () => {
+    enqueueSelectResult([]); // session not found
+    const res = await app.request(`${BASE}/nonexistent`);
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("PATCH /v1/sessions/:id/status — cache invalidation", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+    responseCache.invalidatePrefix("");
+  });
+
+  it("clears the session base cache so the next GET returns fresh data", async () => {
+    // Prime the cache.
+    enqueueSelectResult([sessionA]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([]);
+    await app.request(`${BASE}/s1`);
+
+    // Perform a status PATCH (existing → updated row → divisions → depths).
+    enqueueSelectResult([sessionA]);          // existing check
+    enqueueSelectResult([sessionB]);          // re-read after update
+    enqueueSelectResult([]);                  // divisions
+    enqueueSelectResult([]);                  // queue depths
+    const patch = await app.request(`${BASE}/s1/status`, {
+      method: "PATCH",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "checkin_open" }),
+    });
+    expect(patch.status).toBe(200);
+
+    // Cache was invalidated — next GET should be a fresh DB miss.
+    enqueueSelectResult([sessionB]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([]);
+    const after = await app.request(`${BASE}/s1`);
+    const body = await readJson<SuccessEnvelope<{ name: string }>>(after);
+    expect(body.data.name).toBe("Session B");
   });
 });

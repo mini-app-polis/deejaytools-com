@@ -1,4 +1,5 @@
 import { CommonErrors, error, success, successList } from "common-typescript-utils";
+import { responseCache, CACHE_TTL } from "../lib/cache.js";
 import { SessionStatusSchema } from "@deejaytools/schemas";
 import { zValidator } from "../lib/validate.js";
 import { Hono } from "hono";
@@ -211,6 +212,27 @@ async function loadDivisionsForSessions(sessionIds: string[]): Promise<Map<strin
   return map;
 }
 
+/**
+ * Shape stored in the cache for the expensive shared part of GET /:id.
+ * Excludes user-specific fields (has_active_checkin, active_checkin_division)
+ * which are always computed fresh.
+ */
+type SessionBaseCache = {
+  row: SessionRow;
+  eventName: string | null;
+  eventTimezone: string | null;
+  divs: ReturnType<typeof mapDivision>[];
+  depth: { priority: number; non_priority: number; active: number };
+};
+
+/** Invalidate all cached data for a single session (call after any mutation). */
+export function invalidateSessionCache(sessionId: string): void {
+  responseCache.invalidatePrefix(`sessions:base:${sessionId}`);
+  // Also clear queue caches — session mutations (status changes, etc.) can
+  // affect how clients interpret queue state.
+  responseCache.invalidatePrefix(`queue:${sessionId}:`);
+}
+
 sessionRoutes.get("/", zValidator("query", listQuery), async (c) => {
   const { event_id } = c.req.valid("query");
   const userId = await getOptionalSyncedUserId(c);
@@ -414,6 +436,7 @@ sessionRoutes.put(
       }
     });
 
+    invalidateSessionCache(id);
     const [row] = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1);
     const divs = (await loadDivisionsForSession(id)).map(mapDivision);
     const depth = await loadQueueDepthsForSession(id);
@@ -435,6 +458,7 @@ sessionRoutes.patch("/:id/status", requireAdmin, zValidator("json", statusBody),
     return c.json(CommonErrors.notFound("Session"), 404);
   }
   await db.update(sessions).set({ status }).where(eq(sessions.id, id));
+  invalidateSessionCache(id);
   const [row] = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1);
   const divs = (await loadDivisionsForSession(id)).map(mapDivision);
   const depth = await loadQueueDepthsForSession(id);
@@ -515,6 +539,7 @@ sessionRoutes.patch("/:id", requireAdmin, zValidator("json", patchSessionBody), 
     await db.update(sessions).set(updates).where(eq(sessions.id, id));
   }
 
+  invalidateSessionCache(id);
   const [row] = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1);
   const divs = (await loadDivisionsForSession(id)).map(mapDivision);
   const depth = await loadQueueDepthsForSession(id);
@@ -559,32 +584,47 @@ sessionRoutes.delete("/:id", requireAdmin, async (c) => {
 
 sessionRoutes.get("/:id", async (c) => {
   const id = c.req.param("id");
-  const [row] = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1);
-  if (!row) {
-    return c.json(CommonErrors.notFound("Session"), 404);
+
+  // ── Shared base data (cached) ────────────────────────────────────────────
+  // The session row, event info, divisions, and queue depths are identical for
+  // every caller viewing the same session. We cache this heavy work and serve
+  // it stale for up to SESSION_TTL ms so that 200 simultaneous pollers only
+  // hit the DB once per window instead of 200 times.
+  const baseCacheKey = `sessions:base:${id}`;
+  let base = responseCache.get<SessionBaseCache>(baseCacheKey);
+
+  if (!base) {
+    const [row] = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1);
+    if (!row) return c.json(CommonErrors.notFound("Session"), 404);
+
+    let eventName: string | null = null;
+    let eventTimezone: string | null = null;
+    if (row.eventId) {
+      const [ev] = await db
+        .select({ name: events.name, timezone: events.timezone })
+        .from(events)
+        .where(eq(events.id, row.eventId))
+        .limit(1);
+      eventName = ev?.name ?? null;
+      eventTimezone = ev?.timezone ?? null;
+    }
+
+    const divs = (await loadDivisionsForSession(id)).map(mapDivision);
+    const depth = await loadQueueDepthsForSession(id);
+
+    base = { row, eventName, eventTimezone, divs, depth };
+    responseCache.set(baseCacheKey, base, CACHE_TTL.SESSION);
   }
 
-  // Pull the event name and timezone (if any) so the page header can show
-  // which event this session belongs to, and so times can be displayed in the
-  // correct timezone — all without a second client-side fetch.
-  let eventName: string | null = null;
-  let eventTimezone: string | null = null;
-  if (row.eventId) {
-    const [ev] = await db
-      .select({ name: events.name, timezone: events.timezone })
-      .from(events)
-      .where(eq(events.id, row.eventId))
-      .limit(1);
-    eventName = ev?.name ?? null;
-    eventTimezone = ev?.timezone ?? null;
-  }
-
-  const divs = (await loadDivisionsForSession(id)).map(mapDivision);
-  const depth = await loadQueueDepthsForSession(id);
-
+  // ── User-specific enrichment (always fresh) ──────────────────────────────
+  // has_active_checkin reflects real-time queue membership for the current
+  // user — it must never be served stale or another user's session would bleed
+  // through. These two queries are cheap (indexed lookups) so running them
+  // on every request is fine.
   const userId = await getOptionalSyncedUserId(c);
   let has_active_checkin: boolean | undefined;
   let active_checkin_division: string | undefined;
+
   if (userId) {
     const userPairs = await db.select({ id: pairs.id }).from(pairs).where(eq(pairs.userAId, userId));
     const pairIds = userPairs.map((p) => p.id);
@@ -611,11 +651,11 @@ sessionRoutes.get("/:id", async (c) => {
 
   return c.json(
     success({
-      ...mapSessionBase(row),
-      event_name: eventName,
-      event_timezone: eventTimezone,
-      divisions: divs,
-      queue_depth: depth,
+      ...mapSessionBase(base.row),
+      event_name: base.eventName,
+      event_timezone: base.eventTimezone,
+      divisions: base.divs,
+      queue_depth: base.depth,
       ...(has_active_checkin !== undefined && { has_active_checkin }),
       ...(active_checkin_division !== undefined && { active_checkin_division }),
     })

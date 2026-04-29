@@ -18,6 +18,12 @@ import { zValidator } from "../lib/validate.js";
 import { canPromoteNonPriority, canPromotePriority } from "../lib/queue/admission.js";
 import { compactAfterRemoval, nextBottomPosition } from "../lib/queue/compaction.js";
 import { requireAdmin } from "../middleware/auth.js";
+import { responseCache, CACHE_TTL } from "../lib/cache.js";
+
+/** Invalidate all cached queue views for a session after any mutation. */
+function invalidateQueueCache(sessionId: string): void {
+  responseCache.invalidatePrefix(`queue:${sessionId}:`);
+}
 
 const logger = createLogger("deejaytools-api");
 
@@ -138,6 +144,7 @@ queueRoutes.post("/promote", requireAdmin, zValidator("json", promoteBody), asyn
     return c.json(error("conflict", "Promotion conflicted with concurrent activity; please retry"), 409);
   }
 
+  invalidateQueueCache(entry.sessionId);
   return c.json(success({ promoted: true }));
 });
 
@@ -228,6 +235,7 @@ queueRoutes.post("/complete", requireAdmin, zValidator("json", slotOneBody), asy
     return c.json(error("conflict", "Completion conflicted with concurrent activity; please retry"), 409);
   }
 
+  invalidateQueueCache(sessionId);
   return c.json(success({ completed: true }));
 });
 
@@ -301,6 +309,7 @@ queueRoutes.post("/incomplete", requireAdmin, zValidator("json", slotOneBody), a
     return c.json(error("conflict", "Rotation conflicted with concurrent activity; please retry"), 409);
   }
 
+  invalidateQueueCache(sessionId);
   return c.json(success({ rotated: true }));
 });
 
@@ -356,6 +365,7 @@ queueRoutes.post("/withdraw", requireAdmin, zValidator("json", withdrawBody), as
     return c.json(error("conflict", "Withdraw conflicted with concurrent activity; please retry"), 409);
   }
 
+  invalidateQueueCache(entry.sessionId);
   return c.json(success({ withdrawn: true }));
 });
 
@@ -429,8 +439,13 @@ async function listQueue(sessionId: string, queueType: "priority" | "non_priorit
 /** GET /v1/queue/:sessionId/active */
 queueRoutes.get("/:sessionId/active", async (c) => {
   const sessionId = c.req.param("sessionId");
+  const cacheKey = `queue:${sessionId}:active`;
+  const cached = responseCache.get<ReturnType<typeof success>>(cacheKey);
+  if (cached) return c.json(cached);
   const data = await listQueue(sessionId, "active");
-  return c.json(success(data));
+  const result = success(data);
+  responseCache.set(cacheKey, result, CACHE_TTL.QUEUE);
+  return c.json(result);
 });
 
 /**
@@ -439,6 +454,9 @@ queueRoutes.get("/:sessionId/active", async (c) => {
  */
 queueRoutes.get("/:sessionId/waiting", async (c) => {
   const sessionId = c.req.param("sessionId");
+  const cacheKey = `queue:${sessionId}:waiting`;
+  const cached = responseCache.get<ReturnType<typeof success>>(cacheKey);
+  if (cached) return c.json(cached);
   const [priorityRows, nonPriorityRows] = await Promise.all([
     listQueue(sessionId, "priority"),
     listQueue(sessionId, "non_priority"),
@@ -447,19 +465,31 @@ queueRoutes.get("/:sessionId/waiting", async (c) => {
     ...priorityRows.map((r) => ({ ...r, subQueue: "priority" as const })),
     ...nonPriorityRows.map((r) => ({ ...r, subQueue: "non_priority" as const })),
   ];
-  return c.json(success(data));
+  const result = success(data);
+  responseCache.set(cacheKey, result, CACHE_TTL.QUEUE);
+  return c.json(result);
 });
 
 /** GET /v1/queue/:sessionId/priority */
 queueRoutes.get("/:sessionId/priority", requireAdmin, async (c) => {
   const sessionId = c.req.param("sessionId");
+  const cacheKey = `queue:${sessionId}:priority`;
+  const cached = responseCache.get<ReturnType<typeof success>>(cacheKey);
+  if (cached) return c.json(cached);
   const data = await listQueue(sessionId, "priority");
-  return c.json(success(data));
+  const result = success(data);
+  responseCache.set(cacheKey, result, CACHE_TTL.QUEUE);
+  return c.json(result);
 });
 
 /** GET /v1/queue/:sessionId/non-priority */
 queueRoutes.get("/:sessionId/non-priority", requireAdmin, async (c) => {
   const sessionId = c.req.param("sessionId");
+  const cacheKey = `queue:${sessionId}:non-priority`;
+  const cached = responseCache.get<ReturnType<typeof success>>(cacheKey);
+  if (cached) return c.json(cached);
   const data = await listQueue(sessionId, "non_priority");
-  return c.json(success(data));
+  const result = success(data);
+  responseCache.set(cacheKey, result, CACHE_TTL.QUEUE);
+  return c.json(result);
 });
