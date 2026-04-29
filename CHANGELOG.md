@@ -1,3 +1,10 @@
+## [1.36.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.36.1...v1.36.2) (2026-04-29)
+
+
+### Bug Fixes
+
+* check in stuck post session ([ec4fe17](https://github.com/mini-app-polis/deejaytools-com/commit/ec4fe17303faa371c17cafc378f53bcf2b9f92e0))
+
 ## [1.36.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.36.0...v1.36.1) (2026-04-29)
 
 
