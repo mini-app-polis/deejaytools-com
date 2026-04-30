@@ -17,7 +17,6 @@ import { Link } from "react-router-dom";
 
 type SectionKey =
   | "what-is-a-floor-trial"
-  | "the-deejay-team"
   | "submitting-music"
   | "confirming-music-on-file"
   | "checking-in"
@@ -37,15 +36,14 @@ type Section = {
 // they can never drift out of sync.
 const SECTIONS: Section[] = [
   { id: "what-is-a-floor-trial",     eyebrow: "01", title: "What is a floor trial?" },
-  { id: "the-deejay-team",           eyebrow: "02", title: "The deejay team" },
-  { id: "submitting-music",          eyebrow: "03", title: "Submitting your music" },
-  { id: "confirming-music-on-file",  eyebrow: "04", title: "Confirming your music is on file" },
-  { id: "checking-in",               eyebrow: "05", title: "Checking in" },
-  { id: "the-queue",                 eyebrow: "06", title: "Watching the queue" },
-  { id: "preparing-to-run",          eyebrow: "07", title: "When you're next in line" },
-  { id: "during-your-run",           eyebrow: "08", title: "When it's your turn" },
-  { id: "going-again",               eyebrow: "09", title: "After your run" },
-  { id: "etiquette",                 eyebrow: "10", title: "Etiquette and other notes" },
+  { id: "submitting-music",          eyebrow: "02", title: "Submitting your music" },
+  { id: "confirming-music-on-file",  eyebrow: "03", title: "Confirming your music is on file" },
+  { id: "checking-in",               eyebrow: "04", title: "Checking in" },
+  { id: "the-queue",                 eyebrow: "05", title: "Watching the queue" },
+  { id: "preparing-to-run",         eyebrow: "06", title: "When you're next in line" },
+  { id: "during-your-run",           eyebrow: "07", title: "When it's your turn" },
+  { id: "going-again",               eyebrow: "08", title: "After your run" },
+  { id: "etiquette",                 eyebrow: "09", title: "Etiquette and other notes" },
 ];
 
 export default function HowItWorksPage() {
@@ -58,10 +56,10 @@ export default function HowItWorksPage() {
         >
           Guide
         </p>
-        <h1 className="text-3xl sm:text-4xl font-light tracking-tight mb-2">
+        <h1 className="text-3xl sm:text-4xl font-light tracking-tight mb-2 text-foreground">
           How floor trials work
         </h1>
-        <p className="text-sm text-muted-foreground font-light max-w-xl">
+        <p className="text-sm text-foreground/70 max-w-xl">
           Everything you need to know to submit music, check in, watch the
           queue, and run your routine — adapted from the official competitor
           information document.
@@ -81,7 +79,7 @@ export default function HowItWorksPage() {
             <li key={s.id}>
               <a
                 href={`#${s.id}`}
-                className="text-sm text-muted-foreground hover:text-primary transition-colors"
+                className="text-sm text-foreground/60 hover:text-primary transition-colors"
               >
                 <span
                   className="inline-block w-7 text-primary/50 tabular-nums"
@@ -116,43 +114,6 @@ export default function HowItWorksPage() {
 
         <Section section={SECTIONS[1]!}>
           <p>
-            Kaiano Levine and Libby Wooton are the deejay team for routine
-            competitions. The deejay booth is the central point of contact
-            for anything that needs to be sorted out — technical problems,
-            unusual cues, requests to skip your turn, anything else.
-          </p>
-          <p>
-            A few practical notes:
-          </p>
-          <ul className="list-disc pl-5 space-y-2">
-            <li>
-              You'll often see the deejays in the room before the listed
-              start time. Please wait until the floor trial has officially
-              started (per the event schedule) before approaching with
-              questions — that pre-start time is reserved for setup and
-              minimizing technical issues. Updates and the official start
-              are announced over the microphone.
-            </li>
-            <li>
-              English is the working language at the booth. Libby
-              understands French but typically replies in English. You're
-              welcome to bring a friend, peer, or mentor as a translator.
-            </li>
-            <li>
-              For questions ahead of the event, email{" "}
-              <a
-                href="mailto:kaiano.levine@gmail.com"
-                className="text-primary hover:underline"
-              >
-                kaiano.levine@gmail.com
-              </a>
-              .
-            </li>
-          </ul>
-        </Section>
-
-        <Section section={SECTIONS[2]!}>
-          <p>
             Before the event, upload the audio file for your routine. The
             file should contain <strong className="text-foreground">only</strong>{" "}
             your routine — no introduction music, no bow music, no buffer
@@ -171,7 +132,7 @@ export default function HowItWorksPage() {
           <ActionLink to="/songs/add">Submit a song →</ActionLink>
         </Section>
 
-        <Section section={SECTIONS[3]!}>
+        <Section section={SECTIONS[2]!}>
           <p>
             After you've submitted, confirm the deejay actually has your
             file by checking{" "}
@@ -190,7 +151,7 @@ export default function HowItWorksPage() {
           </p>
         </Section>
 
-        <Section section={SECTIONS[4]!}>
+        <Section section={SECTIONS[3]!}>
           <p>
             Check-in is the moment that puts you in the queue. Each session
             page on{" "}
@@ -231,7 +192,7 @@ export default function HowItWorksPage() {
           </ul>
         </Section>
 
-        <Section section={SECTIONS[5]!}>
+        <Section section={SECTIONS[4]!}>
           <p>
             Once you've checked in, the session page splits into three
             queues. All three are visible at the same time and they all
@@ -286,7 +247,7 @@ export default function HowItWorksPage() {
           </p>
         </Section>
 
-        <Section section={SECTIONS[6]!}>
+        <Section section={SECTIONS[5]!}>
           <p>
             When you're a slot or two from the top of the active queue,
             walk over near the deejay booth and start planning how you'll
@@ -315,7 +276,7 @@ export default function HowItWorksPage() {
           </p>
         </Section>
 
-        <Section section={SECTIONS[7]!}>
+        <Section section={SECTIONS[6]!}>
           <p>
             Your time slot is roughly{" "}
             <strong className="text-foreground">5 minutes for couples</strong>{" "}
@@ -353,7 +314,7 @@ export default function HowItWorksPage() {
           </ul>
         </Section>
 
-        <Section section={SECTIONS[8]!}>
+        <Section section={SECTIONS[7]!}>
           <p>
             Want another run? Check in again. There's no cooldown beyond
             "the queue has to actually progress." Your second check-in
@@ -370,7 +331,7 @@ export default function HowItWorksPage() {
           <ActionLink to="/floor-trials">Back to Active Floor Trials →</ActionLink>
         </Section>
 
-        <Section section={SECTIONS[9]!}>
+        <Section section={SECTIONS[8]!}>
           <ul className="list-disc pl-5 space-y-2">
             <li>
               <strong className="text-foreground">Sharing the floor:</strong>{" "}
@@ -428,11 +389,11 @@ function Section({
         >
           {section.eyebrow}
         </span>
-        <h2 className="text-xl sm:text-2xl font-light tracking-tight">
+        <h2 className="text-xl sm:text-2xl font-light tracking-tight text-foreground">
           {section.title}
         </h2>
       </div>
-      <div className="space-y-3 text-sm text-muted-foreground font-light leading-relaxed">
+      <div className="space-y-3 text-sm text-foreground/75 leading-relaxed">
         {children}
       </div>
     </section>
