@@ -1,3 +1,10 @@
+## [1.37.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.37.0...v1.37.1) (2026-04-30)
+
+
+### Bug Fixes
+
+* menu item locations ([2eb5046](https://github.com/mini-app-polis/deejaytools-com/commit/2eb504653db85a9d7035a23345f2d64e722f2f19))
+
 # [1.37.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.36.3...v1.37.0) (2026-04-30)
 
 
