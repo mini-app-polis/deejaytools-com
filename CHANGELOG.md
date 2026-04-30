@@ -1,3 +1,10 @@
+## [1.37.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.37.1...v1.37.2) (2026-04-30)
+
+
+### Bug Fixes
+
+* how it works ([434349b](https://github.com/mini-app-polis/deejaytools-com/commit/434349b772b6145f48b582868553d83505f98253))
+
 ## [1.37.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.37.0...v1.37.1) (2026-04-30)
 
 
