@@ -8,11 +8,8 @@ import pkg from "../../../../package.json";
 
 type NavItem = { to: string; label: string };
 
-// Public: always shown.
-const PUBLIC_ITEMS: NavItem[] = [
-  { to: "/floor-trials", label: "Floor Trials" },
-  { to: "/feedback", label: "Feedback" },
-];
+// Public: always shown (left side).
+const PUBLIC_ITEMS: NavItem[] = [{ to: "/floor-trials", label: "Floor Trials" }];
 
 // Signed-in only.
 const SIGNED_IN_ITEMS: NavItem[] = [
@@ -92,16 +89,23 @@ export default function NavBar() {
                 {item.label}
               </NavLink>
             ))}
-            {adminItem && (
-              <NavLink to={adminItem.to} className={desktopLinkClass}>
-                {adminItem.label}
-              </NavLink>
-            )}
           </SignedIn>
         </div>
 
-        {/* Right cluster: user menu / sign-in + hamburger */}
+        {/* Right cluster: Contact, Admin (if admin), user menu / sign-in, hamburger */}
         <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-1">
+            <NavLink to="/feedback" className={desktopLinkClass}>
+              Contact
+            </NavLink>
+            <SignedIn>
+              {adminItem && (
+                <NavLink to={adminItem.to} className={desktopLinkClass}>
+                  {adminItem.label}
+                </NavLink>
+              )}
+            </SignedIn>
+          </div>
           <SignedIn>
             <UserButton />
           </SignedIn>
@@ -165,6 +169,15 @@ export default function NavBar() {
                   {item.label}
                 </NavLink>
               ))}
+            </SignedIn>
+            <NavLink
+              to="/feedback"
+              onClick={() => setMenuOpen(false)}
+              className={mobileLinkClass}
+            >
+              Contact
+            </NavLink>
+            <SignedIn>
               {adminItem && (
                 <NavLink
                   to={adminItem.to}
