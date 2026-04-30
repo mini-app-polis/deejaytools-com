@@ -9,7 +9,10 @@ import pkg from "../../../../package.json";
 type NavItem = { to: string; label: string };
 
 // Public: always shown.
-const PUBLIC_ITEMS: NavItem[] = [{ to: "/floor-trials", label: "Floor Trials" }];
+const PUBLIC_ITEMS: NavItem[] = [
+  { to: "/floor-trials", label: "Floor Trials" },
+  { to: "/feedback", label: "Feedback" },
+];
 
 // Signed-in only.
 const SIGNED_IN_ITEMS: NavItem[] = [

@@ -19,6 +19,7 @@ import { sessionRoutes } from "./routes/sessions.js";
 import { queueRoutes } from "./routes/queue.js";
 import { runRoutes } from "./routes/runs.js";
 import { songRoutes } from "./routes/songs.js";
+import { feedbackRoutes } from "./routes/feedback.js";
 import { tickSessionStatuses } from "./services/cron.js";
 import { rateLimitMiddleware } from "./middleware/rate-limit.js";
 import { timeoutMiddleware } from "./middleware/timeout.js";
@@ -117,6 +118,8 @@ app.route("/v1/partners", partnerRoutes);
 app.route("/v1/songs", songRoutes);
 // Intentionally public — read-only historical catalog, no user data.
 app.route("/v1/legacy-songs", legacySongRoutes);
+// Intentionally public — unauthenticated feedback submissions.
+app.route("/v1/feedback", feedbackRoutes);
 
 app.notFound((c) => c.json(CommonErrors.notFound(), 404));
 

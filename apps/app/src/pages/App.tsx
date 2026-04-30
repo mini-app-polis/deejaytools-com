@@ -14,6 +14,7 @@ import SessionDetailPage from "./SessionDetailPage";
 import SessionsPage from "./SessionsPage";
 import AddSongPage from "./AddSongPage";
 import SongsPage from "./SongsPage";
+import FeedbackPage from "./FeedbackPage";
 
 export default function App() {
   return (
@@ -37,6 +38,7 @@ export default function App() {
               AddSongPage and a separate top-level entry just confused
               first-time visitors. */}
           <Route path="how-it-works" element={<HowItWorksPage />} />
+          <Route path="feedback" element={<FeedbackPage />} />
 
           {/* Auth-required routes */}
           <Route
