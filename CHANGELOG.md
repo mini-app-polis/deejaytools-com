@@ -1,3 +1,10 @@
+# [1.37.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.36.3...v1.37.0) (2026-04-30)
+
+
+### Features
+
+* feedback form through brevo email ([3be3303](https://github.com/mini-app-polis/deejaytools-com/commit/3be3303c9eec65c7e5187aed5b34fc925463c479))
+
 ## [1.36.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.36.2...v1.36.3) (2026-04-29)
 
 
