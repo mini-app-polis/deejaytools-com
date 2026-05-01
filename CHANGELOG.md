@@ -1,3 +1,17 @@
+# [1.40.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.39.0...v1.40.0) (2026-05-01)
+
+
+### Bug Fixes
+
+* UI adjustment for admin ([346fe75](https://github.com/mini-app-polis/deejaytools-com/commit/346fe75228db1aad970bb20284cf4a59f0880049))
+* UI adjustment for admin ([2555b49](https://github.com/mini-app-polis/deejaytools-com/commit/2555b4938170437533d4bbca7890460507000414))
+* UI adjustment for sessions ([b415204](https://github.com/mini-app-polis/deejaytools-com/commit/b415204d2ca0f19f836bf86cfef4f8b9fd85f714))
+
+
+### Features
+
+* adding reorder functionality to api and app ([f3e2b43](https://github.com/mini-app-polis/deejaytools-com/commit/f3e2b43648de4cc8d901cac36d86cc3eaaf7a759))
+
 # [1.39.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.38.1...v1.39.0) (2026-05-01)
 
 
