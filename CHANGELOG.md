@@ -1,3 +1,10 @@
+## [1.41.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.41.1...v1.41.2) (2026-05-01)
+
+
+### Bug Fixes
+
+* remove notes ([3ca63f8](https://github.com/mini-app-polis/deejaytools-com/commit/3ca63f8c622694291744a7c9910c0a8cd3ea90e9))
+
 ## [1.41.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.41.0...v1.41.1) (2026-05-01)
 
 
