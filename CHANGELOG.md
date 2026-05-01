@@ -1,3 +1,18 @@
+# [1.42.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.41.2...v1.42.0) (2026-05-01)
+
+
+### Bug Fixes
+
+* admin inject and my content display ([c2be1ad](https://github.com/mini-app-polis/deejaytools-com/commit/c2be1ad5a964a31577d9216c9187fb2a6795ebb4))
+* admin inject and my content display ([954a245](https://github.com/mini-app-polis/deejaytools-com/commit/954a24570a0eba7cbfc7827f1fd3590b80c41390))
+* admin inject and my content display ([f303331](https://github.com/mini-app-polis/deejaytools-com/commit/f30333190639ff369c3834c53baeb0e46f85de80))
+
+
+### Features
+
+* shifting to my content ([18c2fd2](https://github.com/mini-app-polis/deejaytools-com/commit/18c2fd2223b349a5d03561b24a488806aaae3118))
+* shifting to my content ([c6e89ce](https://github.com/mini-app-polis/deejaytools-com/commit/c6e89ceb7987b7fe4f62984bddc399c0d1436a53))
+
 ## [1.41.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.41.1...v1.41.2) (2026-05-01)
 
 
