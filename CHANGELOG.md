@@ -1,3 +1,10 @@
+## [1.38.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.38.0...v1.38.1) (2026-05-01)
+
+
+### Bug Fixes
+
+* descriptions ([cc9b8af](https://github.com/mini-app-polis/deejaytools-com/commit/cc9b8afb65b0d716782cd4bce0725048b966d3f0))
+
 # [1.38.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.37.2...v1.38.0) (2026-05-01)
 
 
