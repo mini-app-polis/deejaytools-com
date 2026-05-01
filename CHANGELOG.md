@@ -1,3 +1,10 @@
+# [1.38.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.37.2...v1.38.0) (2026-05-01)
+
+
+### Features
+
+* updating google drive song organization ([116cd59](https://github.com/mini-app-polis/deejaytools-com/commit/116cd5942e33d4a606d0d134b5220f9d15c21a87))
+
 ## [1.37.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.37.1...v1.37.2) (2026-04-30)
 
 
