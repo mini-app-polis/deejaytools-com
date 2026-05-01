@@ -270,15 +270,10 @@ export default function MyContentPage() {
 
       {/* ── Check-ins section ── */}
       <div className="rounded-lg border bg-card">
-        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
+        <div className="px-4 py-3 border-b">
           <h2 className="font-semibold">Check-ins</h2>
-          <Button variant="outline" size="sm" onClick={loadCheckins} disabled={checkinsLoading}>
-            {checkinsLoading ? "Refreshing…" : "Refresh"}
-          </Button>
         </div>
         <div className="p-4 space-y-3">
-          <p className="text-sm text-muted-foreground">Your active queue entries across all sessions.</p>
-
           {checkinsLoading && !checkins ? (
             <Skeleton className="h-40 w-full" />
           ) : checkins?.length === 0 ? (
