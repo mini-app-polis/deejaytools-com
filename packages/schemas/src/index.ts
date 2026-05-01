@@ -134,6 +134,28 @@ export const ApiQueueEntrySchema = z.object({
 });
 export type ApiQueueEntry = z.infer<typeof ApiQueueEntrySchema>;
 
+export const ApiMyCheckinSchema = z.object({
+  id: z.string(),
+  sessionId: z.string(),
+  sessionName: z.string(),
+  sessionFloorTrialStartsAt: z.number(),
+  sessionStatus: z.string(),
+  eventTimezone: z.string().nullable(),
+  divisionName: z.string(),
+  entityLabel: z.string(),
+  songDisplayName: z.string().nullable(),
+  songProcessedFilename: z.string().nullable(),
+  initialQueue: z.enum(["priority", "non_priority"]),
+  notes: z.string().nullable(),
+  checkedInAt: z.number(),
+  queueEntryId: z.string().nullable(),
+  queueType: z.string().nullable(),
+  queuePosition: z.number().nullable(),
+  hasRun: z.boolean(),
+  completedAt: z.number().nullable(),
+});
+export type ApiMyCheckin = z.infer<typeof ApiMyCheckinSchema>;
+
 export const ApiSongSchema = z.object({
   id: z.string(),
   user_id: z.string(),

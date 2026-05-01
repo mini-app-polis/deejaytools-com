@@ -9,6 +9,7 @@ import FloorTrialsPage from "./FloorTrialsPage";
 import EventDetailPage from "./EventDetailPage";
 import EventsPage from "./EventsPage";
 import HowItWorksPage from "./HowItWorksPage";
+import MyContentPage from "./MyContentPage";
 import PartnersPage from "./PartnersPage";
 import SessionDetailPage from "./SessionDetailPage";
 import SessionsPage from "./SessionsPage";
@@ -41,6 +42,15 @@ export default function App() {
           <Route path="feedback" element={<FeedbackPage />} />
 
           {/* Auth-required routes */}
+          <Route
+            path="my-content"
+            element={
+              <RequireAuth>
+                <MyContentPage />
+              </RequireAuth>
+            }
+          />
+          {/* Legacy routes — kept so existing links don't break */}
           <Route
             path="partners"
             element={
