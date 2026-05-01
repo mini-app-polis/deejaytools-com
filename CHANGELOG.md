@@ -1,3 +1,10 @@
+# [1.39.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.38.1...v1.39.0) (2026-05-01)
+
+
+### Features
+
+* updating fetch logic and promote process UI ([39f79e8](https://github.com/mini-app-polis/deejaytools-com/commit/39f79e8baddf2612f0c376de95562117666638b6))
+
 ## [1.38.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.38.0...v1.38.1) (2026-05-01)
 
 
