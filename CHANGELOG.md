@@ -1,3 +1,10 @@
+# [1.41.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.40.2...v1.41.0) (2026-05-01)
+
+
+### Features
+
+* showing song on admin live queue ([f63f441](https://github.com/mini-app-polis/deejaytools-com/commit/f63f4411d37cbb12e482a11c184ee812c09ea263))
+
 ## [1.40.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.40.1...v1.40.2) (2026-05-01)
 
 
