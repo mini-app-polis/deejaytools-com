@@ -153,13 +153,6 @@ export default function ApiSessionPage() {
     }
   }, [selectedSong, sessionDivisions]);
 
-  const songMap = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const s of songs) {
-      m.set(s.id, s.display_name ?? s.processed_filename ?? s.id);
-    }
-    return m;
-  }, [songs]);
 
   const pairMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -176,8 +169,6 @@ export default function ApiSessionPage() {
     return row.entityLabel;
   };
 
-  const renderSongLabel = (songId: string | null | undefined): string =>
-    songId ? (songMap.get(songId) ?? songId) : "—";
 
   // Sorted active queue (slot 1 first). The first item is "on deck right now"
   // and gets a visual highlight inside the Active card.
@@ -507,8 +498,13 @@ export default function ApiSessionPage() {
                   >
                     <p className="font-medium">{renderEntityLabel(r)}</p>
                     <p className="text-muted-foreground truncate">
-                      {r.divisionName} · {renderSongLabel(r.songId)}
+                      {r.divisionName}
                     </p>
+                    {r.notes && (
+                      <p className="text-xs text-muted-foreground italic">
+                        Note: {r.notes}
+                      </p>
+                    )}
                   </div>
                 </div>
               );
@@ -535,8 +531,13 @@ export default function ApiSessionPage() {
                   <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
                     <p className="font-medium">{renderEntityLabel(r)}</p>
                     <p className="text-muted-foreground truncate">
-                      {r.divisionName} · {renderSongLabel(r.songId)}
+                      {r.divisionName}
                     </p>
+                    {r.notes && (
+                      <p className="text-xs text-muted-foreground italic">
+                        Note: {r.notes}
+                      </p>
+                    )}
                   </div>
                 </div>
               ))
@@ -560,8 +561,13 @@ export default function ApiSessionPage() {
                   <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
                     <p className="font-medium">{renderEntityLabel(r)}</p>
                     <p className="text-muted-foreground truncate">
-                      {r.divisionName} · {renderSongLabel(r.songId)}
+                      {r.divisionName}
                     </p>
+                    {r.notes && (
+                      <p className="text-xs text-muted-foreground italic">
+                        Note: {r.notes}
+                      </p>
+                    )}
                   </div>
                 </div>
               ))
