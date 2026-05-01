@@ -408,19 +408,19 @@ describe("POST /v1/queue/complete", () => {
   });
 
   it("returns 400 when no slot 1 exists", async () => {
-    // loadSlotOne select → empty.
+    // loadActiveEntry select → empty (entry not found or not active).
     enqueueSelectResult([]);
     const res = await app.request(`${BASE}/complete`, {
       method: "POST",
       headers: { ...adminHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId: "s1" }),
+      body: JSON.stringify({ queueEntryId: "qe1" }),
     });
     expect(res.status).toBe(400);
   });
 
   it("returns 200 and { completed: true } on success", async () => {
-    // loadSlotOne → slot 1 entry
-    enqueueSelectResult([{ id: "qe1", checkinId: "c1", entityPairId: null, entitySoloUserId: "u1", position: 1 }]);
+    // loadActiveEntry → active entry (sessionId now included)
+    enqueueSelectResult([{ id: "qe1", checkinId: "c1", sessionId: "s1", entityPairId: null, entitySoloUserId: "u1", position: 1 }]);
     // SELECT checkin
     enqueueSelectResult([{ sessionId: "s1", divisionName: "Classic", songId: "song1" }]);
     // SELECT session (for eventId)
@@ -429,7 +429,7 @@ describe("POST /v1/queue/complete", () => {
     const res = await app.request(`${BASE}/complete`, {
       method: "POST",
       headers: { ...adminHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId: "s1" }),
+      body: JSON.stringify({ queueEntryId: "qe1" }),
     });
     expect(res.status).toBe(200);
     const body = await readJson<SuccessEnvelope<{ completed: boolean }>>(res);
@@ -461,26 +461,26 @@ describe("POST /v1/queue/incomplete", () => {
   });
 
   it("returns 400 when no slot 1 exists", async () => {
-    // loadSlotOne select → empty.
+    // loadActiveEntry select → empty (entry not found or not active).
     enqueueSelectResult([]);
     const res = await app.request(`${BASE}/incomplete`, {
       method: "POST",
       headers: { ...adminHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId: "s1" }),
+      body: JSON.stringify({ queueEntryId: "qe1" }),
     });
     expect(res.status).toBe(400);
   });
 
   it("returns 200 and { rotated: true } on success", async () => {
-    // loadSlotOne → slot 1 entry
-    enqueueSelectResult([{ id: "qe1", checkinId: "c1", entityPairId: null, entitySoloUserId: "u1", position: 1 }]);
+    // loadActiveEntry → active entry (sessionId now included)
+    enqueueSelectResult([{ id: "qe1", checkinId: "c1", sessionId: "s1", entityPairId: null, entitySoloUserId: "u1", position: 1 }]);
     // tx: SELECT active entries for rotation (position 1 is the only entry)
     enqueueSelectResult([{ id: "qe1", position: 1 }]);
     // Transaction: updates only (sentinel swap, resequence, insert queueEvents) — no further drains
     const res = await app.request(`${BASE}/incomplete`, {
       method: "POST",
       headers: { ...adminHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId: "s1" }),
+      body: JSON.stringify({ queueEntryId: "qe1" }),
     });
     expect(res.status).toBe(200);
     const body = await readJson<SuccessEnvelope<{ rotated: boolean }>>(res);
@@ -599,19 +599,16 @@ describe("POST /v1/queue/complete — cache invalidation", () => {
     enqueueSelectResult([activeRow(1)]);
     await app.request(`${BASE}/s1/active`);
 
-    // complete: loadSlotOne returns nothing → 400 (no entry to complete).
-    // We just need to verify that a *successful* complete would have cleared
-    // the cache. We test the path by confirming the 400 does NOT clear cache
-    // (no side-effect on failure) and a real success path would.
-    //
+    // complete: loadActiveEntry returns nothing → 400 (entry not found).
+    // We verify the 400 does NOT clear the cache (no side-effect on failure).
     // For a full success path we'd need many DB mocks; the withdraw test above
     // already covers the core invalidation contract.  Here we verify the
     // endpoint at least passes through the rate limiter and auth correctly.
-    enqueueSelectResult([]); // no slot 1
+    enqueueSelectResult([]); // entry not found
     const res = await app.request(`${BASE}/complete`, {
       method: "POST",
       headers: { ...adminHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId: "s1" }),
+      body: JSON.stringify({ queueEntryId: "missing-qe" }),
     });
     expect(res.status).toBe(400);
 
@@ -784,8 +781,8 @@ describe("full-flow: promote then complete", () => {
     expect(promoteBody.data.promoted).toBe(true);
 
     // ── Step 2: complete (the entry is now in active at position 1) ──────────
-    // loadSlotOne: entry now active at position 1
-    enqueueSelectResult([{ id: "qe-active", checkinId: priorityEntry.checkinId, entityPairId: priorityEntry.entityPairId, entitySoloUserId: null, position: 1 }]);
+    // loadActiveEntry: entry now active at position 1 (sessionId required)
+    enqueueSelectResult([{ id: "qe-active", checkinId: priorityEntry.checkinId, sessionId: priorityEntry.sessionId, entityPairId: priorityEntry.entityPairId, entitySoloUserId: null, position: 1 }]);
     // SELECT checkin
     enqueueSelectResult([{ sessionId: priorityEntry.sessionId, divisionName: "Classic", songId: "song1" }]);
     // SELECT session (eventId)
@@ -794,7 +791,7 @@ describe("full-flow: promote then complete", () => {
     const completeRes = await app.request(`${BASE}/complete`, {
       method: "POST",
       headers: { ...adminHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId: priorityEntry.sessionId }),
+      body: JSON.stringify({ queueEntryId: "qe-active" }),
     });
     expect(completeRes.status).toBe(200);
     const completeBody = await readJson<SuccessEnvelope<{ completed: boolean }>>(completeRes);
