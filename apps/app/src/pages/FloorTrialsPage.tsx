@@ -59,11 +59,9 @@ export default function FloorTrialsPage() {
     };
 
     fetchData();
-    const intervalId = setInterval(fetchData, 10_000);
 
     return () => {
       cancelled = true;
-      clearInterval(intervalId);
     };
   }, [api]);
 
@@ -142,7 +140,7 @@ export default function FloorTrialsPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="text-sm text-muted-foreground space-y-1">
-                    <p>Open: {formatTimeOnly(s.checkin_opens_at, eventTz)}</p>
+                    <p>Check-in opens: {formatTimeOnly(s.checkin_opens_at, eventTz)}</p>
                     <p>
                       Floor trial: {formatTimeOnly(s.floor_trial_starts_at, eventTz)} –{" "}
                       {formatTimeOnly(s.floor_trial_ends_at, eventTz)}

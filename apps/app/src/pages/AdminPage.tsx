@@ -358,14 +358,11 @@ export default function AdminPage() {
     }
   }, [sessions]); // intentionally omit lqSessionId — only auto-select on initial session load
 
-  // Auto-refresh live queue every 8 s when a session is selected
+  // Load queue when a session is selected; subsequent refreshes happen after
+  // each action or via the manual Refresh button.
   useEffect(() => {
     if (!lqSessionId) return;
     void loadLiveQueues(lqSessionId);
-    const t = setInterval(() => {
-      if (lqSessionRef.current) void loadLiveQueues(lqSessionRef.current).catch(() => {});
-    }, 8_000);
-    return () => clearInterval(t);
   }, [lqSessionId, loadLiveQueues]);
 
   // ── Derived maps ────────────────────────────────────────────────────────────
@@ -574,6 +571,18 @@ export default function AdminPage() {
 
   const handlePromote = (queueEntryId: string) =>
     queueAction("/v1/queue/promote", { queueEntryId });
+
+  // Promotes the next entry from whichever waiting queue should go next:
+  // priority first (if it has entries), then non-priority.
+  const handlePromoteNext = () => {
+    const prioritySorted = [...lqPriority].sort((a, b) => a.position - b.position);
+    const nonPrioritySorted = [...lqNonPriority].sort((a, b) => a.position - b.position);
+    const next = prioritySorted[0] ?? nonPrioritySorted[0];
+    if (!next) return;
+    return handlePromote(next.queueEntryId);
+  };
+
+  const canPromoteNext = lqPriority.length > 0 || lqNonPriority.length > 0;
 
   // ── Test injection ──────────────────────────────────────────────────────────
 
@@ -924,7 +933,16 @@ export default function AdminPage() {
               <section className="space-y-2">
                 <div className="flex items-center justify-between">
                   <h2 className="text-base font-semibold">Active queue</h2>
-                  <span className="text-xs text-muted-foreground">{lqActive.length} slot{lqActive.length !== 1 ? "s" : ""}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground">{lqActive.length} slot{lqActive.length !== 1 ? "s" : ""}</span>
+                    <Button
+                      size="sm"
+                      onClick={handlePromoteNext}
+                      disabled={!canPromoteNext || lqLoading}
+                    >
+                      Promote next
+                    </Button>
+                  </div>
                 </div>
                 {lqActive.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No one in the active queue.</p>
@@ -1023,9 +1041,6 @@ export default function AdminPage() {
                             )}
                           </div>
                           <div className="flex gap-2">
-                            <Button size="sm" variant="outline" onClick={() => handlePromote(row.queueEntryId)}>
-                              Promote to active
-                            </Button>
                             <Button
                               size="sm"
                               variant="ghost"
@@ -1074,9 +1089,6 @@ export default function AdminPage() {
                             )}
                           </div>
                           <div className="flex gap-2">
-                            <Button size="sm" variant="outline" onClick={() => handlePromote(row.queueEntryId)}>
-                              Promote to active
-                            </Button>
                             <Button
                               size="sm"
                               variant="ghost"

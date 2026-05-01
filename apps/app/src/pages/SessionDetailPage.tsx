@@ -107,7 +107,7 @@ export default function ApiSessionPage() {
     const t = setInterval(() => {
       setNow(Date.now());
       void Promise.all([loadQueue(), loadSession()]).catch(() => {});
-    }, 10_000);
+    }, 60_000);
     return () => clearInterval(t);
   }, [id, loadQueue, loadSession]);
 

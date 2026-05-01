@@ -234,19 +234,7 @@ describe("FloorTrialsPage", () => {
     });
   });
 
-  it("polls for session and event updates every 10 seconds", async () => {
-    // Spy on window.setInterval directly so we can capture and invoke the
-    // polling callback without relying on fake-timer global patching (which
-    // doesn't reliably replace window.setInterval in JSDOM when
-    // vi.useFakeTimers is called more than once).
-    let capturedCallback: (() => void) | null = null;
-    const setIntervalSpy = vi
-      .spyOn(window, "setInterval")
-      .mockImplementationOnce((cb: TimerHandler) => {
-        capturedCallback = cb as () => void;
-        return 999 as unknown as ReturnType<typeof setInterval>;
-      });
-
+  it("fetches sessions and events once on mount", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/sessions") {
         return Promise.resolve([
@@ -263,53 +251,10 @@ describe("FloorTrialsPage", () => {
       expect(screen.getByRole("link", { name: /open session/i })).toBeInTheDocument();
     });
 
-    expect(capturedCallback).not.toBeNull();
-    apiGet.mockClear();
-
-    // Simulate the 10 s tick firing
-    await act(async () => {
-      capturedCallback!();
-    });
-
     expect(apiGet).toHaveBeenCalledWith("/v1/sessions");
     expect(apiGet).toHaveBeenCalledWith("/v1/events");
-
-    setIntervalSpy.mockRestore();
-  });
-
-  it("stops polling when component unmounts", async () => {
-    let capturedIntervalId = -1;
-    const setIntervalSpy = vi
-      .spyOn(window, "setInterval")
-      .mockImplementationOnce((cb: TimerHandler) => {
-        capturedIntervalId = 999;
-        return capturedIntervalId as unknown as ReturnType<typeof setInterval>;
-      });
-    const clearIntervalSpy = vi.spyOn(window, "clearInterval");
-
-    apiGet.mockImplementation((path: string) => {
-      if (path === "/v1/sessions") {
-        return Promise.resolve([
-          makeSession({ id: "s1", status: "scheduled", startsAt: `${TODAY}T07:00:00` }),
-        ]);
-      }
-      if (path === "/v1/events") return Promise.resolve([]);
-      return Promise.resolve([]);
-    });
-
-    const { unmount } = renderPage();
-
-    await waitFor(() => {
-      expect(screen.getByRole("link", { name: /open session/i })).toBeInTheDocument();
-    });
-
-    unmount();
-
-    // clearInterval must have been called with the registered interval ID
-    expect(clearIntervalSpy).toHaveBeenCalledWith(capturedIntervalId);
-
-    setIntervalSpy.mockRestore();
-    clearIntervalSpy.mockRestore();
+    // No polling — exactly two calls total
+    expect(apiGet).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -426,7 +371,7 @@ describe("FloorTrialsPage — queue state", () => {
     });
 
     expect(screen.getByText("checkin_open")).toBeInTheDocument();
-    expect(screen.getByText(/Open:/i)).toBeInTheDocument();
+    expect(screen.getByText(/Check-in opens:/i)).toBeInTheDocument();
     expect(screen.getByText(/Floor trial:/i)).toBeInTheDocument();
   });
 
