@@ -500,11 +500,6 @@ export default function ApiSessionPage() {
                     <p className="text-muted-foreground truncate">
                       {r.divisionName}
                     </p>
-                    {r.notes && (
-                      <p className="text-xs text-muted-foreground italic">
-                        Note: {r.notes}
-                      </p>
-                    )}
                   </div>
                 </div>
               );
@@ -533,11 +528,6 @@ export default function ApiSessionPage() {
                     <p className="text-muted-foreground truncate">
                       {r.divisionName}
                     </p>
-                    {r.notes && (
-                      <p className="text-xs text-muted-foreground italic">
-                        Note: {r.notes}
-                      </p>
-                    )}
                   </div>
                 </div>
               ))
@@ -563,11 +553,6 @@ export default function ApiSessionPage() {
                     <p className="text-muted-foreground truncate">
                       {r.divisionName}
                     </p>
-                    {r.notes && (
-                      <p className="text-xs text-muted-foreground italic">
-                        Note: {r.notes}
-                      </p>
-                    )}
                   </div>
                 </div>
               ))
