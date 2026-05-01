@@ -1036,6 +1036,7 @@ export default function AdminPage() {
                         .slice()
                         .sort((a, b) => a.position - b.position)
                         .map((row) => {
+                          const isLast = row.position === lqPriority.length;
                           const filename = row.songId ? songFilenameMap.get(row.songId) : undefined;
                           return (
                             <div key={row.queueEntryId} className="flex items-start gap-3">
@@ -1056,6 +1057,11 @@ export default function AdminPage() {
                                   <p className="text-xs text-muted-foreground italic">Note: {row.notes}</p>
                                 )}
                                 <div className="flex gap-2 pt-2 border-t border-border/40 mt-1.5">
+                                  {!isLast && (
+                                    <Button size="sm" variant="outline" onClick={() => handleMoveDown(row.queueEntryId)}>
+                                      Move down
+                                    </Button>
+                                  )}
                                   <Button
                                     size="sm"
                                     variant="ghost"
@@ -1088,6 +1094,7 @@ export default function AdminPage() {
                         .slice()
                         .sort((a, b) => a.position - b.position)
                         .map((row) => {
+                          const isLast = row.position === lqNonPriority.length;
                           const filename = row.songId ? songFilenameMap.get(row.songId) : undefined;
                           return (
                             <div key={row.queueEntryId} className="flex items-start gap-3">
@@ -1108,6 +1115,11 @@ export default function AdminPage() {
                                   <p className="text-xs text-muted-foreground italic">Note: {row.notes}</p>
                                 )}
                                 <div className="flex gap-2 pt-2 border-t border-border/40 mt-1.5">
+                                  {!isLast && (
+                                    <Button size="sm" variant="outline" onClick={() => handleMoveDown(row.queueEntryId)}>
+                                      Move down
+                                    </Button>
+                                  )}
                                   <Button
                                     size="sm"
                                     variant="ghost"
