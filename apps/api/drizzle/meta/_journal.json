@@ -50,13 +50,6 @@
       "when": 1745870400000,
       "tag": "0006_event_timezone",
       "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1746316800000,
-      "tag": "0007_queue_event_reordered",
-      "breakpoints": true
     }
   ]
 }
