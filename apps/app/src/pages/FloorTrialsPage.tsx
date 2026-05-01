@@ -91,9 +91,9 @@ export default function FloorTrialsPage() {
       <div>
         <h1 className="page-title text-2xl">Floor Trials</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Upcoming and active sessions, sorted by start time. Check-in opens
-          30 minutes before each session — tap a session to check in or watch
-          its queue.{" "}
+          Upcoming and active sessions, sorted by start time. Check-in opening
+          times vary by session — tap a session to check in or watch its
+          queue.{" "}
           <Link to="/how-it-works" className="text-primary hover:underline">
             How this works →
           </Link>

@@ -119,15 +119,8 @@ export default function HowItWorksPage() {
             your routine — no introduction music, no bow music, no buffer
             at the front. The deejay starts playback at{" "}
             <code className="px-1 rounded bg-muted/30 text-foreground">0:00</code>{" "}
-            unless you note a specific cue when you check in. If your
-            existing file has bow music attached, please re-submit a clean
+            . If your existing file has bow music attached, please re-submit a clean
             version.
-          </p>
-          <p>
-            Submit one file per routine, per partnership. If you compete
-            with two different partners or in two divisions, that's two
-            separate files. Re-uploading replaces the previous version and
-            bumps the version tag — the deejay always plays the latest one.
           </p>
           <ActionLink to="/songs/add">Submit a song →</ActionLink>
         </Section>
@@ -142,9 +135,8 @@ export default function HowItWorksPage() {
             and you should re-upload before the floor trial starts.
           </p>
           <p>
-            If a song was submitted under a previous account, by a former
-            partner, or before this site existed, you can also claim it
-            from the historical catalog: open{" "}
+            If a song was submitted between The Open (Nov) 2025 and MADjam (March) 2026,
+            you may be able to claim it from the historical catalog: open{" "}
             <Link to="/songs/add" className="text-primary hover:underline">Add a song</Link>{" "}
             and use the <em>Claim from history</em> option to search past
             submissions and attach one to your account.
@@ -153,7 +145,7 @@ export default function HowItWorksPage() {
 
         <Section section={SECTIONS[3]!}>
           <p>
-            Check-in is the moment that puts you in the queue. Each session
+            Check-in is the action that puts you in the queue. Each session
             page on{" "}
             <Link to="/floor-trials" className="text-primary hover:underline">Active Floor Trials</Link>{" "}
             has its own check-in form.
@@ -161,26 +153,24 @@ export default function HowItWorksPage() {
           <ul className="list-disc pl-5 space-y-2">
             <li>
               <strong className="text-foreground">Window:</strong> the form
-              opens <strong className="text-foreground">30 minutes before</strong>{" "}
-              the listed start of the floor trial block, and stays open for
-              the duration. Submissions outside that window are rejected
-              automatically — there's no penalty for trying early, the form
-              will just tell you to come back.
+              opens at the check-in time listed on each session card and stays
+              open for the duration of the floor trial block. Submissions
+              outside that window are rejected automatically — there's no
+              penalty for trying early, the form will just tell you to come
+              back.
             </li>
             <li>
               <strong className="text-foreground">Special instructions:</strong>{" "}
               if you want the deejay to start at a specific cue, run with no
               music, play the song without running, or anything else
               non-default — write it in the notes field on the check-in
-              form. That's faster and more reliable than verbal instructions
-              at the booth.
+              form.
             </li>
             <li>
               <strong className="text-foreground">What you need:</strong>{" "}
-              a song on file plus a partner registered against that song.
-              If your partner has a DeejayTools account, link them from{" "}
-              <Link to="/partners" className="text-primary hover:underline">My Partners</Link>{" "}
-              so they can see the same queue you do.
+              a song on file with a partner linked to it. If your partner also
+              has a DeejayTools account, linking them to the song during upload
+              means either of you can check in with it.
             </li>
             <li>
               <strong className="text-foreground">Issues:</strong> if
@@ -200,25 +190,25 @@ export default function HowItWorksPage() {
           </p>
           <p>
             <strong className="text-foreground">Active queue.</strong> The
-            next handful of couples actually about to take the floor —
-            usually four to six slots. The couple at the top is up next;
-            the deejay is already cueing their music.
+            next handful of couples actually about to take the floor. The
+            couple at the top is up next; the deejay is already cueing
+            their music.
           </p>
           <p>
             <strong className="text-foreground">Priority queue.</strong>{" "}
-            Routines that run on the same day get priority over other
-            divisions. Your first three runs of that day count as priority;
-            from the fourth run onward you drop to the standard queue. Some
-            divisions are designated priority by the event (Classic,
-            Showcase, etc.) — see the session page for the list. Once
+            Whether your check-in lands here depends on two things: whether
+            your division is designated priority for this session, and
+            whether you're within that division's priority run limit. Both
+            are configured per session — see the session page for which
+            divisions are priority and how many runs each allows. Once
             you've used up your priority runs, additional check-ins join
             the standard queue automatically.
           </p>
           <p>
             <strong className="text-foreground">Standard queue.</strong>{" "}
-            Everyone else: priority divisions past their cap, and any
-            non-priority divisions running today. Couples in this queue are
-            served between priority slots whenever there's room.
+            Everyone else: priority divisions past their run limit, and
+            non-priority divisions. Couples in this queue are served
+            between priority slots whenever there's room.
           </p>
           <p>Three things to keep in mind about the queue display:</p>
           <ul className="list-disc pl-5 space-y-2">
@@ -317,10 +307,10 @@ export default function HowItWorksPage() {
         <Section section={SECTIONS[7]!}>
           <p>
             Want another run? Check in again. There's no cooldown beyond
-            "the queue has to actually progress." Your second check-in
-            joins whichever queue your division qualifies for at that
-            moment — remember, runs 1–3 are priority and the 4th+ is
-            standard.
+            "the queue has to actually progress." Your next check-in joins
+            whichever queue your division qualifies for at that moment —
+            priority if you're still within the session's priority run
+            limit for your division, standard if you've exceeded it.
           </p>
           <p>
             A note on order of operations: don't submit the check-in form
