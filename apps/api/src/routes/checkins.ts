@@ -1,5 +1,5 @@
 import { CommonErrors, createLogger, error, success } from "common-typescript-utils";
-import { desc, eq, inArray, or } from "drizzle-orm";
+import { count, desc, eq, inArray, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -166,9 +166,9 @@ checkinRoutes.post(
 );
 
 /**
- * GET /v1/checkins/mine — return the current user's check-in history (most
- * recent first, capped at 100), joined with queue status, run status, session
- * info, and song info so the UI doesn't need extra requests.
+ * GET /v1/checkins/mine — return the current user's active check-ins (ones
+ * that still have a live queue entry). Inner-joins queue_entries so only
+ * in-queue check-ins are returned — completed or withdrawn ones are excluded.
  */
 checkinRoutes.get("/mine", requireAuth, async (c) => {
   const userId = c.get("user").userId;
@@ -194,25 +194,21 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
     .select({
       id: checkins.id,
       sessionId: checkins.sessionId,
+      eventName: events.name,
       sessionName: sessions.name,
       sessionFloorTrialStartsAt: sessions.floorTrialStartsAt,
       sessionStatus: sessions.status,
       eventTimezone: events.timezone,
       divisionName: checkins.divisionName,
       entityPairId: checkins.entityPairId,
-      entitySoloUserId: checkins.entitySoloUserId,
-      initialQueue: checkins.initialQueue,
       notes: checkins.notes,
       checkedInAt: checkins.createdAt,
       songDisplayName: songs.displayName,
       songProcessedFilename: songs.processedFilename,
-      // Current queue position (null if no longer in any queue)
+      // Current queue position — always present (inner join)
       queueEntryId: queueEntries.id,
       queueType: queueEntries.queueType,
       queuePosition: queueEntries.position,
-      // Run completion
-      runId: runs.id,
-      completedAt: runs.completedAt,
       // Entity label parts
       pairUserFirst: pairUser.firstName,
       pairUserLast: pairUser.lastName,
@@ -220,17 +216,49 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
       pairPartnerLast: partners.lastName,
     })
     .from(checkins)
+    .innerJoin(queueEntries, eq(queueEntries.checkinId, checkins.id))
     .innerJoin(sessions, eq(sessions.id, checkins.sessionId))
     .leftJoin(events, eq(events.id, sessions.eventId))
     .leftJoin(songs, eq(songs.id, checkins.songId))
-    .leftJoin(queueEntries, eq(queueEntries.checkinId, checkins.id))
-    .leftJoin(runs, eq(runs.checkinId, checkins.id))
     .leftJoin(pairs, eq(pairs.id, checkins.entityPairId))
     .leftJoin(pairUser, eq(pairUser.id, pairs.userAId))
     .leftJoin(partners, eq(partners.id, pairs.partnerBId))
     .where(whereClause)
-    .orderBy(desc(checkins.createdAt))
-    .limit(100);
+    .orderBy(desc(checkins.createdAt));
+
+  // For each session the user is in, fetch how many entries are in each
+  // queue type so we can compute an overall position (active → priority → standard).
+  const sessionIds = [...new Set(rows.map((r) => r.sessionId))];
+  const countsMap = new Map<string, { active: number; priority: number; non_priority: number }>();
+
+  if (sessionIds.length > 0) {
+    const queueCounts = await db
+      .select({
+        sessionId: queueEntries.sessionId,
+        queueType: queueEntries.queueType,
+        n: count(),
+      })
+      .from(queueEntries)
+      .where(inArray(queueEntries.sessionId, sessionIds))
+      .groupBy(queueEntries.sessionId, queueEntries.queueType);
+
+    for (const row of queueCounts) {
+      if (!countsMap.has(row.sessionId)) {
+        countsMap.set(row.sessionId, { active: 0, priority: 0, non_priority: 0 });
+      }
+      const c = countsMap.get(row.sessionId)!;
+      if (row.queueType === "active") c.active = Number(row.n);
+      if (row.queueType === "priority") c.priority = Number(row.n);
+      if (row.queueType === "non_priority") c.non_priority = Number(row.n);
+    }
+  }
+
+  const overallPosition = (sessionId: string, queueType: string, queuePos: number): number => {
+    const c = countsMap.get(sessionId) ?? { active: 0, priority: 0, non_priority: 0 };
+    if (queueType === "active") return queuePos;
+    if (queueType === "priority") return c.active + queuePos;
+    return c.active + c.priority + queuePos;
+  };
 
   const data = rows.map((r) => {
     let entityLabel: string;
@@ -245,6 +273,7 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
     return {
       id: r.id,
       sessionId: r.sessionId,
+      eventName: r.eventName ?? null,
       sessionName: r.sessionName,
       sessionFloorTrialStartsAt: r.sessionFloorTrialStartsAt,
       sessionStatus: r.sessionStatus,
@@ -253,14 +282,12 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
       entityLabel,
       songDisplayName: r.songDisplayName ?? null,
       songProcessedFilename: r.songProcessedFilename ?? null,
-      initialQueue: r.initialQueue,
       notes: r.notes ?? null,
       checkedInAt: r.checkedInAt,
-      queueEntryId: r.queueEntryId ?? null,
-      queueType: r.queueType ?? null,
-      queuePosition: r.queuePosition ?? null,
-      hasRun: r.runId !== null,
-      completedAt: r.completedAt ?? null,
+      queueEntryId: r.queueEntryId,
+      queueType: r.queueType,
+      queuePosition: r.queuePosition,
+      overallPosition: overallPosition(r.sessionId, r.queueType, r.queuePosition),
     };
   });
 

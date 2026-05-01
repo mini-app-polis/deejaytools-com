@@ -129,7 +129,7 @@ export default function HowItWorksPage() {
           <p>
             After you've submitted, confirm the deejay actually has your
             file by checking{" "}
-            <Link to="/songs" className="text-primary hover:underline">My Songs</Link>{" "}
+            <Link to="/my-content?tab=songs" className="text-primary hover:underline">My Songs</Link>{" "}
             — it lists everything you've uploaded under your account. If
             your routine doesn't appear there, the deejay does not have it
             and you should re-upload before the floor trial starts.

@@ -1,7 +1,7 @@
 import { PartnerRoleSchema, type PartnerRole, type ApiMyCheckin, type ApiSong } from "@deejaytools/schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -75,9 +75,6 @@ type DeleteAssociations = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function queueStatusBadge(checkin: ApiMyCheckin) {
-  if (checkin.hasRun) {
-    return <Badge variant="outline">Completed</Badge>;
-  }
   if (checkin.queueType === "active") {
     return (
       <Badge className="bg-primary text-primary-foreground border-transparent">
@@ -99,13 +96,17 @@ function queueStatusBadge(checkin: ApiMyCheckin) {
       </Badge>
     );
   }
-  return <Badge variant="secondary">Off queue</Badge>;
+  return <Badge variant="secondary">#{checkin.queuePosition}</Badge>;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function MyContentPage() {
   const api = useApiClient();
+  const [searchParams] = useSearchParams();
+  const initialTab = ["checkins", "partners", "songs"].includes(searchParams.get("tab") ?? "")
+    ? searchParams.get("tab")!
+    : "checkins";
 
   // ── Partners state ───────────────────────────────────────────────────────────
   const [partners, setPartners] = useState<PartnerRow[] | null>(null);
@@ -272,7 +273,7 @@ export default function MyContentPage() {
     <div className="space-y-6">
       <h1 className="page-title text-2xl">My Content</h1>
 
-      <Tabs defaultValue="checkins">
+      <Tabs defaultValue={initialTab}>
         <TabsList>
           <TabsTrigger value="checkins">Check-ins</TabsTrigger>
           <TabsTrigger value="partners">Partners</TabsTrigger>
@@ -282,7 +283,7 @@ export default function MyContentPage() {
         {/* ── Check-ins tab ── */}
         <TabsContent value="checkins" className="mt-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">Your 100 most recent check-ins.</p>
+            <p className="text-sm text-muted-foreground">Your active queue entries across all sessions.</p>
             <Button variant="outline" size="sm" onClick={loadCheckins} disabled={checkinsLoading}>
               {checkinsLoading ? "Refreshing…" : "Refresh"}
             </Button>
@@ -291,36 +292,61 @@ export default function MyContentPage() {
           {checkinsLoading && !checkins ? (
             <Skeleton className="h-40 w-full" />
           ) : checkins?.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No check-ins yet.</p>
+            <p className="text-sm text-muted-foreground">You are not currently checked in anywhere.</p>
           ) : (
-            <div className={`space-y-2${checkinsLoading ? " opacity-60" : ""}`}>
+            <div className={`space-y-3${checkinsLoading ? " opacity-60" : ""}`}>
               {checkins?.map((ci) => (
-                <div
-                  key={ci.id}
-                  className="rounded-lg border px-3 py-3 text-sm space-y-1.5"
-                >
-                  <div className="flex items-start justify-between gap-2 flex-wrap">
-                    <div className="min-w-0 space-y-0.5">
-                      <p className="font-medium">
-                        {ci.divisionName}
-                        <span className="text-muted-foreground font-normal">
-                          {" · "}{ci.entityLabel}
-                        </span>
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatSessionTitle(
-                          { floor_trial_starts_at: ci.sessionFloorTrialStartsAt },
-                          ci.eventTimezone
+                <div key={ci.id} className="flex items-start gap-3">
+                  {/* Overall position number */}
+                  <div className="shrink-0 pt-3 w-12 text-right">
+                    <span className="text-sm font-medium tabular-nums text-muted-foreground">
+                      #{ci.overallPosition}
+                    </span>
+                  </div>
+
+                  {/* Card */}
+                  <div className="flex-1 min-w-0 rounded-lg border px-4 py-3 text-sm space-y-2">
+                    {/* Header: event + session + queue badge */}
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <div className="min-w-0">
+                        {ci.eventName && (
+                          <p className="text-xs text-muted-foreground">{ci.eventName}</p>
                         )}
+                        <p className="font-medium">
+                          {formatSessionTitle(
+                            { floor_trial_starts_at: ci.sessionFloorTrialStartsAt },
+                            ci.eventTimezone
+                          )}
+                        </p>
+                      </div>
+                      <div className="shrink-0">{queueStatusBadge(ci)}</div>
+                    </div>
+
+                    {/* Entry details */}
+                    <div className="space-y-0.5 border-t border-border/40 pt-2">
+                      <p>
+                        <span className="text-muted-foreground">Division </span>
+                        {ci.divisionName}
+                      </p>
+                      <p>
+                        <span className="text-muted-foreground">Dancer </span>
+                        {ci.entityLabel}
                       </p>
                       {ci.songDisplayName && (
-                        <p className="text-xs text-muted-foreground">{ci.songDisplayName}</p>
+                        <p>
+                          <span className="text-muted-foreground">Song </span>
+                          {ci.songDisplayName}
+                        </p>
+                      )}
+                      {ci.songProcessedFilename && (
+                        <p className="font-mono text-xs text-muted-foreground/70 truncate">
+                          {ci.songProcessedFilename}
+                        </p>
                       )}
                       {ci.notes && (
-                        <p className="text-xs text-muted-foreground italic">Note: {ci.notes}</p>
+                        <p className="text-muted-foreground italic">Note: {ci.notes}</p>
                       )}
                     </div>
-                    <div className="shrink-0">{queueStatusBadge(ci)}</div>
                   </div>
                 </div>
               ))}

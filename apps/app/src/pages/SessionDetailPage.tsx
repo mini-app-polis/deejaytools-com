@@ -343,7 +343,7 @@ export default function ApiSessionPage() {
           ) : !canCheckIn && checkinWindowOpen && songs.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               You have no songs uploaded —{" "}
-              <Link to="/songs" className="underline">add a song first</Link>.
+              <Link to="/songs/add" className="underline">add a song first</Link>.
             </p>
           ) : null}
         </div>
@@ -351,8 +351,8 @@ export default function ApiSessionPage() {
       <SignedOut>
         <div className="flex flex-wrap items-center gap-3">
           <SignInButton
-            forceRedirectUrl={id ? `/sessions/${id}` : "/partners"}
-            signUpForceRedirectUrl={id ? `/sessions/${id}` : "/partners"}
+            forceRedirectUrl={id ? `/sessions/${id}` : "/my-content"}
+            signUpForceRedirectUrl={id ? `/sessions/${id}` : "/my-content"}
           >
             <Button size="lg">Sign in to check in</Button>
           </SignInButton>

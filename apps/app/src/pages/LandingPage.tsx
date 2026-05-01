@@ -12,7 +12,7 @@ import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
  * /how-it-works page (linked from one of the cards) where each step has
  * room to actually be useful instead of a one-line summary.
  *
- * Auth-gated cards (My Songs, My Partners) link straight to their routes;
+ * Auth-gated cards (My Content) link straight to their routes;
  * Clerk's RequireAuth wrapper redirects signed-out users to sign-in.
  */
 
@@ -41,16 +41,10 @@ const CARDS: CardDef[] = [
     body: "See active and upcoming sessions. Open one to check in and watch the live queue.",
   },
   {
-    to: "/partners",
+    to: "/my-content",
     eyebrow: "Signed in",
-    title: "My Partners",
-    body: "Add and manage the partners you check in with.",
-  },
-  {
-    to: "/songs",
-    eyebrow: "Signed in",
-    title: "My Songs",
-    body: "Manage the music files you've submitted for your routines.",
+    title: "My Content",
+    body: "Manage your partners, songs, and see where you're currently checked in.",
   },
 ];
 
