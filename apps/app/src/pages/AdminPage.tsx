@@ -16,6 +16,7 @@ import { useAuthMe } from "@/hooks/useAuthMe";
 import { CLICKABLE_ROW_CLASS } from "@/lib/clickable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -930,184 +931,200 @@ export default function AdminPage() {
           )}
 
           {lqSessionId && (
-            <div className={`space-y-6 ${lqLoading ? "opacity-60" : ""}`}>
+            <div className={`space-y-4 ${lqLoading ? "opacity-60" : ""}`}>
 
               {/* Active queue */}
-              <section className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-base font-semibold">Active queue</h2>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground">{lqActive.length} slot{lqActive.length !== 1 ? "s" : ""}</span>
-                    <Button
-                      size="sm"
-                      onClick={handlePromoteNext}
-                      disabled={!canPromoteNext || lqLoading}
-                    >
-                      Promote next
-                    </Button>
+              <Card className="border-primary/30">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-primary">Active</CardTitle>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground">
+                        {lqActive.length} slot{lqActive.length !== 1 ? "s" : ""}
+                      </span>
+                      <Button
+                        size="sm"
+                        onClick={handlePromoteNext}
+                        disabled={!canPromoteNext || lqLoading}
+                      >
+                        Promote next
+                      </Button>
+                    </div>
                   </div>
-                </div>
-                {lqActive.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No one in the active queue.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {lqActive
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {lqActive.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No one on deck.</p>
+                  ) : (
+                    lqActive
                       .slice()
                       .sort((a, b) => a.position - b.position)
                       .map((row) => {
                         const isSlotOne = row.position === 1;
                         const isLast = row.position === lqActive.length;
+                        const filename = row.songId ? songFilenameMap.get(row.songId) : undefined;
                         return (
-                          <div
-                            key={row.queueEntryId}
-                            className={`rounded-lg border px-3 py-3 text-sm space-y-2 ${isSlotOne ? "border-primary/40 bg-primary/5" : ""}`}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="space-y-0.5 min-w-0">
-                                <p className="font-medium">
-                                  {isSlotOne && (
-                                    <span className="text-primary mr-1.5">▶</span>
-                                  )}
-                                  #{row.position} · {renderEntityLabel(row)}
+                          <div key={row.queueEntryId} className="flex items-start gap-3">
+                            <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
+                              {isSlotOne && <span className="text-primary mr-0.5">▶</span>}
+                              #{row.position}
+                            </span>
+                            <div
+                              className={
+                                isSlotOne
+                                  ? "border border-primary/50 bg-primary/10 rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5"
+                                  : "border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5"
+                              }
+                            >
+                              <p className="font-medium">{renderEntityLabel(row)}</p>
+                              <p className="text-muted-foreground truncate">
+                                {row.divisionName} · {renderSongLabel(row.songId)}
+                              </p>
+                              {filename && (
+                                <p className="text-xs text-muted-foreground/70 truncate font-mono">
+                                  {filename}
                                 </p>
-                                <p className="text-muted-foreground truncate">
-                                  {row.divisionName} · {renderSongLabel(row.songId)}
-                                </p>
-                                {(row.songId ? songFilenameMap.get(row.songId) : undefined) && (
-                                  <p className="text-xs text-muted-foreground/70 truncate font-mono">
-                                    {(row.songId ? songFilenameMap.get(row.songId) : undefined)}
-                                  </p>
-                                )}
-                                {row.notes && (
-                                  <p className="text-xs text-muted-foreground italic">
-                                    Note: {row.notes}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex gap-2 flex-wrap">
-                              <Button size="sm" onClick={() => handleComplete(row.queueEntryId)}>
-                                Run complete
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={() => handleIncomplete(row.queueEntryId)}>
-                                Run incomplete
-                              </Button>
-                              {!isLast && (
-                                <Button size="sm" variant="outline" onClick={() => handleMoveDown(row.queueEntryId)}>
-                                  Move down
-                                </Button>
                               )}
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="text-destructive hover:text-destructive"
-                                onClick={() => handleWithdraw(row.queueEntryId)}
-                              >
-                                Withdraw
-                              </Button>
+                              {row.notes && (
+                                <p className="text-xs text-muted-foreground italic">
+                                  Note: {row.notes}
+                                </p>
+                              )}
+                              <div className="flex gap-2 flex-wrap pt-2 border-t border-border/40 mt-1.5">
+                                <Button size="sm" onClick={() => handleComplete(row.queueEntryId)}>
+                                  Run complete
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => handleIncomplete(row.queueEntryId)}>
+                                  Run incomplete
+                                </Button>
+                                {!isLast && (
+                                  <Button size="sm" variant="outline" onClick={() => handleMoveDown(row.queueEntryId)}>
+                                    Move down
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-destructive hover:text-destructive"
+                                  onClick={() => handleWithdraw(row.queueEntryId)}
+                                >
+                                  Withdraw
+                                </Button>
+                              </div>
                             </div>
                           </div>
                         );
-                      })}
-                  </div>
-                )}
-              </section>
+                      })
+                  )}
+                </CardContent>
+              </Card>
 
-              {/* Priority queue */}
-              <section className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-base font-semibold">Priority queue</h2>
-                  <span className="text-xs text-muted-foreground">{lqPriority.length} waiting</span>
-                </div>
-                {lqPriority.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Priority queue is empty.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {lqPriority
-                      .slice()
-                      .sort((a, b) => a.position - b.position)
-                      .map((row) => (
-                        <div
-                          key={row.queueEntryId}
-                          className="rounded-lg border px-3 py-3 text-sm space-y-2"
-                        >
-                          <div className="space-y-0.5">
-                            <p className="font-medium">#{row.position} · {renderEntityLabel(row)}</p>
-                            <p className="text-muted-foreground truncate">
-                              {row.divisionName} · {renderSongLabel(row.songId)}
-                            </p>
-                            {(row.songId ? songFilenameMap.get(row.songId) : undefined) && (
-                              <p className="text-xs text-muted-foreground/70 truncate font-mono">
-                                {(row.songId ? songFilenameMap.get(row.songId) : undefined)}
-                              </p>
-                            )}
-                            {row.notes && (
-                              <p className="text-xs text-muted-foreground italic">Note: {row.notes}</p>
-                            )}
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-destructive hover:text-destructive"
-                              onClick={() => handleWithdraw(row.queueEntryId)}
-                            >
-                              Withdraw
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </section>
+              {/* Priority + Non-priority queues — side by side when there's room */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Card className="border-amber-500/30">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-amber-500 dark:text-amber-400">Priority</CardTitle>
+                      <span className="text-xs text-muted-foreground">{lqPriority.length} waiting</span>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {lqPriority.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Priority queue is empty.</p>
+                    ) : (
+                      lqPriority
+                        .slice()
+                        .sort((a, b) => a.position - b.position)
+                        .map((row) => {
+                          const filename = row.songId ? songFilenameMap.get(row.songId) : undefined;
+                          return (
+                            <div key={row.queueEntryId} className="flex items-start gap-3">
+                              <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
+                                #{row.position}
+                              </span>
+                              <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
+                                <p className="font-medium">{renderEntityLabel(row)}</p>
+                                <p className="text-muted-foreground truncate">
+                                  {row.divisionName} · {renderSongLabel(row.songId)}
+                                </p>
+                                {filename && (
+                                  <p className="text-xs text-muted-foreground/70 truncate font-mono">
+                                    {filename}
+                                  </p>
+                                )}
+                                {row.notes && (
+                                  <p className="text-xs text-muted-foreground italic">Note: {row.notes}</p>
+                                )}
+                                <div className="flex gap-2 pt-2 border-t border-border/40 mt-1.5">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="text-destructive hover:text-destructive"
+                                    onClick={() => handleWithdraw(row.queueEntryId)}
+                                  >
+                                    Withdraw
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                    )}
+                  </CardContent>
+                </Card>
 
-              {/* Non-priority queue */}
-              <section className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-base font-semibold">Non-priority queue</h2>
-                  <span className="text-xs text-muted-foreground">{lqNonPriority.length} waiting</span>
-                </div>
-                {lqNonPriority.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Non-priority queue is empty.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {lqNonPriority
-                      .slice()
-                      .sort((a, b) => a.position - b.position)
-                      .map((row) => (
-                        <div
-                          key={row.queueEntryId}
-                          className="rounded-lg border px-3 py-3 text-sm space-y-2"
-                        >
-                          <div className="space-y-0.5">
-                            <p className="font-medium">#{row.position} · {renderEntityLabel(row)}</p>
-                            <p className="text-muted-foreground truncate">
-                              {row.divisionName} · {renderSongLabel(row.songId)}
-                            </p>
-                            {(row.songId ? songFilenameMap.get(row.songId) : undefined) && (
-                              <p className="text-xs text-muted-foreground/70 truncate font-mono">
-                                {(row.songId ? songFilenameMap.get(row.songId) : undefined)}
-                              </p>
-                            )}
-                            {row.notes && (
-                              <p className="text-xs text-muted-foreground italic">Note: {row.notes}</p>
-                            )}
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-destructive hover:text-destructive"
-                              onClick={() => handleWithdraw(row.queueEntryId)}
-                            >
-                              Withdraw
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </section>
+                <Card className="border-sky-500/30">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sky-500 dark:text-sky-400">Standard</CardTitle>
+                      <span className="text-xs text-muted-foreground">{lqNonPriority.length} waiting</span>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {lqNonPriority.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Standard queue is empty.</p>
+                    ) : (
+                      lqNonPriority
+                        .slice()
+                        .sort((a, b) => a.position - b.position)
+                        .map((row) => {
+                          const filename = row.songId ? songFilenameMap.get(row.songId) : undefined;
+                          return (
+                            <div key={row.queueEntryId} className="flex items-start gap-3">
+                              <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
+                                #{row.position}
+                              </span>
+                              <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
+                                <p className="font-medium">{renderEntityLabel(row)}</p>
+                                <p className="text-muted-foreground truncate">
+                                  {row.divisionName} · {renderSongLabel(row.songId)}
+                                </p>
+                                {filename && (
+                                  <p className="text-xs text-muted-foreground/70 truncate font-mono">
+                                    {filename}
+                                  </p>
+                                )}
+                                {row.notes && (
+                                  <p className="text-xs text-muted-foreground italic">Note: {row.notes}</p>
+                                )}
+                                <div className="flex gap-2 pt-2 border-t border-border/40 mt-1.5">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="text-destructive hover:text-destructive"
+                                    onClick={() => handleWithdraw(row.queueEntryId)}
+                                  >
+                                    Withdraw
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
 
             </div>
           )}
