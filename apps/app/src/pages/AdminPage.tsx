@@ -560,11 +560,14 @@ export default function AdminPage() {
     }
   };
 
-  const handleComplete = () =>
-    queueAction("/v1/queue/complete", { sessionId: lqSessionId });
+  const handleComplete = (queueEntryId: string) =>
+    queueAction("/v1/queue/complete", { queueEntryId });
 
-  const handleIncomplete = () =>
-    queueAction("/v1/queue/incomplete", { sessionId: lqSessionId });
+  const handleIncomplete = (queueEntryId: string) =>
+    queueAction("/v1/queue/incomplete", { queueEntryId });
+
+  const handleMoveDown = (queueEntryId: string) =>
+    queueAction("/v1/queue/move-down", { queueEntryId });
 
   const handleWithdraw = (queueEntryId: string) =>
     queueAction("/v1/queue/withdraw", { queueEntryId });
@@ -953,6 +956,7 @@ export default function AdminPage() {
                       .sort((a, b) => a.position - b.position)
                       .map((row) => {
                         const isSlotOne = row.position === 1;
+                        const isLast = row.position === lqActive.length;
                         return (
                           <div
                             key={row.queueEntryId}
@@ -982,16 +986,17 @@ export default function AdminPage() {
                               </div>
                             </div>
                             <div className="flex gap-2 flex-wrap">
-                              {isSlotOne ? (
-                                <>
-                                  <Button size="sm" onClick={handleComplete}>
-                                    Run complete
-                                  </Button>
-                                  <Button size="sm" variant="outline" onClick={handleIncomplete}>
-                                    Run incomplete
-                                  </Button>
-                                </>
-                              ) : null}
+                              <Button size="sm" onClick={() => handleComplete(row.queueEntryId)}>
+                                Run complete
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => handleIncomplete(row.queueEntryId)}>
+                                Run incomplete
+                              </Button>
+                              {!isLast && (
+                                <Button size="sm" variant="outline" onClick={() => handleMoveDown(row.queueEntryId)}>
+                                  Move down
+                                </Button>
+                              )}
                               <Button
                                 size="sm"
                                 variant="ghost"

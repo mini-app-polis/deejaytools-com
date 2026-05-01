@@ -29,6 +29,7 @@ export const queueEventActionEnum = pgEnum("queue_event_action", [
   "run_completed",
   "run_incomplete_rotated",
   "withdrawn",
+  "reordered",
 ]);
 
 export const initialQueueEnum = pgEnum("initial_queue", ["priority", "non_priority"]);

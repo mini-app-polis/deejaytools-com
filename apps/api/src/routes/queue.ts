@@ -30,8 +30,8 @@ const logger = createLogger("deejaytools-api");
 export const queueRoutes = new Hono();
 
 const promoteBody = z.object({ queueEntryId: z.string().min(1) });
-const slotOneBody = z.object({
-  sessionId: z.string().min(1),
+const entryActionBody = z.object({
+  queueEntryId: z.string().min(1),
   reason: z.string().nullish(),
 });
 const withdrawBody = z.object({
@@ -200,12 +200,13 @@ queueRoutes.post("/promote", requireAdmin, zValidator("json", promoteBody), asyn
   return c.json(success({ promoted: true }));
 });
 
-/** Helper: load slot 1 of a session's active queue. */
-async function loadSlotOne(sessionId: string) {
+/** Helper: load an active queue entry by its ID. */
+async function loadActiveEntry(queueEntryId: string) {
   const [row] = await db
     .select({
       id: queueEntries.id,
       checkinId: queueEntries.checkinId,
+      sessionId: queueEntries.sessionId,
       entityPairId: queueEntries.entityPairId,
       entitySoloUserId: queueEntries.entitySoloUserId,
       position: queueEntries.position,
@@ -213,22 +214,23 @@ async function loadSlotOne(sessionId: string) {
     .from(queueEntries)
     .where(
       and(
-        eq(queueEntries.sessionId, sessionId),
-        eq(queueEntries.queueType, "active"),
-        eq(queueEntries.position, 1)
+        eq(queueEntries.id, queueEntryId),
+        eq(queueEntries.queueType, "active")
       )
     );
   return row ?? null;
 }
 
-/** POST /v1/queue/complete — mark slot-1 active entry as run complete. */
-queueRoutes.post("/complete", requireAdmin, zValidator("json", slotOneBody), async (c) => {
+/** POST /v1/queue/complete — mark an active entry as run complete and record the run. */
+queueRoutes.post("/complete", requireAdmin, zValidator("json", entryActionBody), async (c) => {
   const adminId = c.get("user").userId;
-  const { sessionId, reason } = c.req.valid("json");
+  const { queueEntryId, reason } = c.req.valid("json");
   const now = Date.now();
 
-  const slotOne = await loadSlotOne(sessionId);
-  if (!slotOne) return c.json(CommonErrors.badRequest("No entry currently running"), 400);
+  const entry = await loadActiveEntry(queueEntryId);
+  if (!entry) return c.json(CommonErrors.badRequest("Active queue entry not found"), 400);
+
+  const sessionId = entry.sessionId;
 
   const [checkin] = await db
     .select({
@@ -237,7 +239,7 @@ queueRoutes.post("/complete", requireAdmin, zValidator("json", slotOneBody), asy
       songId: checkins.songId,
     })
     .from(checkins)
-    .where(eq(checkins.id, slotOne.checkinId));
+    .where(eq(checkins.id, entry.checkinId));
   if (!checkin) return c.json(CommonErrors.notFound("Check-in"), 404);
 
   const [session] = await db
@@ -247,17 +249,17 @@ queueRoutes.post("/complete", requireAdmin, zValidator("json", slotOneBody), asy
 
   try {
     await db.transaction(async (tx) => {
-      await tx.delete(queueEntries).where(eq(queueEntries.id, slotOne.id));
-      await compactAfterRemoval(tx, sessionId, "active", slotOne.position);
+      await tx.delete(queueEntries).where(eq(queueEntries.id, entry.id));
+      await compactAfterRemoval(tx, sessionId, "active", entry.position);
 
       await tx.insert(runs).values({
         id: crypto.randomUUID(),
-        checkinId: slotOne.checkinId,
+        checkinId: entry.checkinId,
         sessionId,
         eventId: session?.eventId ?? null,
         divisionName: checkin.divisionName,
-        entityPairId: slotOne.entityPairId,
-        entitySoloUserId: slotOne.entitySoloUserId,
+        entityPairId: entry.entityPairId,
+        entitySoloUserId: entry.entitySoloUserId,
         songId: checkin.songId,
         completedAt: now,
         completedByUserId: adminId,
@@ -266,10 +268,10 @@ queueRoutes.post("/complete", requireAdmin, zValidator("json", slotOneBody), asy
       await tx.insert(queueEvents).values({
         id: crypto.randomUUID(),
         sessionId,
-        checkinId: slotOne.checkinId,
+        checkinId: entry.checkinId,
         action: "run_completed",
         fromQueue: "active",
-        fromPosition: 1,
+        fromPosition: entry.position,
         toQueue: null,
         toPosition: null,
         actorUserId: adminId,
@@ -281,7 +283,7 @@ queueRoutes.post("/complete", requireAdmin, zValidator("json", slotOneBody), asy
     logger.error({
       event: "queue_complete_failed",
       category: "api",
-      context: { sessionId },
+      context: { queueEntryId, sessionId },
       error: err,
     });
     return c.json(error("conflict", "Completion conflicted with concurrent activity; please retry"), 409);
@@ -291,14 +293,16 @@ queueRoutes.post("/complete", requireAdmin, zValidator("json", slotOneBody), asy
   return c.json(success({ completed: true }));
 });
 
-/** POST /v1/queue/incomplete — rotate slot-1 active entry to bottom of active. */
-queueRoutes.post("/incomplete", requireAdmin, zValidator("json", slotOneBody), async (c) => {
+/** POST /v1/queue/incomplete — rotate an active entry to the bottom of the active queue. */
+queueRoutes.post("/incomplete", requireAdmin, zValidator("json", entryActionBody), async (c) => {
   const adminId = c.get("user").userId;
-  const { sessionId, reason } = c.req.valid("json");
+  const { queueEntryId, reason } = c.req.valid("json");
   const now = Date.now();
 
-  const slotOne = await loadSlotOne(sessionId);
-  if (!slotOne) return c.json(CommonErrors.badRequest("No entry currently running"), 400);
+  const entry = await loadActiveEntry(queueEntryId);
+  if (!entry) return c.json(CommonErrors.badRequest("Active queue entry not found"), 400);
+
+  const sessionId = entry.sessionId;
 
   try {
     await db.transaction(async (tx) => {
@@ -308,23 +312,30 @@ queueRoutes.post("/incomplete", requireAdmin, zValidator("json", slotOneBody), a
         .where(and(eq(queueEntries.sessionId, sessionId), eq(queueEntries.queueType, "active")))
         .orderBy(asc(queueEntries.position));
 
-      const first = rows[0];
-      if (!first || first.position !== 1) {
-        throw new Error("slot_one_missing");
+      const target = rows.find((r) => r.id === entry.id);
+      if (!target) {
+        throw new Error("entry_missing");
       }
 
       const n = rows.length;
-      // 2_000_000 is a safe out-of-range position — active queues never grow
+      // If the entry is already at the bottom there's nothing to rotate.
+      if (target.position === n) {
+        return;
+      }
+
+      const targetPos = target.position;
+      // 2_000_000 is a safe out-of-range sentinel — active queues never grow
       // anywhere near this size, so it cannot collide with any real position
-      // while we shift the other entries down by one.
+      // while we shift the other entries.
       const sentinel = 2_000_000;
       await tx
         .update(queueEntries)
         .set({ position: sentinel })
-        .where(eq(queueEntries.id, first.id));
+        .where(eq(queueEntries.id, target.id));
 
+      // Shift all entries that were after the target up by one position.
       for (const row of rows) {
-        if (row.position > 1) {
+        if (row.position > targetPos) {
           await tx
             .update(queueEntries)
             .set({ position: row.position - 1 })
@@ -335,15 +346,15 @@ queueRoutes.post("/incomplete", requireAdmin, zValidator("json", slotOneBody), a
       await tx
         .update(queueEntries)
         .set({ position: n, enteredQueueAt: now })
-        .where(eq(queueEntries.id, first.id));
+        .where(eq(queueEntries.id, target.id));
 
       await tx.insert(queueEvents).values({
         id: crypto.randomUUID(),
         sessionId,
-        checkinId: slotOne.checkinId,
+        checkinId: entry.checkinId,
         action: "run_incomplete_rotated",
         fromQueue: "active",
-        fromPosition: 1,
+        fromPosition: targetPos,
         toQueue: "active",
         toPosition: n,
         actorUserId: adminId,
@@ -352,13 +363,13 @@ queueRoutes.post("/incomplete", requireAdmin, zValidator("json", slotOneBody), a
       });
     });
   } catch (e) {
-    if (e instanceof Error && e.message === "slot_one_missing") {
-      return c.json(CommonErrors.badRequest("No entry currently running"), 400);
+    if (e instanceof Error && e.message === "entry_missing") {
+      return c.json(CommonErrors.badRequest("Active queue entry not found"), 400);
     }
     logger.error({
       event: "queue_incomplete_failed",
       category: "api",
-      context: { sessionId },
+      context: { queueEntryId, sessionId },
       error: e,
     });
     return c.json(error("conflict", "Rotation conflicted with concurrent activity; please retry"), 409);
@@ -366,6 +377,89 @@ queueRoutes.post("/incomplete", requireAdmin, zValidator("json", slotOneBody), a
 
   invalidateQueueCache(sessionId);
   return c.json(success({ rotated: true }));
+});
+
+/**
+ * POST /v1/queue/move-down — swap a queue entry with the one immediately below
+ * it (position + 1) within the same queue. Only works within a single queue
+ * type — entries cannot be moved between queues.
+ *
+ * Returns 400 if the entry is already at the bottom or not found.
+ */
+queueRoutes.post("/move-down", requireAdmin, zValidator("json", z.object({ queueEntryId: z.string().min(1) })), async (c) => {
+  const adminId = c.get("user").userId;
+  const { queueEntryId } = c.req.valid("json");
+  const now = Date.now();
+
+  const [entry] = await db
+    .select({
+      id: queueEntries.id,
+      checkinId: queueEntries.checkinId,
+      sessionId: queueEntries.sessionId,
+      queueType: queueEntries.queueType,
+      position: queueEntries.position,
+    })
+    .from(queueEntries)
+    .where(eq(queueEntries.id, queueEntryId));
+  if (!entry) return c.json(CommonErrors.notFound("Queue entry"), 404);
+
+  // Find the entry immediately below this one in the same queue.
+  const [below] = await db
+    .select({ id: queueEntries.id, position: queueEntries.position })
+    .from(queueEntries)
+    .where(
+      and(
+        eq(queueEntries.sessionId, entry.sessionId),
+        eq(queueEntries.queueType, entry.queueType),
+        eq(queueEntries.position, entry.position + 1)
+      )
+    );
+  if (!below) return c.json(CommonErrors.badRequest("Entry is already at the bottom of its queue"), 400);
+
+  try {
+    await db.transaction(async (tx) => {
+      // Swap positions using a sentinel to avoid a unique constraint violation
+      // if (sessionId, queueType, position) is unique.
+      const sentinel = 2_000_000;
+      await tx
+        .update(queueEntries)
+        .set({ position: sentinel })
+        .where(eq(queueEntries.id, entry.id));
+      await tx
+        .update(queueEntries)
+        .set({ position: entry.position })
+        .where(eq(queueEntries.id, below.id));
+      await tx
+        .update(queueEntries)
+        .set({ position: below.position })
+        .where(eq(queueEntries.id, entry.id));
+
+      await tx.insert(queueEvents).values({
+        id: crypto.randomUUID(),
+        sessionId: entry.sessionId,
+        checkinId: entry.checkinId,
+        action: "reordered",
+        fromQueue: entry.queueType,
+        fromPosition: entry.position,
+        toQueue: entry.queueType,
+        toPosition: below.position,
+        actorUserId: adminId,
+        reason: null,
+        createdAt: now,
+      });
+    });
+  } catch (err) {
+    logger.error({
+      event: "queue_move_down_failed",
+      category: "api",
+      context: { queueEntryId, sessionId: entry.sessionId },
+      error: err,
+    });
+    return c.json(error("conflict", "Move conflicted with concurrent activity; please retry"), 409);
+  }
+
+  invalidateQueueCache(entry.sessionId);
+  return c.json(success({ moved: true }));
 });
 
 /** POST /v1/queue/withdraw — remove a queue entry from any queue without recording a run. */
