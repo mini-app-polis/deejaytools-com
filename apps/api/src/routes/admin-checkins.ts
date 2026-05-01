@@ -1,5 +1,5 @@
 import { CommonErrors, createLogger, error, success, successList } from "common-typescript-utils";
-import { and, desc, eq, inArray, like } from "drizzle-orm";
+import { desc, eq, inArray, like } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { db } from "../db/index.js";
@@ -24,8 +24,6 @@ const logger = createLogger("deejaytools-api");
 
 export const adminCheckinRoutes = new Hono();
 
-const PLACEHOLDER_SONG_DISPLAY_NAME = "[Admin Test Placeholder]";
-
 /** All synthetic users created by admin injection match this email pattern. */
 const STUB_EMAIL_PATTERN = "admin-injected-%@test.local";
 
@@ -43,9 +41,9 @@ const injectBody = z.object({
  * POST /v1/admin/checkins
  *
  * Admin-only test bypass for injecting a check-in without going through the
- * normal user flow. Creates fresh stub user + partner + pair rows for each
- * injection (no dedup — throwaway test data) and reuses a single placeholder
- * song owned by the admin. Bypasses the session check-in time window.
+ * normal user flow. Creates fresh stub user + partner + pair + song rows for
+ * each injection (no dedup — throwaway test data). All stub rows are owned by
+ * the synthetic user, not the admin. Bypasses the session check-in time window.
  *
  * Intended for testing only. Not exposed in the regular check-in flow.
  */
@@ -66,37 +64,7 @@ adminCheckinRoutes.post("/", requireAdmin, zValidator("json", injectBody), async
     .where(eq(sessions.id, body.sessionId));
   if (!session) return c.json(CommonErrors.notFound("Session"), 404);
 
-  // 2) Get-or-create the shared placeholder song. Owned by the admin so it appears
-  // in /v1/songs for the admin's UI. Reused across all injections.
-  let [placeholderSong] = await db
-    .select({ id: songs.id })
-    .from(songs)
-    .where(and(eq(songs.userId, adminUserId), eq(songs.displayName, PLACEHOLDER_SONG_DISPLAY_NAME)))
-    .limit(1);
-
-  if (!placeholderSong) {
-    const songId = crypto.randomUUID();
-    await db.insert(songs).values({
-      id: songId,
-      userId: adminUserId,
-      partnerId: null,
-      displayName: PLACEHOLDER_SONG_DISPLAY_NAME,
-      originalFilename: null,
-      processedFilename: null,
-      driveFileId: null,
-      driveFolderId: null,
-      division: null,
-      routineName: null,
-      personalDescriptor: null,
-      seasonYear: null,
-      createdAt: now,
-      updatedAt: now,
-    });
-    placeholderSong = { id: songId };
-  }
-  const songId = placeholderSong.id;
-
-  // 3) Create stub leader user (synthetic email so it doesn't collide with real users).
+  // 2) Create stub leader user (synthetic email so it doesn't collide with real users).
   const stubUserId = crypto.randomUUID();
   const stubEmail = `admin-injected-${stubUserId}@test.local`;
   await db.insert(users).values({
@@ -106,6 +74,26 @@ adminCheckinRoutes.post("/", requireAdmin, zValidator("json", injectBody), async
     firstName: leaderFirst,
     lastName: leaderLast,
     role: "user",
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  // 3) Create a stub placeholder song owned by the stub user (not the admin) so the
+  // injected entry has zero association with the admin's account.
+  const songId = crypto.randomUUID();
+  await db.insert(songs).values({
+    id: songId,
+    userId: stubUserId,
+    partnerId: null,
+    displayName: "[Test Placeholder]",
+    originalFilename: null,
+    processedFilename: null,
+    driveFileId: null,
+    driveFolderId: null,
+    division: null,
+    routineName: null,
+    personalDescriptor: null,
+    seasonYear: null,
     createdAt: now,
     updatedAt: now,
   });
@@ -124,7 +112,7 @@ adminCheckinRoutes.post("/", requireAdmin, zValidator("json", injectBody), async
     updatedAt: now,
   });
 
-  // 5) Create the pair (leader stub user → follower stub partner).
+  // 6) Create the pair (leader stub user → follower stub partner).
   const pairId = crypto.randomUUID();
   await db.insert(pairs).values({
     id: pairId,
@@ -133,7 +121,7 @@ adminCheckinRoutes.post("/", requireAdmin, zValidator("json", injectBody), async
     createdAt: now,
   });
 
-  // 6) Determine initial queue using the existing admission logic.
+  // 7) Determine initial queue using the existing admission logic.
   let initialQueue: "priority" | "non_priority";
   try {
     const ctx = await loadAdmissionContext(body.sessionId, body.divisionName);
@@ -143,7 +131,7 @@ adminCheckinRoutes.post("/", requireAdmin, zValidator("json", injectBody), async
     return c.json(CommonErrors.badRequest(msg), 400);
   }
 
-  // 7) Defensive single-entry check (shouldn't fire since pair is brand-new).
+  // 8) Defensive single-entry check (shouldn't fire since pair is brand-new).
   if (await entityHasLiveEntry({ pairId }, body.sessionId)) {
     return c.json(
       error("conflict", "This entity already has a live queue entry in this session"),
@@ -151,7 +139,7 @@ adminCheckinRoutes.post("/", requireAdmin, zValidator("json", injectBody), async
     );
   }
 
-  // 8) Insert checkin + queueEntry + queueEvent in a single transaction.
+  // 9) Insert checkin + queueEntry + queueEvent in a single transaction.
   const checkinId = crypto.randomUUID();
   const queueEntryId = crypto.randomUUID();
   const queueEventRowId = crypto.randomUUID();
@@ -339,6 +327,9 @@ adminCheckinRoutes.delete("/test", requireAdmin, async (c) => {
       await tx.delete(pairs).where(inArray(pairs.id, stubPairIds));
     }
     await tx.delete(partners).where(inArray(partners.userId, stubUserIds));
+    // Delete stub songs owned by synthetic users (created per-injection since the
+    // refactor that removed the shared admin-owned placeholder song).
+    await tx.delete(songs).where(inArray(songs.userId, stubUserIds));
     await tx.delete(users).where(inArray(users.id, stubUserIds));
   });
 

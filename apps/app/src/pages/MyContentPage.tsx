@@ -1,7 +1,7 @@
 import { PartnerRoleSchema, type PartnerRole, type ApiMyCheckin, type ApiSong } from "@deejaytools/schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -41,7 +41,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatSessionTitle } from "@/lib/sessionFormat";
 
 // ─── Partners types & schema ──────────────────────────────────────────────────
@@ -103,10 +102,6 @@ function queueStatusBadge(checkin: ApiMyCheckin) {
 
 export default function MyContentPage() {
   const api = useApiClient();
-  const [searchParams] = useSearchParams();
-  const initialTab = ["checkins", "partners", "songs"].includes(searchParams.get("tab") ?? "")
-    ? searchParams.get("tab")!
-    : "checkins";
 
   // ── Partners state ───────────────────────────────────────────────────────────
   const [partners, setPartners] = useState<PartnerRow[] | null>(null);
@@ -273,21 +268,16 @@ export default function MyContentPage() {
     <div className="space-y-6">
       <h1 className="page-title text-2xl">My Content</h1>
 
-      <Tabs defaultValue={initialTab}>
-        <TabsList>
-          <TabsTrigger value="checkins">Check-ins</TabsTrigger>
-          <TabsTrigger value="partners">Partners</TabsTrigger>
-          <TabsTrigger value="songs">Songs</TabsTrigger>
-        </TabsList>
-
-        {/* ── Check-ins tab ── */}
-        <TabsContent value="checkins" className="mt-4 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">Your active queue entries across all sessions.</p>
-            <Button variant="outline" size="sm" onClick={loadCheckins} disabled={checkinsLoading}>
-              {checkinsLoading ? "Refreshing…" : "Refresh"}
-            </Button>
-          </div>
+      {/* ── Check-ins section ── */}
+      <div className="rounded-lg border bg-card">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
+          <h2 className="font-semibold">Check-ins</h2>
+          <Button variant="outline" size="sm" onClick={loadCheckins} disabled={checkinsLoading}>
+            {checkinsLoading ? "Refreshing…" : "Refresh"}
+          </Button>
+        </div>
+        <div className="p-4 space-y-3">
+          <p className="text-sm text-muted-foreground">Your active queue entries across all sessions.</p>
 
           {checkinsLoading && !checkins ? (
             <Skeleton className="h-40 w-full" />
@@ -304,9 +294,8 @@ export default function MyContentPage() {
                     </span>
                   </div>
 
-                  {/* Card */}
+                  {/* Entry card */}
                   <div className="flex-1 min-w-0 rounded-lg border px-4 py-3 text-sm space-y-2">
-                    {/* Header: event + session + queue badge */}
                     <div className="flex items-start justify-between gap-2 flex-wrap">
                       <div className="min-w-0">
                         {ci.eventName && (
@@ -322,7 +311,6 @@ export default function MyContentPage() {
                       <div className="shrink-0">{queueStatusBadge(ci)}</div>
                     </div>
 
-                    {/* Entry details */}
                     <div className="space-y-0.5 border-t border-border/40 pt-2">
                       <p>
                         <span className="text-muted-foreground">Division </span>
@@ -352,21 +340,23 @@ export default function MyContentPage() {
               ))}
             </div>
           )}
-        </TabsContent>
+        </div>
+      </div>
 
-        {/* ── Partners tab ── */}
-        <TabsContent value="partners" className="mt-4 space-y-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <Button onClick={openCreate} className="w-full sm:w-auto">Add partner</Button>
-          </div>
-
+      {/* ── Partners section ── */}
+      <div className="rounded-lg border bg-card">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
+          <h2 className="font-semibold">Partners</h2>
+          <Button size="sm" onClick={openCreate}>Add partner</Button>
+        </div>
+        <div className="p-4 space-y-4">
           {/* Mobile card list */}
           <div className={`sm:hidden space-y-3${partnersLoading ? " opacity-60" : ""}`}>
             {partners?.length === 0 && (
               <p className="text-sm text-muted-foreground py-4 text-center">No partners yet.</p>
             )}
             {partners?.map((p) => (
-              <div key={p.id} className="rounded-lg border bg-card p-4 space-y-3 shadow-sm">
+              <div key={p.id} className="rounded-lg border p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <p className="font-medium text-base">{p.first_name} {p.last_name}</p>
                   {p.partner_role === "leader" ? (
@@ -441,16 +431,18 @@ export default function MyContentPage() {
               </Table>
             )}
           </div>
-        </TabsContent>
+        </div>
+      </div>
 
-        {/* ── Songs tab ── */}
-        <TabsContent value="songs" className="mt-4 space-y-4">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <Button asChild>
-              <Link to="/songs/add">Add Song</Link>
-            </Button>
-          </div>
-
+      {/* ── Songs section ── */}
+      <div className="rounded-lg border bg-card">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
+          <h2 className="font-semibold">Songs</h2>
+          <Button size="sm" asChild>
+            <Link to="/songs/add">Add song</Link>
+          </Button>
+        </div>
+        <div className="p-4 space-y-4">
           {/* Mobile card list */}
           <div className={`sm:hidden space-y-3${songsLoading ? " opacity-60" : ""}`}>
             {songsLoading && songs.length === 0 && <Skeleton className="h-40 w-full" />}
@@ -462,7 +454,7 @@ export default function MyContentPage() {
                 ? null
                 : [s.partner_first_name, s.partner_last_name].filter(Boolean).join(" ").trim() || null;
               return (
-                <div key={s.id} className="rounded-lg border bg-card p-4 space-y-2 shadow-sm">
+                <div key={s.id} className="rounded-lg border p-4 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-mono text-sm leading-snug break-all flex-1">
                       {s.processed_filename?.trim() ? s.processed_filename : "—"}
@@ -600,8 +592,8 @@ export default function MyContentPage() {
               </Table>
             )}
           </div>
-        </TabsContent>
-      </Tabs>
+        </div>
+      </div>
 
       {/* ── Partner add/edit dialog ── */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
