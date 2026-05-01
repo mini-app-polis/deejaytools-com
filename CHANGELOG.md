@@ -1,3 +1,10 @@
+## [1.40.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.40.0...v1.40.1) (2026-05-01)
+
+
+### Bug Fixes
+
+* move down functionality ([23da307](https://github.com/mini-app-polis/deejaytools-com/commit/23da30716aa3cbb3ef3dbbe4732b2b88d2fd7e77))
+
 # [1.40.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.39.0...v1.40.0) (2026-05-01)
 
 
