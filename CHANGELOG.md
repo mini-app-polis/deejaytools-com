@@ -1,3 +1,10 @@
+## [1.41.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.41.0...v1.41.1) (2026-05-01)
+
+
+### Bug Fixes
+
+* remove song name from sessions ([cb01559](https://github.com/mini-app-polis/deejaytools-com/commit/cb01559868058c6d0665378b818e743a6ae9bec3))
+
 # [1.41.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.40.2...v1.41.0) (2026-05-01)
 
 
