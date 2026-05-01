@@ -12,6 +12,7 @@ import {
   queueEvents,
   runs,
   sessions,
+  songs,
   users,
 } from "../db/schema.js";
 import { zValidator } from "../lib/validate.js";
@@ -551,6 +552,8 @@ async function listQueue(sessionId: string, queueType: "priority" | "non_priorit
       pairPartnerLast: partners.lastName,
       soloUserFirst: soloUser.firstName,
       soloUserLast: soloUser.lastName,
+      songDisplayName: songs.displayName,
+      songProcessedFilename: songs.processedFilename,
     })
     .from(queueEntries)
     .innerJoin(checkins, eq(queueEntries.checkinId, checkins.id))
@@ -558,6 +561,7 @@ async function listQueue(sessionId: string, queueType: "priority" | "non_priorit
     .leftJoin(pairUser, eq(pairUser.id, pairs.userAId))
     .leftJoin(partners, eq(partners.id, pairs.partnerBId))
     .leftJoin(soloUser, eq(soloUser.id, queueEntries.entitySoloUserId))
+    .leftJoin(songs, eq(songs.id, checkins.songId))
     .where(and(eq(queueEntries.sessionId, sessionId), eq(queueEntries.queueType, queueType)))
     .orderBy(asc(queueEntries.position));
 
@@ -582,6 +586,8 @@ async function listQueue(sessionId: string, queueType: "priority" | "non_priorit
       entityLabel,
       divisionName: r.divisionName,
       songId: r.songId,
+      songDisplayName: r.songDisplayName ?? null,
+      songProcessedFilename: r.songProcessedFilename ?? null,
       notes: r.notes,
       initialQueue: r.initialQueue,
       checkedInAt: r.checkedInAt,

@@ -124,6 +124,8 @@ export const ApiQueueEntrySchema = z.object({
   entityLabel: z.string(),
   divisionName: z.string(),
   songId: z.string().nullable(),
+  songDisplayName: z.string().nullable().optional(),
+  songProcessedFilename: z.string().nullable().optional(),
   notes: z.string().nullable(),
   initialQueue: z.string(),
   checkedInAt: z.number(),

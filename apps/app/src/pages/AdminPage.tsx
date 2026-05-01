@@ -399,8 +399,8 @@ export default function AdminPage() {
     return row.entityLabel;
   };
 
-  const renderSongLabel = (songId: string | null | undefined) =>
-    songId ? (songMap.get(songId) ?? songId) : "—";
+  const renderSongLabel = (row: ApiQueueEntry) =>
+    row.songDisplayName ?? (row.songId ? (songMap.get(row.songId) ?? row.songId) : "—");
 
   // ── Event CRUD ──────────────────────────────────────────────────────────────
 
@@ -962,7 +962,7 @@ export default function AdminPage() {
                       .map((row) => {
                         const isSlotOne = row.position === 1;
                         const isLast = row.position === lqActive.length;
-                        const filename = row.songId ? songFilenameMap.get(row.songId) : undefined;
+                        const filename = row.songProcessedFilename ?? undefined;
                         return (
                           <div key={row.queueEntryId} className="flex items-start gap-3">
                             <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
@@ -978,7 +978,7 @@ export default function AdminPage() {
                             >
                               <p className="font-medium">{renderEntityLabel(row)}</p>
                               <p className="text-muted-foreground truncate">
-                                {row.divisionName} · {renderSongLabel(row.songId)}
+                                {row.divisionName} · {renderSongLabel(row)}
                               </p>
                               {filename && (
                                 <p className="text-xs text-muted-foreground/70 truncate font-mono">
@@ -1037,7 +1037,7 @@ export default function AdminPage() {
                         .sort((a, b) => a.position - b.position)
                         .map((row) => {
                           const isLast = row.position === lqPriority.length;
-                          const filename = row.songId ? songFilenameMap.get(row.songId) : undefined;
+                          const filename = row.songProcessedFilename ?? undefined;
                           return (
                             <div key={row.queueEntryId} className="flex items-start gap-3">
                               <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
@@ -1046,7 +1046,7 @@ export default function AdminPage() {
                               <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
                                 <p className="font-medium">{renderEntityLabel(row)}</p>
                                 <p className="text-muted-foreground truncate">
-                                  {row.divisionName} · {renderSongLabel(row.songId)}
+                                  {row.divisionName} · {renderSongLabel(row)}
                                 </p>
                                 {filename && (
                                   <p className="text-xs text-muted-foreground/70 truncate font-mono">
@@ -1095,7 +1095,7 @@ export default function AdminPage() {
                         .sort((a, b) => a.position - b.position)
                         .map((row) => {
                           const isLast = row.position === lqNonPriority.length;
-                          const filename = row.songId ? songFilenameMap.get(row.songId) : undefined;
+                          const filename = row.songProcessedFilename ?? undefined;
                           return (
                             <div key={row.queueEntryId} className="flex items-start gap-3">
                               <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
@@ -1104,7 +1104,7 @@ export default function AdminPage() {
                               <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
                                 <p className="font-medium">{renderEntityLabel(row)}</p>
                                 <p className="text-muted-foreground truncate">
-                                  {row.divisionName} · {renderSongLabel(row.songId)}
+                                  {row.divisionName} · {renderSongLabel(row)}
                                 </p>
                                 {filename && (
                                   <p className="text-xs text-muted-foreground/70 truncate font-mono">
