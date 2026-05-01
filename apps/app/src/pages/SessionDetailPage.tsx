@@ -517,57 +517,58 @@ export default function ApiSessionPage() {
         </CardContent>
       </Card>
 
-      {/* ── Priority queue ── */}
-      <Card className="border-amber-500/30">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-amber-500 dark:text-amber-400">Priority</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {priorityWaiting.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Priority queue is empty.</p>
-          ) : (
-            priorityWaiting.map((r, i) => (
-              <div key={r.queueEntryId} className="flex items-start gap-3">
-                <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
-                  #{active.length + i + 1}
-                </span>
-                <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
-                  <p className="font-medium">{renderEntityLabel(r)}</p>
-                  <p className="text-muted-foreground truncate">
-                    {r.divisionName} · {renderSongLabel(r.songId)}
-                  </p>
+      {/* ── Priority + Standard queues — side by side when there's room ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Card className="border-amber-500/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-amber-500 dark:text-amber-400">Priority</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {priorityWaiting.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Priority queue is empty.</p>
+            ) : (
+              priorityWaiting.map((r, i) => (
+                <div key={r.queueEntryId} className="flex items-start gap-3">
+                  <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
+                    #{active.length + i + 1}
+                  </span>
+                  <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
+                    <p className="font-medium">{renderEntityLabel(r)}</p>
+                    <p className="text-muted-foreground truncate">
+                      {r.divisionName} · {renderSongLabel(r.songId)}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
+              ))
+            )}
+          </CardContent>
+        </Card>
 
-      {/* ── Standard queue ── */}
-      <Card className="border-sky-500/30">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sky-500 dark:text-sky-400">Standard</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {standardWaiting.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Standard queue is empty.</p>
-          ) : (
-            standardWaiting.map((r, i) => (
-              <div key={r.queueEntryId} className="flex items-start gap-3">
-                <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
-                  #{active.length + priorityWaiting.length + i + 1}
-                </span>
-                <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
-                  <p className="font-medium">{renderEntityLabel(r)}</p>
-                  <p className="text-muted-foreground truncate">
-                    {r.divisionName} · {renderSongLabel(r.songId)}
-                  </p>
+        <Card className="border-sky-500/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sky-500 dark:text-sky-400">Standard</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {standardWaiting.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Standard queue is empty.</p>
+            ) : (
+              standardWaiting.map((r, i) => (
+                <div key={r.queueEntryId} className="flex items-start gap-3">
+                  <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
+                    #{active.length + priorityWaiting.length + i + 1}
+                  </span>
+                  <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
+                    <p className="font-medium">{renderEntityLabel(r)}</p>
+                    <p className="text-muted-foreground truncate">
+                      {r.divisionName} · {renderSongLabel(r.songId)}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* ── Check-in action (bottom) — same block as top ── */}
       {checkInBlock}
