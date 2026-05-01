@@ -224,7 +224,12 @@ async function buildAndUploadSong(
 
   const taggedBytes = await tagSongBytes({ bytes: inputBytes, newTitle, newArtist, mimeType });
 
-  const uploadResult = await uploadSongToDrive(taggedBytes, { filename: processedFilename, mimeType });
+  const uploadResult = await uploadSongToDrive(taggedBytes, {
+    filename: processedFilename,
+    mimeType,
+    seasonYear: seasonYearStr,
+    division: song.division ?? "",
+  });
 
   const now = Date.now();
   await db
@@ -486,7 +491,7 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
   // manually. We do NOT block the user's delete action for this.
   if (existing.driveFileId && existing.driveFolderId) {
     try {
-      await softDeleteOnDrive(existing.driveFileId, existing.driveFolderId);
+      await softDeleteOnDrive(existing.driveFileId);
     } catch (err) {
       logger.error({
         event: "song_drive_soft_delete_failed",

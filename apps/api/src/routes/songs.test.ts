@@ -279,7 +279,7 @@ describe("DELETE /v1/songs/:id", () => {
       headers: authHeaders(),
     });
     expect(res.status).toBe(204);
-    expect(vi.mocked(drive.softDeleteOnDrive)).toHaveBeenCalledWith("file1", "folder1");
+    expect(vi.mocked(drive.softDeleteOnDrive)).toHaveBeenCalledWith("file1");
   });
 });
 

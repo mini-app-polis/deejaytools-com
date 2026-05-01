@@ -46,6 +46,13 @@ const TEST_ENV = {
   GOOGLE_DRIVE_PARENT_FOLDER_ID: "parent_folder_123",
 };
 
+const DEFAULT_UPLOAD_OPTIONS = {
+  filename: "test_v01.mp3",
+  mimeType: "audio/mpeg",
+  seasonYear: "2026",
+  division: "Advanced",
+};
+
 function resetDriveTestState() {
   vi.resetAllMocks();
   mocks.mockGoogleDrive.mockImplementation(() => mocks.driveApi);
@@ -55,59 +62,134 @@ function resetDriveTestState() {
   Object.assign(process.env, TEST_ENV);
 }
 
+// Helper: set up list mocks so both year and division folders already exist.
+function mockFoldersExist(yearFolderId = "year_folder_2026", divisionFolderId = "div_folder_adv") {
+  mocks.mockFilesList
+    .mockResolvedValueOnce({ data: { files: [{ id: yearFolderId }] } })   // year lookup
+    .mockResolvedValueOnce({ data: { files: [{ id: divisionFolderId }] } }); // division lookup
+  return { yearFolderId, divisionFolderId };
+}
+
 describe("uploadSongToDrive", () => {
   beforeEach(() => {
     resetDriveTestState();
   });
 
-  const { mockFilesCreate } = mocks;
+  const { mockFilesCreate, mockFilesList } = mocks;
 
   it("throws when env vars are missing", async () => {
     delete process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
     await expect(
-      uploadSongToDrive(Buffer.from("test"), { filename: "test.mp3", mimeType: "audio/mpeg" })
+      uploadSongToDrive(Buffer.from("test"), DEFAULT_UPLOAD_OPTIONS)
     ).rejects.toThrow("Google Drive environment variables are not configured");
   });
 
-  it("calls drive.files.create with correct parameters", async () => {
+  it("uploads file into <root>/<year>/<division>/ when both folders exist", async () => {
+    const { divisionFolderId } = mockFoldersExist();
     mockFilesCreate.mockResolvedValueOnce({ data: { id: "file_abc123" } });
 
-    const bytes = Buffer.from("audio data");
-    await uploadSongToDrive(bytes, { filename: "test_v1.mp3", mimeType: "audio/mpeg" });
+    await uploadSongToDrive(Buffer.from("audio data"), DEFAULT_UPLOAD_OPTIONS);
 
+    // File create call should target the division folder, not root
+    expect(mockFilesCreate).toHaveBeenCalledOnce();
     expect(mockFilesCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         requestBody: expect.objectContaining({
-          name: "test_v1.mp3",
-          parents: ["parent_folder_123"],
+          name: DEFAULT_UPLOAD_OPTIONS.filename,
+          parents: [divisionFolderId],
         }),
-        media: expect.objectContaining({
-          mimeType: "audio/mpeg",
-        }),
+        media: expect.objectContaining({ mimeType: DEFAULT_UPLOAD_OPTIONS.mimeType }),
         supportsAllDrives: true,
       })
     );
   });
 
-  it("returns fileId and folderId on success", async () => {
+  it("creates year and division folders when neither exists", async () => {
+    // Both list calls return empty — folders need to be created
+    mockFilesList
+      .mockResolvedValueOnce({ data: { files: [] } }) // year lookup → not found
+      .mockResolvedValueOnce({ data: { files: [] } }); // division lookup → not found
+    // create year folder, create division folder, create file
+    mockFilesCreate
+      .mockResolvedValueOnce({ data: { id: "new_year_folder" } })
+      .mockResolvedValueOnce({ data: { id: "new_div_folder" } })
+      .mockResolvedValueOnce({ data: { id: "file_abc123" } });
+
+    await uploadSongToDrive(Buffer.from("audio"), DEFAULT_UPLOAD_OPTIONS);
+
+    expect(mockFilesCreate).toHaveBeenCalledTimes(3);
+
+    // First create: year folder under root
+    expect(mockFilesCreate).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        requestBody: expect.objectContaining({
+          name: "2026",
+          mimeType: "application/vnd.google-apps.folder",
+          parents: ["parent_folder_123"],
+        }),
+      })
+    );
+
+    // Second create: division folder under year
+    expect(mockFilesCreate).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        requestBody: expect.objectContaining({
+          name: "Advanced",
+          mimeType: "application/vnd.google-apps.folder",
+          parents: ["new_year_folder"],
+        }),
+      })
+    );
+
+    // Third create: file under division folder
+    expect(mockFilesCreate).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        requestBody: expect.objectContaining({
+          name: DEFAULT_UPLOAD_OPTIONS.filename,
+          parents: ["new_div_folder"],
+        }),
+      })
+    );
+  });
+
+  it("returns fileId and the division folderId", async () => {
+    const { divisionFolderId } = mockFoldersExist("yr_folder", "div_folder_xyz");
     mockFilesCreate.mockResolvedValueOnce({ data: { id: "file_abc123" } });
 
-    const result = await uploadSongToDrive(Buffer.from("audio"), {
+    const result = await uploadSongToDrive(Buffer.from("audio"), DEFAULT_UPLOAD_OPTIONS);
+
+    expect(result).toEqual({ fileId: "file_abc123", folderId: divisionFolderId });
+  });
+
+  it("falls back to 'unknown' for blank seasonYear and division", async () => {
+    mockFilesList
+      .mockResolvedValueOnce({ data: { files: [{ id: "yr_folder" }] } })
+      .mockResolvedValueOnce({ data: { files: [{ id: "div_folder" }] } });
+    mockFilesCreate.mockResolvedValueOnce({ data: { id: "file_xyz" } });
+
+    await uploadSongToDrive(Buffer.from("audio"), {
       filename: "test.mp3",
       mimeType: "audio/mpeg",
+      seasonYear: "  ",
+      division: "",
     });
 
-    expect(result).toEqual({
-      fileId: "file_abc123",
-      folderId: "parent_folder_123",
-    });
+    // Year folder lookup should use "unknown"
+    expect(mockFilesList).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ q: expect.stringContaining("name='unknown'") })
+    );
   });
 
   it("throws when Drive returns no file ID", async () => {
+    mockFoldersExist();
     mockFilesCreate.mockResolvedValueOnce({ data: {} });
 
     await expect(
-      uploadSongToDrive(Buffer.from("audio"), { filename: "test.mp3", mimeType: "audio/mpeg" })
+      uploadSongToDrive(Buffer.from("audio"), DEFAULT_UPLOAD_OPTIONS)
     ).rejects.toThrow("Drive upload did not return a file id");
   });
 });
@@ -121,23 +203,30 @@ describe("softDeleteOnDrive", () => {
 
   it("throws when env vars are missing", async () => {
     delete process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-    await expect(softDeleteOnDrive("file1", "folder1")).rejects.toThrow(
+    await expect(softDeleteOnDrive("file1")).rejects.toThrow(
       "Google Drive environment variables are not configured"
     );
   });
 
-  it("uses existing _deprecated folder when found", async () => {
+  it("uses existing _deprecated folder at root when found", async () => {
     mockFilesList.mockResolvedValueOnce({
       data: { files: [{ id: "deprecated_folder_1" }] },
     });
     mockFilesGet.mockResolvedValueOnce({
-      data: { parents: ["parent_folder_123"] },
+      data: { parents: ["year_folder_2026"] },
     });
     mockFilesUpdate.mockResolvedValueOnce({ data: {} });
 
-    await softDeleteOnDrive("file_abc", "parent_folder_123");
+    await softDeleteOnDrive("file_abc");
 
     expect(mockFilesCreate).not.toHaveBeenCalled();
+
+    // _deprecated lookup must target the root folder
+    expect(mockFilesList).toHaveBeenCalledWith(
+      expect.objectContaining({
+        q: expect.stringContaining("'parent_folder_123' in parents"),
+      })
+    );
 
     expect(mockFilesUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -148,13 +237,13 @@ describe("softDeleteOnDrive", () => {
     );
   });
 
-  it("creates _deprecated folder when not found", async () => {
+  it("creates _deprecated folder at root when not found", async () => {
     mockFilesList.mockResolvedValueOnce({ data: { files: [] } });
     mockFilesCreate.mockResolvedValueOnce({ data: { id: "new_deprecated_folder" } });
-    mockFilesGet.mockResolvedValueOnce({ data: { parents: ["parent_folder_123"] } });
+    mockFilesGet.mockResolvedValueOnce({ data: { parents: ["year_folder_2026"] } });
     mockFilesUpdate.mockResolvedValueOnce({ data: {} });
 
-    await softDeleteOnDrive("file_abc", "parent_folder_123");
+    await softDeleteOnDrive("file_abc");
 
     expect(mockFilesCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -176,10 +265,10 @@ describe("softDeleteOnDrive", () => {
 
   it("throws when _deprecated folder cannot be created", async () => {
     mockFilesList.mockResolvedValueOnce({ data: { files: [] } });
-    mockFilesCreate.mockResolvedValueOnce({ data: {} });
+    mockFilesCreate.mockResolvedValueOnce({ data: {} }); // no ID returned
 
-    await expect(softDeleteOnDrive("file_abc", "parent_folder_123")).rejects.toThrow(
-      "Unable to locate or create _deprecated folder"
+    await expect(softDeleteOnDrive("file_abc")).rejects.toThrow(
+      "Failed to create Drive folder: _deprecated"
     );
   });
 
@@ -187,36 +276,33 @@ describe("softDeleteOnDrive", () => {
     mockFilesList.mockResolvedValueOnce({
       data: { files: [{ id: "dep_folder" }] },
     });
-    mockFilesGet.mockResolvedValueOnce({ data: { parents: ["parent_folder_123"] } });
+    mockFilesGet.mockResolvedValueOnce({ data: { parents: ["year_folder_2026"] } });
     mockFilesUpdate.mockResolvedValueOnce({ data: {} });
 
-    await softDeleteOnDrive("file_abc", "parent_folder_123");
+    await softDeleteOnDrive("file_abc");
 
     expect(mockFilesList).toHaveBeenCalledWith(
-      expect.objectContaining({
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true,
-      })
+      expect.objectContaining({ supportsAllDrives: true, includeItemsFromAllDrives: true })
     );
     expect(mockFilesUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ supportsAllDrives: true })
     );
   });
 
-  it("handles file with multiple parents — removes all current parents", async () => {
+  it("removes all current parents when moving to _deprecated", async () => {
     mockFilesList.mockResolvedValueOnce({
       data: { files: [{ id: "dep_folder" }] },
     });
     mockFilesGet.mockResolvedValueOnce({
-      data: { parents: ["parent1", "parent2"] },
+      data: { parents: ["year_folder", "div_folder"] },
     });
     mockFilesUpdate.mockResolvedValueOnce({ data: {} });
 
-    await softDeleteOnDrive("file_abc", "parent_folder_123");
+    await softDeleteOnDrive("file_abc");
 
     expect(mockFilesUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        removeParents: "parent1,parent2",
+        removeParents: "year_folder,div_folder",
       })
     );
   });
