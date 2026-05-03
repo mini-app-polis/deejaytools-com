@@ -225,13 +225,15 @@ partnerRoutes.delete("/:id", requireAuth, async (c) => {
     );
   }
 
-  await db
-    .update(songs)
-    .set({ partnerId: null })
-    .where(and(eq(songs.partnerId, id), eq(songs.userId, userId)));
+  await db.transaction(async (tx) => {
+    await tx
+      .update(songs)
+      .set({ partnerId: null })
+      .where(and(eq(songs.partnerId, id), eq(songs.userId, userId)));
 
-  await db.update(pairs).set({ partnerBId: null }).where(eq(pairs.partnerBId, id));
+    await tx.update(pairs).set({ partnerBId: null }).where(eq(pairs.partnerBId, id));
 
-  await db.delete(partners).where(and(eq(partners.id, id), eq(partners.userId, userId)));
+    await tx.delete(partners).where(and(eq(partners.id, id), eq(partners.userId, userId)));
+  });
   return c.body(null, 204);
 });

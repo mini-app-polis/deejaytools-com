@@ -41,7 +41,6 @@ export const createCheckinBodySchema = z
     entitySoloUserId: z.string().nullish(),
     songId: z.string().min(1),
     notes: z.string().nullish(),
-    eventRegistrationId: z.string().nullish(),
   })
   .refine(
     (b) => Boolean(b.entityPairId) !== Boolean(b.entitySoloUserId),

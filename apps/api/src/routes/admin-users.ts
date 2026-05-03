@@ -67,7 +67,7 @@ adminUserRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c)
       lastName: users.lastName,
       role: users.role,
       createdAt: users.createdAt,
-      songCount: sql<number>`(SELECT COUNT(*)::int FROM ${songs} WHERE ${songs.userId} = ${users.id})`,
+      songCount: sql<number>`(SELECT COUNT(*)::int FROM ${songs} WHERE ${songs.userId} = ${users.id} AND ${songs.deletedAt} IS NULL)`,
       partnerCount: sql<number>`(SELECT COUNT(*)::int FROM ${partners} WHERE ${partners.userId} = ${users.id})`,
     })
     .from(users)

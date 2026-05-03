@@ -117,7 +117,7 @@ export const events = pgTable(
     /** IANA timezone identifier, e.g. "America/Chicago". All session timestamps
      *  for this event are interpreted and displayed in this timezone. */
     timezone: text("timezone").notNull().default("America/Chicago"),
-    createdBy: text("created_by").references(() => users.id),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
   },
@@ -140,7 +140,7 @@ export const sessions = pgTable(
     activePriorityMax: integer("active_priority_max").notNull().default(6),
     activeNonPriorityMax: integer("active_non_priority_max").notNull().default(4),
     status: sessionStatusEnum("status").notNull().default("scheduled"),
-    createdBy: text("created_by").references(() => users.id),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
   },
   (t) => ({
