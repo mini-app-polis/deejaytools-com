@@ -31,7 +31,10 @@ const listQuery = z.object({
  * would produce N*M rows that need to be deduplicated; the subquery form
  * stays at one row per user and is straightforward to read. The `::int`
  * cast forces postgres.js to deliver the count as a JS number — without
- * it, COUNT(*) returns bigint and arrives here as a string.
+ * it, COUNT(*) returns bigint and arrives here as a string. The subqueries
+ * use raw SQL column names (not Drizzle column references) because Drizzle
+ * parameterizes interpolated columns inside sql`` templates, which breaks
+ * correlated subquery semantics.
  *
  * Query params:
  *   - q:    optional search across email / first_name / last_name (ILIKE)
@@ -67,8 +70,8 @@ adminUserRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c)
       lastName: users.lastName,
       role: users.role,
       createdAt: users.createdAt,
-      songCount: sql<number>`(SELECT COUNT(*)::int FROM ${songs} WHERE ${songs.userId} = ${users.id} AND ${songs.deletedAt} IS NULL)`,
-      partnerCount: sql<number>`(SELECT COUNT(*)::int FROM ${partners} WHERE ${partners.userId} = ${users.id})`,
+      songCount: sql<number>`(SELECT COUNT(*)::int FROM songs WHERE songs.user_id = users.id AND songs.deleted_at IS NULL)`,
+      partnerCount: sql<number>`(SELECT COUNT(*)::int FROM partners WHERE partners.user_id = users.id)`,
     })
     .from(users)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
