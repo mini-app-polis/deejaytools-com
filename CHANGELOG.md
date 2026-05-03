@@ -1,3 +1,10 @@
+## [1.44.6](https://github.com/mini-app-polis/deejaytools-com/compare/v1.44.5...v1.44.6) (2026-05-03)
+
+
+### Bug Fixes
+
+* landing page text ([ad90846](https://github.com/mini-app-polis/deejaytools-com/commit/ad9084657938646bcd77e0e0efa2903250351002))
+
 ## [1.44.5](https://github.com/mini-app-polis/deejaytools-com/compare/v1.44.4...v1.44.5) (2026-05-03)
 
 
