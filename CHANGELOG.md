@@ -1,3 +1,18 @@
+# [1.46.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.45.0...v1.46.0) (2026-05-03)
+
+
+### Bug Fixes
+
+* adjusting my content queue position ([01a773c](https://github.com/mini-app-polis/deejaytools-com/commit/01a773c3ab372a63062651144db7eb85f2de543e))
+* adjusting my content queue position ([be2b1f3](https://github.com/mini-app-polis/deejaytools-com/commit/be2b1f309a0caae020c31efb854d62ea59fbc6da))
+* run count uses all user pair IDs to handle partner re-creation ([59c7a6f](https://github.com/mini-app-polis/deejaytools-com/commit/59c7a6faea75a248fffe6390d26e0375d6300685))
+* runCount undefined fallback and queue badge labels ([acaa587](https://github.com/mini-app-polis/deejaytools-com/commit/acaa58732afdafda4b0e47b20a8bad2bdb5d3e47))
+
+
+### Features
+
+* show run count and improve check-in card layout on My Content ([567d9c3](https://github.com/mini-app-polis/deejaytools-com/commit/567d9c371179185f5bc2e10bfffa2542ef60a5bf))
+
 # [1.45.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.44.7...v1.45.0) (2026-05-03)
 
 
