@@ -44,15 +44,15 @@ const CARDS: CardDef[] = [
   {
     kind: "public",
     to: "/how-it-works",
-    eyebrow: "Start here",
+    eyebrow: "Answers to all questions",
     title: "How Floor Trials Work",
     body: "What a floor trial is, how to submit music, what happens at the event, and how the queue is ordered.",
   },
   {
     kind: "public",
     to: "/floor-trials",
-    eyebrow: "Now / next",
-    title: "Active Floor Trials",
+    eyebrow: "Scheduled",
+    title: "Floor Trials",
     body: "See active and upcoming sessions. Open one to check in and watch the live queue.",
   },
   {

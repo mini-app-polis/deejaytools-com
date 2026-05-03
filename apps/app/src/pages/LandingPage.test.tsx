@@ -53,7 +53,7 @@ describe("LandingPage — entry-point cards", () => {
     signedIn = true; // run in signed-in mode so the My Content link href is asserted directly
     renderPage();
     expect(screen.getByText("How Floor Trials Work")).toBeInTheDocument();
-    expect(screen.getByText("Active Floor Trials")).toBeInTheDocument();
+    expect(screen.getByText("Floor Trials")).toBeInTheDocument();
     expect(screen.getByText("My Content")).toBeInTheDocument();
     expect(screen.getByText("Feedback")).toBeInTheDocument();
     // Old cards should not be back.
@@ -67,7 +67,7 @@ describe("LandingPage — entry-point cards", () => {
     renderPage();
     const cards = [
       { title: "How Floor Trials Work", href: "/how-it-works" },
-      { title: "Active Floor Trials", href: "/floor-trials" },
+      { title: "Floor Trials", href: "/floor-trials" },
       { title: "My Content", href: "/my-content" },
       { title: "Feedback", href: "/feedback" },
     ];
