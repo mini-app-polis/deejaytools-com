@@ -1,3 +1,10 @@
+## [1.47.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.47.3...v1.47.4) (2026-05-03)
+
+
+### Bug Fixes
+
+* surface actual fetch error in upload toast for diagnostics ([80ed34b](https://github.com/mini-app-polis/deejaytools-com/commit/80ed34b30a68835ea8faee72c5c42a3e53c17459))
+
 ## [1.47.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.47.2...v1.47.3) (2026-05-03)
 
 
