@@ -1,3 +1,4 @@
+import { SignInButton, SignedIn, SignedOut } from "@clerk/clerk-react";
 import { Link } from "react-router-dom";
 import NavBar from "@/components/NavBar";
 import { cn } from "@/lib/utils";
@@ -7,46 +8,73 @@ import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
  * Public landing page.
  *
  * The page is deliberately thin: a short pitch in the hero, then a card
- * grid that points visitors at every real entry point on the site. There's
- * no inline how-it-works section anymore — that material moved to its own
- * /how-it-works page (linked from one of the cards) where each step has
- * room to actually be useful instead of a one-line summary.
+ * grid that points visitors at every real entry point on the site.
  *
- * Auth-gated cards (My Content) link straight to their routes;
- * Clerk's RequireAuth wrapper redirects signed-out users to sign-in.
+ * Card kinds:
+ *   - "public":  always navigates straight to the destination
+ *   - "auth":    when signed in, behaves like "public"; when signed out,
+ *                opens Clerk's sign-in modal and redirects to the
+ *                destination on success — so a signed-out click on
+ *                "My Content" doesn't bounce the user through the
+ *                RequireAuth wrapper, it asks for credentials in place
  */
 
-type CardDef = {
+type PublicCard = {
+  kind: "public";
   to: string;
   eyebrow: string;
   title: string;
   body: string;
 };
 
-// Card order — the long-form guide leads, then the in-the-moment action,
-// then the user's own data, then the read-only catalog. This top-down
-// reading order matches how a competitor would naturally use the site:
-// learn, then act, then look up.
+type AuthCard = {
+  kind: "auth";
+  to: string;
+  eyebrow: string;
+  title: string;
+  body: string;
+};
+
+type CardDef = PublicCard | AuthCard;
+
+// Card order matches reading flow: learn → act → manage your stuff → tell us
+// what's broken. The auth-gated card sits in the middle so the layout stays
+// the same whether you're signed in or out.
 const CARDS: CardDef[] = [
   {
+    kind: "public",
     to: "/how-it-works",
     eyebrow: "Start here",
     title: "How Floor Trials Work",
     body: "What a floor trial is, how to submit music, what happens at the event, and how the queue is ordered.",
   },
   {
+    kind: "public",
     to: "/floor-trials",
     eyebrow: "Now / next",
     title: "Active Floor Trials",
     body: "See active and upcoming sessions. Open one to check in and watch the live queue.",
   },
   {
+    kind: "auth",
     to: "/my-content",
-    eyebrow: "Signed in",
+    eyebrow: "Sign in required",
     title: "My Content",
     body: "Manage your partners, songs, and see where you're currently checked in.",
   },
+  {
+    kind: "public",
+    to: "/feedback",
+    eyebrow: "Help us improve",
+    title: "Feedback",
+    body: "Report a bug, request a feature, or send the deejay team a note.",
+  },
 ];
+
+const CARD_BOX_CLASS = cn(
+  "rounded-xl border border-white/[0.07] bg-card px-5 py-5 flex flex-col text-left",
+  CLICKABLE_CARD_CLASS
+);
 
 export default function LandingPage() {
   return (
@@ -80,40 +108,80 @@ export default function LandingPage() {
         <section className="py-10 sm:py-14">
           <SectionLabel>Where do you want to go?</SectionLabel>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {CARDS.map((card) => (
-              <Link
-                key={card.to}
-                to={card.to}
-                className={cn(
-                  "rounded-xl border border-white/[0.07] bg-card px-5 py-5 flex flex-col",
-                  CLICKABLE_CARD_CLASS
-                )}
-              >
-                <p
-                  className="text-[10px] font-medium tracking-[0.18em] uppercase text-primary/60 mb-3"
-                  style={{ fontFamily: "'DM Mono', monospace" }}
-                >
-                  {card.eyebrow}
-                </p>
-                <p className="text-base font-medium text-foreground mb-1 transition-colors group-hover:text-primary">
-                  {card.title}
-                </p>
-                <p className="text-sm text-muted-foreground font-light leading-relaxed flex-1">
-                  {card.body}
-                </p>
-                <p
-                  className="mt-4 text-xs text-muted-foreground/60 transition-colors group-hover:text-primary"
-                  style={{ fontFamily: "'DM Mono', monospace" }}
-                >
-                  → open
-                </p>
-              </Link>
-            ))}
+            {CARDS.map((card) =>
+              card.kind === "auth" ? (
+                <AuthCardLink key={card.to} card={card} />
+              ) : (
+                <Link key={card.to} to={card.to} className={CARD_BOX_CLASS}>
+                  <CardSurface card={card} />
+                </Link>
+              )
+            )}
           </div>
         </section>
 
       </main>
     </div>
+  );
+}
+
+/**
+ * Card that renders as a normal Link when the user is signed in, and as a
+ * Clerk SignInButton trigger when they're not. The visible content is
+ * identical in both cases — only the click behavior differs.
+ *
+ * `forceRedirectUrl` + `signUpForceRedirectUrl` send the user back to
+ * `card.to` after the modal closes successfully, so the click feels like
+ * "this opened the page" with a one-step auth detour in the middle.
+ */
+function AuthCardLink({ card }: { card: AuthCard }) {
+  return (
+    <>
+      <SignedIn>
+        <Link to={card.to} className={CARD_BOX_CLASS}>
+          <CardSurface card={card} />
+        </Link>
+      </SignedIn>
+      <SignedOut>
+        <SignInButton
+          mode="modal"
+          forceRedirectUrl={card.to}
+          signUpForceRedirectUrl={card.to}
+        >
+          {/* The card is the click target. SignInButton attaches its handler
+              to whatever you put inside it, so a `<button>` wrapping the
+              same surface keeps keyboard + screen-reader semantics. */}
+          <button type="button" className={CARD_BOX_CLASS}>
+            <CardSurface card={card} />
+          </button>
+        </SignInButton>
+      </SignedOut>
+    </>
+  );
+}
+
+function CardSurface({ card }: { card: CardDef }) {
+  return (
+    <>
+      <p
+        className="text-[10px] font-medium tracking-[0.18em] uppercase text-primary/60 mb-3"
+        style={{ fontFamily: "'DM Mono', monospace" }}
+      >
+        {card.eyebrow}
+      </p>
+      <p className="text-base font-medium text-foreground mb-1 transition-colors group-hover:text-primary">
+        {card.title}
+      </p>
+      <p className="text-sm text-muted-foreground font-light leading-relaxed flex-1">
+        {card.body}
+      </p>
+      <p
+        className="mt-4 text-xs text-muted-foreground/60 transition-colors group-hover:text-primary"
+        style={{ fontFamily: "'DM Mono', monospace" }}
+      >
+        → open
+      </p>
+    </>
   );
 }
 
