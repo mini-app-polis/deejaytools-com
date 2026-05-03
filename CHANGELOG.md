@@ -1,3 +1,10 @@
+## [1.42.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.42.0...v1.42.1) (2026-05-03)
+
+
+### Bug Fixes
+
+* updating admin users page ([17fdd79](https://github.com/mini-app-polis/deejaytools-com/commit/17fdd79d443f75a4c006b0264b6626827698f227))
+
 # [1.42.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.41.2...v1.42.0) (2026-05-01)
 
 
