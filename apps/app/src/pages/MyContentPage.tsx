@@ -303,11 +303,20 @@ export default function MyContentPage() {
                   <div className="flex-1 min-w-0 rounded-lg border px-4 py-3 text-sm space-y-2">
                     {/* Position + queue type */}
                     <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-border/40">
-                      <p className="text-sm font-medium">
-                        This entry is{" "}
-                        <span className="text-foreground font-semibold">#{ci.overallPosition}</span>{" "}
-                        in line
-                      </p>
+                      <div>
+                        <p className="text-sm font-medium">
+                          This entry is{" "}
+                          <span className="text-foreground font-semibold">#{ci.overallPosition}</span>{" "}
+                          in line
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {ci.runCount === 0
+                            ? "No runs yet this session"
+                            : ci.runCount === 1
+                            ? "1 run this session"
+                            : `${ci.runCount} runs this session`}
+                        </p>
+                      </div>
                       <div className="shrink-0">{queueStatusBadge(ci)}</div>
                     </div>
                     <div className="flex items-start justify-between gap-2 flex-wrap">

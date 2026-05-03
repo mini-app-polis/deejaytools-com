@@ -1,5 +1,5 @@
 import { CommonErrors, createLogger, error, success } from "common-typescript-utils";
-import { count, desc, eq, inArray, or } from "drizzle-orm";
+import { and, count, desc, eq, inArray, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -204,6 +204,7 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
       eventTimezone: events.timezone,
       divisionName: checkins.divisionName,
       entityPairId: checkins.entityPairId,
+      entitySoloUserId: checkins.entitySoloUserId,
       notes: checkins.notes,
       checkedInAt: checkins.createdAt,
       songDisplayName: songs.displayName,
@@ -256,6 +257,38 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
     }
   }
 
+  // For each (session, entity) combo, count how many runs have been completed.
+  // Key: `${sessionId}:${entityPairId ?? entitySoloUserId}`
+  const runCountMap = new Map<string, number>();
+  if (sessionIds.length > 0) {
+    const entityPairIdsInSessions = [...new Set(rows.map((r) => r.entityPairId).filter(Boolean))] as string[];
+    const entitySoloIdsInSessions = [...new Set(rows.map((r) => r.entitySoloUserId).filter(Boolean))] as string[];
+
+    const runCountParts = [];
+    if (entityPairIdsInSessions.length > 0)
+      runCountParts.push(inArray(runs.entityPairId, entityPairIdsInSessions));
+    if (entitySoloIdsInSessions.length > 0)
+      runCountParts.push(inArray(runs.entitySoloUserId, entitySoloIdsInSessions));
+
+    if (runCountParts.length > 0) {
+      const runCounts = await db
+        .select({
+          sessionId: runs.sessionId,
+          entityPairId: runs.entityPairId,
+          entitySoloUserId: runs.entitySoloUserId,
+          n: count(),
+        })
+        .from(runs)
+        .where(and(inArray(runs.sessionId, sessionIds), or(...runCountParts)))
+        .groupBy(runs.sessionId, runs.entityPairId, runs.entitySoloUserId);
+
+      for (const rc of runCounts) {
+        const entityKey = rc.entityPairId ?? rc.entitySoloUserId;
+        if (entityKey) runCountMap.set(`${rc.sessionId}:${entityKey}`, Number(rc.n));
+      }
+    }
+  }
+
   const overallPosition = (sessionId: string, queueType: string, queuePos: number): number => {
     const c = countsMap.get(sessionId) ?? { active: 0, priority: 0, non_priority: 0 };
     if (queueType === "active") return queuePos;
@@ -272,6 +305,9 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
     } else {
       entityLabel = "Solo";
     }
+
+    const entityKey = r.entityPairId ?? r.entitySoloUserId;
+    const runCount = entityKey ? (runCountMap.get(`${r.sessionId}:${entityKey}`) ?? 0) : 0;
 
     return {
       id: r.id,
@@ -291,6 +327,7 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
       queueType: r.queueType,
       queuePosition: r.queuePosition,
       overallPosition: overallPosition(r.sessionId, r.queueType, r.queuePosition),
+      runCount,
     };
   });
 
