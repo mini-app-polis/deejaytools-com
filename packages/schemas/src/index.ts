@@ -151,7 +151,7 @@ export const ApiMyCheckinSchema = z.object({
   queueType: z.string(),
   queuePosition: z.number(),
   overallPosition: z.number(),
-  runCount: z.number(),
+  runCount: z.number().optional().default(0),
 });
 export type ApiMyCheckin = z.infer<typeof ApiMyCheckinSchema>;
 

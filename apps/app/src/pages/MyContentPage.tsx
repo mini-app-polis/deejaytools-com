@@ -77,21 +77,21 @@ function queueStatusBadge(checkin: ApiMyCheckin) {
   if (checkin.queueType === "active") {
     return (
       <Badge className="bg-primary text-primary-foreground border-transparent">
-        Active
+        Active queue
       </Badge>
     );
   }
   if (checkin.queueType === "priority") {
     return (
       <Badge className="bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30">
-        Priority
+        Priority queue
       </Badge>
     );
   }
   if (checkin.queueType === "non_priority") {
     return (
       <Badge className="bg-sky-500/20 text-sky-600 dark:text-sky-400 border-sky-500/30">
-        Standard
+        Standard queue
       </Badge>
     );
   }
@@ -310,9 +310,9 @@ export default function MyContentPage() {
                           in line
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {ci.runCount === 0
+                          {(ci.runCount ?? 0) === 0
                             ? "No runs yet this session"
-                            : ci.runCount === 1
+                            : (ci.runCount ?? 0) === 1
                             ? "1 run this session"
                             : `${ci.runCount} runs this session`}
                         </p>
