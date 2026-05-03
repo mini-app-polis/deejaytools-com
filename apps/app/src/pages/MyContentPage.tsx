@@ -77,25 +77,25 @@ function queueStatusBadge(checkin: ApiMyCheckin) {
   if (checkin.queueType === "active") {
     return (
       <Badge className="bg-primary text-primary-foreground border-transparent">
-        Active #{checkin.queuePosition}
+        Active
       </Badge>
     );
   }
   if (checkin.queueType === "priority") {
     return (
       <Badge className="bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30">
-        Priority #{checkin.queuePosition}
+        Priority
       </Badge>
     );
   }
   if (checkin.queueType === "non_priority") {
     return (
       <Badge className="bg-sky-500/20 text-sky-600 dark:text-sky-400 border-sky-500/30">
-        Standard #{checkin.queuePosition}
+        Standard
       </Badge>
     );
   }
-  return <Badge variant="secondary">#{checkin.queuePosition}</Badge>;
+  return <Badge variant="secondary">In queue</Badge>;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -301,9 +301,10 @@ export default function MyContentPage() {
                 <div key={ci.id} className="flex items-start gap-3">
                   {/* Overall position number */}
                   <div className="shrink-0 pt-3 w-12 text-right">
-                    <span className="text-sm font-medium tabular-nums text-muted-foreground">
+                    <span className="text-sm font-medium tabular-nums text-foreground">
                       #{ci.overallPosition}
                     </span>
+                    <p className="text-[10px] text-muted-foreground leading-tight">overall</p>
                   </div>
 
                   {/* Entry card */}
