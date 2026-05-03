@@ -321,16 +321,20 @@ sessionRoutes.get("/", zValidator("query", listQuery), async (c) => {
   if (userId && sessionIds.length > 0) {
     const userPairs = await db.select({ id: pairs.id }).from(pairs).where(eq(pairs.userAId, userId));
     const pairIds = userPairs.map((p) => p.id);
+    // Filter directly on queueEntries.entityPairId / entitySoloUserId — the
+    // authoritative "who is in the queue" columns. Filtering on checkins.*
+    // instead can produce false positives when the two tables have mismatched
+    // entity IDs (e.g. legacy rows where a queue entry was created with one
+    // pair ID but the linked check-in row records a different one).
     const liveParts = [
-      eq(checkins.entitySoloUserId, userId),
+      eq(queueEntries.entitySoloUserId, userId),
     ];
     if (pairIds.length > 0) {
-      liveParts.push(inArray(checkins.entityPairId, pairIds));
+      liveParts.push(inArray(queueEntries.entityPairId, pairIds));
     }
     const live = await db
       .select({ sessionId: queueEntries.sessionId })
       .from(queueEntries)
-      .innerJoin(checkins, eq(checkins.id, queueEntries.checkinId))
       .where(and(inArray(queueEntries.sessionId, sessionIds), or(...liveParts)));
     activeSet = new Set(live.map((l) => l.sessionId!).filter(Boolean));
   }
@@ -743,10 +747,13 @@ sessionRoutes.get("/:id", async (c) => {
   if (userId) {
     const userPairs = await db.select({ id: pairs.id }).from(pairs).where(eq(pairs.userAId, userId));
     const pairIds = userPairs.map((p) => p.id);
+    // Filter on queueEntries.* (the authoritative queue-membership columns)
+    // rather than checkins.* to avoid false positives from legacy rows where
+    // the two tables had mismatched entity IDs.
     const parts = [
-      eq(checkins.entitySoloUserId, userId),
+      eq(queueEntries.entitySoloUserId, userId),
     ];
-    if (pairIds.length > 0) parts.push(inArray(checkins.entityPairId, pairIds));
+    if (pairIds.length > 0) parts.push(inArray(queueEntries.entityPairId, pairIds));
 
     const [hit] = await db
       .select({ divisionName: checkins.divisionName })

@@ -231,7 +231,11 @@ partnerRoutes.delete("/:id", requireAuth, async (c) => {
       .set({ partnerId: null })
       .where(and(eq(songs.partnerId, id), eq(songs.userId, userId)));
 
-    await tx.update(pairs).set({ partnerBId: null }).where(eq(pairs.partnerBId, id));
+    // Delete pair rows entirely (not just null partnerBId) so they don't
+    // linger as "zombie" pairs that would be picked up by the ownership
+    // check in has_active_checkin queries. The active-check-in guard above
+    // already ensures no live queue entry references these pairs.
+    await tx.delete(pairs).where(eq(pairs.partnerBId, id));
 
     await tx.delete(partners).where(and(eq(partners.id, id), eq(partners.userId, userId)));
   });

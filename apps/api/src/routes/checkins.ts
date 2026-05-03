@@ -183,13 +183,15 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
     .where(eq(pairs.userAId, userId));
   const pairIds = userPairs.map((p) => p.id);
 
+  // Filter on queueEntries.* so the ownership check uses the same authoritative
+  // source as the has_active_checkin queries in sessions.ts.
   const whereClause =
     pairIds.length > 0
       ? or(
-          eq(checkins.entitySoloUserId, userId),
-          inArray(checkins.entityPairId, pairIds)
+          eq(queueEntries.entitySoloUserId, userId),
+          inArray(queueEntries.entityPairId, pairIds)
         )
-      : eq(checkins.entitySoloUserId, userId);
+      : eq(queueEntries.entitySoloUserId, userId);
 
   const rows = await db
     .select({
