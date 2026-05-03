@@ -77,6 +77,9 @@ app.use("/v1/*", rateLimitMiddleware(300, 60_000));
 
 // Hard 30-second deadline on all API routes.  Prevents a slow DB query or
 // upstream call from holding the connection open indefinitely.
+// The chunked upload final-chunk handler triggers a Drive upload that can
+// legitimately exceed 30 s for large files, so it gets a longer budget.
+app.use("/v1/songs/upload/*", timeoutMiddleware(300_000)); // 5 min for Drive uploads
 app.use("/v1/*", timeoutMiddleware(30_000));
 
 // Liveness + readiness probe for Railway / uptime monitors.
