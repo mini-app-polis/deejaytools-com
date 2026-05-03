@@ -203,8 +203,10 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
       sessionStatus: sessions.status,
       eventTimezone: events.timezone,
       divisionName: checkins.divisionName,
-      entityPairId: checkins.entityPairId,
-      entitySoloUserId: checkins.entitySoloUserId,
+      // Use queueEntries as the authoritative entity source — checkins.entity*
+      // can be stale on legacy rows that pre-date the entity-column alignment fix.
+      entityPairId: queueEntries.entityPairId,
+      entitySoloUserId: queueEntries.entitySoloUserId,
       notes: checkins.notes,
       checkedInAt: checkins.createdAt,
       songDisplayName: songs.displayName,
@@ -224,7 +226,7 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
     .innerJoin(sessions, eq(sessions.id, checkins.sessionId))
     .leftJoin(events, eq(events.id, sessions.eventId))
     .leftJoin(songs, eq(songs.id, checkins.songId))
-    .leftJoin(pairs, eq(pairs.id, checkins.entityPairId))
+    .leftJoin(pairs, eq(pairs.id, queueEntries.entityPairId))
     .leftJoin(pairUser, eq(pairUser.id, pairs.userAId))
     .leftJoin(partners, eq(partners.id, pairs.partnerBId))
     .where(whereClause)
@@ -257,11 +259,9 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
     }
   }
 
-  // Count how many runs this user's entities have completed per session.
-  // We use ALL of the user's pair IDs (not just the current check-in's pair) so
-  // that runs recorded under an older pair ID (e.g. after partner delete/re-add)
-  // are still counted. Keyed by sessionId only since what matters is total runs
-  // in the session regardless of which pair was used.
+  // Count runs per session per specific partnership (pair or solo).
+  // Each unique pair is tracked independently — runs with partner A don't
+  // affect priority for partner B. Key: `${sessionId}:${pairId|soloUserId}`.
   const runCountMap = new Map<string, number>();
   if (sessionIds.length > 0) {
     const runCountParts = [eq(runs.entitySoloUserId, userId)];
@@ -270,14 +270,17 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
     const runCounts = await db
       .select({
         sessionId: runs.sessionId,
+        entityPairId: runs.entityPairId,
+        entitySoloUserId: runs.entitySoloUserId,
         n: count(),
       })
       .from(runs)
       .where(and(inArray(runs.sessionId, sessionIds), or(...runCountParts)))
-      .groupBy(runs.sessionId);
+      .groupBy(runs.sessionId, runs.entityPairId, runs.entitySoloUserId);
 
     for (const rc of runCounts) {
-      runCountMap.set(rc.sessionId, Number(rc.n));
+      const entityKey = rc.entityPairId ?? rc.entitySoloUserId;
+      if (entityKey) runCountMap.set(`${rc.sessionId}:${entityKey}`, Number(rc.n));
     }
   }
 
@@ -298,7 +301,8 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
       entityLabel = "Solo";
     }
 
-    const runCount = runCountMap.get(r.sessionId) ?? 0;
+    const entityKey = r.entityPairId ?? r.entitySoloUserId;
+    const runCount = entityKey ? (runCountMap.get(`${r.sessionId}:${entityKey}`) ?? 0) : 0;
 
     return {
       id: r.id,
