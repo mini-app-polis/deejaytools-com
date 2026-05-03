@@ -299,16 +299,17 @@ export default function MyContentPage() {
             <div className={`space-y-3${checkinsLoading ? " opacity-60" : ""}`}>
               {checkins?.map((ci) => (
                 <div key={ci.id} className="flex items-start gap-3">
-                  {/* Overall position number */}
-                  <div className="shrink-0 pt-3 w-12 text-right">
-                    <span className="text-sm font-medium tabular-nums text-foreground">
-                      #{ci.overallPosition}
-                    </span>
-                    <p className="text-[10px] text-muted-foreground leading-tight">overall</p>
-                  </div>
-
                   {/* Entry card */}
                   <div className="flex-1 min-w-0 rounded-lg border px-4 py-3 text-sm space-y-2">
+                    {/* Position + queue type */}
+                    <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-border/40">
+                      <p className="text-sm font-medium">
+                        This entry is{" "}
+                        <span className="text-foreground font-semibold">#{ci.overallPosition}</span>{" "}
+                        in line
+                      </p>
+                      <div className="shrink-0">{queueStatusBadge(ci)}</div>
+                    </div>
                     <div className="flex items-start justify-between gap-2 flex-wrap">
                       <div className="min-w-0">
                         {ci.eventName && (
@@ -321,7 +322,6 @@ export default function MyContentPage() {
                           )}
                         </p>
                       </div>
-                      <div className="shrink-0">{queueStatusBadge(ci)}</div>
                     </div>
 
                     <div className="space-y-0.5 border-t border-border/40 pt-2">
