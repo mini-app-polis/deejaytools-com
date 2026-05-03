@@ -67,7 +67,7 @@ const CARDS: CardDef[] = [
     to: "/feedback",
     eyebrow: "Help us improve",
     title: "Feedback",
-    body: "Report a bug, request a feature, or send the deejay team a note.",
+    body: "Report a bug, request a feature, or send the developers a note.",
   },
 ];
 

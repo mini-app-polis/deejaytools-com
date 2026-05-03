@@ -33,6 +33,8 @@ type AdminUserRow = {
   last_name: string | null;
   role: "user" | "admin";
   created_at: number;
+  song_count: number;
+  partner_count: number;
 };
 
 beforeEach(() => {
@@ -69,6 +71,8 @@ describe("GET /v1/admin/users", () => {
         lastName: "Smith",
         role: "admin",
         createdAt: 1700000000000,
+        songCount: 3,
+        partnerCount: 2,
       },
       {
         id: "user_2",
@@ -77,6 +81,8 @@ describe("GET /v1/admin/users", () => {
         lastName: null,
         role: "user",
         createdAt: 1710000000000,
+        songCount: 0,
+        partnerCount: 0,
       },
     ]);
 
@@ -91,6 +97,8 @@ describe("GET /v1/admin/users", () => {
         last_name: "Smith",
         role: "admin",
         created_at: 1700000000000,
+        song_count: 3,
+        partner_count: 2,
       },
       {
         id: "user_2",
@@ -99,8 +107,55 @@ describe("GET /v1/admin/users", () => {
         last_name: null,
         role: "user",
         created_at: 1710000000000,
+        song_count: 0,
+        partner_count: 0,
       },
     ]);
+  });
+
+  it("coerces string counts (driver bigint quirk) into JS numbers", async () => {
+    // postgres.js sometimes returns COUNT(*) as a string even with ::int —
+    // the route should defensively coerce so the frontend always sees a
+    // number it can render and compare.
+    enqueueSelectResult([
+      {
+        id: "user_3",
+        email: "charlie@example.com",
+        firstName: "Charlie",
+        lastName: null,
+        role: "user",
+        createdAt: 1720000000000,
+        songCount: "7", // arrives as string from the driver
+        partnerCount: "4",
+      },
+    ]);
+
+    const res = await app.request(LIST_ENDPOINT, { headers: adminHeaders() });
+    const body = await readJson<SuccessEnvelope<AdminUserRow[]>>(res);
+    expect(body.data[0].song_count).toBe(7);
+    expect(body.data[0].partner_count).toBe(4);
+    expect(typeof body.data[0].song_count).toBe("number");
+    expect(typeof body.data[0].partner_count).toBe("number");
+  });
+
+  it("treats null/missing counts as 0", async () => {
+    enqueueSelectResult([
+      {
+        id: "user_4",
+        email: "dave@example.com",
+        firstName: "Dave",
+        lastName: null,
+        role: "user",
+        createdAt: 1730000000000,
+        songCount: null,
+        partnerCount: null,
+      },
+    ]);
+
+    const res = await app.request(LIST_ENDPOINT, { headers: adminHeaders() });
+    const body = await readJson<SuccessEnvelope<AdminUserRow[]>>(res);
+    expect(body.data[0].song_count).toBe(0);
+    expect(body.data[0].partner_count).toBe(0);
   });
 
   it("accepts q + role query params without erroring", async () => {
@@ -184,6 +239,8 @@ describe("PATCH /v1/admin/users/:id/role", () => {
         lastName: "User",
         role: "admin",
         createdAt: 1700000000000,
+        songCount: 5,
+        partnerCount: 3,
       },
     ]); // refreshed row
 
@@ -202,6 +259,8 @@ describe("PATCH /v1/admin/users/:id/role", () => {
       last_name: "User",
       role: "admin",
       created_at: 1700000000000,
+      song_count: 5,
+      partner_count: 3,
     });
     expect(mockDb.update).toHaveBeenCalledTimes(1);
   });

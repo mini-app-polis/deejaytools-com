@@ -218,6 +218,10 @@ export const ApiAdminUserSchema = z.object({
   last_name: z.string().nullable(),
   role: z.enum(["user", "admin"]),
   created_at: z.number(),
+  /** Total songs uploaded by this user. */
+  song_count: z.number(),
+  /** Total partner records owned by this user. */
+  partner_count: z.number(),
 });
 export type ApiAdminUser = z.infer<typeof ApiAdminUserSchema>;
 

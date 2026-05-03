@@ -1430,6 +1430,10 @@ export default function AdminPage() {
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
+                    {/* Numeric columns are right-aligned and use tabular-nums
+                        on the cells below so digits line up between rows. */}
+                    <TableHead className="text-right">Songs</TableHead>
+                    <TableHead className="text-right">Partners</TableHead>
                     <TableHead className="text-right">Action</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1456,6 +1460,12 @@ export default function AdminPage() {
                           ) : (
                             <Badge variant="secondary">user</Badge>
                           )}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-sm">
+                          {u.song_count}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-sm">
+                          {u.partner_count}
                         </TableCell>
                         <TableCell className="text-right">
                           {isSelf ? (

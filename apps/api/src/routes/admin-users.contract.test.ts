@@ -28,6 +28,8 @@ const dbUser = {
   lastName: "Smith",
   role: "user" as "user" | "admin",
   createdAt: 1_000_000,
+  songCount: 2,
+  partnerCount: 1,
 };
 
 const dbAdmin = {
@@ -37,6 +39,8 @@ const dbAdmin = {
   lastName: null as string | null,
   role: "admin" as "user" | "admin",
   createdAt: 2_000_000,
+  songCount: 0,
+  partnerCount: 0,
 };
 
 beforeEach(resetSelectQueue);

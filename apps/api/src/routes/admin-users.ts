@@ -1,9 +1,9 @@
 import { CommonErrors, createLogger, error, success, successList } from "common-typescript-utils";
-import { and, asc, eq, ilike, or } from "drizzle-orm";
+import { and, asc, eq, ilike, or, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { db } from "../db/index.js";
-import { users } from "../db/schema.js";
+import { partners, songs, users } from "../db/schema.js";
 import { zValidator } from "../lib/validate.js";
 import { requireAdmin } from "../middleware/auth.js";
 
@@ -22,9 +22,16 @@ const listQuery = z.object({
  * GET /v1/admin/users
  *
  * Admin-only directory of every account on the platform. Returns the fields
- * the Users tab needs to render the table — id, email, names, role, and the
- * createdAt epoch — sorted oldest-first so newly created accounts surface
- * naturally at the bottom of the list.
+ * the Users tab needs to render the table — id, email, names, role, the
+ * createdAt epoch, and per-user counts of songs + partners — sorted
+ * oldest-first so newly created accounts surface naturally at the bottom.
+ *
+ * The song/partner counts are correlated subqueries rather than GROUP BY
+ * joins. With LEFT JOIN + GROUP BY a user with N songs and M partners
+ * would produce N*M rows that need to be deduplicated; the subquery form
+ * stays at one row per user and is straightforward to read. The `::int`
+ * cast forces postgres.js to deliver the count as a JS number — without
+ * it, COUNT(*) returns bigint and arrives here as a string.
  *
  * Query params:
  *   - q:    optional search across email / first_name / last_name (ILIKE)
@@ -60,6 +67,8 @@ adminUserRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c)
       lastName: users.lastName,
       role: users.role,
       createdAt: users.createdAt,
+      songCount: sql<number>`(SELECT COUNT(*)::int FROM ${songs} WHERE ${songs.userId} = ${users.id})`,
+      partnerCount: sql<number>`(SELECT COUNT(*)::int FROM ${partners} WHERE ${partners.userId} = ${users.id})`,
     })
     .from(users)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
@@ -74,6 +83,11 @@ adminUserRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c)
         last_name: r.lastName,
         role: r.role,
         created_at: r.createdAt,
+        // postgres.js sometimes still hands counts back as strings even with
+        // ::int (driver quirk for some bigint cases). Coerce defensively so
+        // the frontend always sees a number.
+        song_count: Number(r.songCount ?? 0),
+        partner_count: Number(r.partnerCount ?? 0),
       }))
     )
   );
@@ -133,6 +147,9 @@ adminUserRoutes.patch(
       .set({ role, updatedAt: Date.now() })
       .where(eq(users.id, id));
 
+    // Mirror the GET shape exactly — including song/partner counts — so the
+    // PATCH response satisfies ApiAdminUser and the frontend can drop the
+    // returned row straight into local state.
     const [updated] = await db
       .select({
         id: users.id,
@@ -141,6 +158,8 @@ adminUserRoutes.patch(
         lastName: users.lastName,
         role: users.role,
         createdAt: users.createdAt,
+        songCount: sql<number>`(SELECT COUNT(*)::int FROM ${songs} WHERE ${songs.userId} = ${users.id})`,
+        partnerCount: sql<number>`(SELECT COUNT(*)::int FROM ${partners} WHERE ${partners.userId} = ${users.id})`,
       })
       .from(users)
       .where(eq(users.id, id))
@@ -154,6 +173,8 @@ adminUserRoutes.patch(
         last_name: updated!.lastName,
         role: updated!.role,
         created_at: updated!.createdAt,
+        song_count: Number(updated!.songCount ?? 0),
+        partner_count: Number(updated!.partnerCount ?? 0),
       })
     );
   }
