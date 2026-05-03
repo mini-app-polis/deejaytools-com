@@ -1,3 +1,17 @@
+# [1.45.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.44.7...v1.45.0) (2026-05-03)
+
+
+### Bug Fixes
+
+* allowing checking while test data exists ([b80ab40](https://github.com/mini-app-polis/deejaytools-com/commit/b80ab409b7d1089abd81302281044f71b46d419c))
+
+
+### Features
+
+* display more session information ([33f61d6](https://github.com/mini-app-polis/deejaytools-com/commit/33f61d6d91b7869a4f6ba7c32f9ec84501d0b50b))
+* display more session information ([69a7b62](https://github.com/mini-app-polis/deejaytools-com/commit/69a7b6287b9dc95662d455ca84023effddec886a))
+* display more session information ([b26d0e5](https://github.com/mini-app-polis/deejaytools-com/commit/b26d0e55bc22eaf606d149e99ba13ed46a17cf10))
+
 ## [1.44.7](https://github.com/mini-app-polis/deejaytools-com/compare/v1.44.6...v1.44.7) (2026-05-03)
 
 
