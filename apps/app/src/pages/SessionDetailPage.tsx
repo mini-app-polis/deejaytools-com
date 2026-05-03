@@ -467,6 +467,31 @@ export default function ApiSessionPage() {
             })()}
           </div>
         )}
+
+        {/* Active cap + priority run limits */}
+        <div className="text-xs text-muted-foreground space-y-0.5 pt-0.5">
+          {(session.active_priority_max != null || session.active_non_priority_max != null) && (
+            <p>
+              Active cap:{" "}
+              <span className="text-foreground">{session.active_priority_max ?? "—"}</span>{" "}
+              priority ·{" "}
+              <span className="text-foreground">{session.active_non_priority_max ?? "—"}</span>{" "}
+              standard
+            </p>
+          )}
+          {(() => {
+            const runsLines = (session.divisions ?? [])
+              .filter((d) => d.priority_run_limit != null && d.priority_run_limit > 0)
+              .sort((a, b) => a.sort_order - b.sort_order)
+              .map((d) => `${d.division_name} ×${d.priority_run_limit}`);
+            return runsLines.length > 0 ? (
+              <p>
+                Priority runs:{" "}
+                <span className="text-foreground">{runsLines.join(" · ")}</span>
+              </p>
+            ) : null;
+          })()}
+        </div>
       </div>
 
       {/* ── Check-in action (top) ── */}
