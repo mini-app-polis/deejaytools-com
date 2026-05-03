@@ -1,3 +1,10 @@
+## [1.47.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.47.2...v1.47.3) (2026-05-03)
+
+
+### Bug Fixes
+
+* background Drive upload — return HTTP response before uploading to Drive ([84bc830](https://github.com/mini-app-polis/deejaytools-com/commit/84bc830ca19b53916e5cea2a096c699d54f81ef7))
+
 ## [1.47.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.47.1...v1.47.2) (2026-05-03)
 
 
