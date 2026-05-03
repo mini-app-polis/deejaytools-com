@@ -323,7 +323,6 @@ sessionRoutes.get("/", zValidator("query", listQuery), async (c) => {
     const pairIds = userPairs.map((p) => p.id);
     const liveParts = [
       eq(checkins.entitySoloUserId, userId),
-      eq(checkins.submittedByUserId, userId),
     ];
     if (pairIds.length > 0) {
       liveParts.push(inArray(checkins.entityPairId, pairIds));
@@ -746,7 +745,6 @@ sessionRoutes.get("/:id", async (c) => {
     const pairIds = userPairs.map((p) => p.id);
     const parts = [
       eq(checkins.entitySoloUserId, userId),
-      eq(checkins.submittedByUserId, userId),
     ];
     if (pairIds.length > 0) parts.push(inArray(checkins.entityPairId, pairIds));
 
