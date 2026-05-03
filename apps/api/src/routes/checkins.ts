@@ -203,8 +203,10 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
       sessionStatus: sessions.status,
       eventTimezone: events.timezone,
       divisionName: checkins.divisionName,
-      entityPairId: checkins.entityPairId,
-      entitySoloUserId: checkins.entitySoloUserId,
+      // Use queueEntries as the authoritative entity source — checkins.entity*
+      // can be stale on legacy rows that pre-date the entity-column alignment fix.
+      entityPairId: queueEntries.entityPairId,
+      entitySoloUserId: queueEntries.entitySoloUserId,
       notes: checkins.notes,
       checkedInAt: checkins.createdAt,
       songDisplayName: songs.displayName,
@@ -224,7 +226,7 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
     .innerJoin(sessions, eq(sessions.id, checkins.sessionId))
     .leftJoin(events, eq(events.id, sessions.eventId))
     .leftJoin(songs, eq(songs.id, checkins.songId))
-    .leftJoin(pairs, eq(pairs.id, checkins.entityPairId))
+    .leftJoin(pairs, eq(pairs.id, queueEntries.entityPairId))
     .leftJoin(pairUser, eq(pairUser.id, pairs.userAId))
     .leftJoin(partners, eq(partners.id, pairs.partnerBId))
     .where(whereClause)
