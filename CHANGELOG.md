@@ -1,3 +1,11 @@
+## [1.47.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.47.0...v1.47.1) (2026-05-03)
+
+
+### Bug Fixes
+
+* DELETE /checkins/:id ownership check uses queueEntries entity IDs ([331ca3a](https://github.com/mini-app-polis/deejaytools-com/commit/331ca3a845752a3db3b3f96e900405d2a93350a9))
+* extend timeout to 5 min for song upload route (Drive uploads) ([a7a5931](https://github.com/mini-app-polis/deejaytools-com/commit/a7a59314a5b79e1e02e38662304034110a26ed2e))
+
 # [1.47.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.46.0...v1.47.0) (2026-05-03)
 
 
