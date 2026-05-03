@@ -1,3 +1,10 @@
+## [1.47.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.47.1...v1.47.2) (2026-05-03)
+
+
+### Bug Fixes
+
+* single timeout middleware on /v1/* — upload routes get 5 min, others 30 s ([0ee029a](https://github.com/mini-app-polis/deejaytools-com/commit/0ee029ab0ffcb310bfa4fddbd162e39e5339717c))
+
 ## [1.47.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.47.0...v1.47.1) (2026-05-03)
 
 
