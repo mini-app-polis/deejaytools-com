@@ -211,6 +211,37 @@ export const ApiRunSchema = z.object({
 });
 export type ApiRun = z.infer<typeof ApiRunSchema>;
 
+export const ApiAdminSongOwnerSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  full_name: z.string().nullable(),
+});
+
+export const ApiAdminSongPartnerSchema = z.object({
+  id: z.string(),
+  full_name: z.string().nullable(),
+  /** Set when the partner has been claimed by a real DeejayTools account. */
+  linked_user_email: z.string().nullable(),
+});
+
+export const ApiAdminSongSchema = z.object({
+  id: z.string(),
+  /** Pre-rendered "Partnership Division Year Routine v##" display label. */
+  song_label: z.string(),
+  display_name: z.string().nullable(),
+  division: z.string().nullable(),
+  routine_name: z.string().nullable(),
+  season_year: z.string().nullable(),
+  created_at: z.number(),
+  /** Epoch ms when soft-deleted, or null for live rows. */
+  deleted_at: z.number().nullable(),
+  /** Primary owner — the user who uploaded the file. */
+  owner: ApiAdminSongOwnerSchema,
+  /** Secondary owner — the partner record, if any. */
+  partner: ApiAdminSongPartnerSchema.nullable(),
+});
+export type ApiAdminSong = z.infer<typeof ApiAdminSongSchema>;
+
 export const ApiAdminUserSchema = z.object({
   id: z.string(),
   email: z.string(),

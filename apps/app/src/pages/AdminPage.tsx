@@ -9,6 +9,7 @@ import type {
   ApiSong,
   ApiTestInjection,
   ApiRun,
+  ApiAdminSong,
   ApiAdminUser,
 } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
@@ -224,6 +225,15 @@ export default function AdminPage() {
   /** Per-row loading state while a role PATCH is in flight. */
   const [userRoleSubmitting, setUserRoleSubmitting] = useState<Record<string, boolean>>({});
 
+  // ── Admin Songs tab ─────────────────────────────────────────────────────────
+  // Mirrors the Users tab pattern: live keystrokes feed `adminSongsQuery`,
+  // debounced into `adminSongsDebouncedQuery` to drive the API call.
+  const [adminSongs, setAdminSongs] = useState<ApiAdminSong[] | null>(null);
+  const [adminSongsLoading, setAdminSongsLoading] = useState(false);
+  const [adminSongsQuery, setAdminSongsQuery] = useState("");
+  const [adminSongsDebouncedQuery, setAdminSongsDebouncedQuery] = useState("");
+  const [adminSongsIncludeDeleted, setAdminSongsIncludeDeleted] = useState(false);
+
   // ── Data loaders ────────────────────────────────────────────────────────────
 
   const loadEvents = useCallback(() => {
@@ -320,13 +330,34 @@ export default function AdminPage() {
     [api]
   );
 
+  const loadAdminSongs = useCallback(
+    async (q: string, includeDeleted: boolean) => {
+      setAdminSongsLoading(true);
+      try {
+        const params = new URLSearchParams();
+        if (q) params.set("q", q);
+        if (includeDeleted) params.set("include_deleted", "true");
+        const qs = params.toString();
+        const path = qs ? `/v1/admin/songs?${qs}` : "/v1/admin/songs";
+        const data = await api.get<ApiAdminSong[]>(path);
+        setAdminSongs(data);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Failed to load songs");
+      } finally {
+        setAdminSongsLoading(false);
+      }
+    },
+    [api]
+  );
+
   useEffect(() => {
     loadEvents();
     loadSessions();
     void loadLqExtras().catch(() => {});
     void loadApiTestInjections().catch(() => {});
     void loadUsers("").catch(() => {});
-  }, [loadEvents, loadSessions, loadLqExtras, loadApiTestInjections, loadUsers]);
+    void loadAdminSongs("", false).catch(() => {});
+  }, [loadEvents, loadSessions, loadLqExtras, loadApiTestInjections, loadUsers, loadAdminSongs]);
 
   // Refetch run history whenever the session filter changes.
   useEffect(() => {
@@ -345,6 +376,16 @@ export default function AdminPage() {
   useEffect(() => {
     void loadUsers(usersDebouncedQuery).catch(() => {});
   }, [usersDebouncedQuery, loadUsers]);
+
+  // Same debounce + refetch pattern for the Songs tab.
+  useEffect(() => {
+    const t = setTimeout(() => setAdminSongsDebouncedQuery(adminSongsQuery.trim()), 300);
+    return () => clearTimeout(t);
+  }, [adminSongsQuery]);
+
+  useEffect(() => {
+    void loadAdminSongs(adminSongsDebouncedQuery, adminSongsIncludeDeleted).catch(() => {});
+  }, [adminSongsDebouncedQuery, adminSongsIncludeDeleted, loadAdminSongs]);
 
   // Auto-select the single active session when sessions load / change.
   // "Active" means checkin_open or in_progress; completed/cancelled sessions
@@ -722,6 +763,7 @@ export default function AdminPage() {
           <TabsTrigger value="queue">Live Queue</TabsTrigger>
           <TabsTrigger value="runs">Run History</TabsTrigger>
           <TabsTrigger value="inject">Test Inject</TabsTrigger>
+          <TabsTrigger value="songs">Songs</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
         </TabsList>
 
@@ -1389,6 +1431,126 @@ export default function AdminPage() {
               </div>
             )}
           </section>
+        </TabsContent>
+
+        {/* ── Songs tab ── */}
+        <TabsContent value="songs" className="mt-4 space-y-4">
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center flex-wrap">
+            <div className="w-full sm:w-80">
+              <Input
+                placeholder="Search by song, owner, or partner…"
+                value={adminSongsQuery}
+                onChange={(e) => setAdminSongsQuery(e.target.value)}
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                checked={adminSongsIncludeDeleted}
+                onChange={(e) => setAdminSongsIncludeDeleted(e.target.checked)}
+              />
+              Show deleted
+            </label>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                void loadAdminSongs(adminSongsDebouncedQuery, adminSongsIncludeDeleted)
+              }
+              disabled={adminSongsLoading}
+            >
+              {adminSongsLoading ? "Refreshing…" : "Refresh"}
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              {adminSongs === null
+                ? ""
+                : `${adminSongs.length} song${adminSongs.length === 1 ? "" : "s"}`}
+            </span>
+          </div>
+
+          {adminSongs === null ? (
+            <Skeleton className="h-32 w-full" />
+          ) : adminSongs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {adminSongsDebouncedQuery
+                ? `No songs match "${adminSongsDebouncedQuery}".`
+                : "No songs yet."}
+            </p>
+          ) : (
+            <div className={adminSongsLoading ? "opacity-60" : ""}>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Song</TableHead>
+                    {/* "Owner" is the uploader; "Partner" is the second
+                        member of the partnership. Up to two owners total. */}
+                    <TableHead>Owner</TableHead>
+                    <TableHead>Partner</TableHead>
+                    <TableHead>Division</TableHead>
+                    <TableHead>Routine</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">Created</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {adminSongs.map((s) => {
+                    const ownerLabel =
+                      s.owner.full_name?.trim() || s.owner.email || "—";
+                    const partnerLabel = s.partner?.full_name?.trim() || "—";
+                    return (
+                      <TableRow
+                        key={s.id}
+                        className={s.deleted_at ? "opacity-60" : ""}
+                      >
+                        <TableCell className="font-medium">
+                          <div className="flex flex-col gap-0.5">
+                            <span>{s.song_label}</span>
+                            {s.deleted_at && (
+                              <Badge
+                                variant="destructive"
+                                className="text-xs font-normal w-fit"
+                              >
+                                deleted
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          <div className="flex flex-col gap-0.5">
+                            <span>{ownerLabel}</span>
+                            {s.owner.email && s.owner.full_name && (
+                              <span className="text-xs text-muted-foreground">
+                                {s.owner.email}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          <div className="flex flex-col gap-0.5">
+                            <span>{partnerLabel}</span>
+                            {s.partner?.linked_user_email && (
+                              <span className="text-xs text-muted-foreground">
+                                linked: {s.partner.linked_user_email}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                          {s.division ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {s.routine_name ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground whitespace-nowrap tabular-nums">
+                          {formatTime(s.created_at)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </TabsContent>
 
         {/* ── Users tab ── */}
