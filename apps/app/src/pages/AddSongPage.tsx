@@ -213,8 +213,11 @@ export default function AddSongPage() {
               },
               body: form,
             });
-          } catch {
-            lastErr = new Error("Network error — check your connection and try again.");
+          } catch (fetchErr) {
+            const detail = fetchErr instanceof Error
+              ? `${fetchErr.name}: ${fetchErr.message}`
+              : String(fetchErr);
+            lastErr = new Error(`Network error (${detail}) — check your connection and try again.`);
             continue;
           }
 
