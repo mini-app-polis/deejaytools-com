@@ -1,4 +1,4 @@
-import { CommonErrors, error, success, successList } from "common-typescript-utils";
+import { CommonErrors, createLogger, error, success, successList } from "common-typescript-utils";
 import { responseCache, CACHE_TTL } from "../lib/cache.js";
 import { SessionStatusSchema } from "@deejaytools/schemas";
 import { zValidator } from "../lib/validate.js";
@@ -19,6 +19,8 @@ import {
 import { getOptionalSyncedUserId } from "../lib/optional-user.js";
 import { sessionOverlapsInEvent } from "../lib/sessions/overlap.js";
 import { requireAdmin } from "../middleware/auth.js";
+
+const logger = createLogger("deejaytools-api");
 
 const divisionItemSchema = z.object({
   division_name: z.string(),
@@ -477,25 +479,49 @@ sessionRoutes.put(
       return c.json(CommonErrors.notFound("Session"), 404);
     }
 
-    await db.transaction(async (tx) => {
-      await tx.delete(sessionDivisions).where(eq(sessionDivisions.sessionId, id));
-      for (let i = 0; i < body.divisions.length; i++) {
-        const d = body.divisions[i]!;
-        const name = d.division_name.trim();
-        if (!name || name === "Other") continue;
-        const isPriority = d.is_priority ?? false;
-        const sortOrder = d.sort_order ?? i;
-        const priorityRunLimit = d.priority_run_limit ?? 0;
-        await tx.insert(sessionDivisions).values({
-          id: crypto.randomUUID(),
-          sessionId: id,
-          divisionName: name,
-          isPriority,
-          priorityRunLimit,
-          sortOrder,
-        });
-      }
-    });
+    // Wrap the transaction so the caller sees a useful error message instead
+    // of a generic 500. Without this, any DB / driver failure inside the
+    // delete-then-reinsert flow surfaces as "Internal server error" with no
+    // hint about which session or which division row triggered it.
+    try {
+      await db.transaction(async (tx) => {
+        await tx.delete(sessionDivisions).where(eq(sessionDivisions.sessionId, id));
+        for (let i = 0; i < body.divisions.length; i++) {
+          const d = body.divisions[i]!;
+          const name = d.division_name.trim();
+          if (!name || name === "Other") continue;
+          const isPriority = d.is_priority ?? false;
+          const sortOrder = d.sort_order ?? i;
+          const priorityRunLimit = d.priority_run_limit ?? 0;
+          await tx.insert(sessionDivisions).values({
+            id: crypto.randomUUID(),
+            sessionId: id,
+            divisionName: name,
+            isPriority,
+            priorityRunLimit,
+            sortOrder,
+          });
+        }
+      });
+    } catch (err) {
+      logger.error({
+        event: "session_divisions_put_failed",
+        category: "api",
+        context: {
+          session_id: id,
+          division_count: body.divisions.length,
+          division_names: body.divisions.map((d) => d.division_name),
+        },
+        error: err,
+      });
+      return c.json(
+        error(
+          "DIVISIONS_UPDATE_FAILED",
+          err instanceof Error ? err.message : "Failed to update divisions"
+        ),
+        500
+      );
+    }
 
     invalidateSessionCache(id);
     const [row] = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1);

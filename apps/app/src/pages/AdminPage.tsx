@@ -701,20 +701,35 @@ export default function AdminPage() {
     setSessSubmitting(true);
     try {
       if (sessEditId) {
-        // Edit: PATCH the scalar fields, then PUT divisions to overwrite the
-        // priority/run-limit flags. The two endpoints are intentionally
+        // Edit: PATCH the scalar fields first, then PUT divisions to overwrite
+        // the priority/run-limit flags. The two endpoints are intentionally
         // separate on the API side because divisions are a child collection.
-        await api.patch(`/v1/sessions/${sessEditId}`, {
-          event_id: sessEventId,
-          name: sessionName,
-          date: sessDate,
-          checkin_opens_at: checkinOpensAt,
-          floor_trial_starts_at: floorStartsAt,
-          floor_trial_ends_at: floorEndsAt,
-          active_priority_max: priorityMaxNum,
-          active_non_priority_max: nonPriorityMaxNum,
-        });
-        await api.put(`/v1/sessions/${sessEditId}/divisions`, { divisions });
+        // Each call is wrapped so the toast can identify which leg failed —
+        // necessary because the PATCH can succeed while the PUT errors,
+        // leaving the row half-updated.
+        try {
+          await api.patch(`/v1/sessions/${sessEditId}`, {
+            event_id: sessEventId,
+            name: sessionName,
+            date: sessDate,
+            checkin_opens_at: checkinOpensAt,
+            floor_trial_starts_at: floorStartsAt,
+            floor_trial_ends_at: floorEndsAt,
+            active_priority_max: priorityMaxNum,
+            active_non_priority_max: nonPriorityMaxNum,
+          });
+        } catch (err) {
+          throw new Error(
+            `Failed to update session fields: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+        try {
+          await api.put(`/v1/sessions/${sessEditId}/divisions`, { divisions });
+        } catch (err) {
+          throw new Error(
+            `Session fields saved, but failed to update divisions: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
         toast.success("Session updated");
       } else {
         await api.post<ApiSession>("/v1/sessions", {
