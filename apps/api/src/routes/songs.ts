@@ -738,13 +738,19 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   const [songRow] = await db.select().from(songs).where(eq(songs.id, songId)).limit(1);
   if (!songRow) return c.json(CommonErrors.internalError(), 500);
 
-  try {
-    const mappedSong = await buildAndUploadSong(songRow, userId, assembled, originalName, mimeType);
-    return c.json(success({ received: true, complete: true, song: mappedSong }));
-  } catch (err) {
-    // Drive upload failed — remove the record so the user's list stays clean.
-    // Log a warning if the cleanup delete itself fails: the row will be a zombie
-    // (no Drive file, orphaned in the DB) and an operator will need to remove it.
+  // Return the song record immediately so the client's HTTP request completes
+  // without waiting for the Google Drive upload (which can take 30–120 s for
+  // large files and was causing the connection to be dropped mid-flight,
+  // manifesting as "Network error — check your connection" on the client).
+  //
+  // The Drive upload, audio tagging, and DB update (processedFilename /
+  // driveFileId) all happen in the background after the response is sent.
+  // If the background upload fails, the orphaned song record is deleted so
+  // the user's library stays clean; they will need to retry the upload.
+  const pendingSong = mapSong({ ...songRow, partner_first_name: null, partner_last_name: null });
+
+  buildAndUploadSong(songRow, userId, assembled, originalName, mimeType).catch(async (err) => {
+    logger.error({ event: "song_background_upload_failed", category: "api", context: { songId, uploadId }, error: err });
     await db.delete(songs).where(eq(songs.id, songId)).catch((deleteErr) => {
       logger.warn({
         event: "song_cleanup_delete_failed",
@@ -752,9 +758,9 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
         context: { songId, uploadId, error: String(deleteErr) },
       });
     });
-    logger.error({ event: "song_atomic_upload_failed", category: "api", context: { songId, uploadId }, error: err });
-    throw err;
-  }
+  });
+
+  return c.json(success({ received: true, complete: true, song: pendingSong }));
 });
 
 
