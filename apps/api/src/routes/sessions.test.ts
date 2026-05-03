@@ -166,21 +166,23 @@ describe("DELETE /v1/sessions/:id", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns 409 when session has checkins", async () => {
+  it("cascades deletion of session with checkins and returns 200", async () => {
+    // The route used to 409 here. It now cascades: queue_entries,
+    // queue_events, runs, checkins, session_divisions, sessions. The mock
+    // db chain treats every delete().where() as a no-op promise, so we
+    // just need the existence-check select to return the session row.
     enqueueSelectResult([mockSession]);
-    enqueueSelectResult([{ c: 2 }]);
     const res = await app.request(`${BASE}/s1`, {
       method: "DELETE",
       headers: adminHeaders(),
     });
-    expect(res.status).toBe(409);
-    const body = await readJson<ErrorEnvelope>(res);
-    expect(body.error.code).toBe("CONFLICT");
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<{ deleted: boolean }>>(res);
+    expect(body.data.deleted).toBe(true);
   });
 
-  it("deletes session with no checkins and returns 200", async () => {
+  it("deletes a session with no checkins and returns 200", async () => {
     enqueueSelectResult([mockSession]);
-    enqueueSelectResult([{ c: 0 }]);
     const res = await app.request(`${BASE}/s1`, {
       method: "DELETE",
       headers: adminHeaders(),

@@ -94,6 +94,21 @@ export function useApiClient() {
     [withAuth]
   );
 
+  const put = useCallback(
+    async <T>(path: string, body: unknown) => {
+      const res = await fetch(
+        `${base}${path}`,
+        await withAuth({
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        })
+      );
+      return parseEnvelope<T>(res);
+    },
+    [withAuth]
+  );
+
   const del = useCallback(
     async (path: string) => {
       const res = await fetch(`${base}${path}`, await withAuth({ method: "DELETE" }));
@@ -109,8 +124,9 @@ export function useApiClient() {
       post,
       postForm,
       patch,
+      put,
       del,
     }),
-    [get, post, postForm, patch, del]
+    [get, post, postForm, patch, put, del]
   );
 }

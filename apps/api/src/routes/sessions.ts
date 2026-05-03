@@ -6,7 +6,16 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { and, asc, count, desc, eq, inArray, or } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { checkins, events, pairs, queueEntries, sessionDivisions, sessions } from "../db/schema.js";
+import {
+  checkins,
+  events,
+  pairs,
+  queueEntries,
+  queueEvents,
+  runs,
+  sessionDivisions,
+  sessions,
+} from "../db/schema.js";
 import { getOptionalSyncedUserId } from "../lib/optional-user.js";
 import { sessionOverlapsInEvent } from "../lib/sessions/overlap.js";
 import { requireAdmin } from "../middleware/auth.js";
@@ -625,26 +634,22 @@ sessionRoutes.delete("/:id", requireAdmin, async (c) => {
     return c.json(CommonErrors.notFound("Session"), 404);
   }
 
-  const [cntRow] = await db
-    .select({ c: count() })
-    .from(checkins)
-    .where(eq(checkins.sessionId, id));
-
-  if (Number(cntRow?.c ?? 0) > 0) {
-    return c.json(
-      error(
-        "CONFLICT",
-        "This session has check-ins. Remove or complete all check-ins before deleting the session."
-      ),
-      409
-    );
-  }
-
+  // Cascade: an admin asked to delete this session, so wipe everything that
+  // hangs off it before the session row itself. Mirrors the events DELETE
+  // pattern. We used to 409 when check-ins existed; that prevented admins
+  // from cleaning up past sessions and synthetic test sessions, so the
+  // guard moved to the UI (a destructive confirmation prompt) instead. The
+  // order matters: rows that reference others go first.
   await db.transaction(async (tx) => {
+    await tx.delete(queueEntries).where(eq(queueEntries.sessionId, id));
+    await tx.delete(queueEvents).where(eq(queueEvents.sessionId, id));
+    await tx.delete(runs).where(eq(runs.sessionId, id));
+    await tx.delete(checkins).where(eq(checkins.sessionId, id));
     await tx.delete(sessionDivisions).where(eq(sessionDivisions.sessionId, id));
     await tx.delete(sessions).where(eq(sessions.id, id));
   });
 
+  invalidateSessionCache(id);
   return c.json(success({ deleted: true }));
 });
 

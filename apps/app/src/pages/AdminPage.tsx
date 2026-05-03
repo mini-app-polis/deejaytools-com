@@ -60,6 +60,27 @@ const DIVISION_OPTIONS = [
  * e.g. ("2026-04-27", "19:30", "America/Chicago") → epoch for 7:30 PM CDT.
  * Falls back to browser local time if the timezone is empty or invalid.
  */
+/**
+ * Inverse of toEpochInTz: given an epoch and a timezone, return the local
+ * wall-clock time in that zone as "HH:MM" (24-hour). Used by the Edit
+ * Session dialog to pre-fill the start-time input from a stored epoch.
+ */
+function epochToTimeInTz(epoch: number, tz: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    }).formatToParts(new Date(epoch));
+    const h = parts.find((p) => p.type === "hour")!.value;
+    const m = parts.find((p) => p.type === "minute")!.value;
+    // Intl in Chrome can return "24" instead of "00" for midnight; normalize.
+    return `${h === "24" ? "00" : h}:${m}`;
+  } catch {
+    const d = new Date(epoch);
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  }
+}
+
 function toEpochInTz(dateStr: string, timeStr: string, tz: string): number {
   try {
     const [year, month, day] = dateStr.split("-").map(Number);
@@ -164,6 +185,11 @@ export default function AdminPage() {
   const [evStartDate, setEvStartDate] = useState("");
   const [evEndDate, setEvEndDate] = useState("");
   const [evTimezone, setEvTimezone] = useState("America/Chicago");
+  /**
+   * When set, the Event dialog is in edit mode: submitting calls PATCH on
+   * this id instead of POST. Cleared when the dialog closes.
+   */
+  const [evEditId, setEvEditId] = useState<string | null>(null);
 
   // ── Sessions tab ────────────────────────────────────────────────────────────
   const [sessions, setSessions] = useState<ApiSession[] | null>(null);
@@ -173,6 +199,10 @@ export default function AdminPage() {
   const [sessEventId, setSessEventId] = useState("");
   const [sessDate, setSessDate] = useState("");
   const [sessStartTime, setSessStartTime] = useState("07:00");
+  /** When set, the Session dialog is in edit mode (PATCH/PUT instead of POST). */
+  const [sessEditId, setSessEditId] = useState<string | null>(null);
+  /** Tracks the row currently mid-delete so its button can disable + show "Deleting…". */
+  const [sessDeletingId, setSessDeletingId] = useState<string | null>(null);
   /** Minutes before start that check-in opens. 0 = same moment as start. */
   const [sessCheckinOffsetMins, setSessCheckinOffsetMins] = useState("30");
   /** Floor trial duration in minutes. */
@@ -457,13 +487,24 @@ export default function AdminPage() {
   };
 
   const openEvDialog = () => {
+    setEvEditId(null);
     setEvName("");
     setEvStartDate("");
     setEvEndDate("");
+    setEvTimezone("America/Chicago");
     setEvDialogOpen(true);
   };
 
-  const submitCreateEvent = async (e: React.FormEvent) => {
+  const openEvEditDialog = (ev: ApiEvent) => {
+    setEvEditId(ev.id);
+    setEvName(ev.name);
+    setEvStartDate(ev.start_date);
+    setEvEndDate(ev.end_date);
+    setEvTimezone(ev.timezone);
+    setEvDialogOpen(true);
+  };
+
+  const submitEventDialog = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!evName.trim()) { toast.error("Name is required"); return; }
     if (!evStartDate) { toast.error("Start date is required"); return; }
@@ -471,21 +512,38 @@ export default function AdminPage() {
     if (evEndDate < evStartDate) { toast.error("End date must be on or after start date"); return; }
     setEvSubmitting(true);
     try {
-      const created = await api.post<ApiEvent>("/v1/events", {
-        name: evName.trim(),
-        start_date: evStartDate,
-        end_date: evEndDate,
-        timezone: evTimezone,
-      });
-      toast.success("Event created");
+      if (evEditId) {
+        // Edit mode — PATCH the existing event and merge the response back
+        // into local state so the table updates without a full refetch.
+        const updated = await api.patch<ApiEvent>(`/v1/events/${evEditId}`, {
+          name: evName.trim(),
+          start_date: evStartDate,
+          end_date: evEndDate,
+          timezone: evTimezone,
+        });
+        toast.success("Event updated");
+        setEvents((prev) =>
+          prev?.map((e) => (e.id === updated.id ? updated : e)) ?? null
+        );
+      } else {
+        // Create mode — POST and prepend.
+        const created = await api.post<ApiEvent>("/v1/events", {
+          name: evName.trim(),
+          start_date: evStartDate,
+          end_date: evEndDate,
+          timezone: evTimezone,
+        });
+        toast.success("Event created");
+        setEvents((prev) => (prev ? [created, ...prev] : [created]));
+      }
       setEvDialogOpen(false);
+      setEvEditId(null);
       setEvName("");
       setEvStartDate("");
       setEvEndDate("");
       setEvTimezone("America/Chicago");
-      setEvents((prev) => (prev ? [created, ...prev] : [created]));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to create event");
+      toast.error(err instanceof Error ? err.message : "Failed to save event");
     } finally {
       setEvSubmitting(false);
     }
@@ -507,15 +565,87 @@ export default function AdminPage() {
   };
 
   const openSessDialog = () => {
+    setSessEditId(null);
     resetSessForm();
     setSessDialogOpen(true);
+  };
+
+  /**
+   * Pre-fill the Session dialog from an existing session row and switch into
+   * edit mode. The session stores absolute epochs but the form takes
+   * wall-clock time + offsets, so we derive those by anchoring on the
+   * event's timezone.
+   */
+  const openSessEditDialog = (s: ApiSession) => {
+    const tz =
+      s.event_timezone ??
+      events?.find((ev) => ev.id === s.event_id)?.timezone ??
+      Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    setSessEditId(s.id);
+    setSessEventId(s.event_id ?? "");
+    setSessDate(s.date ?? "");
+    setSessStartTime(epochToTimeInTz(s.floor_trial_starts_at, tz));
+    setSessCheckinOffsetMins(
+      String(Math.max(0, Math.round((s.floor_trial_starts_at - s.checkin_opens_at) / 60_000)))
+    );
+    setSessDurationMins(
+      String(Math.max(1, Math.round((s.floor_trial_ends_at - s.floor_trial_starts_at) / 60_000)))
+    );
+    setSessPriorityMax(String(s.active_priority_max ?? 6));
+    setSessNonPriorityMax(String(s.active_non_priority_max ?? 4));
+
+    // Per-division priority flags + the (single, shared) priority run limit.
+    const flags = Object.fromEntries(DIVISION_OPTIONS.map((d) => [d, false])) as Record<
+      string,
+      boolean
+    >;
+    let runLimit = 1;
+    for (const d of s.divisions ?? []) {
+      flags[d.division_name] = d.is_priority;
+      // priority_run_limit is nullable on non-priority divisions; only
+      // priority divisions store a real limit, and they all share one.
+      const limit = d.priority_run_limit ?? 0;
+      if (d.is_priority && limit > 0) {
+        runLimit = limit;
+      }
+    }
+    setSessDivisionPriority(flags);
+    setSessPriorityRunLimit(String(runLimit));
+
+    setSessDialogOpen(true);
+  };
+
+  const deleteSession = async (s: ApiSession) => {
+    const label = formatSessionTitle(s, s.event_timezone);
+    const confirmed = confirm(
+      `Delete this session?\n\n${label}\n\nThis will cascade-delete every check-in, queue entry, queue event, run, and division row attached to it. This cannot be undone.`
+    );
+    if (!confirmed) return;
+    setSessDeletingId(s.id);
+    try {
+      await api.del(`/v1/sessions/${s.id}`);
+      toast.success("Session deleted");
+      setSessions((prev) => prev?.filter((x) => x.id !== s.id) ?? null);
+      // If the live-queue tab was viewing this session, clear that selection.
+      if (lqSessionRef.current === s.id) {
+        setLqSessionId("");
+        setLqActive([]);
+        setLqPriority([]);
+        setLqNonPriority([]);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete session");
+    } finally {
+      setSessDeletingId(null);
+    }
   };
 
   const toggleDivisionPriority = (name: string) => {
     setSessDivisionPriority((prev) => ({ ...prev, [name]: !prev[name] }));
   };
 
-  const submitCreateSession = async (e: React.FormEvent) => {
+  const submitSessionDialog = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sessEventId) { toast.error("Select an event"); return; }
     if (!sessDate) { toast.error("Date is required"); return; }
@@ -570,22 +700,41 @@ export default function AdminPage() {
 
     setSessSubmitting(true);
     try {
-      await api.post<ApiSession>("/v1/sessions", {
-        event_id: sessEventId,
-        name: sessionName,
-        date: sessDate,
-        checkin_opens_at: checkinOpensAt,
-        floor_trial_starts_at: floorStartsAt,
-        floor_trial_ends_at: floorEndsAt,
-        active_priority_max: priorityMaxNum,
-        active_non_priority_max: nonPriorityMaxNum,
-        divisions,
-      });
-      toast.success("Session created");
+      if (sessEditId) {
+        // Edit: PATCH the scalar fields, then PUT divisions to overwrite the
+        // priority/run-limit flags. The two endpoints are intentionally
+        // separate on the API side because divisions are a child collection.
+        await api.patch(`/v1/sessions/${sessEditId}`, {
+          event_id: sessEventId,
+          name: sessionName,
+          date: sessDate,
+          checkin_opens_at: checkinOpensAt,
+          floor_trial_starts_at: floorStartsAt,
+          floor_trial_ends_at: floorEndsAt,
+          active_priority_max: priorityMaxNum,
+          active_non_priority_max: nonPriorityMaxNum,
+        });
+        await api.put(`/v1/sessions/${sessEditId}/divisions`, { divisions });
+        toast.success("Session updated");
+      } else {
+        await api.post<ApiSession>("/v1/sessions", {
+          event_id: sessEventId,
+          name: sessionName,
+          date: sessDate,
+          checkin_opens_at: checkinOpensAt,
+          floor_trial_starts_at: floorStartsAt,
+          floor_trial_ends_at: floorEndsAt,
+          active_priority_max: priorityMaxNum,
+          active_non_priority_max: nonPriorityMaxNum,
+          divisions,
+        });
+        toast.success("Session created");
+      }
       setSessDialogOpen(false);
+      setSessEditId(null);
       loadSessions();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to create session");
+      toast.error(err instanceof Error ? err.message : "Failed to save session");
     } finally {
       setSessSubmitting(false);
     }
@@ -784,7 +933,7 @@ export default function AdminPage() {
                     <TableHead>End date</TableHead>
                     <TableHead>Timezone</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="w-[100px]" />
+                    <TableHead className="w-[160px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -819,13 +968,24 @@ export default function AdminPage() {
                       </TableCell>
                       <TableCell>{eventStatusBadge(ev.status)}</TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => deleteEvent(ev.id)}
-                        >
-                          Delete
-                        </Button>
+                        {/* stopPropagation lets these buttons coexist with
+                            the row-level navigate(/events/:id) handler. */}
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openEvEditDialog(ev)}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => deleteEvent(ev.id)}
+                          >
+                            Delete
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -854,12 +1014,13 @@ export default function AdminPage() {
                     <TableHead>Open</TableHead>
                     <TableHead>Start</TableHead>
                     <TableHead>End</TableHead>
+                    <TableHead className="w-[160px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sessions?.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-muted-foreground">
+                      <TableCell colSpan={8} className="text-muted-foreground">
                         No sessions yet.
                       </TableCell>
                     </TableRow>
@@ -896,6 +1057,30 @@ export default function AdminPage() {
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                           {formatTimeOnly(s.floor_trial_ends_at, s.event_timezone)}
+                        </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          {/* stopPropagation on the cell: row-level onClick
+                              navigates to the session detail page; the
+                              admin actions inside need to fire without
+                              triggering that. */}
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openSessEditDialog(s)}
+                              disabled={sessDeletingId === s.id}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => void deleteSession(s)}
+                              disabled={sessDeletingId === s.id}
+                            >
+                              {sessDeletingId === s.id ? "Deleting…" : "Delete"}
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -1673,10 +1858,10 @@ export default function AdminPage() {
               <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
             </div>
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">New event</h2>
+              <h2 className="text-lg font-semibold">{evEditId ? "Edit event" : "New event"}</h2>
               <Button type="button" variant="ghost" size="sm" onClick={() => setEvDialogOpen(false)}>✕</Button>
             </div>
-            <form onSubmit={submitCreateEvent} className="space-y-4">
+            <form onSubmit={submitEventDialog} className="space-y-4">
               <div>
                 <label className={FIELD_LABEL_CLASS}>Name</label>
                 <input
@@ -1750,7 +1935,9 @@ export default function AdminPage() {
                 </select>
               </div>
               <Button type="submit" disabled={evSubmitting} size="lg" className="w-full">
-                {evSubmitting ? "Creating…" : "Create event"}
+                {evSubmitting
+                  ? evEditId ? "Saving…" : "Creating…"
+                  : evEditId ? "Save changes" : "Create event"}
               </Button>
             </form>
           </div>
@@ -1771,10 +1958,10 @@ export default function AdminPage() {
               <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
             </div>
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">New session</h2>
+              <h2 className="text-lg font-semibold">{sessEditId ? "Edit session" : "New session"}</h2>
               <Button type="button" variant="ghost" size="sm" onClick={() => setSessDialogOpen(false)}>✕</Button>
             </div>
-            <form onSubmit={submitCreateSession} className="space-y-4">
+            <form onSubmit={submitSessionDialog} className="space-y-4">
               <div>
                 <label className={FIELD_LABEL_CLASS}>Event</label>
                 <select
@@ -1915,7 +2102,9 @@ export default function AdminPage() {
                 </p>
               </div>
               <Button type="submit" disabled={sessSubmitting} size="lg" className="w-full">
-                {sessSubmitting ? "Creating…" : "Create session"}
+                {sessSubmitting
+                  ? sessEditId ? "Saving…" : "Creating…"
+                  : sessEditId ? "Save changes" : "Create session"}
               </Button>
             </form>
           </div>
