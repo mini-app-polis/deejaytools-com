@@ -499,20 +499,33 @@ describe("POST /v1/songs/upload/chunk", () => {
 
   // --- atomic guarantee ---
 
-  it("deletes the song record and returns 500 when Drive upload fails", async () => {
-    vi.mocked(drive.uploadSongToDrive).mockRejectedValueOnce(new Error("Drive unavailable"));
+  it("returns 200 immediately and deletes the song record in the background when Drive upload fails", async () => {
+    // The Drive upload now runs in the background after the HTTP response is
+    // sent, so the client always receives 200 on the final chunk — even if the
+    // upload later fails.  On failure the handler deletes the orphaned song row
+    // so the user's library stays clean.
+    let rejectDrive!: (e: Error) => void;
+    vi.mocked(drive.uploadSongToDrive).mockReturnValueOnce(
+      new Promise<never>((_, rej) => { rejectDrive = rej; })
+    );
     const finalRow = makeFinalSongRow();
     enqueueSelectResult([finalRow.song]); // post-insert song
-    enqueueSelectResult([mockUserRow]);   // user lookup
-    enqueueSelectResult([]);              // existingRows
-    // No final select — Drive throws before we get there
+    enqueueSelectResult([mockUserRow]);   // user lookup (inside background job)
+    enqueueSelectResult([]);              // existingRows (inside background job)
 
     const res = await app.request(CHUNK_BASE, {
       method: "POST",
       headers: authHeaders(),
       body: makeChunkForm(),
     });
-    expect(res.status).toBe(500);
+    // Response arrives before Drive finishes — must be 200.
+    expect(res.status).toBe(200);
+
+    // Now simulate the Drive failure and wait for the microtask queue to drain
+    // so the background .catch() handler has run.
+    rejectDrive(new Error("Drive unavailable"));
+    await new Promise((r) => setTimeout(r, 0));
+
     // The song record must be deleted so it doesn't appear in the user's list.
     expect(vi.mocked(mockDb.delete)).toHaveBeenCalled();
   });
