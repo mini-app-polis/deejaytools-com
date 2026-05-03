@@ -479,13 +479,22 @@ sessionRoutes.put(
       return c.json(CommonErrors.notFound("Session"), 404);
     }
 
-    // Wrap the transaction so the caller sees a useful error message instead
-    // of a generic 500. Without this, any DB / driver failure inside the
-    // delete-then-reinsert flow surfaces as "Internal server error" with no
-    // hint about which session or which division row triggered it.
+    // UPSERT each division by (session_id, division_name) instead of
+    // delete-then-reinsert. The original implementation wiped the whole
+    // collection and rebuilt it, but that breaks the FK from `checkins`
+    // (fk_checkins_session_division, ON DELETE RESTRICT) the moment a
+    // session has any check-ins — the DELETE fails with a Postgres 23503.
+    //
+    // Updating in place is also semantically what the admin actually wants:
+    // editing a session changes which divisions are priority and the run
+    // limit, never the set of division names (the UI always sends the full
+    // DIVISION_OPTIONS list). Existing division rows keep their primary
+    // keys, so any check-ins still reference valid rows.
+    //
+    // Wrapped in try/catch so the caller sees a useful error message
+    // instead of a generic 500.
     try {
       await db.transaction(async (tx) => {
-        await tx.delete(sessionDivisions).where(eq(sessionDivisions.sessionId, id));
         for (let i = 0; i < body.divisions.length; i++) {
           const d = body.divisions[i]!;
           const name = d.division_name.trim();
@@ -493,14 +502,24 @@ sessionRoutes.put(
           const isPriority = d.is_priority ?? false;
           const sortOrder = d.sort_order ?? i;
           const priorityRunLimit = d.priority_run_limit ?? 0;
-          await tx.insert(sessionDivisions).values({
-            id: crypto.randomUUID(),
-            sessionId: id,
-            divisionName: name,
-            isPriority,
-            priorityRunLimit,
-            sortOrder,
-          });
+          await tx
+            .insert(sessionDivisions)
+            .values({
+              id: crypto.randomUUID(),
+              sessionId: id,
+              divisionName: name,
+              isPriority,
+              priorityRunLimit,
+              sortOrder,
+            })
+            .onConflictDoUpdate({
+              target: [sessionDivisions.sessionId, sessionDivisions.divisionName],
+              set: {
+                isPriority,
+                priorityRunLimit,
+                sortOrder,
+              },
+            });
         }
       });
     } catch (err) {
