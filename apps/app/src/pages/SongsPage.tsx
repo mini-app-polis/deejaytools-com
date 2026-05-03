@@ -63,8 +63,8 @@ export default function SongsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h1 className="page-title text-2xl">My Songs</h1>
-        <Button asChild>
-          <Link to="/songs/add">Add Song</Link>
+        <Button disabled title="Song uploads are temporarily unavailable — check back soon.">
+          Add Song
         </Button>
       </div>
 
