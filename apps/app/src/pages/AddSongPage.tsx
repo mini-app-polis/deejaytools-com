@@ -323,7 +323,7 @@ export default function AddSongPage() {
     <div className="space-y-6">
       <div>
         <Button variant="ghost" size="sm" className="px-0 mb-2" asChild>
-          <Link to="/my-content?tab=songs">← Back to My Songs</Link>
+          <Link to="/my-content?tab=songs">← Back to My Content</Link>
         </Button>
         <h1 className="page-title text-2xl">Add Song</h1>
       </div>

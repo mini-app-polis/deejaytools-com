@@ -129,13 +129,13 @@ export default function HowItWorksPage() {
           <p>
             After you've submitted, confirm the deejay actually has your
             file by checking{" "}
-            <Link to="/my-content?tab=songs" className="text-primary hover:underline">My Songs</Link>{" "}
+            <Link to="/my-content?tab=songs" className="text-primary hover:underline">My Content → Songs</Link>{" "}
             — it lists everything you've uploaded under your account. If
             your routine doesn't appear there, the deejay does not have it
             and you should re-upload before the floor trial starts.
           </p>
           <p>
-            If a song was submitted between The Open (Nov) 2025 and MADjam (March) 2026,
+            If a song was submitted at a past event and isn't in your account yet,
             you may be able to claim it from the historical catalog: open{" "}
             <Link to="/songs/add" className="text-primary hover:underline">Add a song</Link>{" "}
             and use the <em>Claim from history</em> option to search past
@@ -147,7 +147,7 @@ export default function HowItWorksPage() {
           <p>
             Check-in is the action that puts you in the queue. Each session
             page on{" "}
-            <Link to="/floor-trials" className="text-primary hover:underline">Active Floor Trials</Link>{" "}
+            <Link to="/floor-trials" className="text-primary hover:underline">Floor Trials</Link>{" "}
             has its own check-in form.
           </p>
           <ul className="list-disc pl-5 space-y-2">
@@ -318,7 +318,7 @@ export default function HowItWorksPage() {
             while you're already on the queue (or actively running) are
             rejected automatically.
           </p>
-          <ActionLink to="/floor-trials">Back to Active Floor Trials →</ActionLink>
+          <ActionLink to="/floor-trials">Back to Floor Trials →</ActionLink>
         </Section>
 
         <Section section={SECTIONS[8]!}>
