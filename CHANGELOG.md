@@ -1,3 +1,10 @@
+# [1.43.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.42.1...v1.43.0) (2026-05-03)
+
+
+### Features
+
+* adding all songs view to admin ui ([d6ce4ad](https://github.com/mini-app-polis/deejaytools-com/commit/d6ce4adb24d5d8770401b57100e7d30daa239f61))
+
 ## [1.42.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.42.0...v1.42.1) (2026-05-03)
 
 
