@@ -1,3 +1,10 @@
+## [1.44.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.44.1...v1.44.2) (2026-05-03)
+
+
+### Bug Fixes
+
+* added error messaging ([d4b2d95](https://github.com/mini-app-polis/deejaytools-com/commit/d4b2d9527f536452a8928b3c95c8bf3ac228aa22))
+
 ## [1.44.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.44.0...v1.44.1) (2026-05-03)
 
 
