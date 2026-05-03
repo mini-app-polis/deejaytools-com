@@ -470,6 +470,17 @@ export default function ApiSessionPage() {
 
         {/* Active cap + priority run limits */}
         <div className="text-xs text-muted-foreground space-y-0.5 pt-0.5">
+          {(() => {
+            const limit = (session.divisions ?? []).find(
+              (d) => d.priority_run_limit != null && d.priority_run_limit > 0
+            )?.priority_run_limit ?? null;
+            return limit != null ? (
+              <p>
+                Priority runs:{" "}
+                <span className="text-foreground">{limit}</span>
+              </p>
+            ) : null;
+          })()}
           {(session.active_priority_max != null || session.active_non_priority_max != null) && (
             <p>
               Active cap:{" "}
@@ -479,18 +490,6 @@ export default function ApiSessionPage() {
               standard
             </p>
           )}
-          {(() => {
-            const runsLines = (session.divisions ?? [])
-              .filter((d) => d.priority_run_limit != null && d.priority_run_limit > 0)
-              .sort((a, b) => a.sort_order - b.sort_order)
-              .map((d) => `${d.division_name} ×${d.priority_run_limit}`);
-            return runsLines.length > 0 ? (
-              <p>
-                Priority runs:{" "}
-                <span className="text-foreground">{runsLines.join(" · ")}</span>
-              </p>
-            ) : null;
-          })()}
         </div>
       </div>
 
