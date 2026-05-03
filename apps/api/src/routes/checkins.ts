@@ -8,8 +8,9 @@ import { checkins, events, pairs, partners, queueEntries, queueEvents, runs, ses
 import { zValidator } from "../lib/validate.js";
 import { determineInitialQueue, loadAdmissionContext } from "../lib/queue/admission.js";
 import { entityHasLiveEntry } from "../lib/queue/singleEntry.js";
-import { nextBottomPosition } from "../lib/queue/compaction.js";
+import { nextBottomPosition, compactAfterRemoval } from "../lib/queue/compaction.js";
 import { requireAuth } from "../middleware/auth.js";
+import { invalidateSessionCache } from "./sessions.js";
 
 const logger = createLogger("deejaytools-api");
 
@@ -292,4 +293,82 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
   });
 
   return c.json(success(data));
+});
+
+/**
+ * DELETE /v1/checkins/:id — self-service withdrawal.
+ *
+ * Lets the authenticated user remove their own check-in from the queue.
+ * Ownership is verified by confirming the check-in's entitySoloUserId or
+ * entityPairId (via pairs.userAId) belongs to the requesting user.
+ * The queue entry is deleted, the queue is compacted, and a "withdrawn"
+ * event is logged — identical to the admin-only POST /v1/queue/withdraw.
+ */
+checkinRoutes.delete("/:id", requireAuth, async (c) => {
+  const userId = c.get("user").userId;
+  const checkinId = c.req.param("id");
+  const now = Date.now();
+
+  // Load the check-in and its live queue entry in one query.
+  const [row] = await db
+    .select({
+      checkinId: checkins.id,
+      sessionId: checkins.sessionId,
+      entityPairId: checkins.entityPairId,
+      entitySoloUserId: checkins.entitySoloUserId,
+      queueEntryId: queueEntries.id,
+      queueType: queueEntries.queueType,
+      position: queueEntries.position,
+    })
+    .from(checkins)
+    .innerJoin(queueEntries, eq(queueEntries.checkinId, checkins.id))
+    .where(eq(checkins.id, checkinId))
+    .limit(1);
+
+  if (!row) return c.json(CommonErrors.notFound("Check-in"), 404);
+
+  // Verify ownership: either solo user or pair led by this user.
+  let owned = row.entitySoloUserId === userId;
+  if (!owned && row.entityPairId) {
+    const [pair] = await db
+      .select({ userAId: pairs.userAId })
+      .from(pairs)
+      .where(eq(pairs.id, row.entityPairId))
+      .limit(1);
+    owned = pair?.userAId === userId;
+  }
+
+  if (!owned) return c.json(CommonErrors.forbidden(), 403);
+
+  try {
+    await db.transaction(async (tx) => {
+      await tx.delete(queueEntries).where(eq(queueEntries.id, row.queueEntryId));
+      await compactAfterRemoval(tx, row.sessionId, row.queueType, row.position);
+
+      await tx.insert(queueEvents).values({
+        id: crypto.randomUUID(),
+        sessionId: row.sessionId,
+        checkinId: row.checkinId,
+        action: "withdrawn",
+        fromQueue: row.queueType,
+        fromPosition: row.position,
+        toQueue: null,
+        toPosition: null,
+        actorUserId: userId,
+        reason: "self_withdrew",
+        createdAt: now,
+      });
+    });
+  } catch (err) {
+    logger.error({
+      event: "checkin_self_withdraw_failed",
+      category: "api",
+      context: { checkinId, userId },
+      error: err,
+    });
+    return c.json(error("conflict", "Withdraw conflicted with concurrent activity; please retry"), 409);
+  }
+
+  invalidateSessionCache(row.sessionId);
+  return c.json(success({ withdrawn: true }));
 });

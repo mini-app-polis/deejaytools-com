@@ -128,6 +128,8 @@ export default function MyContentPage() {
   // ── Check-ins state ──────────────────────────────────────────────────────────
   const [checkins, setCheckins] = useState<ApiMyCheckin[] | null>(null);
   const [checkinsLoading, setCheckinsLoading] = useState(true);
+  const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
+  const [pendingWithdrawId, setPendingWithdrawId] = useState<string | null>(null);
 
   // ── Data loaders ─────────────────────────────────────────────────────────────
 
@@ -156,6 +158,21 @@ export default function MyContentPage() {
       .then(setCheckins)
       .catch((e: Error) => toast.error(e.message))
       .finally(() => setCheckinsLoading(false));
+  };
+
+  const handleWithdraw = async (checkinId: string) => {
+    setWithdrawingId(checkinId);
+    try {
+      await api.del(`/v1/checkins/${checkinId}`);
+      setCheckins((prev) => prev?.filter((c) => c.id !== checkinId) ?? null);
+      setPendingWithdrawId(null);
+      toast.success("Withdrawn from queue.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to withdraw.");
+      setPendingWithdrawId(null);
+    } finally {
+      setWithdrawingId(null);
+    }
   };
 
   useEffect(() => {
@@ -330,6 +347,37 @@ export default function MyContentPage() {
                         <p className="text-muted-foreground italic">Note: {ci.notes}</p>
                       )}
                     </div>
+
+                    {/* Withdraw */}
+                    {pendingWithdrawId === ci.id ? (
+                      <div className="flex items-center gap-2 pt-1 border-t border-border/40 mt-1">
+                        <span className="text-xs text-muted-foreground flex-1">Remove yourself from this queue?</span>
+                        <Button
+                          type="button" size="sm" variant="destructive"
+                          onClick={() => void handleWithdraw(ci.id)}
+                          disabled={withdrawingId === ci.id}
+                        >
+                          {withdrawingId === ci.id ? "Withdrawing…" : "Yes, withdraw"}
+                        </Button>
+                        <Button
+                          type="button" size="sm" variant="outline"
+                          onClick={() => setPendingWithdrawId(null)}
+                          disabled={withdrawingId === ci.id}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="pt-1 border-t border-border/40 mt-1">
+                        <Button
+                          type="button" size="sm" variant="ghost"
+                          className="text-muted-foreground hover:text-destructive px-0"
+                          onClick={() => setPendingWithdrawId(ci.id)}
+                        >
+                          Withdraw from queue
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
