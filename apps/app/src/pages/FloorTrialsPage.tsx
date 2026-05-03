@@ -145,6 +145,22 @@ export default function FloorTrialsPage() {
                       Floor trial: {formatTimeOnly(s.floor_trial_starts_at, eventTz)} –{" "}
                       {formatTimeOnly(s.floor_trial_ends_at, eventTz)}
                     </p>
+                    <p>
+                      Active cap:{" "}
+                      <span className="text-foreground">{s.active_priority_max}</span>{" "}
+                      priority ·{" "}
+                      <span className="text-foreground">{s.active_non_priority_max}</span>{" "}
+                      standard
+                    </p>
+                    {(() => {
+                      const runsLines = (s.divisions ?? [])
+                        .filter((d) => d.priority_run_limit !== null && d.priority_run_limit > 0)
+                        .sort((a, b) => a.sort_order - b.sort_order)
+                        .map((d) => `${d.division_name} ×${d.priority_run_limit}`);
+                      return runsLines.length > 0 ? (
+                        <p>Priority runs: <span className="text-foreground">{runsLines.join(" · ")}</span></p>
+                      ) : null;
+                    })()}
                     <Separator className="my-2" />
                     <p className="text-sm font-medium text-primary">Open session →</p>
                   </CardContent>
