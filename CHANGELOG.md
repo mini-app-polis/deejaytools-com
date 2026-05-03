@@ -1,3 +1,10 @@
+## [1.44.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.44.0...v1.44.1) (2026-05-03)
+
+
+### Bug Fixes
+
+* edit options on sessions and events ([630f89e](https://github.com/mini-app-polis/deejaytools-com/commit/630f89e093850dede9a9f1b0ea0d5f147854ec8c))
+
 # [1.44.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.43.0...v1.44.0) (2026-05-03)
 
 
