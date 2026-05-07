@@ -1,3 +1,11 @@
+## [1.49.8](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.7...v1.49.8) (2026-05-07)
+
+
+### Bug Fixes
+
+* ui allow multiple check ins for users with multilpe partners ([c1b7620](https://github.com/mini-app-polis/deejaytools-com/commit/c1b762024df92859f8442e0b3dec9514da72ff1a))
+* ui allow multiple check ins for users with multilpe partners ([8fed63d](https://github.com/mini-app-polis/deejaytools-com/commit/8fed63d70c8bce99548076cb8d5cc126aa8b9672))
+
 ## [1.49.7](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.6...v1.49.7) (2026-05-07)
 
 
