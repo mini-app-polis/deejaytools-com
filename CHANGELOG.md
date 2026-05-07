@@ -1,3 +1,10 @@
+# [1.48.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.47.5...v1.48.0) (2026-05-07)
+
+
+### Features
+
+* add Cabaret, Carolina Shag Divisions, and My Division Is Not Listed to DIVISIONS ([8b028bb](https://github.com/mini-app-polis/deejaytools-com/commit/8b028bbf84f246c1410b8a27db4c0be67c10797c))
+
 ## [1.47.5](https://github.com/mini-app-polis/deejaytools-com/compare/v1.47.4...v1.47.5) (2026-05-07)
 
 
