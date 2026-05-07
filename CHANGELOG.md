@@ -1,3 +1,10 @@
+## [1.49.7](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.6...v1.49.7) (2026-05-07)
+
+
+### Bug Fixes
+
+* ui elements ([563e60c](https://github.com/mini-app-polis/deejaytools-com/commit/563e60c145bb8d729c50ec32fdeda4e5a2ce2abc))
+
 ## [1.49.6](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.5...v1.49.6) (2026-05-07)
 
 
