@@ -3,7 +3,7 @@ import { PartnerRoleSchema } from "@deejaytools/schemas";
 import { zValidator } from "../lib/validate.js";
 import { Hono } from "hono";
 import { z } from "zod";
-import { and, asc, count, eq } from "drizzle-orm";
+import { and, asc, count, eq, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { checkins, pairs, partners, queueEntries, songs } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
@@ -120,6 +120,7 @@ partnerRoutes.get("/:id/associations", requireAuth, async (c) => {
     .from(songs)
     .where(and(eq(songs.partnerId, id), eq(songs.userId, userId)));
 
+  // Active check-in: checkin that still has a live queue entry.
   const [activeHit] = await db
     .select({ id: checkins.id })
     .from(checkins)
@@ -128,10 +129,20 @@ partnerRoutes.get("/:id/associations", requireAuth, async (c) => {
     .where(eq(pairs.partnerBId, id))
     .limit(1);
 
+  // Historical check-in: any checkin ever (completed/withdrawn rows remain in the
+  // checkins table and their entityPairId FK is RESTRICT — pair deletion is blocked).
+  const [historyHit] = await db
+    .select({ id: checkins.id })
+    .from(checkins)
+    .innerJoin(pairs, eq(pairs.id, checkins.entityPairId))
+    .where(eq(pairs.partnerBId, id))
+    .limit(1);
+
   return c.json(
     success({
       song_count: Number(songCountRow?.c ?? 0),
       has_active_checkin: !!activeHit,
+      has_checkin_history: !!historyHit,
     })
   );
 });
@@ -207,6 +218,7 @@ partnerRoutes.delete("/:id", requireAuth, async (c) => {
     return c.json(CommonErrors.notFound("Partner"), 404);
   }
 
+  // Block only if there is a live queue entry — an active check-in cannot be orphaned.
   const [activeHit] = await db
     .select({ id: checkins.id })
     .from(checkins)
@@ -225,17 +237,44 @@ partnerRoutes.delete("/:id", requireAuth, async (c) => {
     );
   }
 
+  // Collect all pair IDs for this partner so we can handle them correctly.
+  // Pairs that have historical checkins (RESTRICT FK on checkins.entityPairId) cannot
+  // be deleted — instead we null out their partnerBId so the pair row survives for
+  // history while the partner record itself is removed.
+  // Pairs with no checkin history are safe to delete outright.
+  const partnerPairs = await db
+    .select({ id: pairs.id })
+    .from(pairs)
+    .where(eq(pairs.partnerBId, id));
+  const partnerPairIds = partnerPairs.map((p) => p.id);
+
+  const pairsWithHistory =
+    partnerPairIds.length > 0
+      ? await db
+          .select({ entityPairId: checkins.entityPairId })
+          .from(checkins)
+          .where(inArray(checkins.entityPairId, partnerPairIds))
+          .groupBy(checkins.entityPairId)
+      : [];
+  const historicPairIds = new Set(pairsWithHistory.map((r) => r.entityPairId).filter(Boolean) as string[]);
+
   await db.transaction(async (tx) => {
     await tx
       .update(songs)
       .set({ partnerId: null })
       .where(and(eq(songs.partnerId, id), eq(songs.userId, userId)));
 
-    // Delete pair rows entirely (not just null partnerBId) so they don't
-    // linger as "zombie" pairs that would be picked up by the ownership
-    // check in has_active_checkin queries. The active-check-in guard above
-    // already ensures no live queue entry references these pairs.
-    await tx.delete(pairs).where(eq(pairs.partnerBId, id));
+    // Pairs with history: null out partnerBId so the pair row persists for FK integrity.
+    const toOrphan = partnerPairIds.filter((pid) => historicPairIds.has(pid));
+    if (toOrphan.length > 0) {
+      await tx.update(pairs).set({ partnerBId: null }).where(inArray(pairs.id, toOrphan));
+    }
+
+    // Pairs without history: safe to delete entirely.
+    const toDelete = partnerPairIds.filter((pid) => !historicPairIds.has(pid));
+    if (toDelete.length > 0) {
+      await tx.delete(pairs).where(inArray(pairs.id, toDelete));
+    }
 
     await tx.delete(partners).where(and(eq(partners.id, id), eq(partners.userId, userId)));
   });

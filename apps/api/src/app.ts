@@ -27,17 +27,8 @@ import { timeoutMiddleware } from "./middleware/timeout.js";
 
 const logger = createLogger("deejaytools-api");
 
-Sentry.init({
-  dsn: process.env.SENTRY_DSN,
-  environment: process.env.NODE_ENV ?? "development",
-  enabled: !!process.env.SENTRY_DSN,
-  // Tag every event with the deployed version so errors link back to a
-  // specific release. Railway sets RAILWAY_DEPLOYMENT_ID per deploy; the
-  // npm fallback uses the version semantic-release bumps in package.json.
-  release:
-    process.env.RAILWAY_DEPLOYMENT_ID ??
-    process.env.npm_package_version,
-});
+// Sentry is initialised in instrument.ts, loaded via `node --import`
+// before this module runs.  This import is kept here only for captureException.
 
 export const app = new Hono();
 

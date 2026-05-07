@@ -58,6 +58,7 @@ type PartnerForm = z.infer<typeof partnerSchema>;
 type DeleteAssociations = {
   song_count: number;
   has_active_checkin: boolean;
+  has_checkin_history?: boolean;
 };
 
 export default function PartnersPage() {
@@ -335,6 +336,11 @@ export default function PartnersPage() {
             <p className="text-sm text-destructive">
               This partner has an active check-in and cannot be deleted. Complete or withdraw the
               check-in first.
+            </p>
+          ) : deleteAssociations?.has_checkin_history ? (
+            <p className="text-sm text-muted-foreground">
+              This partner has check-in history. Their historical data will be preserved after
+              deletion.
             </p>
           ) : deleteAssociations && deleteAssociations.song_count > 0 ? (
             <p className="text-sm text-muted-foreground">
