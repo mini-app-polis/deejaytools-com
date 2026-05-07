@@ -664,7 +664,7 @@ export default function ApiSessionPage() {
                   </div>
                   <div className="flex items-start gap-2">
                     <span className="text-muted-foreground w-16 shrink-0 pt-px">Song</span>
-                    <span className="font-medium truncate">
+                    <span className="font-medium break-all">
                       {songLabel(selectedSong)}
                     </span>
                   </div>
