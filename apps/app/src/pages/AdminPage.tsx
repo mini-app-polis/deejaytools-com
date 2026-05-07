@@ -1209,7 +1209,7 @@ export default function AdminPage() {
                                 {row.divisionName} · {renderSongLabel(row)}
                               </p>
                               {filename && (
-                                <p className="text-xs text-muted-foreground/70 truncate font-mono">
+                                <p className="text-xs text-muted-foreground/70 break-all font-mono">
                                   {filename}
                                 </p>
                               )}
@@ -1277,7 +1277,7 @@ export default function AdminPage() {
                                   {row.divisionName} · {renderSongLabel(row)}
                                 </p>
                                 {filename && (
-                                  <p className="text-xs text-muted-foreground/70 truncate font-mono">
+                                  <p className="text-xs text-muted-foreground/70 break-all font-mono">
                                     {filename}
                                   </p>
                                 )}
@@ -1335,7 +1335,7 @@ export default function AdminPage() {
                                   {row.divisionName} · {renderSongLabel(row)}
                                 </p>
                                 {filename && (
-                                  <p className="text-xs text-muted-foreground/70 truncate font-mono">
+                                  <p className="text-xs text-muted-foreground/70 break-all font-mono">
                                     {filename}
                                   </p>
                                 )}
