@@ -634,10 +634,6 @@ export default function ApiSessionPage() {
                   {songs.map((s) => (
                     <option key={s.id} value={s.id}>
                       {songLabel(s)}
-                      {s.division ? ` · ${s.division}` : ""}
-                      {s.partner_first_name
-                        ? ` · ${s.partner_first_name} ${s.partner_last_name ?? ""}`.trimEnd()
-                        : " · Solo"}
                     </option>
                   ))}
                 </select>
