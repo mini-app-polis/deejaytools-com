@@ -69,13 +69,25 @@ async function sweepStaleTmpDirs(): Promise<void> {
 export const songRoutes = new Hono();
 const logger = createLogger("songs-routes");
 
+/**
+ * Convert a string to camelCase, stripping non-alphanumeric characters.
+ * Each whitespace-separated word becomes a camelCase component:
+ *   "Kaiano Levine"             → "kaianoLevine"
+ *   "My Division Is Not Listed" → "myDivisionIsNotListed"
+ *   "Rising Star Classic"       → "risingStarClassic"
+ *   "2026"                      → "2026"
+ */
 function sanitizeSegment(input: string | null | undefined): string {
   if (!input) return "";
-  return input
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, "_")
-    .replace(/[^a-z0-9_-]/g, "");
+  const words = input.trim().split(/\s+/).filter(Boolean);
+  return words
+    .map((word, i) => {
+      const clean = word.replace(/[^a-zA-Z0-9]/g, "");
+      if (!clean) return "";
+      const lower = clean.toLowerCase();
+      return i === 0 ? lower : lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join("");
 }
 
 function splitNameAndExtension(filename: string): { base: string; ext: string } {
@@ -184,9 +196,9 @@ async function buildAndUploadSong(
   const version = maxVersion + 1;
 
   const userName =
-    [userRow.firstName, userRow.lastName].filter(Boolean).join("") || userId;
+    [userRow.firstName, userRow.lastName].filter(Boolean).join(" ") || userId;
   const partnerName = partnerRow
-    ? [partnerRow.firstName, partnerRow.lastName].filter(Boolean).join("")
+    ? [partnerRow.firstName, partnerRow.lastName].filter(Boolean).join(" ")
     : null;
 
   let leaderName: string;
