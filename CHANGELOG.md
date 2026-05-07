@@ -1,3 +1,10 @@
+## [1.48.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.48.0...v1.48.1) (2026-05-07)
+
+
+### Bug Fixes
+
+* never show original filename in song labels — use processed_filename → routine_name → division fallback ([6651463](https://github.com/mini-app-polis/deejaytools-com/commit/6651463c18d3af9e5a2ca43893e0a8ab313e41b1))
+
 # [1.48.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.47.5...v1.48.0) (2026-05-07)
 
 
