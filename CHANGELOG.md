@@ -1,3 +1,10 @@
+## [1.47.5](https://github.com/mini-app-polis/deejaytools-com/compare/v1.47.4...v1.47.5) (2026-05-07)
+
+
+### Bug Fixes
+
+* build ([2f488be](https://github.com/mini-app-polis/deejaytools-com/commit/2f488be7048a6fe8a180ca470777fbc1e16d970b))
+
 ## [1.47.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.47.3...v1.47.4) (2026-05-07)
 
 
