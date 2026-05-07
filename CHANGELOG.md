@@ -3,6 +3,15 @@
 
 ### Bug Fixes
 
+* build ([9c914ea](https://github.com/mini-app-polis/deejaytools-com/commit/9c914ea707caa160a0000f6645cafddcec65259b))
+* potential ([a1c6309](https://github.com/mini-app-polis/deejaytools-com/commit/a1c63094b168bb4548e55b953b5697bca2c48fe5))
+* surface actual fetch error in upload toast for diagnostics ([80ed34b](https://github.com/mini-app-polis/deejaytools-com/commit/80ed34b30a68835ea8faee72c5c42a3e53c17459))
+
+## [1.47.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.47.3...v1.47.4) (2026-05-07)
+
+
+### Bug Fixes
+
 * potential ([a1c6309](https://github.com/mini-app-polis/deejaytools-com/commit/a1c63094b168bb4548e55b953b5697bca2c48fe5))
 * surface actual fetch error in upload toast for diagnostics ([80ed34b](https://github.com/mini-app-polis/deejaytools-com/commit/80ed34b30a68835ea8faee72c5c42a3e53c17459))
 
