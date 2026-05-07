@@ -1,3 +1,16 @@
+# [1.49.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.48.1...v1.49.0) (2026-05-07)
+
+
+### Bug Fixes
+
+* PascalCase processed filenames (KaianoLevine_LibbyWooton_MyDivisionIsNotListed) ([cc8ddb8](https://github.com/mini-app-polis/deejaytools-com/commit/cc8ddb807333cc4660582048515fa8d3866cd57a))
+* wrap long song filenames in check-in confirmation card ([6bb6638](https://github.com/mini-app-polis/deejaytools-com/commit/6bb6638107b1290c73e99c5e8517a8293d0b5b18))
+
+
+### Features
+
+* camelCase processed filenames — names and divisions use camelCase segments ([4238d21](https://github.com/mini-app-polis/deejaytools-com/commit/4238d210bb3e31df7ab1cef6833389b3b22e39c6))
+
 ## [1.48.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.48.0...v1.48.1) (2026-05-07)
 
 
