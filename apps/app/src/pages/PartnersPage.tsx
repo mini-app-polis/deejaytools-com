@@ -198,7 +198,7 @@ export default function PartnersPage() {
           <p className="text-sm text-muted-foreground py-4 text-center">No partners yet.</p>
         )}
         {partners?.map((p) => (
-          <div key={p.id} className="rounded-lg border bg-card p-4 space-y-3 shadow-sm">
+          <div key={p.id} className="rounded-lg border-2 border-muted-foreground/30 bg-card p-4 space-y-3 shadow-sm">
             <div className="flex items-center justify-between gap-2">
               <p className="font-medium text-base">
                 {p.first_name} {p.last_name}

@@ -382,7 +382,7 @@ export default function MyContentPage() {
               <p className="text-sm text-muted-foreground py-4 text-center">No partners yet.</p>
             )}
             {partners?.map((p) => (
-              <div key={p.id} className="rounded-lg border bg-card p-4 space-y-3 shadow-sm">
+              <div key={p.id} className="rounded-lg border-2 border-muted-foreground/30 bg-card p-4 space-y-3 shadow-sm">
                 <div className="flex items-center justify-between gap-2">
                   <p className="font-medium text-base">{p.first_name} {p.last_name}</p>
                   {p.partner_role === "leader" ? (
@@ -430,7 +430,7 @@ export default function MyContentPage() {
                 ? null
                 : [s.partner_first_name, s.partner_last_name].filter(Boolean).join(" ").trim() || null;
               return (
-                <div key={s.id} className="rounded-lg border bg-card p-4 space-y-2 shadow-sm">
+                <div key={s.id} className="rounded-lg border-2 border-muted-foreground/30 bg-card p-4 space-y-2 shadow-sm">
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-mono text-sm leading-snug break-all flex-1">
                       {s.processed_filename?.trim() ? s.processed_filename : "—"}
