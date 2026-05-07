@@ -122,9 +122,8 @@ describe("PartnersPage — partner role display", () => {
     await waitFor(() => {
       expect(screen.getAllByText(/Alice Smith/).length).toBeGreaterThan(0);
     });
-    // Both layouts render the badge → 2 matches per role.
-    expect(screen.getAllByText(/follower/i).length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByText(/leader/i).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText(/follower/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/leader/i).length).toBeGreaterThan(0);
   });
 
   it("renders the email column for partners with an email", async () => {

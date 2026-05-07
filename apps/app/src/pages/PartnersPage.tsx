@@ -32,14 +32,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 
 export type PartnerRow = {
   id: string;
@@ -201,8 +193,7 @@ export default function PartnersPage() {
         <Button onClick={openCreate} className="w-full sm:w-auto">Add partner</Button>
       </div>
 
-      {/* Mobile card list */}
-      <div className={`sm:hidden space-y-3${loading ? " opacity-60" : ""}`}>
+      <div className={`space-y-3${loading ? " opacity-60" : ""}`}>
         {partners?.length === 0 && (
           <p className="text-sm text-muted-foreground py-4 text-center">No partners yet.</p>
         )}
@@ -241,56 +232,6 @@ export default function PartnersPage() {
             </div>
           </div>
         ))}
-      </div>
-
-      {/* Desktop table */}
-      <div className={`hidden sm:block${loading ? " opacity-60" : ""}`}>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead className="w-[160px]">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {partners?.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={4} className="text-muted-foreground">
-                  No partners yet.
-                </TableCell>
-              </TableRow>
-            )}
-            {partners?.map((p) => (
-              <TableRow key={p.id}>
-                <TableCell className="font-medium">
-                  {p.first_name} {p.last_name}
-                </TableCell>
-                <TableCell>
-                  {p.partner_role === "leader" ? (
-                    <Badge variant="default">Leader</Badge>
-                  ) : (
-                    <Badge variant="secondary">Follower</Badge>
-                  )}
-                </TableCell>
-                <TableCell>{p.email ?? "—"}</TableCell>
-                <TableCell className="space-x-2">
-                  <Button variant="outline" size="sm" onClick={() => openEdit(p)}>
-                    Edit
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => void handleDeleteClick(p)}
-                  >
-                    Delete
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
       </div>
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>

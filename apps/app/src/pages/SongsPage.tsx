@@ -13,14 +13,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 
 export default function SongsPage() {
   const api = useApiClient();
@@ -105,8 +97,7 @@ export default function SongsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Mobile card list */}
-      <div className={`sm:hidden space-y-3${loading ? " opacity-60" : ""}`}>
+      <div className={`space-y-3${loading ? " opacity-60" : ""}`}>
         {songs.length === 0 && (
           <p className="text-sm text-muted-foreground py-4 text-center">No songs yet.</p>
         )}
@@ -115,11 +106,7 @@ export default function SongsPage() {
             ? null
             : [s.partner_first_name, s.partner_last_name].filter(Boolean).join(" ").trim() || null;
           return (
-            <div
-              key={s.id}
-              className="rounded-lg border bg-card p-4 space-y-2 shadow-sm"
-            >
-              {/* Filename + date row */}
+            <div key={s.id} className="rounded-lg border bg-card p-4 space-y-2 shadow-sm">
               <div className="flex items-start justify-between gap-2">
                 <p className="font-mono text-sm leading-snug break-all flex-1">
                   {s.processed_filename?.trim() ? s.processed_filename : "—"}
@@ -128,8 +115,6 @@ export default function SongsPage() {
                   {new Date(s.created_at).toLocaleDateString()}
                 </p>
               </div>
-
-              {/* Metadata pills */}
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
                 {s.division && (
                   <span>
@@ -156,7 +141,6 @@ export default function SongsPage() {
                   </span>
                 )}
               </div>
-
               <Button
                 type="button"
                 size="sm"
@@ -169,64 +153,6 @@ export default function SongsPage() {
             </div>
           );
         })}
-      </div>
-
-      {/* Desktop table */}
-      <div className={`hidden sm:block${loading ? " opacity-60" : ""}`}>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Processed filename</TableHead>
-              <TableHead>Division</TableHead>
-              <TableHead>Routine name</TableHead>
-              <TableHead>Descriptor</TableHead>
-              <TableHead>Partner</TableHead>
-              <TableHead className="w-[100px]">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {songs.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={7} className="text-muted-foreground">
-                  No songs yet.
-                </TableCell>
-              </TableRow>
-            )}
-            {songs.map((s) => {
-              const partnerCell = !s.partner_id
-                ? "—"
-                : [s.partner_first_name, s.partner_last_name]
-                    .filter(Boolean)
-                    .join(" ")
-                    .trim() || "—";
-              return (
-                <TableRow key={s.id}>
-                  <TableCell>
-                    {new Date(s.created_at).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell className="font-mono text-sm break-all">
-                    {s.processed_filename?.trim() ? s.processed_filename : "—"}
-                  </TableCell>
-                  <TableCell>{s.division ?? "—"}</TableCell>
-                  <TableCell>{s.routine_name ?? "—"}</TableCell>
-                  <TableCell>{s.personal_descriptor ?? "—"}</TableCell>
-                  <TableCell>{partnerCell}</TableCell>
-                  <TableCell>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => setPendingDeleteId(s.id)}
-                    >
-                      Delete
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
       </div>
 
     </div>
