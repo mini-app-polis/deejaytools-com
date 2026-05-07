@@ -19,6 +19,14 @@ import { CLICKABLE_ROW_CLASS } from "@/lib/clickable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -189,6 +197,10 @@ export default function AdminPage() {
   const [sessEditId, setSessEditId] = useState<string | null>(null);
   /** Tracks the row currently mid-delete so its button can disable + show "Deleting…". */
   const [sessDeletingId, setSessDeletingId] = useState<string | null>(null);
+  /** Delete-confirmation dialog state — one per destructive action type. */
+  const [pendingDeleteEventId, setPendingDeleteEventId] = useState<string | null>(null);
+  const [pendingDeleteSession, setPendingDeleteSession] = useState<ApiSession | null>(null);
+  const [pendingDeleteAllTestData, setPendingDeleteAllTestData] = useState(false);
   /** Minutes before start that check-in opens. 0 = same moment as start. */
   const [sessCheckinOffsetMins, setSessCheckinOffsetMins] = useState("30");
   /** Floor trial duration in minutes. */
@@ -461,8 +473,14 @@ export default function AdminPage() {
 
   // ── Event CRUD ──────────────────────────────────────────────────────────────
 
-  const deleteEvent = async (id: string) => {
-    if (!confirm("Delete this event?")) return;
+  const deleteEvent = (id: string) => {
+    setPendingDeleteEventId(id);
+  };
+
+  const confirmDeleteEvent = async () => {
+    if (!pendingDeleteEventId) return;
+    const id = pendingDeleteEventId;
+    setPendingDeleteEventId(null);
     try {
       await api.del(`/v1/events/${id}`);
       toast.success("Event deleted");
@@ -602,12 +620,14 @@ export default function AdminPage() {
     setSessDialogOpen(true);
   };
 
-  const deleteSession = async (s: ApiSession) => {
-    const label = formatSessionTitle(s, s.event_timezone);
-    const confirmed = confirm(
-      `Delete this session?\n\n${label}\n\nThis will cascade-delete every check-in, queue entry, queue event, run, and division row attached to it. This cannot be undone.`
-    );
-    if (!confirmed) return;
+  const deleteSession = (s: ApiSession) => {
+    setPendingDeleteSession(s);
+  };
+
+  const confirmDeleteSession = async () => {
+    if (!pendingDeleteSession) return;
+    const s = pendingDeleteSession;
+    setPendingDeleteSession(null);
     setSessDeletingId(s.id);
     try {
       await api.del(`/v1/sessions/${s.id}`);
@@ -874,15 +894,14 @@ export default function AdminPage() {
     }
   };
 
-  const deleteAllTestData = async () => {
+  const deleteAllTestData = () => {
     if (!tiData || tiData.length === 0) return;
-    if (
-      !confirm(
-        `Delete all ${tiData.length} test injection${tiData.length === 1 ? "" : "s"}? This will remove the synthetic users, partners, pairs, check-ins, and queue entries created by test injection. This cannot be undone.`
-      )
-    ) {
-      return;
-    }
+    setPendingDeleteAllTestData(true);
+  };
+
+  const confirmDeleteAllTestData = async () => {
+    setPendingDeleteAllTestData(false);
+    if (!tiData) return;
     setTiDeleting(true);
     const expectedCount = tiData.length;
     try {
@@ -1076,7 +1095,7 @@ export default function AdminPage() {
                             <Button
                               variant="destructive"
                               size="sm"
-                              onClick={() => void deleteSession(s)}
+                              onClick={() => deleteSession(s)}
                               disabled={sessDeletingId === s.id}
                             >
                               {sessDeletingId === s.id ? "Deleting…" : "Delete"}
@@ -1844,6 +1863,69 @@ export default function AdminPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* ── Delete Event confirmation dialog ── */}
+      <Dialog open={!!pendingDeleteEventId} onOpenChange={(open: boolean) => { if (!open) setPendingDeleteEventId(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this event?</DialogTitle>
+            <DialogDescription>
+              {pendingDeleteEventId
+                ? (() => {
+                    const ev = events?.find((e) => e.id === pendingDeleteEventId);
+                    return ev
+                      ? <>This will permanently delete <span className="font-medium">{ev.name}</span>. This cannot be undone.</>
+                      : "This will permanently delete the event. This cannot be undone.";
+                  })()
+                : null}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingDeleteEventId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => void confirmDeleteEvent()}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete Session confirmation dialog ── */}
+      <Dialog open={!!pendingDeleteSession} onOpenChange={(open: boolean) => { if (!open) setPendingDeleteSession(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this session?</DialogTitle>
+            <DialogDescription>
+              {pendingDeleteSession && (
+                <>
+                  <span className="font-medium">{formatSessionTitle(pendingDeleteSession, pendingDeleteSession.event_timezone)}</span>
+                  <br />
+                  This will cascade-delete every check-in, queue entry, run, and division row attached to it. This cannot be undone.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingDeleteSession(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => void confirmDeleteSession()}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete all test data confirmation dialog ── */}
+      <Dialog open={pendingDeleteAllTestData} onOpenChange={(open: boolean) => { if (!open) setPendingDeleteAllTestData(false); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete all test data?</DialogTitle>
+            <DialogDescription>
+              This will remove{" "}
+              {tiData?.length ?? 0} test injection{(tiData?.length ?? 0) === 1 ? "" : "s"} —
+              synthetic users, partners, pairs, check-ins, and queue entries. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingDeleteAllTestData(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => void confirmDeleteAllTestData()}>Delete all</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Create Event dialog ── */}
       {evDialogOpen && (
