@@ -1,3 +1,11 @@
+## [1.49.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.0...v1.49.1) (2026-05-07)
+
+
+### Bug Fixes
+
+* allow processed filename to wrap in songs table ([7e06dea](https://github.com/mini-app-polis/deejaytools-com/commit/7e06deaf26729f49853fb765595702a2579698bb))
+* allow processed filenames to wrap in admin queue cards ([c6113c7](https://github.com/mini-app-polis/deejaytools-com/commit/c6113c7da61d7c917539f10dd6c39874dd73adb0))
+
 # [1.49.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.48.1...v1.49.0) (2026-05-07)
 
 
