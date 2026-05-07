@@ -1,3 +1,10 @@
+## [1.49.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.3...v1.49.4) (2026-05-07)
+
+
+### Bug Fixes
+
+* unify platform experience ([d08fedb](https://github.com/mini-app-polis/deejaytools-com/commit/d08fedbfdffb7e7ef19d135a47051c3874683888))
+
 ## [1.49.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.2...v1.49.3) (2026-05-07)
 
 
