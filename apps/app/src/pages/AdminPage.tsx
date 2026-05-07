@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import type {
-  ApiEvent,
-  ApiSession,
-  ApiQueueEntry,
-  ApiLeadingPair,
-  ApiSong,
-  ApiTestInjection,
-  ApiRun,
-  ApiAdminSong,
-  ApiAdminUser,
+import {
+  DIVISIONS,
+  type ApiEvent,
+  type ApiSession,
+  type ApiQueueEntry,
+  type ApiLeadingPair,
+  type ApiSong,
+  type ApiTestInjection,
+  type ApiRun,
+  type ApiAdminSong,
+  type ApiAdminUser,
 } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 import { useAuthMe } from "@/hooks/useAuthMe";
@@ -34,22 +35,7 @@ import { compareEventChrono, compareSessionChrono } from "@/lib/chronoSort";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const DIVISION_OPTIONS = [
-  "Classic",
-  "Showcase",
-  "Rising Star Classic",
-  "Rising Star Showcase",
-  "Sophisticated",
-  "Masters",
-  "Teams",
-  "ProAm LeaderAm",
-  "ProAm FollowerAm",
-  "NovInt Routines",
-  "Juniors",
-  "Young Adult",
-  "Exhibition",
-  "Superstar",
-] as const;
+const DIVISION_OPTIONS = DIVISIONS;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

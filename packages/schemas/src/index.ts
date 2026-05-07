@@ -4,16 +4,32 @@ import { z } from "zod";
 // Domain enums (used in request bodies / shared across API + frontend)
 // ---------------------------------------------------------------------------
 
-export const DivisionSchema = z.enum([
-  "Newcomer",
-  "Novice",
-  "Intermediate",
-  "Advanced",
-  "All-Star",
-  "Champion",
-  "Invitational",
-  "Other",
-]);
+/**
+ * Master list of competition divisions. This is the single source of truth
+ * used across the admin panel, the upload form, and any future consumers.
+ * "My Division Is Not Listed" is a UI-only escape hatch — it is not included
+ * here so consumers that need it can append it themselves.
+ */
+export const DIVISIONS = [
+  "Classic",
+  "Showcase",
+  "Rising Star Classic",
+  "Rising Star Showcase",
+  "Sophisticated",
+  "Masters",
+  "Teams",
+  "ProAm LeaderAm",
+  "ProAm FollowerAm",
+  "NovInt Routines",
+  "Juniors",
+  "Young Adult",
+  "Exhibition",
+  "Superstar",
+] as const;
+
+export type Division = (typeof DIVISIONS)[number];
+
+export const DivisionSchema = z.enum(DIVISIONS);
 
 export const SessionStatusSchema = z.enum([
   "scheduled",
