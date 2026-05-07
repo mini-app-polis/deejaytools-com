@@ -1,3 +1,11 @@
+## [1.49.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.1...v1.49.2) (2026-05-07)
+
+
+### Bug Fixes
+
+* replace inline delete confirmation with dialog modal on songs page ([d01e4d3](https://github.com/mini-app-polis/deejaytools-com/commit/d01e4d3259b783377663bfe1bff300fb3e53dbdb))
+* tests ([5c2f8f0](https://github.com/mini-app-polis/deejaytools-com/commit/5c2f8f0bc7774009fc292178c5893fa969d78d83))
+
 ## [1.49.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.0...v1.49.1) (2026-05-07)
 
 
