@@ -4,6 +4,14 @@ import { toast } from "sonner";
 import type { ApiSong } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -50,6 +58,8 @@ export default function SongsPage() {
     }
   };
 
+  const pendingSong = songs.find((s) => s.id === pendingDeleteId);
+
   if (loading) {
     return (
       <div className="space-y-3">
@@ -67,6 +77,33 @@ export default function SongsPage() {
           <Link to="/songs/add">Add Song</Link>
         </Button>
       </div>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={!!pendingDeleteId} onOpenChange={(open: boolean) => { if (!open) setPendingDeleteId(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this song?</DialogTitle>
+            <DialogDescription>
+              {pendingSong?.processed_filename
+                ? <>This will permanently remove <span className="font-mono break-all">{pendingSong.processed_filename}</span>. This cannot be undone.</>
+                : "This will permanently remove the song. This cannot be undone."
+              }
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" disabled={!!deletingId} onClick={() => setPendingDeleteId(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!!deletingId}
+              onClick={() => { if (pendingDeleteId) void handleDelete(pendingDeleteId); }}
+            >
+              {deletingId ? "Removing…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Mobile card list */}
       <div className={`sm:hidden space-y-3${loading ? " opacity-60" : ""}`}>
@@ -120,42 +157,15 @@ export default function SongsPage() {
                 )}
               </div>
 
-              {/* Delete action */}
-              {pendingDeleteId === s.id ? (
-                <div className="flex items-center gap-2 pt-1">
-                  <span className="text-xs text-muted-foreground">Delete this song?</span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="destructive"
-                    className="flex-1"
-                    onClick={() => void handleDelete(s.id)}
-                    disabled={deletingId === s.id}
-                  >
-                    {deletingId === s.id ? "Removing..." : "Yes, delete"}
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => setPendingDeleteId(null)}
-                    disabled={deletingId === s.id}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              ) : (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="destructive"
-                  className="w-full mt-1"
-                  onClick={() => setPendingDeleteId(s.id)}
-                >
-                  Delete
-                </Button>
-              )}
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                className="w-full mt-1"
+                onClick={() => setPendingDeleteId(s.id)}
+              >
+                Delete
+              </Button>
             </div>
           );
         })}
@@ -172,7 +182,7 @@ export default function SongsPage() {
               <TableHead>Routine name</TableHead>
               <TableHead>Descriptor</TableHead>
               <TableHead>Partner</TableHead>
-              <TableHead className="w-[200px]">Actions</TableHead>
+              <TableHead className="w-[100px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -203,38 +213,14 @@ export default function SongsPage() {
                   <TableCell>{s.personal_descriptor ?? "—"}</TableCell>
                   <TableCell>{partnerCell}</TableCell>
                   <TableCell>
-                    {pendingDeleteId === s.id ? (
-                      <span className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs text-muted-foreground">Delete?</span>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => void handleDelete(s.id)}
-                          disabled={deletingId === s.id}
-                        >
-                          {deletingId === s.id ? "Removing..." : "Yes"}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setPendingDeleteId(null)}
-                          disabled={deletingId === s.id}
-                        >
-                          No
-                        </Button>
-                      </span>
-                    ) : (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => setPendingDeleteId(s.id)}
-                      >
-                        Delete
-                      </Button>
-                    )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => setPendingDeleteId(s.id)}
+                    >
+                      Delete
+                    </Button>
                   </TableCell>
                 </TableRow>
               );
