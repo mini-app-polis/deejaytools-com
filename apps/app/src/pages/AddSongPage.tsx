@@ -24,7 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DIVISIONS } from "@deejaytools/schemas";
 import type { AuthMe as MeResponse } from "@/hooks/useAuthMe";
 
-const DIVISION_OPTIONS = [...DIVISIONS, "My Division Is Not Listed"] as const;
+const DIVISION_OPTIONS = DIVISIONS;
 
 const SOLO_ALLOWED_DIVISIONS = new Set<string>(["Teams", "Exhibition", "My Division Is Not Listed"]);
 

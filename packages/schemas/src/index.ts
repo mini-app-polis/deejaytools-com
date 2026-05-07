@@ -25,6 +25,9 @@ export const DIVISIONS = [
   "Young Adult",
   "Exhibition",
   "Superstar",
+  "Cabaret",
+  "Carolina Shag Divisions",
+  "My Division Is Not Listed",
 ] as const;
 
 export type Division = (typeof DIVISIONS)[number];
