@@ -1,3 +1,10 @@
+## [1.49.9](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.8...v1.49.9) (2026-05-07)
+
+
+### Bug Fixes
+
+* partner delete path and sentry reporting fix ([836c721](https://github.com/mini-app-polis/deejaytools-com/commit/836c7218537e9527cd0cec09902a0dd0795a7e1b))
+
 ## [1.49.8](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.7...v1.49.8) (2026-05-07)
 
 
