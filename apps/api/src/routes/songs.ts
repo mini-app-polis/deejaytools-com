@@ -70,22 +70,22 @@ export const songRoutes = new Hono();
 const logger = createLogger("songs-routes");
 
 /**
- * Convert a string to camelCase, stripping non-alphanumeric characters.
- * Each whitespace-separated word becomes a camelCase component:
- *   "Kaiano Levine"             → "kaianoLevine"
- *   "My Division Is Not Listed" → "myDivisionIsNotListed"
- *   "Rising Star Classic"       → "risingStarClassic"
+ * Convert a string to PascalCase, stripping non-alphanumeric characters.
+ * Each whitespace-separated word is capitalised:
+ *   "Kaiano Levine"             → "KaianoLevine"
+ *   "My Division Is Not Listed" → "MyDivisionIsNotListed"
+ *   "Rising Star Classic"       → "RisingStarClassic"
  *   "2026"                      → "2026"
  */
 function sanitizeSegment(input: string | null | undefined): string {
   if (!input) return "";
   const words = input.trim().split(/\s+/).filter(Boolean);
   return words
-    .map((word, i) => {
+    .map((word) => {
       const clean = word.replace(/[^a-zA-Z0-9]/g, "");
       if (!clean) return "";
       const lower = clean.toLowerCase();
-      return i === 0 ? lower : lower.charAt(0).toUpperCase() + lower.slice(1);
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
     })
     .join("");
 }
