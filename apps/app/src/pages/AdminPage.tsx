@@ -434,7 +434,7 @@ export default function AdminPage() {
   const songMap = useMemo(() => {
     const m = new Map<string, string>();
     for (const s of lqSongs) {
-      m.set(s.id, s.display_name ?? s.processed_filename ?? s.id);
+      m.set(s.id, s.processed_filename?.trim() || s.routine_name?.trim() || s.division?.trim() || s.id);
     }
     return m;
   }, [lqSongs]);

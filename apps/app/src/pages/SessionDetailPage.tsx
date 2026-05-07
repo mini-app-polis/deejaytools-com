@@ -10,6 +10,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr, formatDateTimeShort } from "@/lib/sessionFormat";
 
+/**
+ * Best human-readable label for a song, never falling back to the raw
+ * original filename (which is meaningless noise in the UI).
+ * Priority: processed filename → routine name → division → "Untitled song"
+ */
+function songLabel(s: ApiSong): string {
+  if (s.processed_filename?.trim()) return s.processed_filename.trim();
+  if (s.routine_name?.trim()) return s.routine_name.trim();
+  if (s.division?.trim()) return `${s.division.trim()} song`;
+  return "Untitled song";
+}
+
 function derivedStatus(s: ApiSession, now: number): string {
   if (now < s.checkin_opens_at) return "scheduled";
   if (now <= s.floor_trial_ends_at) return "open";
@@ -621,7 +633,7 @@ export default function ApiSessionPage() {
                   <option value="">Select a song…</option>
                   {songs.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.display_name ?? s.processed_filename ?? s.id}
+                      {songLabel(s)}
                       {s.division ? ` · ${s.division}` : ""}
                       {s.partner_first_name
                         ? ` · ${s.partner_first_name} ${s.partner_last_name ?? ""}`.trimEnd()
@@ -653,7 +665,7 @@ export default function ApiSessionPage() {
                   <div className="flex items-start gap-2">
                     <span className="text-muted-foreground w-16 shrink-0 pt-px">Song</span>
                     <span className="font-medium truncate">
-                      {selectedSong.display_name ?? selectedSong.processed_filename ?? selectedSong.id}
+                      {songLabel(selectedSong)}
                     </span>
                   </div>
                 </div>
