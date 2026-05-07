@@ -200,28 +200,100 @@ describe("SessionDetailPage — check-in button", () => {
     });
   });
 
-  it("shows 'Already in queue (division: X)' fallback when has_active_checkin but no exact match", async () => {
+  it("shows queue position when user's partnership is in the waiting queue", async () => {
     signedIn = true;
     stubGets({
       session: makeSession({
         checkinOpensAt: "2026-04-27T07:00:00",
         floorTrialStartsAt: "2026-04-27T08:00:00",
         floorTrialEndsAt: "2026-04-27T22:00:00",
-        hasActiveCheckin: true,
-        activeCheckinDivision: "Teams",
       }),
-      // active+waiting empty so userQueuePosition can't compute a precise number.
       active: [],
-      waiting: [],
-      pairs: [],
+      waiting: [
+        {
+          queueEntryId: "qe1",
+          checkinId: "c1",
+          position: 1,
+          enteredQueueAt: 1,
+          entityPairId: "pair_1",
+          entitySoloUserId: null,
+          entityLabel: "User One & Partner A",
+          divisionName: "Classic",
+          songId: "song1",
+          notes: null,
+          initialQueue: "priority",
+          checkedInAt: 1,
+          subQueue: "priority",
+        },
+      ],
+      pairs: [{ id: "pair_1", display_name: "User One & Partner A", partner_b_id: "partner_1" }],
       songs: [],
     });
     renderAt();
 
     await waitFor(() => {
-      expect(screen.getAllByText(/already in queue/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/#1 in queue/i).length).toBeGreaterThan(0);
     });
-    expect(screen.getAllByText(/division: Teams/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/priority/i).length).toBeGreaterThan(0);
+  });
+
+  it("shows a position line for each partnership when multiple are in queue", async () => {
+    signedIn = true;
+    stubGets({
+      session: makeSession({
+        checkinOpensAt: "2026-04-27T07:00:00",
+        floorTrialStartsAt: "2026-04-27T08:00:00",
+        floorTrialEndsAt: "2026-04-27T22:00:00",
+      }),
+      active: [],
+      waiting: [
+        {
+          queueEntryId: "qe1",
+          checkinId: "c1",
+          position: 1,
+          enteredQueueAt: 1,
+          entityPairId: "pair_1",
+          entitySoloUserId: null,
+          entityLabel: "User One & Partner A",
+          divisionName: "Classic",
+          songId: "song1",
+          notes: null,
+          initialQueue: "priority",
+          checkedInAt: 1,
+          subQueue: "priority",
+        },
+        {
+          queueEntryId: "qe2",
+          checkinId: "c2",
+          position: 1,
+          enteredQueueAt: 2,
+          entityPairId: "pair_2",
+          entitySoloUserId: null,
+          entityLabel: "User One & Partner B",
+          divisionName: "Showcase",
+          songId: "song2",
+          notes: null,
+          initialQueue: "non_priority",
+          checkedInAt: 2,
+          subQueue: "non_priority",
+        },
+      ],
+      pairs: [
+        { id: "pair_1", display_name: "User One & Partner A", partner_b_id: "partner_1" },
+        { id: "pair_2", display_name: "User One & Partner B", partner_b_id: "partner_2" },
+      ],
+      songs: [],
+    });
+    renderAt();
+
+    // Both entries should render a position line (the check-in block renders twice)
+    await waitFor(() => {
+      expect(screen.getAllByText(/#1 in queue/i).length).toBeGreaterThan(0);
+    });
+    expect(screen.getAllByText(/#2 in queue/i).length).toBeGreaterThan(0);
+    // Entity labels are shown when multiple entries are present
+    expect(screen.getAllByText(/Partner A/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Partner B/i).length).toBeGreaterThan(0);
   });
 
   it("shows 'no songs uploaded' when window open and user has no songs", async () => {
