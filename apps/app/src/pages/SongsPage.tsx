@@ -195,7 +195,7 @@ export default function SongsPage() {
                   <TableCell>
                     {new Date(s.created_at).toLocaleDateString()}
                   </TableCell>
-                  <TableCell className="font-mono text-sm">
+                  <TableCell className="font-mono text-sm break-all">
                     {s.processed_filename?.trim() ? s.processed_filename : "—"}
                   </TableCell>
                   <TableCell>{s.division ?? "—"}</TableCell>
