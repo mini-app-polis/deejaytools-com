@@ -1,3 +1,10 @@
+# [1.50.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.9...v1.50.0) (2026-05-12)
+
+
+### Features
+
+* icons and images ([a29c7f3](https://github.com/mini-app-polis/deejaytools-com/commit/a29c7f3f6849d100f49d3141c94c57daf3c8b888))
+
 ## [1.49.9](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.8...v1.49.9) (2026-05-07)
 
 
