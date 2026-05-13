@@ -443,6 +443,12 @@ export default function MyContentPage() {
                       {new Date(s.created_at).toLocaleDateString()}
                     </p>
                   </div>
+                  {s.original_filename?.trim() && (
+                    <p className="font-mono text-xs text-muted-foreground/80 leading-snug break-all">
+                      <span className="text-muted-foreground text-xs not-italic">Original </span>
+                      {s.original_filename}
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
                     {s.division && (
                       <span>
@@ -469,30 +475,35 @@ export default function MyContentPage() {
                       </span>
                     )}
                   </div>
-                  {driveUrl && (
+                  <div className="flex gap-2 mt-1">
+                    {driveUrl && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                        asChild
+                      >
+                        <a
+                          href={driveUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label="Open song in Google Drive to check playback"
+                        >
+                          Open in Google Drive
+                        </a>
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       size="sm"
-                      variant="outline"
-                      className="w-full mt-1"
-                      asChild
+                      variant="destructive"
+                      className="flex-1"
+                      onClick={() => setPendingDeleteSongId(s.id)}
                     >
-                      <a
-                        href={driveUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label="Open song in Google Drive to check playback"
-                      >
-                        Open in Google Drive
-                      </a>
+                      Delete
                     </Button>
-                  )}
-                  <Button
-                    type="button" size="sm" variant="destructive" className="w-full mt-1"
-                    onClick={() => setPendingDeleteSongId(s.id)}
-                  >
-                    Delete
-                  </Button>
+                  </div>
                 </div>
               );
             })}
