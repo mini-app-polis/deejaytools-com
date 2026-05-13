@@ -430,6 +430,9 @@ export default function MyContentPage() {
               const partnerName = !s.partner_id
                 ? null
                 : [s.partner_first_name, s.partner_last_name].filter(Boolean).join(" ").trim() || null;
+              const driveUrl = s.drive_file_id
+                ? `https://drive.google.com/file/d/${s.drive_file_id}/view`
+                : null;
               return (
                 <div key={s.id} className="rounded-lg border-2 border-primary/40 bg-card p-4 space-y-2 shadow-sm">
                   <div className="flex items-start justify-between gap-2">
@@ -466,6 +469,24 @@ export default function MyContentPage() {
                       </span>
                     )}
                   </div>
+                  {driveUrl && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="w-full mt-1"
+                      asChild
+                    >
+                      <a
+                        href={driveUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="Open song in Google Drive to check playback"
+                      >
+                        Open in Google Drive
+                      </a>
+                    </Button>
+                  )}
                   <Button
                     type="button" size="sm" variant="destructive" className="w-full mt-1"
                     onClick={() => setPendingDeleteSongId(s.id)}
