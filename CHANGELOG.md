@@ -1,3 +1,10 @@
+## [1.51.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.51.0...v1.51.1) (2026-05-13)
+
+
+### Bug Fixes
+
+* adding original filename, buttons side by side ([68ccead](https://github.com/mini-app-polis/deejaytools-com/commit/68ccead131620fd5524c7f3ff4f919bc3e0084c7))
+
 # [1.51.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.50.0...v1.51.0) (2026-05-13)
 
 
