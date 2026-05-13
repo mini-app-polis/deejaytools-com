@@ -117,6 +117,13 @@ export default function AddSongPage() {
         if (!cancelled) {
           setPartners(p);
           setMe(m);
+          // Default the partner selector to the first partner the user has,
+          // since most uploads are partnered. Only set it on initial load
+          // when nothing is selected yet — we don't want to override a
+          // deliberate "No partner" choice if partners get refetched later.
+          if (p.length > 0) {
+            setSelectedPartnerId((current) => (current === "" ? p[0].id : current));
+          }
         }
       })
       .catch((e: Error) => toast.error(e.message))
@@ -233,7 +240,9 @@ export default function AddSongPage() {
       setDivision("");
       setRoutineName("");
       setDescriptor("");
-      setSelectedPartnerId("");
+      // Re-apply the partner default after reset so the next upload also
+      // starts on a partner instead of dropping back to "No partner".
+      setSelectedPartnerId(partners.length > 0 ? partners[0].id : "");
       setUploadBytesSent(0);
       setFileInputKey((k) => k + 1);
       setFormKey((k) => k + 1);
