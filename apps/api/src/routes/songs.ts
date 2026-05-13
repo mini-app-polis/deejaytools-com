@@ -9,7 +9,7 @@ import { and, desc, eq, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { checkins, partners, queueEntries, sessions, songs, users } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
-import { softDeleteOnDrive, uploadSongToDrive } from "../services/drive.js";
+import { shareDriveFileWithUsers, softDeleteOnDrive, uploadSongToDrive } from "../services/drive.js";
 import { tagSongBytes } from "../services/tagger.js";
 import { legacySongs } from "./legacy-songs.js";
 
@@ -242,6 +242,57 @@ async function buildAndUploadSong(
     seasonYear: seasonYearStr,
     division: song.division ?? "",
   });
+
+  // Share with the uploader and any partner email we know about.
+  //
+  // The Drive file lives under a service-account-owned root folder, so users
+  // can't see it from their own Drive UI until we explicitly grant them
+  // read access. We collect two potential recipients:
+  //   1. The uploader's user account email (always present, always shared).
+  //   2. The partner's known email, which can come from two places — the
+  //      partner row's own `email` column (free text the user typed in) and,
+  //      if the partner is linked to an actual user account, that linked
+  //      user's email. Both can differ, so we collect both candidates and
+  //      let shareDriveFileWithUsers dedupe by lowercased email.
+  //
+  // Sharing is best-effort: a per-email failure (e.g. a malformed address
+  // or a non-Google account that Drive refuses) must not break the upload,
+  // which has already succeeded. We log failures so they're discoverable in
+  // ops without surfacing a misleading error to the user.
+  const shareTargets: (string | null | undefined)[] = [userRow.email];
+  if (partnerRow) {
+    shareTargets.push(partnerRow.email);
+    if (partnerRow.linkedUserId) {
+      const [linkedUser] = await db
+        .select({ email: users.email })
+        .from(users)
+        .where(eq(users.id, partnerRow.linkedUserId))
+        .limit(1);
+      if (linkedUser?.email) shareTargets.push(linkedUser.email);
+    }
+  }
+  try {
+    const result = await shareDriveFileWithUsers(uploadResult.fileId, shareTargets);
+    if (result.failed.length > 0) {
+      logger.warn({
+        event: "song_drive_share_partial_failure",
+        category: "api",
+        context: {
+          songId: song.id,
+          driveFileId: uploadResult.fileId,
+          sharedCount: result.shared.length,
+          failed: result.failed.map((f) => ({ email: f.email, error: String(f.error) })),
+        },
+      });
+    }
+  } catch (err) {
+    logger.error({
+      event: "song_drive_share_failed",
+      category: "api",
+      context: { songId: song.id, driveFileId: uploadResult.fileId },
+      error: err,
+    });
+  }
 
   const now = Date.now();
   await db

@@ -35,6 +35,7 @@ vi.mock("../services/drive.js", () => ({
     folderId: "drive_folder_1",
   }),
   softDeleteOnDrive: vi.fn().mockResolvedValue(undefined),
+  shareDriveFileWithUsers: vi.fn().mockResolvedValue({ shared: [], failed: [] }),
 }));
 vi.mock("../services/tagger.js", () => ({
   tagSongBytes: vi

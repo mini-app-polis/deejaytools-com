@@ -445,7 +445,7 @@ export default function MyContentPage() {
                   </div>
                   {s.original_filename?.trim() && (
                     <p className="font-mono text-xs text-muted-foreground/80 leading-snug break-all">
-                      <span className="text-muted-foreground text-xs not-italic">Original </span>
+                      <span className="text-muted-foreground text-xs not-italic">Uploaded: </span>
                       {s.original_filename}
                     </p>
                   )}
