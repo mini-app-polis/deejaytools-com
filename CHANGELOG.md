@@ -1,3 +1,10 @@
+## [1.52.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.52.1...v1.52.2) (2026-05-13)
+
+
+### Bug Fixes
+
+* display partner first in upload song when present ([5d77a36](https://github.com/mini-app-polis/deejaytools-com/commit/5d77a36aaf7df181780ff60baa7820f69c6e8c09))
+
 ## [1.52.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.52.0...v1.52.1) (2026-05-13)
 
 
