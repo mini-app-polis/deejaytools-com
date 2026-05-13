@@ -1,3 +1,10 @@
+# [1.52.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.51.1...v1.52.0) (2026-05-13)
+
+
+### Features
+
+* auto share file with users ([0be9b5d](https://github.com/mini-app-polis/deejaytools-com/commit/0be9b5da974cb735f1bd180eddc479e7b056b945))
+
 ## [1.51.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.51.0...v1.51.1) (2026-05-13)
 
 
