@@ -1,3 +1,10 @@
+## [1.52.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.52.0...v1.52.1) (2026-05-13)
+
+
+### Bug Fixes
+
+* fix presentation of legacy songs ([6457e46](https://github.com/mini-app-polis/deejaytools-com/commit/6457e460d5989a4fe2704de57a4e2e188995a665))
+
 # [1.52.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.51.1...v1.52.0) (2026-05-13)
 
 
