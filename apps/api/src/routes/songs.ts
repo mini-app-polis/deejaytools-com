@@ -122,6 +122,17 @@ function computedSongDisplayName(row: typeof songs.$inferSelect): string | null 
   return null;
 }
 
+/**
+ * Legacy rows are created by /v1/songs/claim-legacy with a sentinel
+ * processed_filename that starts with "[Legacy] ". They have no Drive file
+ * and no playable audio — they exist purely so a user can attach historical
+ * metadata to their account. Detecting them off the prefix keeps the logic
+ * in one place; if we ever store this as a real column, swap this out.
+ */
+export function isLegacySong(processedFilename: string | null | undefined): boolean {
+  return !!processedFilename && processedFilename.startsWith("[Legacy] ");
+}
+
 function mapSong(
   row: typeof songs.$inferSelect & {
     partner_first_name?: string | null;
@@ -141,6 +152,7 @@ function mapSong(
     routine_name: row.routineName,
     personal_descriptor: row.personalDescriptor,
     season_year: row.seasonYear,
+    is_legacy: isLegacySong(row.processedFilename),
     created_at: row.createdAt,
     updated_at: row.updatedAt,
     partner_first_name: row.partner_first_name ?? null,
@@ -228,7 +240,10 @@ async function buildAndUploadSong(
   ].filter((s) => s.length > 0);
   const baseWithoutVersion = pathSegments.join("_");
   const versionedStem = `${baseWithoutVersion}_v${String(version).padStart(2, "0")}`;
-  const extSegment = sanitizeSegment(originalParts.ext);
+  // Extensions stay lowercase — file extensions are conventionally lowercase
+  // and don't need the PascalCase treatment that sanitizeSegment applies to
+  // human-facing path segments (which would turn "mp3" into "Mp3").
+  const extSegment = originalParts.ext.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
   const processedFilename = extSegment ? `${versionedStem}.${extSegment}` : versionedStem;
 
   const newTitle = followerName ? `${leaderName} & ${followerName}` : leaderName;

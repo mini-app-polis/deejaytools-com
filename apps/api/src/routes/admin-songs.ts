@@ -8,6 +8,7 @@ import { partners, songs, users } from "../db/schema.js";
 import { buildStructuredSongLabel } from "../lib/songLabel.js";
 import { zValidator } from "../lib/validate.js";
 import { requireAdmin } from "../middleware/auth.js";
+import { isLegacySong } from "./songs.js";
 
 export const adminSongRoutes = new Hono();
 
@@ -139,6 +140,7 @@ adminSongRoutes.get(
             division: r.division,
             routine_name: r.routineName,
             season_year: r.seasonYear,
+            is_legacy: isLegacySong(r.processedFilename),
             created_at: r.createdAt,
             deleted_at: r.deletedAt,
             owner: {

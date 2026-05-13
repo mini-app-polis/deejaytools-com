@@ -1710,14 +1710,25 @@ export default function AdminPage() {
                         <TableCell className="font-medium">
                           <div className="flex flex-col gap-0.5">
                             <span>{s.song_label}</span>
-                            {s.deleted_at && (
-                              <Badge
-                                variant="destructive"
-                                className="text-xs font-normal w-fit"
-                              >
-                                deleted
-                              </Badge>
-                            )}
+                            <div className="flex gap-1 flex-wrap">
+                              {s.is_legacy && (
+                                <Badge
+                                  variant="secondary"
+                                  className="text-xs font-normal w-fit bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30"
+                                  title="Imported from the legacy catalog — no Drive file"
+                                >
+                                  Legacy
+                                </Badge>
+                              )}
+                              {s.deleted_at && (
+                                <Badge
+                                  variant="destructive"
+                                  className="text-xs font-normal w-fit"
+                                >
+                                  deleted
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell className="text-sm">

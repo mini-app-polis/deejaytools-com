@@ -433,6 +433,10 @@ export default function MyContentPage() {
               const driveUrl = s.drive_file_id
                 ? `https://drive.google.com/file/d/${s.drive_file_id}/view`
                 : null;
+              // Legacy rows have no Drive file (and never will). Show a
+              // disabled placeholder so the user understands this song is
+              // metadata-only, not a playback link that's broken.
+              const isLegacy = s.is_legacy;
               return (
                 <div key={s.id} className="rounded-lg border-2 border-primary/40 bg-card p-4 space-y-2 shadow-sm">
                   <div className="flex items-start justify-between gap-2">
@@ -476,7 +480,18 @@ export default function MyContentPage() {
                     )}
                   </div>
                   <div className="flex gap-2 mt-1">
-                    {driveUrl && (
+                    {isLegacy ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                        disabled
+                        title="This song was imported from the legacy catalog and has no uploaded audio file."
+                      >
+                        Legacy Song
+                      </Button>
+                    ) : driveUrl ? (
                       <Button
                         type="button"
                         size="sm"
@@ -493,7 +508,7 @@ export default function MyContentPage() {
                           Open in Google Drive
                         </a>
                       </Button>
-                    )}
+                    ) : null}
                     <Button
                       type="button"
                       size="sm"

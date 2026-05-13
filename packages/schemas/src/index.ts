@@ -168,6 +168,13 @@ export const ApiSongSchema = z.object({
   routine_name: z.string().nullable(),
   personal_descriptor: z.string().nullable(),
   season_year: z.string().nullable(),
+  /**
+   * True when this row was created via the legacy-claim flow rather than an
+   * audio upload. Legacy rows are metadata-only (no Drive file, no playable
+   * audio) and the UI surfaces them differently so users/admins aren't
+   * misled into expecting playback.
+   */
+  is_legacy: z.boolean(),
   created_at: z.number(),
   updated_at: z.number(),
   partner_first_name: z.string().nullable().optional(),
@@ -232,6 +239,13 @@ export const ApiAdminSongSchema = z.object({
   division: z.string().nullable(),
   routine_name: z.string().nullable(),
   season_year: z.string().nullable(),
+  /**
+   * True when this row was claimed from the legacy catalog rather than
+   * uploaded as audio. Legacy rows have no Drive file and live only as
+   * metadata, so the admin UI flags them visually to avoid confusion
+   * with real uploads.
+   */
+  is_legacy: z.boolean(),
   created_at: z.number(),
   /** Epoch ms when soft-deleted, or null for live rows. */
   deleted_at: z.number().nullable(),
