@@ -1,3 +1,10 @@
+# [1.51.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.50.0...v1.51.0) (2026-05-13)
+
+
+### Features
+
+* adding link to song file in song portal ([4b16d5c](https://github.com/mini-app-polis/deejaytools-com/commit/4b16d5ce2dc1bf8ac8874def3fcf3374daa3f7f2))
+
 # [1.50.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.9...v1.50.0) (2026-05-12)
 
 
