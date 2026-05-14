@@ -1,3 +1,10 @@
+## [1.52.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.52.2...v1.52.3) (2026-05-14)
+
+
+### Bug Fixes
+
+* updated ui on mobile ([f6afaed](https://github.com/mini-app-polis/deejaytools-com/commit/f6afaed2f74ff70025066f04b1ecfdc1484dfaee))
+
 ## [1.52.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.52.1...v1.52.2) (2026-05-13)
 
 
