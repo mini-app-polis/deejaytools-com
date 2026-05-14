@@ -1694,6 +1694,7 @@ export default function AdminPage() {
                     <TableHead>Partner</TableHead>
                     <TableHead>Division</TableHead>
                     <TableHead>Routine</TableHead>
+                    <TableHead>Descriptor</TableHead>
                     <TableHead className="text-right whitespace-nowrap">Created</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1756,6 +1757,9 @@ export default function AdminPage() {
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {s.routine_name ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {s.personal_descriptor ?? "—"}
                         </TableCell>
                         <TableCell className="text-right text-xs text-muted-foreground whitespace-nowrap tabular-nums">
                           {formatTime(s.created_at)}

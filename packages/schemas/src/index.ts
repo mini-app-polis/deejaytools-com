@@ -238,6 +238,8 @@ export const ApiAdminSongSchema = z.object({
   display_name: z.string().nullable(),
   division: z.string().nullable(),
   routine_name: z.string().nullable(),
+  /** Free-text per-song descriptor the uploader chose (e.g. "98%", "v3"). */
+  personal_descriptor: z.string().nullable(),
   season_year: z.string().nullable(),
   /**
    * True when this row was claimed from the legacy catalog rather than
