@@ -476,9 +476,15 @@ export default function AddSongPage() {
                 <p className="text-xs text-muted-foreground">MP3, WAV, FLAC, or M4A — max 100 MB</p>
               </div>
 
-              <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
-                {isSubmitting ? "Uploading…" : "Upload song"}
-              </Button>
+              {/* Sticky-on-mobile submit so users on narrow viewports (where
+                  the button would otherwise sit below the fold under the
+                  file input) can always see and tap it. On sm+ this falls
+                  back to a normal inline button. */}
+              <div className="sticky bottom-0 z-10 -mx-6 border-t bg-card/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/80 sm:static sm:mx-0 sm:border-t-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
+                <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
+                  {isSubmitting ? "Uploading…" : "Upload song"}
+                </Button>
+              </div>
               {uploadStage !== "idle" && (
                 <div className="mt-3 space-y-1">
                   <div className="flex justify-between text-xs text-muted-foreground">
