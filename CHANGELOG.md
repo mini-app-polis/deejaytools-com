@@ -1,3 +1,10 @@
+## [1.52.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.52.3...v1.52.4) (2026-05-14)
+
+
+### Bug Fixes
+
+* adding description on admin song page ([36bbc0c](https://github.com/mini-app-polis/deejaytools-com/commit/36bbc0c0446c3ec546c54ca423d8fa668a571275))
+
 ## [1.52.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.52.2...v1.52.3) (2026-05-14)
 
 
