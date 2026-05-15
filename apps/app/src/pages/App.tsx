@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import AdminGuard from "@/components/AdminGuard";
 import Layout from "@/components/Layout";
@@ -103,9 +103,14 @@ export default function App() {
             }
           />
 
-          {/* Admin-required */}
+          {/* Admin-required.
+              /admin is split into one route per section so each admin
+              page is independently bookmarkable / linkable. Bare /admin
+              redirects to the default section so existing links keep
+              working. */}
+          <Route path="admin" element={<Navigate to="/admin/events" replace />} />
           <Route
-            path="admin"
+            path="admin/:section"
             element={
               <AdminGuard>
                 <AdminPage />

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
@@ -47,10 +47,17 @@ import { toast } from "sonner";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function renderPage() {
+/**
+ * Each admin section is now its own route (`/admin/:section`), so tests
+ * pick the section they want to exercise via `initialEntries`. Defaults
+ * to the events page, which is also where bare `/admin` lands.
+ */
+function renderPage(path: string = "/admin/events") {
   return render(
-    <MemoryRouter>
-      <AdminPage />
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/admin/:section" element={<AdminPage />} />
+      </Routes>
     </MemoryRouter>
   );
 }
@@ -70,16 +77,17 @@ describe("AdminPage", () => {
     apiDel.mockReset();
   });
 
-  it("renders the Admin heading and tab list without crashing", async () => {
+  it("renders the Admin heading and the events section without crashing", async () => {
     apiGet.mockResolvedValue([]);
     renderPage();
 
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: /admin/i })).toBeInTheDocument()
     );
-    expect(screen.getByRole("tab", { name: /events/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /sessions/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /live queue/i })).toBeInTheDocument();
+    // The Events section is the default landing page; assert the action
+    // button it owns is visible, since the in-page tab strip no longer
+    // exists (admin sections are now navbar-dropdown routes).
+    expect(screen.getByRole("button", { name: /new event/i })).toBeInTheDocument();
   });
 
   it("shows loading skeleton for events before data arrives", async () => {
@@ -186,35 +194,40 @@ describe("AdminPage", () => {
     });
   });
 
-  it("renders all tabs in the Events tab content", async () => {
+  it("renders the right section for each /admin/<section> route", async () => {
     apiGet.mockResolvedValue([]);
-    renderPage();
 
+    // Events section → owns the "New Event" button.
+    const { unmount } = renderPage("/admin/events");
     await waitFor(() =>
-      expect(screen.getByRole("heading", { name: /admin/i })).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: /new event/i })).toBeInTheDocument()
     );
+    unmount();
 
-    // Check that all tab triggers are present.
-    expect(screen.getByRole("tab", { name: /events/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /sessions/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /queue/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /run history/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /inject/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /users/i })).toBeInTheDocument();
+    // Sessions section → owns the "New Session" button.
+    const sessionsRender = renderPage("/admin/sessions");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /new session/i })).toBeInTheDocument()
+    );
+    sessionsRender.unmount();
+
+    // Users section → owns the user search input placeholder.
+    renderPage("/admin/users");
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText(/search by name or email/i)).toBeInTheDocument()
+    );
   });
 
   it("shows error toast when session creation is missing required fields", async () => {
     apiGet.mockResolvedValue([]);
     const user = userEvent.setup();
-    renderPage();
+    // The Sessions section is now its own route — render it directly
+    // rather than clicking a tab that no longer exists.
+    renderPage("/admin/sessions");
 
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: /admin/i })).toBeInTheDocument()
     );
-
-    // Click on Sessions tab using userEvent so Radix properly activates the panel.
-    const sessionsTab = screen.getByRole("tab", { name: /sessions/i });
-    await user.click(sessionsTab);
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /new session/i })).toBeInTheDocument();

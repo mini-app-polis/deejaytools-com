@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   DIVISIONS,
@@ -37,7 +37,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareEventChrono, compareSessionChrono } from "@/lib/chronoSort";
 
@@ -163,9 +163,42 @@ function randomDivision(): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+/**
+ * The seven admin sections, in display order. The order also drives the
+ * navbar dropdown and any future iteration over admin pages.
+ *
+ * Each admin section is now its own route (`/admin/<section>`); the value
+ * here is the URL slug and the corresponding Radix `<TabsContent value=...>`
+ * identifier in this file. Keeping them in one constant keeps the route,
+ * the param parsing, and the rendering in lock-step.
+ */
+export const ADMIN_SECTIONS = [
+  "events",
+  "sessions",
+  "queue",
+  "runs",
+  "inject",
+  "songs",
+  "users",
+] as const;
+export type AdminSection = (typeof ADMIN_SECTIONS)[number];
+
+const DEFAULT_ADMIN_SECTION: AdminSection = "events";
+
+function isAdminSection(s: string | undefined): s is AdminSection {
+  return !!s && (ADMIN_SECTIONS as readonly string[]).includes(s);
+}
+
 export default function AdminPage() {
   const api = useApiClient();
   const navigate = useNavigate();
+  // The URL drives which section is shown. An unknown / missing slug
+  // collapses to the default rather than rendering nothing, so a
+  // user typing /admin/foo doesn't see a blank page.
+  const { section: rawSection } = useParams<{ section: string }>();
+  const section: AdminSection = isAdminSection(rawSection)
+    ? rawSection
+    : DEFAULT_ADMIN_SECTION;
   // Used to identify the current admin so the Users tab can hide the role
   // toggle on their own row (the API also rejects self-demotion).
   const { me } = useAuthMe();
@@ -925,16 +958,12 @@ export default function AdminPage() {
     <div className="space-y-6">
       <h1 className="page-title text-2xl">Admin</h1>
 
-      <Tabs defaultValue="events">
-        <TabsList>
-          <TabsTrigger value="events">Events</TabsTrigger>
-          <TabsTrigger value="sessions">Sessions</TabsTrigger>
-          <TabsTrigger value="queue">Live Queue</TabsTrigger>
-          <TabsTrigger value="runs">Run History</TabsTrigger>
-          <TabsTrigger value="inject">Test Inject</TabsTrigger>
-          <TabsTrigger value="songs">Songs</TabsTrigger>
-          <TabsTrigger value="users">Users</TabsTrigger>
-        </TabsList>
+      {/* The tab strip lived here previously; admin sections are now their
+          own routes (`/admin/<section>`) reached via the navbar dropdown.
+          We keep Radix's <Tabs> wrapper so we don't have to rewrite every
+          <TabsContent value="..."> block — Radix hides every TabsContent
+          whose `value` doesn't match the controlled `value` prop. */}
+      <Tabs value={section}>
 
         {/* ── Events tab ── */}
         <TabsContent value="events" className="mt-4 space-y-3">
