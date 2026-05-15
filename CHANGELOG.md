@@ -1,3 +1,10 @@
+# [1.53.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.52.4...v1.53.0) (2026-05-15)
+
+
+### Features
+
+* admin menu restructure ([eee1c3b](https://github.com/mini-app-polis/deejaytools-com/commit/eee1c3be95c09bbab677b67613a0d32269568766))
+
 ## [1.52.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.52.3...v1.52.4) (2026-05-14)
 
 
