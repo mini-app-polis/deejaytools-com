@@ -14,6 +14,9 @@ import {
 } from "../test/helpers.js";
 import { enqueueSelectResult, mockDb, resetSelectQueue } from "../test/mocks.js";
 
+/** Minimal bytes that pass server-side detectAudioFormat (ID3v2 header). */
+const MOCK_MP3_CHUNK_BYTES = Buffer.concat([Buffer.from("ID3"), Buffer.alloc(20)]);
+
 // ---------------------------------------------------------------------------
 // Module mocks
 // ---------------------------------------------------------------------------
@@ -46,7 +49,7 @@ vi.mock("node:fs/promises", () => ({
   mkdir: vi.fn().mockResolvedValue(undefined),
   writeFile: vi.fn().mockResolvedValue(undefined),
   readdir: vi.fn().mockResolvedValue([]),
-  readFile: vi.fn().mockImplementation(() => Promise.resolve(Buffer.from("audio"))),
+  readFile: vi.fn().mockImplementation(() => Promise.resolve(MOCK_MP3_CHUNK_BYTES)),
   rm: vi.fn().mockResolvedValue(undefined),
   stat: vi.fn().mockResolvedValue({ mtimeMs: 0 }),
 }));
@@ -297,7 +300,7 @@ describe("POST /v1/songs/upload/chunk", () => {
     // Default: readdir returns a single chunk file (covers the happy path).
     // sweepStaleTmpDirs will also call readdir; stat returns epoch (old) so rm fires — that's fine.
     mockFs.readdir.mockResolvedValue(["chunk_000000"]);
-    mockFs.readFile.mockImplementation(() => Promise.resolve(Buffer.from("audio")));
+    mockFs.readFile.mockImplementation(() => Promise.resolve(MOCK_MP3_CHUNK_BYTES));
   });
 
   // --- auth & basic validation ---
@@ -572,7 +575,7 @@ describe("POST /v1/songs/upload/chunk", () => {
 
     // Chunk 1 (final) — both chunk files now present
     mockFs.readdir.mockResolvedValue(["chunk_000000", "chunk_000001"]);
-    mockFs.readFile.mockImplementation(() => Promise.resolve(Buffer.from("audio")));
+    mockFs.readFile.mockImplementation(() => Promise.resolve(MOCK_MP3_CHUNK_BYTES));
     enqueueHappyPath();
 
     const res1 = await app.request(CHUNK_BASE, {
