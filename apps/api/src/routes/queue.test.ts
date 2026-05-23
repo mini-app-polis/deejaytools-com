@@ -96,7 +96,7 @@ describe("POST /v1/queue/promote", () => {
     });
     expect(res.status).toBe(400);
     const body = await res.json() as { error: { message: string } };
-    expect(body.error.message).toMatch(/priority cap/i);
+    expect(body.error.message).toMatch(/priority cap.*\d+\/\d+/);
   });
 
   it("returns 400 when non-priority promotion is blocked by priority queue entries", async () => {
@@ -111,7 +111,7 @@ describe("POST /v1/queue/promote", () => {
     });
     expect(res.status).toBe(400);
     const body = await res.json() as { error: { message: string } };
-    expect(body.error.message).toMatch(/non-priority/i);
+    expect(body.error.message).toMatch(/priority queue has \d+ waiting/i);
   });
 
   it("returns 200 when promotion succeeds", async () => {
@@ -637,7 +637,7 @@ describe("POST /v1/queue/:session_id/promote — cap boundary conditions", () =>
     });
     expect(res.status).toBe(400);
     const body = await res.json() as { error: { message: string } };
-    expect(body.error.message).toMatch(/priority cap/i);
+    expect(body.error.message).toMatch(/priority cap.*6\/6/);
   });
 
   it("returns 200 one below priority cap (active count === activePriorityMax - 1)", async () => {
@@ -668,7 +668,7 @@ describe("POST /v1/queue/:session_id/promote — cap boundary conditions", () =>
     });
     expect(res.status).toBe(400);
     const body = await res.json() as { error: { message: string } };
-    expect(body.error.message).toMatch(/non-priority/i);
+    expect(body.error.message).toMatch(/standard cap.*4\/4/i);
   });
 
   it("returns 200 one below non-priority cap with empty priority queue", async () => {
@@ -699,7 +699,37 @@ describe("POST /v1/queue/:session_id/promote — cap boundary conditions", () =>
     });
     expect(res.status).toBe(400);
     const body = await res.json() as { error: { message: string } };
-    expect(body.error.message).toMatch(/priority cap/i);
+    expect(body.error.message).toMatch(/priority cap.*0\/0/);
+  });
+
+  it("returns 400 with a blocked-by-priority message when priorityCount > 0 and active has room", async () => {
+    enqueueSelectResult([{ ...priorityEntry, queueType: "non_priority" }]); // entry
+    enqueueSelectResult([sessionCaps]);            // tx: session FOR UPDATE
+    enqueueSelectResult([{ n: 0 }]);              // tx: active count (room below cap)
+    enqueueSelectResult([{ n: 2 }]);              // tx: priority count
+    const res = await app.request(`${BASE}/promote`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ queueEntryId: "qe1" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: { message: string } };
+    expect(body.error.message).toMatch(/priority queue has 2 waiting entries/i);
+  });
+
+  it("returns 400 with a cap-full message when priorityCount === 0 and active is at the non-priority cap", async () => {
+    enqueueSelectResult([{ ...priorityEntry, queueType: "non_priority" }]); // entry
+    enqueueSelectResult([sessionCaps]);            // tx: session FOR UPDATE
+    enqueueSelectResult([{ n: 4 }]);              // tx: active count (at cap)
+    enqueueSelectResult([{ n: 0 }]);              // tx: priority count
+    const res = await app.request(`${BASE}/promote`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ queueEntryId: "qe1" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: { message: string } };
+    expect(body.error.message).toMatch(/standard cap.*4\/4/i);
   });
 });
 
