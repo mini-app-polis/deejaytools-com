@@ -35,6 +35,7 @@ vi.mock("@clerk/clerk-react", () => ({
 }));
 
 import AddSongPage from "./AddSongPage";
+import { toast } from "sonner";
 
 function renderPage() {
   return render(
@@ -261,5 +262,75 @@ describe("AddSongPage — Claim from history", () => {
     expect(
       await screen.findByText(/type a partnership or routine name to search/i)
     ).toBeInTheDocument();
+  });
+});
+
+describe("AddSongPage — upload", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    apiGet.mockReset();
+    apiPost.mockReset();
+    vi.mocked(toast.error).mockClear();
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("allows Cabaret upload without a partner", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/partners") {
+        return Promise.resolve([
+          {
+            id: "partner-1",
+            first_name: "Bob",
+            last_name: "Jones",
+            partner_role: "follower",
+          },
+        ]);
+      }
+      if (path === "/v1/auth/me") {
+        return Promise.resolve({ id: "u1", first_name: "Ann", last_name: "One" });
+      }
+      return Promise.resolve([]);
+    });
+
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: { complete: true, song: { id: "song-new" } } }),
+    });
+
+    renderPage();
+
+    const user = userEvent.setup();
+    await waitFor(() =>
+      expect(screen.getByLabelText(/audio file/i)).toBeInTheDocument()
+    );
+
+    const partnerTrigger = screen.getByRole("combobox", { name: /partner/i });
+    await user.click(partnerTrigger);
+    await user.click(await screen.findByRole("option", { name: /no partner/i }));
+
+    const divisionTrigger = screen.getByRole("combobox", { name: /division/i });
+    await user.click(divisionTrigger);
+    await user.click(await screen.findByRole("option", { name: /^cabaret$/i }));
+
+    const file = new File(["audio"], "track.mp3", { type: "audio/mpeg" });
+    await user.upload(screen.getByLabelText(/audio file/i), file);
+
+    await user.click(screen.getByRole("button", { name: /upload song/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/v1/songs/upload/chunk"),
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+    expect(toast.error).not.toHaveBeenCalledWith(
+      "A partner is required for this division."
+    );
   });
 });

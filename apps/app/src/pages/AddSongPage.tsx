@@ -26,7 +26,7 @@ import type { AuthMe as MeResponse } from "@/hooks/useAuthMe";
 
 const DIVISION_OPTIONS = DIVISIONS;
 
-const SOLO_ALLOWED_DIVISIONS = new Set<string>(["Teams", "Exhibition", "My Division Is Not Listed"]);
+const SOLO_ALLOWED_DIVISIONS = new Set<string>(["Teams", "Exhibition", "My Division Is Not Listed", "Cabaret"]);
 
 const SOLO_PARTNER_VALUE = "__solo__";
 
