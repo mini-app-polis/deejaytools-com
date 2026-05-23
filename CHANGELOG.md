@@ -1,3 +1,11 @@
+## [1.54.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.54.0...v1.54.1) (2026-05-23)
+
+
+### Bug Fixes
+
+* **add-song:** allow Cabaret division to upload without a partner ([986324c](https://github.com/mini-app-polis/deejaytools-com/commit/986324caca30635b9f4fcca5c2b5843c557f90f8))
+* tests ([8e5d4f5](https://github.com/mini-app-polis/deejaytools-com/commit/8e5d4f5152a18f33e67ae60e6d38c9123bc4e20f))
+
 # [1.54.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.53.1...v1.54.0) (2026-05-23)
 
 
