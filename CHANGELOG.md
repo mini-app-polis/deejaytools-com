@@ -1,3 +1,12 @@
+## [1.53.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.53.0...v1.53.1) (2026-05-23)
+
+
+### Bug Fixes
+
+* **api,app:** reliable audio upload on iOS via magic-byte detection ([7c8d251](https://github.com/mini-app-polis/deejaytools-com/commit/7c8d251684aa05a928f793a2aa1b3b960ca8b6bc))
+* tests ([816c54b](https://github.com/mini-app-polis/deejaytools-com/commit/816c54b68fecbc615b82aefa7914c5162c978f0a))
+* tests ([2c92f16](https://github.com/mini-app-polis/deejaytools-com/commit/2c92f16b863066817c956150541cf7367c611228))
+
 # [1.53.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.52.4...v1.53.0) (2026-05-15)
 
 
