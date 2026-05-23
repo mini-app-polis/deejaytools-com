@@ -42,6 +42,28 @@ function formatMB(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1);
 }
 
+/**
+ * True when the current browser is iOS Safari or any browser on iPadOS.
+ *
+ * Used to relax the file input's accept= attribute, because the iOS Files
+ * app picker filters by its own rules that don't match the W3C accept=
+ * semantics — MP3s frequently get greyed out under "On My iPhone" and in
+ * third-party app sandboxes. Server-side magic-byte validation
+ * (detectAudioFormat in apps/api) is the gate that keeps junk files out.
+ *
+ * iPadOS 13+ identifies as Mac in userAgent, so we also check for touch.
+ */
+function isIOS(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  if (/iPad|iPhone|iPod/.test(ua)) return true;
+  // iPadOS 13+ masquerades as Mac
+  if (ua.includes("Mac") && typeof document !== "undefined" && "ontouchend" in document) {
+    return true;
+  }
+  return false;
+}
+
 type Partner = {
   id: string;
   first_name: string;
@@ -469,7 +491,14 @@ export default function AddSongPage() {
                   key={fileInputKey}
                   id="song-file"
                   type="file"
-                  accept="audio/*"
+                  // iOS Files app picker is stricter than accept="audio/*"
+                  // implies — MP3s in "On My iPhone" and third-party app
+                  // sandboxes get greyed out even though they're valid audio.
+                  // We omit the accept attribute on iOS so the picker shows
+                  // every file, and rely on the server's magic-byte check
+                  // (detectAudioFormat) to reject anything that isn't real
+                  // audio. On desktop we keep the filter for UX.
+                  accept={isIOS() ? undefined : "audio/*"}
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                   className="cursor-pointer"
                 />

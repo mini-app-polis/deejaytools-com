@@ -11,6 +11,7 @@ import { checkins, partners, queueEntries, sessions, songs, users } from "../db/
 import { requireAuth } from "../middleware/auth.js";
 import { shareDriveFileWithUsers, softDeleteOnDrive, uploadSongToDrive } from "../services/drive.js";
 import { tagSongBytes } from "../services/tagger.js";
+import { detectAudioFormat } from "../services/audioFormat.js";
 import { legacySongs } from "./legacy-songs.js";
 
 
@@ -793,6 +794,22 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
     return c.json(CommonErrors.badRequest("File exceeds 100 MB limit"), 400);
   }
 
+  // Validate the assembled file by magic bytes rather than trusting the
+  // client-reported mime_type. iOS Safari sometimes sends
+  // application/octet-stream for valid MP3s, and the iOS Files app picker
+  // filters by its own rules that don't always match our accept= attribute
+  // — so we keep the client filter loose and gate quality here instead.
+  const detectedMimeType = detectAudioFormat(assembled);
+  if (!detectedMimeType) {
+    return c.json(
+      error(
+        "UNSUPPORTED_FORMAT",
+        "That file doesn't look like a supported audio format. Please upload an MP3, WAV, FLAC, or M4A."
+      ),
+      400
+    );
+  }
+
   // Create the song record now — only reached if all chunks arrived successfully.
   const now = Date.now();
   const songId = crypto.randomUUID();
@@ -827,7 +844,7 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   // the user's library stays clean; they will need to retry the upload.
   const pendingSong = mapSong({ ...songRow, partner_first_name: null, partner_last_name: null });
 
-  buildAndUploadSong(songRow, userId, assembled, originalName, mimeType).catch(async (err) => {
+  buildAndUploadSong(songRow, userId, assembled, originalName, detectedMimeType).catch(async (err) => {
     logger.error({ event: "song_background_upload_failed", category: "api", context: { songId, uploadId }, error: err });
     await db.delete(songs).where(eq(songs.id, songId)).catch((deleteErr) => {
       logger.warn({
