@@ -1,3 +1,10 @@
+# [1.54.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.53.1...v1.54.0) (2026-05-23)
+
+
+### Features
+
+* **queue:** split non_priority_cap into two distinct reasons with gate snapshot in promote response ([3fe9d5f](https://github.com/mini-app-polis/deejaytools-com/commit/3fe9d5fd80852c9d957862334447b5c65c850927))
+
 ## [1.53.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.53.0...v1.53.1) (2026-05-23)
 
 
