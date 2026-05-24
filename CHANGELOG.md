@@ -1,3 +1,10 @@
+## [1.54.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.54.1...v1.54.2) (2026-05-24)
+
+
+### Bug Fixes
+
+* **add-song:** refresh Clerk token per chunk fetch to prevent auth expiry on slow uploads ([564fa2a](https://github.com/mini-app-polis/deejaytools-com/commit/564fa2ab803429b4a5f334bcc1d398fc59f5b589))
+
 ## [1.54.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.54.0...v1.54.1) (2026-05-23)
 
 
