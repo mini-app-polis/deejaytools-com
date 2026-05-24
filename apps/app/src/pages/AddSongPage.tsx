@@ -183,7 +183,6 @@ export default function AddSongPage() {
       setUploadProgress(10);
       setUploadBytesSent(0);
 
-      const token = await getToken();
       const uploadId = crypto.randomUUID();
       const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
       const MAX_RETRIES = 3;
@@ -217,13 +216,23 @@ export default function AddSongPage() {
           form.set("routine_name", routineName.trim() || "");
           form.set("personal_descriptor", descriptor.trim() || "");
 
+          let token: string | null;
+          try {
+            token = await getToken();
+          } catch {
+            token = null;
+          }
+          if (!token) {
+            throw new Error("Your session expired. Please sign in again and retry the upload.");
+          }
+
           let res: Response;
           try {
             res = await fetch(`${apiBase}/v1/songs/upload/chunk`, {
               method: "POST",
               headers: {
                 Accept: "application/json",
-                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                Authorization: `Bearer ${token}`,
               },
               body: form,
             });
@@ -238,6 +247,7 @@ export default function AddSongPage() {
           if (!res.ok) {
             const json = await res.json().catch(() => null) as { error?: { message?: string } } | null;
             lastErr = new Error(json?.error?.message ?? `Upload failed (${res.status})`);
+            if (res.status === 401) throw lastErr;
             continue;
           }
 
