@@ -4,8 +4,11 @@ import {
   readFlacTags,
   VorbisCommentBlock,
 } from "flac-tagger";
+import { createLogger } from "common-typescript-utils";
 import { parseBuffer } from "music-metadata";
 import NodeID3 from "node-id3";
+
+const logger = createLogger("deejaytools-api");
 
 export interface TagSongInput {
   bytes: Buffer;
@@ -185,109 +188,35 @@ async function tagFlac(
   }
 }
 
-/** Tag m4a using iTunes-style ilst atoms */
+/**
+ * Tag m4a — currently a safe no-op.
+ *
+ * The previous implementation rebuilt the `ilst` atom from scratch, which:
+ *   1. Wiped existing tags (BPM, key, freeform DJ metadata, etc.).
+ *   2. Changed the size of `moov`, shifting `mdat`'s absolute byte offset.
+ *      The `stco` (chunk offset table) entries inside `moov.trak.mdia.minf.stbl`
+ *      were not updated to match, leaving sample-table offsets pointing at
+ *      the wrong file positions. VirtualDJ and other compliant players
+ *      refused to load the resulting files.
+ *
+ * Until the m4a tagger is rebuilt to (a) preserve unknown ilst atoms and
+ * (b) walk and adjust `stco`/`co64` entries when moov's size changes,
+ * we return the input bytes unchanged. The user's existing tags (if any)
+ * are preserved, and the file remains playable. We lose the ability to
+ * write our own title/artist into the file, but `processedFilename`
+ * already carries that identity for downstream consumers.
+ */
 async function tagM4a(
   bytes: Buffer,
-  newTitle: string,
-  newArtist: string
+  _newTitle: string,
+  _newArtist: string
 ): Promise<Buffer> {
-  try {
-    const existing = await parseBuffer(bytes, { mimeType: "audio/mp4" });
-    const prevTitle = existing.common.title ?? "";
-    const prevArtist = existing.common.artist ?? "";
-
-    const result = setM4aTags(bytes, {
-      "©nam": newTitle,
-      "©ART": newArtist,
-      "©cmt": `prev[title=${prevTitle},artist=${prevArtist}]`,
-    });
-    return result ?? bytes;
-  } catch {
-    return bytes;
-  }
-}
-
-/**
- * Minimal iTunes atom writer.
- * Finds the ilst atom inside moov > udta > meta and replaces/adds tags.
- * Returns null if the structure can't be found (caller falls back to original bytes).
- */
-function setM4aTags(bytes: Buffer, tags: Record<string, string>): Buffer | null {
-  try {
-    const dataAtoms = Object.entries(tags).map(([name, value]) => {
-      const valueBytes = Buffer.from(value, "utf8");
-      const dataPayload = Buffer.alloc(8 + valueBytes.length);
-      dataPayload.writeUInt32BE(1, 0);
-      dataPayload.writeUInt32BE(0, 4);
-      valueBytes.copy(dataPayload, 8);
-      const dataAtom = buildAtom("data", dataPayload);
-      return buildAtom(name, dataAtom);
-    });
-
-    const ilstPayload = Buffer.concat(dataAtoms);
-    const newIlst = buildAtom("ilst", ilstPayload);
-
-    return replaceAtom(bytes, ["moov", "udta", "meta", "ilst"], newIlst);
-  } catch {
-    return null;
-  }
-}
-
-function buildAtom(name: string, payload: Buffer): Buffer {
-  const size = 8 + payload.length;
-  const atom = Buffer.alloc(size);
-  atom.writeUInt32BE(size, 0);
-  atom.write(name, 4, "latin1");
-  payload.copy(atom, 8);
-  return atom;
-}
-
-function replaceAtom(bytes: Buffer, path: string[], replacement: Buffer): Buffer | null {
-  if (path.length === 0) return null;
-
-  let offset = 0;
-  const target = path[0];
-
-  while (offset + 8 <= bytes.length) {
-    const size = bytes.readUInt32BE(offset);
-    if (size < 8 || offset + size > bytes.length) break;
-
-    const name = bytes.toString("latin1", offset + 4, offset + 8);
-
-    if (name === target) {
-      if (path.length === 1) {
-        return Buffer.concat([
-          bytes.subarray(0, offset),
-          replacement,
-          bytes.subarray(offset + size),
-        ]);
-      }
-
-      const headerLen = name === "meta" ? 12 : 8;
-      if (size < headerLen) break;
-      const innerBytes = bytes.subarray(offset + headerLen, offset + size);
-      const replaced = replaceAtom(innerBytes, path.slice(1), replacement);
-      if (!replaced) return null;
-
-      const newAtom = Buffer.alloc(headerLen + replaced.length);
-      newAtom.writeUInt32BE(headerLen + replaced.length, 0);
-      newAtom.write(name, 4, "latin1");
-      if (name === "meta" && headerLen === 12) {
-        bytes.copy(newAtom, 8, offset + 8, offset + 12);
-      }
-      replaced.copy(newAtom, headerLen);
-
-      return Buffer.concat([
-        bytes.subarray(0, offset),
-        newAtom,
-        bytes.subarray(offset + size),
-      ]);
-    }
-
-    offset += size;
-  }
-
-  return null;
+  logger.info({
+    event: "tag_m4a_noop",
+    category: "api",
+    context: { byteLength: bytes.length },
+  });
+  return bytes;
 }
 
 export async function tagSongBytes({

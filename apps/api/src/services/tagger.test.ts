@@ -244,7 +244,7 @@ describe("m4a tagging (audio/mp4)", () => {
       newArtist: "M4A Artist",
       mimeType: "audio/mp4",
     });
-    expect(Buffer.isBuffer(result)).toBe(true);
+    expect(result).toBe(bytes);
   });
 
   it("handles audio/x-m4a MIME variant", async () => {
@@ -280,7 +280,7 @@ describe("m4a tagging (audio/mp4)", () => {
     expect(Buffer.isBuffer(result)).toBe(true);
   });
 
-  it("builds valid ilst atom structure for recognized m4a", async () => {
+  it("returns the input m4a bytes unchanged", async () => {
     function buildAtom(name: string, payload: Buffer): Buffer {
       const size = 8 + payload.length;
       const buf = Buffer.alloc(size);
@@ -305,8 +305,7 @@ describe("m4a tagging (audio/mp4)", () => {
       newArtist: "Tagged Artist",
       mimeType: "audio/mp4",
     });
-    expect(Buffer.isBuffer(result)).toBe(true);
-    expect(result.length).toBeGreaterThan(0);
+    expect(result).toBe(moov);
   });
 });
 
