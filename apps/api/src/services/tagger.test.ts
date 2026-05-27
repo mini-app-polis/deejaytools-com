@@ -669,3 +669,87 @@ describe("FLAC tagging (audio/flac)", () => {
     expect(result).toBe(bytes);
   });
 });
+
+describe("sniffFormat-driven routing", () => {
+  it("routes a RIFF/WAVE file through the WAV tagger even when MIME says audio/mpeg", async () => {
+    const bytes = buildMinimalWav();
+    const result = await tagSongBytes({
+      bytes,
+      newTitle: "Tagged Title",
+      newArtist: "Tagged Artist",
+      mimeType: "audio/mpeg",
+    });
+    expect(result.subarray(0, 4).toString("latin1")).toBe("RIFF");
+    expect(result.subarray(8, 12).toString("latin1")).toBe("WAVE");
+  });
+
+  it("routes an ID3-prefixed MP3 through the MP3 tagger even when MIME says audio/wave", async () => {
+    const id3 = NodeID3.create({ title: "Original", artist: "Original" });
+    const bytes = Buffer.isBuffer(id3) ? id3 : Buffer.alloc(128);
+    const result = await tagSongBytes({
+      bytes,
+      newTitle: "Tagged Title",
+      newArtist: "Tagged Artist",
+      mimeType: "audio/wave",
+    });
+    expect(result.subarray(0, 3).toString("latin1")).toBe("ID3");
+    const tags = NodeID3.read(result);
+    if (typeof tags === "object" && tags !== null) {
+      expect(tags.title).toBe("Tagged Title");
+    }
+  });
+
+  it("routes a frame-sync MP3 (no ID3 header) through the MP3 tagger", async () => {
+    const bytes = Buffer.concat([Buffer.from([0xff, 0xfb]), Buffer.alloc(100, 0xaa)]);
+    const result = await tagSongBytes({
+      bytes,
+      newTitle: "Tagged Title",
+      newArtist: "Tagged Artist",
+      mimeType: "audio/mpeg",
+    });
+    expect(Buffer.isBuffer(result)).toBe(true);
+  });
+
+  it("routes ftyp-headed bytes through the m4a tagger even when MIME says audio/flac", async () => {
+    const { buf } = buildMinimalM4a();
+    const result = await tagSongBytes({
+      bytes: buf,
+      newTitle: "Tagged Title",
+      newArtist: "Tagged Artist",
+      mimeType: "audio/flac",
+    });
+    expect(result.subarray(4, 8).toString("latin1")).toBe("ftyp");
+  });
+
+  it("returns input unchanged when bytes match no signature and MIME is unsupported", async () => {
+    const bytes = Buffer.from("totally random bytes here, not any known format header");
+    const result = await tagSongBytes({
+      bytes,
+      newTitle: "Title",
+      newArtist: "Artist",
+      mimeType: "audio/ogg",
+    });
+    expect(result).toBe(bytes);
+  });
+
+  it("returns input unchanged when bytes match no signature and MIME is missing", async () => {
+    const bytes = Buffer.from("totally random bytes here, not any known format header");
+    const result = await tagSongBytes({
+      bytes,
+      newTitle: "Title",
+      newArtist: "Artist",
+    });
+    expect(result).toBe(bytes);
+  });
+
+  it("uses declared MIME when sniff is unsupported but MIME is known", async () => {
+    const bytes = Buffer.alloc(20, 0xaa);
+    const result = await tagSongBytes({
+      bytes,
+      newTitle: "Title",
+      newArtist: "Artist",
+      mimeType: "audio/mpeg",
+    });
+    expect(Buffer.isBuffer(result)).toBe(true);
+  });
+});

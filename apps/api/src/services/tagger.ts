@@ -14,9 +14,46 @@ export interface TagSongInput {
   mimeType?: string;
 }
 
-function getFormat(
-  mimeType: string | undefined
-): "mp3" | "wav" | "m4a" | "flac" | "unsupported" {
+type AudioFormat = "mp3" | "wav" | "m4a" | "flac" | "unsupported";
+
+/**
+ * Detect the audio format by inspecting the leading bytes of the buffer.
+ * Returns "unsupported" if no recognized signature is found.
+ *
+ * This is deliberately byte-based and ignores any MIME type — clients
+ * (especially browsers on mobile) frequently mislabel audio files, and
+ * we've seen real uploads where the declared MIME type contradicts the
+ * actual container. Trusting the bytes is the only reliable signal.
+ */
+function sniffFormat(bytes: Buffer): AudioFormat {
+  if (bytes.length < 12) return "unsupported";
+
+  if (
+    bytes.subarray(0, 4).toString("latin1") === "RIFF" &&
+    bytes.subarray(8, 12).toString("latin1") === "WAVE"
+  ) {
+    return "wav";
+  }
+
+  if (bytes.subarray(0, 4).toString("latin1") === "fLaC") {
+    return "flac";
+  }
+
+  if (bytes.subarray(4, 8).toString("latin1") === "ftyp") {
+    return "m4a";
+  }
+
+  if (bytes.subarray(0, 3).toString("latin1") === "ID3") {
+    return "mp3";
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0) {
+    return "mp3";
+  }
+
+  return "unsupported";
+}
+
+function getFormat(mimeType: string | undefined): AudioFormat {
   if (!mimeType) return "unsupported";
   if (mimeType === "audio/mpeg" || mimeType === "audio/mp3" || mimeType === "audio/x-mp3")
     return "mp3";
@@ -427,7 +464,24 @@ export async function tagSongBytes({
   newArtist,
   mimeType,
 }: TagSongInput): Promise<Buffer> {
-  const format = getFormat(mimeType);
+  const sniffed = sniffFormat(bytes);
+  const declared = getFormat(mimeType);
+
+  let format: AudioFormat;
+  if (sniffed !== "unsupported") {
+    if (declared !== "unsupported" && declared !== sniffed) {
+      console.warn(
+        JSON.stringify({
+          event: "tagger_mime_sniff_mismatch",
+          declared,
+          sniffed,
+        })
+      );
+    }
+    format = sniffed;
+  } else {
+    format = declared;
+  }
 
   switch (format) {
     case "mp3":
