@@ -1,3 +1,10 @@
+## [1.55.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.55.0...v1.55.1) (2026-05-27)
+
+
+### Bug Fixes
+
+* **tagger:** support 64-bit atom sizes in m4a parser/serializer ([d43ea4b](https://github.com/mini-app-polis/deejaytools-com/commit/d43ea4b15bcc7e2e688a0021c77f01d85c054f26))
+
 # [1.55.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.54.4...v1.55.0) (2026-05-27)
 
 
