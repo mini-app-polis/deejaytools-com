@@ -4,8 +4,12 @@ import {
   readFlacTags,
   VorbisCommentBlock,
 } from "flac-tagger";
+import { createLogger, type LogCategory } from "common-typescript-utils";
 import { parseBuffer } from "music-metadata";
 import NodeID3 from "node-id3";
+
+const TAGGER_CATEGORY = "tagger" as LogCategory;
+const logger = createLogger("tagger");
 
 export interface TagSongInput {
   bytes: Buffer;
@@ -173,8 +177,30 @@ async function tagWithId3(
       },
       Buffer.from(bytes)
     );
-    return Buffer.isBuffer(updated) ? updated : bytes;
-  } catch {
+    if (Buffer.isBuffer(updated)) {
+      logger.info({
+        event: "tagger_success",
+        category: TAGGER_CATEGORY,
+        context: {
+          format: "mp3_or_wav",
+          byteLength: bytes.length,
+          outputLength: updated.length,
+        },
+      });
+      return updated;
+    }
+    logger.warn({
+      event: "tagger_id3_returned_non_buffer",
+      category: TAGGER_CATEGORY,
+      context: { byteLength: bytes.length, updatedType: typeof updated },
+    });
+    return bytes;
+  } catch (err) {
+    logger.warn({
+      event: "tagger_id3_failed",
+      category: TAGGER_CATEGORY,
+      context: { byteLength: bytes.length, error: String(err) },
+    });
     return bytes;
   }
 }
@@ -216,8 +242,19 @@ async function tagFlac(
     stream.metadataBlocks = stream.metadataBlocks.filter(
       (b) => b.type !== MetadataBlockType.Padding
     );
-    return stream.toBuffer();
-  } catch {
+    const result = stream.toBuffer();
+    logger.info({
+      event: "tagger_success",
+      category: TAGGER_CATEGORY,
+      context: { format: "flac", byteLength: bytes.length, outputLength: result.length },
+    });
+    return result;
+  } catch (err) {
+    logger.warn({
+      event: "tagger_flac_failed",
+      category: TAGGER_CATEGORY,
+      context: { byteLength: bytes.length, error: String(err) },
+    });
     return bytes;
   }
 }
@@ -452,8 +489,19 @@ async function tagM4a(
       updateStcoEntries(moov.children, delta);
     }
 
-    return serializeAtoms(atoms);
-  } catch {
+    const result = serializeAtoms(atoms);
+    logger.info({
+      event: "tagger_success",
+      category: TAGGER_CATEGORY,
+      context: { format: "m4a", byteLength: bytes.length, outputLength: result.length },
+    });
+    return result;
+  } catch (err) {
+    logger.warn({
+      event: "tagger_m4a_parse_failed",
+      category: TAGGER_CATEGORY,
+      context: { byteLength: bytes.length, error: String(err) },
+    });
     return bytes;
   }
 }
@@ -470,13 +518,11 @@ export async function tagSongBytes({
   let format: AudioFormat;
   if (sniffed !== "unsupported") {
     if (declared !== "unsupported" && declared !== sniffed) {
-      console.warn(
-        JSON.stringify({
-          event: "tagger_mime_sniff_mismatch",
-          declared,
-          sniffed,
-        })
-      );
+      logger.warn({
+        event: "tagger_mime_sniff_mismatch",
+        category: TAGGER_CATEGORY,
+        context: { declared, sniffed, byteLength: bytes.length },
+      });
     }
     format = sniffed;
   } else {
@@ -493,6 +539,11 @@ export async function tagSongBytes({
     case "m4a":
       return tagM4a(bytes, newTitle, newArtist);
     default:
+      logger.warn({
+        event: "tagger_unsupported_format",
+        category: TAGGER_CATEGORY,
+        context: { mimeType: mimeType ?? null, byteLength: bytes.length },
+      });
       return bytes;
   }
 }
