@@ -28,7 +28,94 @@ function getFormat(
   return "unsupported";
 }
 
-/** Tag MP3 and WAV using node-id3 (both support ID3 tags) */
+type RiffChunk = { id: string; payload: Buffer };
+
+function readRiffChunks(bytes: Buffer): RiffChunk[] {
+  const chunks: RiffChunk[] = [];
+  let pos = 12;
+  while (pos + 8 <= bytes.length) {
+    const id = bytes.subarray(pos, pos + 4).toString("latin1");
+    const size = bytes.readUInt32LE(pos + 4);
+    if (pos + 8 + size > bytes.length) break;
+    chunks.push({ id, payload: bytes.subarray(pos + 8, pos + 8 + size) });
+    pos += 8 + size + (size & 1);
+  }
+  return chunks;
+}
+
+function writeRiffChunk(parts: Buffer[], chunk: RiffChunk): void {
+  const header = Buffer.alloc(8);
+  header.write(chunk.id, 0, "latin1");
+  header.writeUInt32LE(chunk.payload.length, 4);
+  parts.push(header, chunk.payload);
+  if (chunk.payload.length & 1) {
+    parts.push(Buffer.from([0]));
+  }
+}
+
+/** Embed ID3v2 metadata in a WAV `id3 ` RIFF sub-chunk (does not prepend ID3 to byte 0). */
+async function tagWav(
+  bytes: Buffer,
+  newTitle: string,
+  newArtist: string
+): Promise<Buffer> {
+  try {
+    if (bytes.length < 12) return bytes;
+    if (bytes.subarray(0, 4).toString("latin1") !== "RIFF") return bytes;
+    if (bytes.subarray(8, 12).toString("latin1") !== "WAVE") return bytes;
+
+    const chunks = readRiffChunks(bytes);
+    let prevTitle = "";
+    let prevArtist = "";
+    let prevAlbum = "";
+    let hadId3 = false;
+
+    for (const chunk of chunks) {
+      if (chunk.id === "id3 ") {
+        hadId3 = true;
+        const existing = NodeID3.read(chunk.payload);
+        if (typeof existing === "object" && existing !== null) {
+          prevTitle = existing.title ?? "";
+          prevArtist = existing.artist ?? "";
+          prevAlbum = existing.album ?? "";
+        }
+      }
+    }
+
+    const previousSummary = `prev[title=${prevTitle},artist=${prevArtist},album=${prevAlbum}]`;
+    const id3TagBytes = NodeID3.create({
+      title: newTitle,
+      artist: newArtist,
+      comment: { language: "eng", text: previousSummary },
+    });
+    if (!Buffer.isBuffer(id3TagBytes)) return bytes;
+
+    const newId3Chunk: RiffChunk = { id: "id3 ", payload: id3TagBytes };
+    const outputChunks: RiffChunk[] = [];
+    for (const chunk of chunks) {
+      if (chunk.id === "id3 ") {
+        outputChunks.push(newId3Chunk);
+      } else {
+        outputChunks.push(chunk);
+      }
+    }
+    if (!hadId3) {
+      outputChunks.push(newId3Chunk);
+    }
+
+    const parts: Buffer[] = [Buffer.from("RIFF", "latin1"), Buffer.alloc(4), Buffer.from("WAVE", "latin1")];
+    for (const chunk of outputChunks) {
+      writeRiffChunk(parts, chunk);
+    }
+    const result = Buffer.concat(parts);
+    result.writeUInt32LE(result.length - 8, 4);
+    return result;
+  } catch {
+    return bytes;
+  }
+}
+
+/** Tag MP3 using node-id3 */
 async function tagWithId3(
   bytes: Buffer,
   newTitle: string,
@@ -213,8 +300,9 @@ export async function tagSongBytes({
 
   switch (format) {
     case "mp3":
-    case "wav":
       return tagWithId3(bytes, newTitle, newArtist);
+    case "wav":
+      return tagWav(bytes, newTitle, newArtist);
     case "flac":
       return tagFlac(bytes, newTitle, newArtist);
     case "m4a":
