@@ -1,3 +1,10 @@
+## [1.54.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.54.3...v1.54.4) (2026-05-27)
+
+
+### Bug Fixes
+
+* **tagger:** make m4a tagging a no-op until stco-aware rewrite ships ([f31b6a1](https://github.com/mini-app-polis/deejaytools-com/commit/f31b6a16cb81b10e1083e90cdaba12ab75ba8313))
+
 ## [1.54.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.54.2...v1.54.3) (2026-05-27)
 
 
