@@ -1,3 +1,11 @@
+# [1.55.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.54.4...v1.55.0) (2026-05-27)
+
+
+### Features
+
+* **tagger:** m4a tagger that preserves existing ilst entries and updates stco/co64 offsets ([6e44a23](https://github.com/mini-app-polis/deejaytools-com/commit/6e44a233ef3f9017864d12d66e8806b77ef458c7))
+* **tagger:** route by byte signature instead of client-supplied MIME type ([a443937](https://github.com/mini-app-polis/deejaytools-com/commit/a44393781bee6ca3f9d98ae6b509f8286821e354))
+
 ## [1.54.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.54.3...v1.54.4) (2026-05-27)
 
 
