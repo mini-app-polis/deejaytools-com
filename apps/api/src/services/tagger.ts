@@ -290,18 +290,55 @@ function parseAtoms(buf: Buffer, offset: number, end: number): ParsedAtom[] {
   const atoms: ParsedAtom[] = [];
   let pos = offset;
   while (pos + 8 <= end) {
-    const size = buf.readUInt32BE(pos);
-    if (size < 8) throw new Error("invalid atom size");
-  // 64-bit sizes and extends-to-end atoms are not supported in this pass.
-    if (size === 0 || size === 1) throw new Error("unsupported atom size encoding");
-    if (pos + size > end) throw new Error("atom extends past container");
+    const size32 = buf.readUInt32BE(pos);
+    const name =
+      pos + 8 <= end ? buf.toString("latin1", pos + 4, pos + 8) : "<unknown>";
 
-    const name = buf.toString("latin1", pos + 4, pos + 8);
-    const headerLen = atomHeaderLen(name);
-    if (size < headerLen) throw new Error("atom smaller than header");
+    let realSize: number;
+    let headerLen: number;
+
+    if (size32 === 0) {
+      throw new Error(
+        `tagger_m4a_parse: size_extends_to_end (name=${name} offset=${pos})`
+      );
+    }
+
+    if (size32 === 1) {
+      if (name === "meta") {
+        throw new Error(
+          `tagger_m4a_parse: 64-bit-with-meta unsupported (name=${name} offset=${pos})`
+        );
+      }
+      if (pos + 16 > end) {
+        throw new Error(
+          `tagger_m4a_parse: size_exceeds_buffer (name=${name} size=<truncated-ext> offset=${pos} end=${end})`
+        );
+      }
+      realSize = Number(buf.readBigUInt64BE(pos + 8));
+      headerLen = 16;
+    } else if (size32 >= 2 && size32 < 8) {
+      throw new Error(
+        `tagger_m4a_parse: size_below_header (name=${name} size=${size32} offset=${pos})`
+      );
+    } else {
+      realSize = size32;
+      headerLen = atomHeaderLen(name);
+    }
+
+    if (realSize < headerLen) {
+      throw new Error(
+        `tagger_m4a_parse: size_below_header (name=${name} size=${realSize} offset=${pos})`
+      );
+    }
+
+    if (pos + realSize > end) {
+      throw new Error(
+        `tagger_m4a_parse: size_exceeds_buffer (name=${name} size=${realSize} offset=${pos} end=${end})`
+      );
+    }
 
     const payloadStart = pos + headerLen;
-    const payloadEnd = pos + size;
+    const payloadEnd = pos + realSize;
     const payload = buf.subarray(payloadStart, payloadEnd);
 
     const atom: ParsedAtom = { name, headerLen, payload };
@@ -309,7 +346,7 @@ function parseAtoms(buf: Buffer, offset: number, end: number): ParsedAtom[] {
       atom.children = parseAtoms(buf, payloadStart, payloadEnd);
     }
     atoms.push(atom);
-    pos += size;
+    pos += realSize;
   }
   return atoms;
 }
@@ -321,6 +358,32 @@ function serializeAtoms(atoms: ParsedAtom[]): Buffer {
 function serializeAtom(atom: ParsedAtom): Buffer {
   const payload = atom.children ? serializeAtoms(atom.children) : atom.payload;
   const totalSize = atom.headerLen + payload.length;
+
+  if (atom.headerLen === 16) {
+    if (atom.name === "meta") {
+      throw new Error(
+        `tagger_m4a_serialize: 64-bit-with-meta unsupported (name=${atom.name})`
+      );
+    }
+    if (totalSize > 0xffffffff) {
+      throw new Error(
+        `tagger_m4a_serialize: total_size_exceeds_32bit (name=${atom.name} size=${totalSize})`
+      );
+    }
+    const out = Buffer.alloc(totalSize);
+    out.writeUInt32BE(1, 0);
+    out.write(atom.name, 4, "latin1");
+    out.writeBigUInt64BE(BigInt(totalSize), 8);
+    payload.copy(out, 16);
+    return out;
+  }
+
+  if (totalSize > 0xffffffff) {
+    throw new Error(
+      `tagger_m4a_serialize: total_size_exceeds_32bit (name=${atom.name} size=${totalSize})`
+    );
+  }
+
   const out = Buffer.alloc(totalSize);
   out.writeUInt32BE(totalSize, 0);
   out.write(atom.name, 4, "latin1");
@@ -547,3 +610,6 @@ export async function tagSongBytes({
       return bytes;
   }
 }
+
+/** @internal Exported for unit tests (64-bit atom round-trip). */
+export { parseAtoms, serializeAtoms };

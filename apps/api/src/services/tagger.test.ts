@@ -1,6 +1,24 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import NodeID3 from "node-id3";
-import { tagSongBytes } from "./tagger.js";
+import { parseAtoms, serializeAtoms, tagSongBytes } from "./tagger.js";
+
+const taggerWarnMock = vi.hoisted(() => vi.fn());
+
+vi.mock("common-typescript-utils", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("common-typescript-utils")>();
+  return {
+    ...mod,
+    createLogger: vi.fn(() => ({
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: taggerWarnMock,
+      error: vi.fn(),
+      start: vi.fn(),
+      success: vi.fn(),
+      failure: vi.fn(),
+    })),
+  };
+});
 
 function minimalMp3(): Buffer {
   const tags = NodeID3.create({ title: "Original Title", artist: "Original Artist" });
@@ -252,6 +270,52 @@ function buildM4aRawAtom(name: string, payload: Buffer): Buffer {
   return buf;
 }
 
+function buildM4a64BitAtom(name: string, payload: Buffer): Buffer {
+  const total = 16 + payload.length;
+  const buf = Buffer.alloc(total);
+  buf.writeUInt32BE(1, 0);
+  buf.write(name, 4, "latin1");
+  buf.writeBigUInt64BE(BigInt(total), 8);
+  payload.copy(buf, 16);
+  return buf;
+}
+
+type M4aAtomBounds = {
+  name: string;
+  start: number;
+  size: number;
+  headerLen: number;
+  payloadStart: number;
+  payloadEnd: number;
+};
+
+function readM4aAtomBounds(buf: Buffer, pos: number, containerEnd: number): M4aAtomBounds | null {
+  if (pos + 8 > containerEnd) return null;
+  const size32 = buf.readUInt32BE(pos);
+  const name = buf.toString("latin1", pos + 4, pos + 8);
+  let realSize: number;
+  let headerLen: number;
+  if (size32 === 1) {
+    if (pos + 16 > containerEnd) return null;
+    realSize = Number(buf.readBigUInt64BE(pos + 8));
+    headerLen = 16;
+  } else if (size32 < 8) {
+    return null;
+  } else {
+    realSize = size32;
+    headerLen = m4aAtomHeaderLen(name);
+  }
+  if (pos + realSize > containerEnd) return null;
+  return {
+    name,
+    start: pos,
+    size: realSize,
+    headerLen,
+    payloadStart: pos + headerLen,
+    payloadEnd: pos + realSize,
+  };
+}
+
 function buildM4aIlstDataAtom(valueBytes: Buffer, type: number): Buffer {
   const inner = Buffer.alloc(8 + valueBytes.length);
   inner.writeUInt32BE(type, 0);
@@ -277,38 +341,39 @@ function patchSampleOffsetTable(
 ): boolean {
   let pos = containerStart;
   while (pos + 8 <= containerEnd) {
-    const size = buf.readUInt32BE(pos);
-    if (size < 8 || pos + size > containerEnd) return false;
-    const name = buf.toString("latin1", pos + 4, pos + 8);
-    const headerLen = m4aAtomHeaderLen(name);
-    const payloadStart = pos + headerLen;
-    const payloadEnd = pos + size;
-    if (name === tableName) {
-      if (tableName === "stco" && payloadEnd - payloadStart >= 12) {
-        buf.writeUInt32BE(offset, payloadStart + 8);
+    const atom = readM4aAtomBounds(buf, pos, containerEnd);
+    if (!atom) return false;
+    if (atom.name === tableName) {
+      if (tableName === "stco" && atom.payloadEnd - atom.payloadStart >= 12) {
+        buf.writeUInt32BE(offset, atom.payloadStart + 8);
         return true;
       }
-      if (tableName === "co64" && payloadEnd - payloadStart >= 16) {
-        buf.writeBigUInt64BE(BigInt(offset), payloadStart + 8);
+      if (tableName === "co64" && atom.payloadEnd - atom.payloadStart >= 16) {
+        buf.writeBigUInt64BE(BigInt(offset), atom.payloadStart + 8);
         return true;
       }
     }
-    if (M4A_CONTAINERS.has(name)) {
-      if (patchSampleOffsetTable(buf, payloadStart, payloadEnd, offset, tableName)) return true;
+    if (M4A_CONTAINERS.has(atom.name)) {
+      if (
+        patchSampleOffsetTable(buf, atom.payloadStart, atom.payloadEnd, offset, tableName)
+      ) {
+        return true;
+      }
     }
-    pos += size;
+    pos += atom.size;
   }
   return false;
 }
 
-function findMoovRange(buf: Buffer): { start: number; end: number } | null {
+function findMoovRange(buf: Buffer): { start: number; end: number; headerLen: number } | null {
   let pos = 0;
   while (pos + 8 <= buf.length) {
-    const size = buf.readUInt32BE(pos);
-    if (size < 8 || pos + size > buf.length) break;
-    const name = buf.toString("latin1", pos + 4, pos + 8);
-    if (name === "moov") return { start: pos, end: pos + size };
-    pos += size;
+    const atom = readM4aAtomBounds(buf, pos, buf.length);
+    if (!atom) break;
+    if (atom.name === "moov") {
+      return { start: atom.start, end: atom.payloadEnd, headerLen: atom.headerLen };
+    }
+    pos += atom.size;
   }
   return null;
 }
@@ -321,32 +386,27 @@ function findIlstEntries(buf: Buffer): { name: string; payload: Buffer }[] {
   const walk = (start: number, end: number) => {
     let pos = start;
     while (pos + 8 <= end) {
-      const size = buf.readUInt32BE(pos);
-      if (size < 8 || pos + size > end) return;
-      const name = buf.toString("latin1", pos + 4, pos + 8);
-      const headerLen = m4aAtomHeaderLen(name);
-      const payloadStart = pos + headerLen;
-      const payloadEnd = pos + size;
-      if (name === "ilst") {
-        let ipos = payloadStart;
-        while (ipos + 8 <= payloadEnd) {
-          const isize = buf.readUInt32BE(ipos);
-          if (isize < 8 || ipos + isize > payloadEnd) break;
-          const iname = buf.toString("latin1", ipos + 4, ipos + 8);
+      const atom = readM4aAtomBounds(buf, pos, end);
+      if (!atom) return;
+      if (atom.name === "ilst") {
+        let ipos = atom.payloadStart;
+        while (ipos + 8 <= atom.payloadEnd) {
+          const entry = readM4aAtomBounds(buf, ipos, atom.payloadEnd);
+          if (!entry) break;
           entries.push({
-            name: iname,
-            payload: buf.subarray(ipos + 8, ipos + isize),
+            name: entry.name,
+            payload: buf.subarray(entry.payloadStart, entry.payloadEnd),
           });
-          ipos += isize;
+          ipos += entry.size;
         }
         return;
       }
-      if (M4A_CONTAINERS.has(name)) walk(payloadStart, payloadEnd);
-      pos += size;
+      if (M4A_CONTAINERS.has(atom.name)) walk(atom.payloadStart, atom.payloadEnd);
+      pos += atom.size;
     }
   };
 
-  walk(moov.start + m4aAtomHeaderLen("moov"), moov.end);
+  walk(moov.start + moov.headerLen, moov.end);
   return entries;
 }
 
@@ -357,14 +417,18 @@ function readIlstEntryText(entryPayload: Buffer): string {
   return entryPayload.subarray(16).toString("utf-8");
 }
 
-function findTopLevelAtom(buf: Buffer, atomName: string): { start: number; size: number } | null {
+function findTopLevelAtom(
+  buf: Buffer,
+  atomName: string
+): { start: number; size: number; headerLen: number } | null {
   let pos = 0;
   while (pos + 8 <= buf.length) {
-    const size = buf.readUInt32BE(pos);
-    if (size < 8 || pos + size > buf.length) break;
-    const name = buf.toString("latin1", pos + 4, pos + 8);
-    if (name === atomName) return { start: pos, size };
-    pos += size;
+    const atom = readM4aAtomBounds(buf, pos, buf.length);
+    if (!atom) break;
+    if (atom.name === atomName) {
+      return { start: atom.start, size: atom.size, headerLen: atom.headerLen };
+    }
+    pos += atom.size;
   }
   return null;
 }
@@ -376,21 +440,17 @@ function readStcoFirstEntry(buf: Buffer): number | null {
   const walk = (start: number, end: number) => {
     let pos = start;
     while (pos + 8 <= end) {
-      const size = buf.readUInt32BE(pos);
-      if (size < 8 || pos + size > end) return;
-      const name = buf.toString("latin1", pos + 4, pos + 8);
-      const headerLen = m4aAtomHeaderLen(name);
-      const payloadStart = pos + headerLen;
-      const payloadEnd = pos + size;
-      if (name === "stco" && payloadEnd - payloadStart >= 12) {
-        found = buf.readUInt32BE(payloadStart + 8);
+      const atom = readM4aAtomBounds(buf, pos, end);
+      if (!atom) return;
+      if (atom.name === "stco" && atom.payloadEnd - atom.payloadStart >= 12) {
+        found = buf.readUInt32BE(atom.payloadStart + 8);
         return;
       }
-      if (M4A_CONTAINERS.has(name)) walk(payloadStart, payloadEnd);
-      pos += size;
+      if (M4A_CONTAINERS.has(atom.name)) walk(atom.payloadStart, atom.payloadEnd);
+      pos += atom.size;
     }
   };
-  walk(moov.start + 8, moov.end);
+  walk(moov.start + moov.headerLen, moov.end);
   return found;
 }
 
@@ -401,21 +461,17 @@ function readCo64FirstEntry(buf: Buffer): bigint | null {
   const walk = (start: number, end: number) => {
     let pos = start;
     while (pos + 8 <= end) {
-      const size = buf.readUInt32BE(pos);
-      if (size < 8 || pos + size > end) return;
-      const name = buf.toString("latin1", pos + 4, pos + 8);
-      const headerLen = m4aAtomHeaderLen(name);
-      const payloadStart = pos + headerLen;
-      const payloadEnd = pos + size;
-      if (name === "co64" && payloadEnd - payloadStart >= 16) {
-        found = buf.readBigUInt64BE(payloadStart + 8);
+      const atom = readM4aAtomBounds(buf, pos, end);
+      if (!atom) return;
+      if (atom.name === "co64" && atom.payloadEnd - atom.payloadStart >= 16) {
+        found = buf.readBigUInt64BE(atom.payloadStart + 8);
         return;
       }
-      if (M4A_CONTAINERS.has(name)) walk(payloadStart, payloadEnd);
-      pos += size;
+      if (M4A_CONTAINERS.has(atom.name)) walk(atom.payloadStart, atom.payloadEnd);
+      pos += atom.size;
     }
   };
-  walk(moov.start + 8, moov.end);
+  walk(moov.start + moov.headerLen, moov.end);
   return found;
 }
 
@@ -424,6 +480,8 @@ function buildMinimalM4a(
     existingIlstEntries?: { name: string; data: Buffer }[];
     moovAfterMdat?: boolean;
     useCo64?: boolean;
+    mdat64Bit?: boolean;
+    moov64Bit?: boolean;
   } = {}
 ): { buf: Buffer; mdatPayloadOffset: number; mdatPayloadLength: number } {
   const mdatPayloadLength = 64;
@@ -479,15 +537,19 @@ function buildMinimalM4a(
     const meta = buildM4aRawAtom("meta", Buffer.concat([metaHdlr, ilst]));
     moovBody = Buffer.concat([moovBody, buildM4aRawAtom("udta", meta)]);
   }
-  const moov = buildM4aRawAtom("moov", moovBody);
-  const mdat = buildM4aRawAtom("mdat", mdatPayload);
+  const moov = opts.moov64Bit
+    ? buildM4a64BitAtom("moov", moovBody)
+    : buildM4aRawAtom("moov", moovBody);
+  const mdat = opts.mdat64Bit
+    ? buildM4a64BitAtom("mdat", mdatPayload)
+    : buildM4aRawAtom("mdat", mdatPayload);
 
   const parts = opts.moovAfterMdat ? [ftyp, mdat, moov] : [ftyp, moov, mdat];
   const buf = Buffer.concat(parts);
 
   const mdatAtom = findTopLevelAtom(buf, "mdat");
   if (!mdatAtom) throw new Error("fixture missing mdat");
-  const mdatPayloadOffset = mdatAtom.start + 8;
+  const mdatPayloadOffset = mdatAtom.start + mdatAtom.headerLen;
 
   const moovRange = findMoovRange(buf);
   if (!moovRange) throw new Error("fixture missing moov");
@@ -582,7 +644,7 @@ describe("m4a tagging (audio/mp4)", () => {
     });
 
     const resultMdat = findTopLevelAtom(result, "mdat")!;
-    const resultPayloadOffset = resultMdat.start + 8;
+    const resultPayloadOffset = resultMdat.start + resultMdat.headerLen;
     const resultStco = readStcoFirstEntry(result)!;
     expect(resultStco).toBe(resultPayloadOffset);
     expect(result.subarray(resultPayloadOffset, resultPayloadOffset + mdatPayloadLength)).toEqual(
@@ -602,9 +664,12 @@ describe("m4a tagging (audio/mp4)", () => {
     expect(readStcoFirstEntry(result)).toBe(inputStco);
     const inputMdat = findTopLevelAtom(buf, "mdat")!;
     const resultMdat = findTopLevelAtom(result, "mdat")!;
-    expect(result.subarray(resultMdat.start + 8, resultMdat.start + 8 + inputMdat.size - 8)).toEqual(
-      buf.subarray(inputMdat.start + 8, inputMdat.start + inputMdat.size)
-    );
+    expect(
+      result.subarray(
+        resultMdat.start + resultMdat.headerLen,
+        resultMdat.start + resultMdat.size
+      )
+    ).toEqual(buf.subarray(inputMdat.start + inputMdat.headerLen, inputMdat.start + inputMdat.size));
   });
 
   it("returns input unchanged when atoms cannot be parsed", async () => {
@@ -630,7 +695,116 @@ describe("m4a tagging (audio/mp4)", () => {
     });
 
     const resultMdat = findTopLevelAtom(result, "mdat")!;
-    expect(readCo64FirstEntry(result)).toBe(BigInt(resultMdat.start + 8));
+    expect(readCo64FirstEntry(result)).toBe(BigInt(resultMdat.start + resultMdat.headerLen));
+  });
+
+  describe("64-bit atom sizing", () => {
+    beforeEach(() => {
+      taggerWarnMock.mockClear();
+    });
+
+    it("parses and re-serializes an m4a with a 64-bit mdat header", async () => {
+      const { buf, mdatPayloadOffset, mdatPayloadLength } = buildMinimalM4a({ mdat64Bit: true });
+
+      const roundTripped = serializeAtoms(parseAtoms(buf, 0, buf.length));
+      expect(roundTripped.equals(buf)).toBe(true);
+
+      const result = await tagSongBytes({
+        bytes: buf,
+        newTitle: "New Title",
+        newArtist: "New Artist",
+        mimeType: "audio/mp4",
+      });
+
+      const entries = findIlstEntries(result);
+      expect(readIlstEntryText(entries.find((e) => e.name === "©nam")!.payload)).toBe("New Title");
+      expect(readIlstEntryText(entries.find((e) => e.name === "©ART")!.payload)).toBe(
+        "New Artist"
+      );
+
+      const resultMdat = findTopLevelAtom(result, "mdat")!;
+      expect(readStcoFirstEntry(result)).toBe(resultMdat.start + resultMdat.headerLen);
+      expect(result.subarray(resultMdat.start + resultMdat.headerLen)).toEqual(
+        buf.subarray(mdatPayloadOffset, mdatPayloadOffset + mdatPayloadLength)
+      );
+    });
+
+    it("parses and re-serializes an m4a with a 64-bit moov header", async () => {
+      const { buf, mdatPayloadOffset } = buildMinimalM4a({ moov64Bit: true });
+
+      const roundTripped = serializeAtoms(parseAtoms(buf, 0, buf.length));
+      expect(roundTripped.equals(buf)).toBe(true);
+
+      const result = await tagSongBytes({
+        bytes: buf,
+        newTitle: "New Title",
+        newArtist: "New Artist",
+        mimeType: "audio/mp4",
+      });
+
+      const resultMdat = findTopLevelAtom(result, "mdat")!;
+      expect(readStcoFirstEntry(result)).toBe(resultMdat.start + resultMdat.headerLen);
+      expect(readStcoFirstEntry(buf)).toBe(mdatPayloadOffset);
+    });
+
+    it("throws diagnostic error for size==0 atoms", async () => {
+      const { buf: base } = buildMinimalM4a();
+      const moovAtom = findTopLevelAtom(base, "moov")!;
+      const moovBytes = base.subarray(moovAtom.start, moovAtom.start + moovAtom.size);
+      const mdatZero = Buffer.alloc(8);
+      mdatZero.writeUInt32BE(0, 0);
+      mdatZero.write("mdat", 4, "latin1");
+      const ftyp = base.subarray(0, findTopLevelAtom(base, "ftyp")!.size);
+      const buf = Buffer.concat([ftyp, moovBytes, mdatZero]);
+
+      const result = await tagSongBytes({
+        bytes: buf,
+        newTitle: "Title",
+        newArtist: "Artist",
+        mimeType: "audio/mp4",
+      });
+      expect(result).toBe(buf);
+      expect(taggerWarnMock).toHaveBeenCalled();
+      const errMsg = String(
+        taggerWarnMock.mock.calls.find((c) => c[0]?.event === "tagger_m4a_parse_failed")?.[0]
+          ?.context?.error ?? ""
+      );
+      expect(errMsg).toContain("size_extends_to_end");
+    });
+
+    it("throws diagnostic error for truncated atoms", async () => {
+      const skipPayload = Buffer.alloc(12, 0);
+      const oversizeSkip = Buffer.alloc(8);
+      oversizeSkip.writeUInt32BE(1000, 0);
+      oversizeSkip.write("skip", 4, "latin1");
+      const { buf: base } = buildMinimalM4a();
+      const moovRange = findMoovRange(base)!;
+      const moovInnerStart = moovRange.start + moovRange.headerLen;
+      const moovInner = base.subarray(moovInnerStart, moovRange.end);
+      const patchedMoovBody = Buffer.concat([moovInner, oversizeSkip, skipPayload]);
+      const moov = buildM4aRawAtom("moov", patchedMoovBody);
+      const ftypEnd = findTopLevelAtom(base, "ftyp")!.start + findTopLevelAtom(base, "ftyp")!.size;
+      const mdatAtom = findTopLevelAtom(base, "mdat")!;
+      const buf = Buffer.concat([
+        base.subarray(0, ftypEnd),
+        moov,
+        base.subarray(mdatAtom.start),
+      ]);
+
+      const result = await tagSongBytes({
+        bytes: buf,
+        newTitle: "Title",
+        newArtist: "Artist",
+        mimeType: "audio/mp4",
+      });
+      expect(result).toBe(buf);
+      expect(taggerWarnMock).toHaveBeenCalled();
+      const errMsg = String(
+        taggerWarnMock.mock.calls.find((c) => c[0]?.event === "tagger_m4a_parse_failed")?.[0]
+          ?.context?.error ?? ""
+      );
+      expect(errMsg).toContain("size_exceeds_buffer");
+    });
   });
 });
 
