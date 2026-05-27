@@ -4,11 +4,8 @@ import {
   readFlacTags,
   VorbisCommentBlock,
 } from "flac-tagger";
-import { createLogger } from "common-typescript-utils";
 import { parseBuffer } from "music-metadata";
 import NodeID3 from "node-id3";
-
-const logger = createLogger("deejaytools-api");
 
 export interface TagSongInput {
   bytes: Buffer;
@@ -188,35 +185,240 @@ async function tagFlac(
   }
 }
 
+type ParsedAtom = {
+  name: string;
+  headerLen: number;
+  payload: Buffer;
+  children?: ParsedAtom[];
+};
+
+const M4A_CONTAINER_ATOMS = new Set([
+  "moov",
+  "trak",
+  "mdia",
+  "minf",
+  "stbl",
+  "udta",
+  "meta",
+  "ilst",
+]);
+
 /**
- * Tag m4a — currently a safe no-op.
- *
- * The previous implementation rebuilt the `ilst` atom from scratch, which:
- *   1. Wiped existing tags (BPM, key, freeform DJ metadata, etc.).
- *   2. Changed the size of `moov`, shifting `mdat`'s absolute byte offset.
- *      The `stco` (chunk offset table) entries inside `moov.trak.mdia.minf.stbl`
- *      were not updated to match, leaving sample-table offsets pointing at
- *      the wrong file positions. VirtualDJ and other compliant players
- *      refused to load the resulting files.
- *
- * Until the m4a tagger is rebuilt to (a) preserve unknown ilst atoms and
- * (b) walk and adjust `stco`/`co64` entries when moov's size changes,
- * we return the input bytes unchanged. The user's existing tags (if any)
- * are preserved, and the file remains playable. We lose the ability to
- * write our own title/artist into the file, but `processedFilename`
- * already carries that identity for downstream consumers.
+ * Atom header convention: headerLen is 8 for every atom except `meta`, where it
+ * is 12 because the 4 version+flags bytes count as header (never as payload).
+ * The serializer always writes those 4 zero bytes after the name for `meta`.
  */
+function atomHeaderLen(name: string): number {
+  return name === "meta" ? 12 : 8;
+}
+
+function parseAtoms(buf: Buffer, offset: number, end: number): ParsedAtom[] {
+  const atoms: ParsedAtom[] = [];
+  let pos = offset;
+  while (pos + 8 <= end) {
+    const size = buf.readUInt32BE(pos);
+    if (size < 8) throw new Error("invalid atom size");
+  // 64-bit sizes and extends-to-end atoms are not supported in this pass.
+    if (size === 0 || size === 1) throw new Error("unsupported atom size encoding");
+    if (pos + size > end) throw new Error("atom extends past container");
+
+    const name = buf.toString("latin1", pos + 4, pos + 8);
+    const headerLen = atomHeaderLen(name);
+    if (size < headerLen) throw new Error("atom smaller than header");
+
+    const payloadStart = pos + headerLen;
+    const payloadEnd = pos + size;
+    const payload = buf.subarray(payloadStart, payloadEnd);
+
+    const atom: ParsedAtom = { name, headerLen, payload };
+    if (M4A_CONTAINER_ATOMS.has(name)) {
+      atom.children = parseAtoms(buf, payloadStart, payloadEnd);
+    }
+    atoms.push(atom);
+    pos += size;
+  }
+  return atoms;
+}
+
+function serializeAtoms(atoms: ParsedAtom[]): Buffer {
+  return Buffer.concat(atoms.map(serializeAtom));
+}
+
+function serializeAtom(atom: ParsedAtom): Buffer {
+  const payload = atom.children ? serializeAtoms(atom.children) : atom.payload;
+  const totalSize = atom.headerLen + payload.length;
+  const out = Buffer.alloc(totalSize);
+  out.writeUInt32BE(totalSize, 0);
+  out.write(atom.name, 4, "latin1");
+  if (atom.name === "meta") {
+    out.writeUInt32BE(0, 8);
+  }
+  payload.copy(out, atom.headerLen);
+  return out;
+}
+
+function findChild(atom: ParsedAtom, name: string): ParsedAtom | undefined {
+  return atom.children?.find((c) => c.name === name);
+}
+
+function buildLeaf(name: string, payload: Buffer): ParsedAtom {
+  return { name, headerLen: atomHeaderLen(name), payload };
+}
+
+function buildContainer(name: string, children: ParsedAtom[]): ParsedAtom {
+  return {
+    name,
+    headerLen: atomHeaderLen(name),
+    payload: Buffer.alloc(0),
+    children,
+  };
+}
+
+function buildTextDataAtom(value: string): Buffer {
+  const valueBytes = Buffer.from(value, "utf-8");
+  const inner = Buffer.alloc(8 + valueBytes.length);
+  inner.writeUInt32BE(1, 0);
+  inner.writeUInt32BE(0, 4);
+  valueBytes.copy(inner, 8);
+  const dataAtom = Buffer.alloc(8 + inner.length);
+  dataAtom.writeUInt32BE(8 + inner.length, 0);
+  dataAtom.write("data", 4, "latin1");
+  inner.copy(dataAtom, 8);
+  return dataAtom;
+}
+
+function buildIlstEntry(name: string, text: string): ParsedAtom {
+  return buildLeaf(name, buildTextDataAtom(text));
+}
+
+function updateStcoPayload(payload: Buffer, entryBytes: 4 | 8, delta: number): Buffer {
+  if (payload.length < 8) return payload;
+  const count = payload.readUInt32BE(4);
+  const needed = 8 + count * entryBytes;
+  if (payload.length < needed) return payload;
+
+  const out = Buffer.alloc(needed);
+  payload.subarray(0, 8).copy(out, 0);
+  let readPos = 8;
+  let writePos = 8;
+  for (let i = 0; i < count; i++) {
+    if (entryBytes === 4) {
+      const next = payload.readUInt32BE(readPos) + delta;
+      if (next < 0) throw new Error("stco offset underflow");
+      out.writeUInt32BE(next, writePos);
+      readPos += 4;
+      writePos += 4;
+    } else {
+      const next = payload.readBigUInt64BE(readPos) + BigInt(delta);
+      if (next < 0n) throw new Error("co64 offset underflow");
+      out.writeBigUInt64BE(next, writePos);
+      readPos += 8;
+      writePos += 8;
+    }
+  }
+  return out;
+}
+
+function updateStcoEntriesInTree(atom: ParsedAtom, delta: number): void {
+  if (atom.name === "stco") {
+    atom.payload = updateStcoPayload(atom.payload, 4, delta);
+    atom.children = undefined;
+    return;
+  }
+  if (atom.name === "co64") {
+    atom.payload = updateStcoPayload(atom.payload, 8, delta);
+    atom.children = undefined;
+    return;
+  }
+  atom.children?.forEach((child) => updateStcoEntriesInTree(child, delta));
+}
+
+function updateStcoEntries(children: ParsedAtom[], delta: number): void {
+  children.forEach((child) => updateStcoEntriesInTree(child, delta));
+}
+
+function readIlstText(entry: ParsedAtom): string {
+  const p = entry.payload;
+  if (p.length < 16) return "";
+  if (p.subarray(4, 8).toString("latin1") !== "data") return "";
+  if (p.readUInt32BE(8) !== 1) return "";
+  return p.subarray(16).toString("utf-8");
+}
+
+/** Tag m4a: update ilst text tags and adjust stco/co64 when moov size changes. */
 async function tagM4a(
   bytes: Buffer,
-  _newTitle: string,
-  _newArtist: string
+  newTitle: string,
+  newArtist: string
 ): Promise<Buffer> {
-  logger.info({
-    event: "tag_m4a_noop",
-    category: "api",
-    context: { byteLength: bytes.length },
-  });
-  return bytes;
+  try {
+    const atoms = parseAtoms(bytes, 0, bytes.length);
+    const moovIdx = atoms.findIndex((a) => a.name === "moov");
+    const mdatIdx = atoms.findIndex((a) => a.name === "mdat");
+    if (moovIdx === -1 || mdatIdx === -1) return bytes;
+
+    const moov = atoms[moovIdx]!;
+    if (!moov.children) moov.children = [];
+
+    const oldMoovSize = serializeAtom(moov).length;
+
+    let udta = findChild(moov, "udta");
+    if (!udta) {
+      udta = buildContainer("udta", []);
+      moov.children.push(udta);
+    }
+    if (!udta.children) udta.children = [];
+
+    let meta = findChild(udta, "meta");
+    if (!meta) {
+      const hdlrPayload = Buffer.concat([
+        Buffer.alloc(8),
+        Buffer.from("mdir", "latin1"),
+        Buffer.alloc(12),
+        Buffer.from([0x00]),
+      ]);
+      meta = buildContainer("meta", [buildLeaf("hdlr", hdlrPayload)]);
+      udta.children.push(meta);
+    }
+    if (!meta.children) meta.children = [];
+
+    let ilst = findChild(meta, "ilst");
+    if (!ilst) {
+      ilst = buildContainer("ilst", []);
+      meta.children.push(ilst);
+    }
+    if (!ilst.children) ilst.children = [];
+
+    const prevTitleEntry = ilst.children.find((a) => a.name === "©nam");
+    const prevArtistEntry = ilst.children.find((a) => a.name === "©ART");
+    const prevAlbumEntry = ilst.children.find((a) => a.name === "©alb");
+    const prevTitle = prevTitleEntry ? readIlstText(prevTitleEntry) : "";
+    const prevArtist = prevArtistEntry ? readIlstText(prevArtistEntry) : "";
+    const prevAlbum = prevAlbumEntry ? readIlstText(prevAlbumEntry) : "";
+    const previousSummary = `prev[title=${prevTitle},artist=${prevArtist},album=${prevAlbum}]`;
+
+    const setEntry = (name: string, text: string) => {
+      const newEntry = buildIlstEntry(name, text);
+      const idx = ilst!.children!.findIndex((a) => a.name === name);
+      if (idx >= 0) ilst!.children![idx] = newEntry;
+      else ilst!.children!.push(newEntry);
+    };
+    setEntry("©nam", newTitle);
+    setEntry("©ART", newArtist);
+    setEntry("©cmt", previousSummary);
+
+    const newMoovSize = serializeAtom(moov).length;
+    const delta = newMoovSize - oldMoovSize;
+    const moovBeforeMdat = moovIdx < mdatIdx;
+
+    if (moovBeforeMdat && delta !== 0) {
+      updateStcoEntries(moov.children, delta);
+    }
+
+    return serializeAtoms(atoms);
+  } catch {
+    return bytes;
+  }
 }
 
 export async function tagSongBytes({
