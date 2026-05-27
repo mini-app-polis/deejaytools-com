@@ -1,3 +1,10 @@
+## [1.54.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.54.2...v1.54.3) (2026-05-27)
+
+
+### Bug Fixes
+
+* **tagger:** write WAV metadata as id3 chunk inside RIFF container instead of corrupting the header ([5e87b2c](https://github.com/mini-app-polis/deejaytools-com/commit/5e87b2c7160233a18d362e37619a842dcc38143f))
+
 ## [1.54.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.54.1...v1.54.2) (2026-05-24)
 
 
