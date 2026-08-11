@@ -10,6 +10,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr, formatDateTimeShort } from "@/lib/sessionFormat";
 
+/**
+ * Best human-readable label for a song, never falling back to the raw
+ * original filename (which is meaningless noise in the UI).
+ * Priority: processed filename → routine name → division → "Untitled song"
+ */
+function songLabel(s: ApiSong): string {
+  if (s.processed_filename?.trim()) return s.processed_filename.trim();
+  if (s.routine_name?.trim()) return s.routine_name.trim();
+  if (s.division?.trim()) return `${s.division.trim()} song`;
+  return "Untitled song";
+}
+
 function derivedStatus(s: ApiSession, now: number): string {
   if (now < s.checkin_opens_at) return "scheduled";
   if (now <= s.floor_trial_ends_at) return "open";
@@ -179,43 +191,38 @@ export default function ApiSessionPage() {
   const priorityWaiting = waiting.filter((r) => r.subQueue === "priority");
   const standardWaiting = waiting.filter((r) => r.subQueue !== "priority");
 
-  // Find the current user's own queue entry — either as a solo entity or as
-  // user A in one of their pairs. Used to show their place in line above the
-  // check-in button.
-  const userQueueEntry = useMemo(() => {
-    if (!user?.id) return null;
+  // Find ALL of the current user's active queue entries — one per entity
+  // (pair or solo). A user with multiple partnerships can have several.
+  const userQueueEntries = useMemo(() => {
+    if (!user?.id) return [];
     const userPairIds = new Set(pairs.map((p) => p.id));
-    return (
-      [...active, ...waiting].find(
-        (r) =>
-          r.entitySoloUserId === user.id ||
-          (r.entityPairId !== null && userPairIds.has(r.entityPairId))
-      ) ?? null
+    return [...active, ...waiting].filter(
+      (r) =>
+        r.entitySoloUserId === user.id ||
+        (r.entityPairId !== null && userPairIds.has(r.entityPairId))
     );
   }, [active, waiting, pairs, user?.id]);
 
-  // Compute overall queue position counting active first, then priority, then
-  // standard — so all priority entries land before any standard ones in the
-  // overall ordering.
-  const userQueuePosition = useMemo(() => {
-    if (!userQueueEntry) return null;
-    const isInActive = active.some(
-      (r) => r.queueEntryId === userQueueEntry.queueEntryId
-    );
-    if (isInActive) {
-      return { subQueue: "active" as const, overall: userQueueEntry.position };
+  // Set of entity IDs (pair IDs or the solo user ID) already in the queue.
+  const inQueueEntityIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of userQueueEntries) {
+      if (r.entityPairId) s.add(r.entityPairId);
+      if (r.entitySoloUserId) s.add(r.entitySoloUserId);
     }
-    if (userQueueEntry.subQueue === "priority") {
-      return {
-        subQueue: "priority" as const,
-        overall: active.length + userQueueEntry.position,
-      };
-    }
-    return {
-      subQueue: "standard" as const,
-      overall: active.length + priorityWaiting.length + userQueueEntry.position,
-    };
-  }, [userQueueEntry, active, priorityWaiting]);
+    return s;
+  }, [userQueueEntries]);
+
+  // True when the entity for the selected song is already in the queue —
+  // used to warn the user and block submission.
+  const selectedEntityInQueue = useMemo(() => {
+    if (!fSongId || !selectedSong) return false;
+    if (isSolo) return inQueueEntityIds.has(user?.id ?? "");
+    const pid = derivedPair?.id;
+    // If the pair hasn't been created yet (pid is null), it can't be in queue.
+    return pid ? inQueueEntityIds.has(pid) : false;
+  }, [fSongId, selectedSong, isSolo, derivedPair?.id, inQueueEntityIds, user?.id]);
+
 
   const checkinWindowOpen =
     !!session &&
@@ -225,7 +232,6 @@ export default function ApiSessionPage() {
   const canCheckIn =
     !!session &&
     checkinWindowOpen &&
-    session.has_active_checkin !== true &&
     songs.length > 0;
 
   const openCheckin = () => {
@@ -310,30 +316,35 @@ export default function ApiSessionPage() {
           <Button disabled={!canCheckIn} onClick={openCheckin} size="lg">
             Check in
           </Button>
-          {userQueuePosition ? (
-            // Found the user's actual queue entry — show their precise position.
-            <p className="text-sm">
-              <span className="font-medium">
-                #{userQueuePosition.overall} in queue
-              </span>
-              <span className="text-muted-foreground">
-                {" "}({userQueuePosition.subQueue}
-                {session.active_checkin_division
-                  ? `, ${session.active_checkin_division}`
-                  : ""}
-                )
-              </span>
-            </p>
-          ) : session.has_active_checkin ? (
-            // Server says the user has a check-in but we couldn't find the
-            // exact entry locally (e.g. admin submitted on behalf of a synthetic
-            // pair). Fall back to the simpler "already in queue" message.
-            <p className="text-sm text-muted-foreground">
-              Already in queue
-              {session.active_checkin_division
-                ? ` (division: ${session.active_checkin_division})`
-                : ""}
-            </p>
+          {userQueueEntries.length > 0 ? (
+            // Show one line per partnership currently in queue.
+            <div className="flex flex-col gap-0.5">
+              {userQueueEntries.map((entry) => {
+                const pos = (() => {
+                  const isInActive = active.some((r) => r.queueEntryId === entry.queueEntryId);
+                  if (isInActive) return { subQueue: "active" as const, overall: entry.position };
+                  if (entry.subQueue === "priority")
+                    return { subQueue: "priority" as const, overall: active.length + entry.position };
+                  return {
+                    subQueue: "standard" as const,
+                    overall: active.length + priorityWaiting.length + entry.position,
+                  };
+                })();
+                return (
+                  <p key={entry.queueEntryId} className="text-sm">
+                    <span className="font-medium">#{pos.overall} in queue</span>
+                    <span className="text-muted-foreground">
+                      {" "}({pos.subQueue}
+                      {entry.divisionName ? `, ${entry.divisionName}` : ""}
+                      {userQueueEntries.length > 1 && entry.entityLabel && entry.entityLabel !== "—"
+                        ? ` · ${entry.entityLabel}`
+                        : ""}
+                      )
+                    </span>
+                  </p>
+                );
+              })}
+            </div>
           ) : !canCheckIn && !checkinWindowOpen ? (
             <p className="text-sm text-muted-foreground">
               {now < session.checkin_opens_at
@@ -621,11 +632,7 @@ export default function ApiSessionPage() {
                   <option value="">Select a song…</option>
                   {songs.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.display_name ?? s.processed_filename ?? s.id}
-                      {s.division ? ` · ${s.division}` : ""}
-                      {s.partner_first_name
-                        ? ` · ${s.partner_first_name} ${s.partner_last_name ?? ""}`.trimEnd()
-                        : " · Solo"}
+                      {songLabel(s)}
                     </option>
                   ))}
                 </select>
@@ -652,10 +659,15 @@ export default function ApiSessionPage() {
                   </div>
                   <div className="flex items-start gap-2">
                     <span className="text-muted-foreground w-16 shrink-0 pt-px">Song</span>
-                    <span className="font-medium truncate">
-                      {selectedSong.display_name ?? selectedSong.processed_filename ?? selectedSong.id}
+                    <span className="font-medium break-all">
+                      {songLabel(selectedSong)}
                     </span>
                   </div>
+                  {selectedEntityInQueue && (
+                    <p className="text-xs text-destructive pt-0.5">
+                      This partnership is already in the queue. Pick a different song or withdraw your current entry first.
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -695,7 +707,7 @@ export default function ApiSessionPage() {
                 />
               </div>
 
-              <Button type="submit" disabled={submitting} size="lg" className="w-full">
+              <Button type="submit" disabled={submitting || selectedEntityInQueue} size="lg" className="w-full">
                 {submitting ? "Submitting…" : "Check in"}
               </Button>
             </form>

@@ -9,8 +9,9 @@ import { and, desc, eq, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { checkins, partners, queueEntries, sessions, songs, users } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
-import { softDeleteOnDrive, uploadSongToDrive } from "../services/drive.js";
+import { shareDriveFileWithUsers, softDeleteOnDrive, uploadSongToDrive } from "../services/drive.js";
 import { tagSongBytes } from "../services/tagger.js";
+import { detectAudioFormat } from "../services/audioFormat.js";
 import { legacySongs } from "./legacy-songs.js";
 
 
@@ -69,13 +70,25 @@ async function sweepStaleTmpDirs(): Promise<void> {
 export const songRoutes = new Hono();
 const logger = createLogger("songs-routes");
 
+/**
+ * Convert a string to PascalCase, stripping non-alphanumeric characters.
+ * Each whitespace-separated word is capitalised:
+ *   "Kaiano Levine"             → "KaianoLevine"
+ *   "My Division Is Not Listed" → "MyDivisionIsNotListed"
+ *   "Rising Star Classic"       → "RisingStarClassic"
+ *   "2026"                      → "2026"
+ */
 function sanitizeSegment(input: string | null | undefined): string {
   if (!input) return "";
-  return input
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, "_")
-    .replace(/[^a-z0-9_-]/g, "");
+  const words = input.trim().split(/\s+/).filter(Boolean);
+  return words
+    .map((word) => {
+      const clean = word.replace(/[^a-zA-Z0-9]/g, "");
+      if (!clean) return "";
+      const lower = clean.toLowerCase();
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join("");
 }
 
 function splitNameAndExtension(filename: string): { base: string; ext: string } {
@@ -110,6 +123,17 @@ function computedSongDisplayName(row: typeof songs.$inferSelect): string | null 
   return null;
 }
 
+/**
+ * Legacy rows are created by /v1/songs/claim-legacy with a sentinel
+ * processed_filename that starts with "[Legacy] ". They have no Drive file
+ * and no playable audio — they exist purely so a user can attach historical
+ * metadata to their account. Detecting them off the prefix keeps the logic
+ * in one place; if we ever store this as a real column, swap this out.
+ */
+export function isLegacySong(processedFilename: string | null | undefined): boolean {
+  return !!processedFilename && processedFilename.startsWith("[Legacy] ");
+}
+
 function mapSong(
   row: typeof songs.$inferSelect & {
     partner_first_name?: string | null;
@@ -129,6 +153,7 @@ function mapSong(
     routine_name: row.routineName,
     personal_descriptor: row.personalDescriptor,
     season_year: row.seasonYear,
+    is_legacy: isLegacySong(row.processedFilename),
     created_at: row.createdAt,
     updated_at: row.updatedAt,
     partner_first_name: row.partner_first_name ?? null,
@@ -184,9 +209,9 @@ async function buildAndUploadSong(
   const version = maxVersion + 1;
 
   const userName =
-    [userRow.firstName, userRow.lastName].filter(Boolean).join("") || userId;
+    [userRow.firstName, userRow.lastName].filter(Boolean).join(" ") || userId;
   const partnerName = partnerRow
-    ? [partnerRow.firstName, partnerRow.lastName].filter(Boolean).join("")
+    ? [partnerRow.firstName, partnerRow.lastName].filter(Boolean).join(" ")
     : null;
 
   let leaderName: string;
@@ -216,7 +241,10 @@ async function buildAndUploadSong(
   ].filter((s) => s.length > 0);
   const baseWithoutVersion = pathSegments.join("_");
   const versionedStem = `${baseWithoutVersion}_v${String(version).padStart(2, "0")}`;
-  const extSegment = sanitizeSegment(originalParts.ext);
+  // Extensions stay lowercase — file extensions are conventionally lowercase
+  // and don't need the PascalCase treatment that sanitizeSegment applies to
+  // human-facing path segments (which would turn "mp3" into "Mp3").
+  const extSegment = originalParts.ext.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
   const processedFilename = extSegment ? `${versionedStem}.${extSegment}` : versionedStem;
 
   const newTitle = followerName ? `${leaderName} & ${followerName}` : leaderName;
@@ -230,6 +258,57 @@ async function buildAndUploadSong(
     seasonYear: seasonYearStr,
     division: song.division ?? "",
   });
+
+  // Share with the uploader and any partner email we know about.
+  //
+  // The Drive file lives under a service-account-owned root folder, so users
+  // can't see it from their own Drive UI until we explicitly grant them
+  // read access. We collect two potential recipients:
+  //   1. The uploader's user account email (always present, always shared).
+  //   2. The partner's known email, which can come from two places — the
+  //      partner row's own `email` column (free text the user typed in) and,
+  //      if the partner is linked to an actual user account, that linked
+  //      user's email. Both can differ, so we collect both candidates and
+  //      let shareDriveFileWithUsers dedupe by lowercased email.
+  //
+  // Sharing is best-effort: a per-email failure (e.g. a malformed address
+  // or a non-Google account that Drive refuses) must not break the upload,
+  // which has already succeeded. We log failures so they're discoverable in
+  // ops without surfacing a misleading error to the user.
+  const shareTargets: (string | null | undefined)[] = [userRow.email];
+  if (partnerRow) {
+    shareTargets.push(partnerRow.email);
+    if (partnerRow.linkedUserId) {
+      const [linkedUser] = await db
+        .select({ email: users.email })
+        .from(users)
+        .where(eq(users.id, partnerRow.linkedUserId))
+        .limit(1);
+      if (linkedUser?.email) shareTargets.push(linkedUser.email);
+    }
+  }
+  try {
+    const result = await shareDriveFileWithUsers(uploadResult.fileId, shareTargets);
+    if (result.failed.length > 0) {
+      logger.warn({
+        event: "song_drive_share_partial_failure",
+        category: "api",
+        context: {
+          songId: song.id,
+          driveFileId: uploadResult.fileId,
+          sharedCount: result.shared.length,
+          failed: result.failed.map((f) => ({ email: f.email, error: String(f.error) })),
+        },
+      });
+    }
+  } catch (err) {
+    logger.error({
+      event: "song_drive_share_failed",
+      category: "api",
+      context: { songId: song.id, driveFileId: uploadResult.fileId },
+      error: err,
+    });
+  }
 
   const now = Date.now();
   await db
@@ -715,6 +794,22 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
     return c.json(CommonErrors.badRequest("File exceeds 100 MB limit"), 400);
   }
 
+  // Validate the assembled file by magic bytes rather than trusting the
+  // client-reported mime_type. iOS Safari sometimes sends
+  // application/octet-stream for valid MP3s, and the iOS Files app picker
+  // filters by its own rules that don't always match our accept= attribute
+  // — so we keep the client filter loose and gate quality here instead.
+  const detectedMimeType = detectAudioFormat(assembled);
+  if (!detectedMimeType) {
+    return c.json(
+      error(
+        "UNSUPPORTED_FORMAT",
+        "That file doesn't look like a supported audio format. Please upload an MP3, WAV, FLAC, or M4A."
+      ),
+      400
+    );
+  }
+
   // Create the song record now — only reached if all chunks arrived successfully.
   const now = Date.now();
   const songId = crypto.randomUUID();
@@ -738,13 +833,19 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   const [songRow] = await db.select().from(songs).where(eq(songs.id, songId)).limit(1);
   if (!songRow) return c.json(CommonErrors.internalError(), 500);
 
-  try {
-    const mappedSong = await buildAndUploadSong(songRow, userId, assembled, originalName, mimeType);
-    return c.json(success({ received: true, complete: true, song: mappedSong }));
-  } catch (err) {
-    // Drive upload failed — remove the record so the user's list stays clean.
-    // Log a warning if the cleanup delete itself fails: the row will be a zombie
-    // (no Drive file, orphaned in the DB) and an operator will need to remove it.
+  // Return the song record immediately so the client's HTTP request completes
+  // without waiting for the Google Drive upload (which can take 30–120 s for
+  // large files and was causing the connection to be dropped mid-flight,
+  // manifesting as "Network error — check your connection" on the client).
+  //
+  // The Drive upload, audio tagging, and DB update (processedFilename /
+  // driveFileId) all happen in the background after the response is sent.
+  // If the background upload fails, the orphaned song record is deleted so
+  // the user's library stays clean; they will need to retry the upload.
+  const pendingSong = mapSong({ ...songRow, partner_first_name: null, partner_last_name: null });
+
+  buildAndUploadSong(songRow, userId, assembled, originalName, detectedMimeType).catch(async (err) => {
+    logger.error({ event: "song_background_upload_failed", category: "api", context: { songId, uploadId }, error: err });
     await db.delete(songs).where(eq(songs.id, songId)).catch((deleteErr) => {
       logger.warn({
         event: "song_cleanup_delete_failed",
@@ -752,9 +853,9 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
         context: { songId, uploadId, error: String(deleteErr) },
       });
     });
-    logger.error({ event: "song_atomic_upload_failed", category: "api", context: { songId, uploadId }, error: err });
-    throw err;
-  }
+  });
+
+  return c.json(success({ received: true, complete: true, song: pendingSong }));
 });
 
 

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -30,11 +30,16 @@ vi.mock("sonner", () => ({
   toast: { error: vi.fn(), success: vi.fn() },
 }));
 
+const { getTokenMock } = vi.hoisted(() => ({
+  getTokenMock: vi.fn<() => Promise<string | null>>(),
+}));
+
 vi.mock("@clerk/clerk-react", () => ({
-  useAuth: () => ({ getToken: () => Promise.resolve("fake-token") }),
+  useAuth: () => ({ getToken: getTokenMock }),
 }));
 
 import AddSongPage from "./AddSongPage";
+import { toast } from "sonner";
 
 function renderPage() {
   return render(
@@ -48,6 +53,8 @@ describe("AddSongPage — mode toggle", () => {
   beforeEach(() => {
     apiGet.mockReset();
     apiPost.mockReset();
+    getTokenMock.mockReset();
+    getTokenMock.mockResolvedValue("fake-token");
   });
 
   it("shows the Upload new audio panel by default", async () => {
@@ -74,6 +81,8 @@ describe("AddSongPage — Claim from history", () => {
   beforeEach(() => {
     apiGet.mockReset();
     apiPost.mockReset();
+    getTokenMock.mockReset();
+    getTokenMock.mockResolvedValue("fake-token");
   });
 
   it("switches to the claim panel and searches /v1/legacy-songs as the user types", async () => {
@@ -261,5 +270,200 @@ describe("AddSongPage — Claim from history", () => {
     expect(
       await screen.findByText(/type a partnership or routine name to search/i)
     ).toBeInTheDocument();
+  });
+});
+
+describe("AddSongPage — upload", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    apiGet.mockReset();
+    apiPost.mockReset();
+    getTokenMock.mockReset();
+    getTokenMock.mockResolvedValue("fake-token");
+    vi.mocked(toast.error).mockClear();
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("allows Cabaret upload without a partner", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/partners") {
+        return Promise.resolve([
+          {
+            id: "partner-1",
+            first_name: "Bob",
+            last_name: "Jones",
+            partner_role: "follower",
+          },
+        ]);
+      }
+      if (path === "/v1/auth/me") {
+        return Promise.resolve({ id: "u1", first_name: "Ann", last_name: "One" });
+      }
+      return Promise.resolve([]);
+    });
+
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: { complete: true, song: { id: "song-new" } } }),
+    });
+
+    renderPage();
+
+    const user = userEvent.setup();
+    await waitFor(() =>
+      expect(screen.getByLabelText(/audio file/i)).toBeInTheDocument()
+    );
+
+    const partnerTrigger = screen.getByRole("combobox", { name: /partner/i });
+    await user.click(partnerTrigger);
+    await user.click(await screen.findByRole("option", { name: /no partner/i }));
+
+    const divisionTrigger = screen.getByRole("combobox", { name: /division/i });
+    await user.click(divisionTrigger);
+    await user.click(await screen.findByRole("option", { name: /^cabaret$/i }));
+
+    const file = new File(["audio"], "track.mp3", { type: "audio/mpeg" });
+    await user.upload(screen.getByLabelText(/audio file/i), file);
+
+    await user.click(screen.getByRole("button", { name: /upload song/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/v1/songs/upload/chunk"),
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+    expect(toast.error).not.toHaveBeenCalledWith(
+      "A partner is required for this division."
+    );
+  });
+});
+
+describe("AddSongPage — Upload chunk loop", () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  async function fillAndSubmitUpload(opts: { fileSizeBytes: number; division?: string }) {
+    const user = userEvent.setup();
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /upload new audio/i })).toBeInTheDocument()
+    );
+
+    const fileBytes = new Uint8Array(opts.fileSizeBytes);
+    const file = new File([fileBytes], "test.mp3", { type: "audio/mpeg" });
+    const fileInput = screen.getByLabelText(/audio file/i) as HTMLInputElement;
+    await user.upload(fileInput, file);
+
+    const divisionTrigger = screen.getByRole("combobox", { name: /division/i });
+    await user.click(divisionTrigger);
+    await user.click(await screen.findByRole("option", { name: opts.division ?? "Classic" }));
+
+    await user.click(screen.getByRole("button", { name: /upload song/i }));
+
+    return { user };
+  }
+
+  beforeEach(() => {
+    apiGet.mockReset();
+    apiPost.mockReset();
+    getTokenMock.mockReset();
+    vi.mocked(toast.error).mockClear();
+    vi.mocked(toast.success).mockClear();
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/partners") {
+        return Promise.resolve([
+          { id: "partner-1", first_name: "Bob", last_name: "Jones", partner_role: "follower" },
+        ]);
+      }
+      if (path === "/v1/auth/me") {
+        return Promise.resolve({ id: "u1", first_name: "U", last_name: "1" });
+      }
+      return Promise.resolve([]);
+    });
+    fetchSpy = vi.spyOn(global, "fetch") as ReturnType<typeof vi.spyOn>;
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+  });
+
+  it("refreshes the Clerk token before each chunk fetch", async () => {
+    getTokenMock.mockResolvedValue("fresh-token");
+    fetchSpy.mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 200 })
+    );
+
+    await fillAndSubmitUpload({ fileSizeBytes: 6 * 1024 * 1024 });
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(getTokenMock.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("aborts the upload with a session-expired message when getToken returns null", async () => {
+    getTokenMock.mockResolvedValueOnce("valid-token").mockResolvedValueOnce(null);
+    fetchSpy.mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 200 })
+    );
+
+    await fillAndSubmitUpload({ fileSizeBytes: 6 * 1024 * 1024 });
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/session expired/i))
+    );
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry when the server returns 401", async () => {
+    getTokenMock.mockResolvedValue("valid-token");
+    fetchSpy.mockResolvedValue(
+      new Response(JSON.stringify({ error: { message: "Unauthorized" } }), { status: 401 })
+    );
+
+    await fillAndSubmitUpload({ fileSizeBytes: 1024 });
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("Unauthorized"))
+    );
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("still retries on a transient 503 then succeeds", async () => {
+    getTokenMock.mockResolvedValue("valid-token");
+    fetchSpy
+      .mockResolvedValueOnce(new Response("", { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+
+    const user = userEvent.setup();
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /upload new audio/i })).toBeInTheDocument()
+    );
+
+    const file = new File([new Uint8Array(1024)], "test.mp3", { type: "audio/mpeg" });
+    await user.upload(screen.getByLabelText(/audio file/i) as HTMLInputElement, file);
+
+    const divisionTrigger = screen.getByRole("combobox", { name: /division/i });
+    await user.click(divisionTrigger);
+    await user.click(await screen.findByRole("option", { name: "Classic" }));
+
+    vi.useFakeTimers();
+    try {
+      fireEvent.submit(screen.getByLabelText(/audio file/i).closest("form")!);
+      await vi.advanceTimersByTimeAsync(2000);
+      await vi.runAllTimersAsync();
+
+      expect(toast.success).toHaveBeenCalled();
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

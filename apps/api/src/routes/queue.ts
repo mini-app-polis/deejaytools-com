@@ -16,7 +16,7 @@ import {
   users,
 } from "../db/schema.js";
 import { zValidator } from "../lib/validate.js";
-import { canPromoteNonPriority, canPromotePriority } from "../lib/queue/admission.js";
+import { canPromotePriority } from "../lib/queue/admission.js";
 import { compactAfterRemoval, nextBottomPosition } from "../lib/queue/compaction.js";
 import { requireAdmin } from "../middleware/auth.js";
 import { responseCache, CACHE_TTL } from "../lib/cache.js";
@@ -40,6 +40,13 @@ const withdrawBody = z.object({
   reason: z.string().nullish(),
 });
 
+type PromoteGate = {
+  activeCount: number;
+  priorityCount: number;
+  activePriorityMax: number;
+  activeNonPriorityMax: number;
+};
+
 /**
  * Sentinel errors thrown from inside the promote transaction so the outer
  * catch can return the right HTTP status without masking real DB failures.
@@ -49,7 +56,9 @@ class PromoteAbortError extends Error {
     public readonly reason:
       | "session_not_found"
       | "priority_cap"
-      | "non_priority_cap"
+      | "non_priority_cap_full"
+      | "non_priority_blocked_by_priority",
+    public readonly gate?: PromoteGate
   ) {
     super(reason);
     this.name = "PromoteAbortError";
@@ -140,9 +149,13 @@ queueRoutes.post("/promote", requireAdmin, zValidator("json", promoteBody), asyn
         };
 
         if (entry.queueType === "priority" && !canPromotePriority(gate))
-          throw new PromoteAbortError("priority_cap");
-        if (entry.queueType === "non_priority" && !canPromoteNonPriority(gate))
-          throw new PromoteAbortError("non_priority_cap");
+          throw new PromoteAbortError("priority_cap", gate);
+        if (entry.queueType === "non_priority") {
+          if (gate.priorityCount > 0)
+            throw new PromoteAbortError("non_priority_blocked_by_priority", gate);
+          if (gate.activeCount >= gate.activeNonPriorityMax)
+            throw new PromoteAbortError("non_priority_cap_full", gate);
+        }
       }
 
       await tx.delete(queueEntries).where(eq(queueEntries.id, entry.id));
@@ -177,16 +190,42 @@ queueRoutes.post("/promote", requireAdmin, zValidator("json", promoteBody), asyn
     });
   } catch (err) {
     if (err instanceof PromoteAbortError) {
+      if (err.gate) {
+        logger.warn({
+          event: "queue_promote_blocked",
+          category: "api",
+          context: {
+            queueEntryId,
+            sessionId: entry.sessionId,
+            reason: err.reason,
+            ...err.gate,
+          },
+        });
+      }
       if (err.reason === "session_not_found")
         return c.json(CommonErrors.notFound("Session"), 404);
-      if (err.reason === "priority_cap")
-        return c.json(CommonErrors.badRequest("Active queue is at priority cap"), 400);
-      return c.json(
-        CommonErrors.badRequest(
-          "Cannot promote non-priority while priority queue has entries or active is at non-priority cap"
-        ),
-        400
-      );
+      const gate = err.gate;
+      if (err.reason === "priority_cap" && gate)
+        return c.json(
+          CommonErrors.badRequest(
+            `Active queue is at its priority cap (${gate.activeCount}/${gate.activePriorityMax} active).`
+          ),
+          400
+        );
+      if (err.reason === "non_priority_cap_full" && gate)
+        return c.json(
+          CommonErrors.badRequest(
+            `Active queue is at its standard cap (${gate.activeCount}/${gate.activeNonPriorityMax} active). Finish or withdraw an active entry before promoting another standard entry.`
+          ),
+          400
+        );
+      if (err.reason === "non_priority_blocked_by_priority" && gate)
+        return c.json(
+          CommonErrors.badRequest(
+            `Cannot promote a standard entry while the priority queue has ${gate.priorityCount} waiting entr${gate.priorityCount === 1 ? "y" : "ies"}. Promote priority entries first.`
+          ),
+          400
+        );
     }
     logger.error({
       event: "queue_promote_failed",

@@ -4,16 +4,33 @@ import { z } from "zod";
 // Domain enums (used in request bodies / shared across API + frontend)
 // ---------------------------------------------------------------------------
 
-export const DivisionSchema = z.enum([
-  "Newcomer",
-  "Novice",
-  "Intermediate",
-  "Advanced",
-  "All-Star",
-  "Champion",
-  "Invitational",
-  "Other",
-]);
+/**
+ * Master list of competition divisions. This is the single source of truth
+ * used across the admin panel, the upload form, and any future consumers.
+ * "My Division Is Not Listed" is a UI-only escape hatch — it is not included
+ * here so consumers that need it can append it themselves.
+ */
+export const DIVISIONS = [
+  "Classic",
+  "Showcase",
+  "Rising Star Classic",
+  "Rising Star Showcase",
+  "Sophisticated",
+  "Masters",
+  "Teams",
+  "ProAm LeaderAm",
+  "ProAm FollowerAm",
+  "NovInt Routines",
+  "Juniors",
+  "Young Adult",
+  "Exhibition",
+  "Superstar",
+  "Cabaret",
+  "Carolina Shag Divisions",
+  "My Division Is Not Listed",
+] as const;
+
+export type Division = (typeof DIVISIONS)[number];
 
 export const SessionStatusSchema = z.enum([
   "scheduled",
@@ -22,16 +39,6 @@ export const SessionStatusSchema = z.enum([
   "completed",
   "cancelled",
 ]);
-
-export const CheckinStatusSchema = z.enum([
-  "waiting",
-  "on_deck",
-  "running",
-  "completed",
-  "withdrawn",
-]);
-
-export const QueueTypeSchema = z.enum(["priority", "non_priority", "active"]);
 
 export const createCheckinBodySchema = z
   .object({
@@ -46,13 +53,6 @@ export const createCheckinBodySchema = z
     (b) => Boolean(b.entityPairId) !== Boolean(b.entitySoloUserId),
     { message: "Exactly one of entityPairId / entitySoloUserId" }
   );
-
-export const EventStatusSchema = z.enum([
-  "upcoming",
-  "active",
-  "completed",
-  "cancelled",
-]);
 
 export const PartnerRoleSchema = z.enum(["leader", "follower"]);
 export type PartnerRole = z.infer<typeof PartnerRoleSchema>;
@@ -168,6 +168,13 @@ export const ApiSongSchema = z.object({
   routine_name: z.string().nullable(),
   personal_descriptor: z.string().nullable(),
   season_year: z.string().nullable(),
+  /**
+   * True when this row was created via the legacy-claim flow rather than an
+   * audio upload. Legacy rows are metadata-only (no Drive file, no playable
+   * audio) and the UI surfaces them differently so users/admins aren't
+   * misled into expecting playback.
+   */
+  is_legacy: z.boolean(),
   created_at: z.number(),
   updated_at: z.number(),
   partner_first_name: z.string().nullable().optional(),
@@ -231,7 +238,16 @@ export const ApiAdminSongSchema = z.object({
   display_name: z.string().nullable(),
   division: z.string().nullable(),
   routine_name: z.string().nullable(),
+  /** Free-text per-song descriptor the uploader chose (e.g. "98%", "v3"). */
+  personal_descriptor: z.string().nullable(),
   season_year: z.string().nullable(),
+  /**
+   * True when this row was claimed from the legacy catalog rather than
+   * uploaded as audio. Legacy rows have no Drive file and live only as
+   * metadata, so the admin UI flags them visually to avoid confusion
+   * with real uploads.
+   */
+  is_legacy: z.boolean(),
   created_at: z.number(),
   /** Epoch ms when soft-deleted, or null for live rows. */
   deleted_at: z.number().nullable(),

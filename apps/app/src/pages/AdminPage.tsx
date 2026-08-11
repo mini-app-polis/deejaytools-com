@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import type {
-  ApiEvent,
-  ApiSession,
-  ApiQueueEntry,
-  ApiLeadingPair,
-  ApiSong,
-  ApiTestInjection,
-  ApiRun,
-  ApiAdminSong,
-  ApiAdminUser,
+import {
+  DIVISIONS,
+  type ApiEvent,
+  type ApiSession,
+  type ApiQueueEntry,
+  type ApiLeadingPair,
+  type ApiSong,
+  type ApiTestInjection,
+  type ApiRun,
+  type ApiAdminSong,
+  type ApiAdminUser,
 } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 import { useAuthMe } from "@/hooks/useAuthMe";
@@ -18,6 +19,14 @@ import { CLICKABLE_ROW_CLASS } from "@/lib/clickable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -28,28 +37,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareEventChrono, compareSessionChrono } from "@/lib/chronoSort";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const DIVISION_OPTIONS = [
-  "Classic",
-  "Showcase",
-  "Rising Star Classic",
-  "Rising Star Showcase",
-  "Sophisticated",
-  "Masters",
-  "Teams",
-  "ProAm LeaderAm",
-  "ProAm FollowerAm",
-  "NovInt Routines",
-  "Juniors",
-  "Young Adult",
-  "Exhibition",
-  "Superstar",
-] as const;
+const DIVISION_OPTIONS = DIVISIONS;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -169,9 +163,42 @@ function randomDivision(): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+/**
+ * The seven admin sections, in display order. The order also drives the
+ * navbar dropdown and any future iteration over admin pages.
+ *
+ * Each admin section is now its own route (`/admin/<section>`); the value
+ * here is the URL slug and the corresponding Radix `<TabsContent value=...>`
+ * identifier in this file. Keeping them in one constant keeps the route,
+ * the param parsing, and the rendering in lock-step.
+ */
+export const ADMIN_SECTIONS = [
+  "events",
+  "sessions",
+  "queue",
+  "runs",
+  "inject",
+  "songs",
+  "users",
+] as const;
+export type AdminSection = (typeof ADMIN_SECTIONS)[number];
+
+const DEFAULT_ADMIN_SECTION: AdminSection = "events";
+
+function isAdminSection(s: string | undefined): s is AdminSection {
+  return !!s && (ADMIN_SECTIONS as readonly string[]).includes(s);
+}
+
 export default function AdminPage() {
   const api = useApiClient();
   const navigate = useNavigate();
+  // The URL drives which section is shown. An unknown / missing slug
+  // collapses to the default rather than rendering nothing, so a
+  // user typing /admin/foo doesn't see a blank page.
+  const { section: rawSection } = useParams<{ section: string }>();
+  const section: AdminSection = isAdminSection(rawSection)
+    ? rawSection
+    : DEFAULT_ADMIN_SECTION;
   // Used to identify the current admin so the Users tab can hide the role
   // toggle on their own row (the API also rejects self-demotion).
   const { me } = useAuthMe();
@@ -203,6 +230,10 @@ export default function AdminPage() {
   const [sessEditId, setSessEditId] = useState<string | null>(null);
   /** Tracks the row currently mid-delete so its button can disable + show "Deleting…". */
   const [sessDeletingId, setSessDeletingId] = useState<string | null>(null);
+  /** Delete-confirmation dialog state — one per destructive action type. */
+  const [pendingDeleteEventId, setPendingDeleteEventId] = useState<string | null>(null);
+  const [pendingDeleteSession, setPendingDeleteSession] = useState<ApiSession | null>(null);
+  const [pendingDeleteAllTestData, setPendingDeleteAllTestData] = useState(false);
   /** Minutes before start that check-in opens. 0 = same moment as start. */
   const [sessCheckinOffsetMins, setSessCheckinOffsetMins] = useState("30");
   /** Floor trial duration in minutes. */
@@ -448,7 +479,7 @@ export default function AdminPage() {
   const songMap = useMemo(() => {
     const m = new Map<string, string>();
     for (const s of lqSongs) {
-      m.set(s.id, s.display_name ?? s.processed_filename ?? s.id);
+      m.set(s.id, s.processed_filename?.trim() || s.routine_name?.trim() || s.division?.trim() || s.id);
     }
     return m;
   }, [lqSongs]);
@@ -475,8 +506,14 @@ export default function AdminPage() {
 
   // ── Event CRUD ──────────────────────────────────────────────────────────────
 
-  const deleteEvent = async (id: string) => {
-    if (!confirm("Delete this event?")) return;
+  const deleteEvent = (id: string) => {
+    setPendingDeleteEventId(id);
+  };
+
+  const confirmDeleteEvent = async () => {
+    if (!pendingDeleteEventId) return;
+    const id = pendingDeleteEventId;
+    setPendingDeleteEventId(null);
     try {
       await api.del(`/v1/events/${id}`);
       toast.success("Event deleted");
@@ -616,12 +653,14 @@ export default function AdminPage() {
     setSessDialogOpen(true);
   };
 
-  const deleteSession = async (s: ApiSession) => {
-    const label = formatSessionTitle(s, s.event_timezone);
-    const confirmed = confirm(
-      `Delete this session?\n\n${label}\n\nThis will cascade-delete every check-in, queue entry, queue event, run, and division row attached to it. This cannot be undone.`
-    );
-    if (!confirmed) return;
+  const deleteSession = (s: ApiSession) => {
+    setPendingDeleteSession(s);
+  };
+
+  const confirmDeleteSession = async () => {
+    if (!pendingDeleteSession) return;
+    const s = pendingDeleteSession;
+    setPendingDeleteSession(null);
     setSessDeletingId(s.id);
     try {
       await api.del(`/v1/sessions/${s.id}`);
@@ -888,15 +927,14 @@ export default function AdminPage() {
     }
   };
 
-  const deleteAllTestData = async () => {
+  const deleteAllTestData = () => {
     if (!tiData || tiData.length === 0) return;
-    if (
-      !confirm(
-        `Delete all ${tiData.length} test injection${tiData.length === 1 ? "" : "s"}? This will remove the synthetic users, partners, pairs, check-ins, and queue entries created by test injection. This cannot be undone.`
-      )
-    ) {
-      return;
-    }
+    setPendingDeleteAllTestData(true);
+  };
+
+  const confirmDeleteAllTestData = async () => {
+    setPendingDeleteAllTestData(false);
+    if (!tiData) return;
     setTiDeleting(true);
     const expectedCount = tiData.length;
     try {
@@ -920,16 +958,12 @@ export default function AdminPage() {
     <div className="space-y-6">
       <h1 className="page-title text-2xl">Admin</h1>
 
-      <Tabs defaultValue="events">
-        <TabsList>
-          <TabsTrigger value="events">Events</TabsTrigger>
-          <TabsTrigger value="sessions">Sessions</TabsTrigger>
-          <TabsTrigger value="queue">Live Queue</TabsTrigger>
-          <TabsTrigger value="runs">Run History</TabsTrigger>
-          <TabsTrigger value="inject">Test Inject</TabsTrigger>
-          <TabsTrigger value="songs">Songs</TabsTrigger>
-          <TabsTrigger value="users">Users</TabsTrigger>
-        </TabsList>
+      {/* The tab strip lived here previously; admin sections are now their
+          own routes (`/admin/<section>`) reached via the navbar dropdown.
+          We keep Radix's <Tabs> wrapper so we don't have to rewrite every
+          <TabsContent value="..."> block — Radix hides every TabsContent
+          whose `value` doesn't match the controlled `value` prop. */}
+      <Tabs value={section}>
 
         {/* ── Events tab ── */}
         <TabsContent value="events" className="mt-4 space-y-3">
@@ -1090,7 +1124,7 @@ export default function AdminPage() {
                             <Button
                               variant="destructive"
                               size="sm"
-                              onClick={() => void deleteSession(s)}
+                              onClick={() => deleteSession(s)}
                               disabled={sessDeletingId === s.id}
                             >
                               {sessDeletingId === s.id ? "Deleting…" : "Delete"}
@@ -1223,7 +1257,7 @@ export default function AdminPage() {
                                 {row.divisionName} · {renderSongLabel(row)}
                               </p>
                               {filename && (
-                                <p className="text-xs text-muted-foreground/70 truncate font-mono">
+                                <p className="text-xs text-muted-foreground/70 break-all font-mono">
                                   {filename}
                                 </p>
                               )}
@@ -1291,7 +1325,7 @@ export default function AdminPage() {
                                   {row.divisionName} · {renderSongLabel(row)}
                                 </p>
                                 {filename && (
-                                  <p className="text-xs text-muted-foreground/70 truncate font-mono">
+                                  <p className="text-xs text-muted-foreground/70 break-all font-mono">
                                     {filename}
                                   </p>
                                 )}
@@ -1349,7 +1383,7 @@ export default function AdminPage() {
                                   {row.divisionName} · {renderSongLabel(row)}
                                 </p>
                                 {filename && (
-                                  <p className="text-xs text-muted-foreground/70 truncate font-mono">
+                                  <p className="text-xs text-muted-foreground/70 break-all font-mono">
                                     {filename}
                                   </p>
                                 )}
@@ -1689,6 +1723,7 @@ export default function AdminPage() {
                     <TableHead>Partner</TableHead>
                     <TableHead>Division</TableHead>
                     <TableHead>Routine</TableHead>
+                    <TableHead>Descriptor</TableHead>
                     <TableHead className="text-right whitespace-nowrap">Created</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1705,14 +1740,25 @@ export default function AdminPage() {
                         <TableCell className="font-medium">
                           <div className="flex flex-col gap-0.5">
                             <span>{s.song_label}</span>
-                            {s.deleted_at && (
-                              <Badge
-                                variant="destructive"
-                                className="text-xs font-normal w-fit"
-                              >
-                                deleted
-                              </Badge>
-                            )}
+                            <div className="flex gap-1 flex-wrap">
+                              {s.is_legacy && (
+                                <Badge
+                                  variant="secondary"
+                                  className="text-xs font-normal w-fit bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30"
+                                  title="Imported from the legacy catalog — no Drive file"
+                                >
+                                  Legacy
+                                </Badge>
+                              )}
+                              {s.deleted_at && (
+                                <Badge
+                                  variant="destructive"
+                                  className="text-xs font-normal w-fit"
+                                >
+                                  deleted
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell className="text-sm">
@@ -1740,6 +1786,9 @@ export default function AdminPage() {
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {s.routine_name ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {s.personal_descriptor ?? "—"}
                         </TableCell>
                         <TableCell className="text-right text-xs text-muted-foreground whitespace-nowrap tabular-nums">
                           {formatTime(s.created_at)}
@@ -1858,6 +1907,69 @@ export default function AdminPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* ── Delete Event confirmation dialog ── */}
+      <Dialog open={!!pendingDeleteEventId} onOpenChange={(open: boolean) => { if (!open) setPendingDeleteEventId(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this event?</DialogTitle>
+            <DialogDescription>
+              {pendingDeleteEventId
+                ? (() => {
+                    const ev = events?.find((e) => e.id === pendingDeleteEventId);
+                    return ev
+                      ? <>This will permanently delete <span className="font-medium">{ev.name}</span>. This cannot be undone.</>
+                      : "This will permanently delete the event. This cannot be undone.";
+                  })()
+                : null}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingDeleteEventId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => void confirmDeleteEvent()}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete Session confirmation dialog ── */}
+      <Dialog open={!!pendingDeleteSession} onOpenChange={(open: boolean) => { if (!open) setPendingDeleteSession(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this session?</DialogTitle>
+            <DialogDescription>
+              {pendingDeleteSession && (
+                <>
+                  <span className="font-medium">{formatSessionTitle(pendingDeleteSession, pendingDeleteSession.event_timezone)}</span>
+                  <br />
+                  This will cascade-delete every check-in, queue entry, run, and division row attached to it. This cannot be undone.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingDeleteSession(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => void confirmDeleteSession()}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete all test data confirmation dialog ── */}
+      <Dialog open={pendingDeleteAllTestData} onOpenChange={(open: boolean) => { if (!open) setPendingDeleteAllTestData(false); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete all test data?</DialogTitle>
+            <DialogDescription>
+              This will remove{" "}
+              {tiData?.length ?? 0} test injection{(tiData?.length ?? 0) === 1 ? "" : "s"} —
+              synthetic users, partners, pairs, check-ins, and queue entries. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingDeleteAllTestData(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => void confirmDeleteAllTestData()}>Delete all</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Create Event dialog ── */}
       {evDialogOpen && (

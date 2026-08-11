@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -33,14 +34,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { formatSessionTitle } from "@/lib/sessionFormat";
 
 // ─── Partners types & schema ──────────────────────────────────────────────────
@@ -69,6 +62,7 @@ type PartnerForm = z.infer<typeof partnerSchema>;
 type DeleteAssociations = {
   song_count: number;
   has_active_checkin: boolean;
+  has_checkin_history?: boolean;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -359,35 +353,15 @@ export default function MyContentPage() {
                     </div>
 
                     {/* Withdraw */}
-                    {pendingWithdrawId === ci.id ? (
-                      <div className="flex items-center gap-2 pt-1 border-t border-border/40 mt-1">
-                        <span className="text-xs text-muted-foreground flex-1">Remove yourself from this queue?</span>
-                        <Button
-                          type="button" size="sm" variant="destructive"
-                          onClick={() => void handleWithdraw(ci.id)}
-                          disabled={withdrawingId === ci.id}
-                        >
-                          {withdrawingId === ci.id ? "Withdrawing…" : "Yes, withdraw"}
-                        </Button>
-                        <Button
-                          type="button" size="sm" variant="outline"
-                          onClick={() => setPendingWithdrawId(null)}
-                          disabled={withdrawingId === ci.id}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="pt-2 border-t border-border/40 mt-1">
-                        <Button
-                          type="button" size="sm" variant="outline"
-                          className="border-destructive/50 text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                          onClick={() => setPendingWithdrawId(ci.id)}
-                        >
-                          Withdraw from queue
-                        </Button>
-                      </div>
-                    )}
+                    <div className="pt-2 border-t border-border/40 mt-1">
+                      <Button
+                        type="button" size="sm" variant="outline"
+                        className="border-destructive/50 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                        onClick={() => setPendingWithdrawId(ci.id)}
+                      >
+                        Withdraw from queue
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -403,13 +377,13 @@ export default function MyContentPage() {
           <Button size="sm" onClick={openCreate}>Add partner</Button>
         </div>
         <div className="p-4 space-y-4">
-          {/* Mobile card list */}
-          <div className={`sm:hidden space-y-3${partnersLoading ? " opacity-60" : ""}`}>
+          <div className={`space-y-3${partnersLoading ? " opacity-60" : ""}`}>
+            {partnersLoading && !partners && <Skeleton className="h-40 w-full" />}
             {partners?.length === 0 && (
               <p className="text-sm text-muted-foreground py-4 text-center">No partners yet.</p>
             )}
             {partners?.map((p) => (
-              <div key={p.id} className="rounded-lg border p-4 space-y-3">
+              <div key={p.id} className="rounded-lg border-2 border-primary/40 bg-card p-4 space-y-3 shadow-sm">
                 <div className="flex items-center justify-between gap-2">
                   <p className="font-medium text-base">{p.first_name} {p.last_name}</p>
                   {p.partner_role === "leader" ? (
@@ -434,55 +408,6 @@ export default function MyContentPage() {
                 </div>
               </div>
             ))}
-            {partnersLoading && !partners && <Skeleton className="h-40 w-full" />}
-          </div>
-
-          {/* Desktop table */}
-          <div className={`hidden sm:block${partnersLoading ? " opacity-60" : ""}`}>
-            {partnersLoading && !partners ? (
-              <Skeleton className="h-40 w-full" />
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead className="w-[160px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {partners?.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-muted-foreground">No partners yet.</TableCell>
-                    </TableRow>
-                  )}
-                  {partners?.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell className="font-medium">{p.first_name} {p.last_name}</TableCell>
-                      <TableCell>
-                        {p.partner_role === "leader" ? (
-                          <Badge variant="default">Leader</Badge>
-                        ) : (
-                          <Badge variant="secondary">Follower</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>{p.email ?? "—"}</TableCell>
-                      <TableCell className="space-x-2">
-                        <Button variant="outline" size="sm" onClick={() => openEdit(p)}>Edit</Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => void handleDeletePartnerClick(p)}
-                        >
-                          Delete
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
           </div>
         </div>
       </div>
@@ -496,8 +421,7 @@ export default function MyContentPage() {
           </Button>
         </div>
         <div className="p-4 space-y-4">
-          {/* Mobile card list */}
-          <div className={`sm:hidden space-y-3${songsLoading ? " opacity-60" : ""}`}>
+          <div className={`space-y-3${songsLoading ? " opacity-60" : ""}`}>
             {songsLoading && songs.length === 0 && <Skeleton className="h-40 w-full" />}
             {songs.length === 0 && !songsLoading && (
               <p className="text-sm text-muted-foreground py-4 text-center">No songs yet.</p>
@@ -506,8 +430,15 @@ export default function MyContentPage() {
               const partnerName = !s.partner_id
                 ? null
                 : [s.partner_first_name, s.partner_last_name].filter(Boolean).join(" ").trim() || null;
+              const driveUrl = s.drive_file_id
+                ? `https://drive.google.com/file/d/${s.drive_file_id}/view`
+                : null;
+              // Legacy rows have no Drive file (and never will). Show a
+              // disabled placeholder so the user understands this song is
+              // metadata-only, not a playback link that's broken.
+              const isLegacy = s.is_legacy;
               return (
-                <div key={s.id} className="rounded-lg border p-4 space-y-2">
+                <div key={s.id} className="rounded-lg border-2 border-primary/40 bg-card p-4 space-y-2 shadow-sm">
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-mono text-sm leading-snug break-all flex-1">
                       {s.processed_filename?.trim() ? s.processed_filename : "—"}
@@ -516,6 +447,12 @@ export default function MyContentPage() {
                       {new Date(s.created_at).toLocaleDateString()}
                     </p>
                   </div>
+                  {s.original_filename?.trim() && (
+                    <p className="font-mono text-xs text-muted-foreground/80 leading-snug break-all">
+                      <span className="text-muted-foreground text-xs not-italic">Uploaded: </span>
+                      {s.original_filename}
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
                     {s.division && (
                       <span>
@@ -542,111 +479,130 @@ export default function MyContentPage() {
                       </span>
                     )}
                   </div>
-                  {pendingDeleteSongId === s.id ? (
-                    <div className="flex items-center gap-2 pt-1">
-                      <span className="text-xs text-muted-foreground">Delete this song?</span>
+                  <div className="flex gap-2 mt-1">
+                    {isLegacy ? (
                       <Button
-                        type="button" size="sm" variant="destructive" className="flex-1"
-                        onClick={() => void handleDeleteSong(s.id)}
-                        disabled={deletingSongId === s.id}
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                        disabled
+                        title="This song was imported from the legacy catalog and has no uploaded audio file."
                       >
-                        {deletingSongId === s.id ? "Removing..." : "Yes, delete"}
+                        Legacy Song
                       </Button>
+                    ) : driveUrl ? (
                       <Button
-                        type="button" size="sm" variant="outline" className="flex-1"
-                        onClick={() => setPendingDeleteSongId(null)}
-                        disabled={deletingSongId === s.id}
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                        asChild
                       >
-                        Cancel
+                        <a
+                          href={driveUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label="Open song in Google Drive to check playback"
+                        >
+                          Open in Google Drive
+                        </a>
                       </Button>
-                    </div>
-                  ) : (
+                    ) : null}
                     <Button
-                      type="button" size="sm" variant="destructive" className="w-full mt-1"
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      className="flex-1"
                       onClick={() => setPendingDeleteSongId(s.id)}
                     >
                       Delete
                     </Button>
-                  )}
+                  </div>
                 </div>
               );
             })}
           </div>
-
-          {/* Desktop table */}
-          <div className={`hidden sm:block${songsLoading ? " opacity-60" : ""}`}>
-            {songsLoading && songs.length === 0 ? (
-              <Skeleton className="h-40 w-full" />
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Processed filename</TableHead>
-                    <TableHead>Division</TableHead>
-                    <TableHead>Routine name</TableHead>
-                    <TableHead>Descriptor</TableHead>
-                    <TableHead>Partner</TableHead>
-                    <TableHead className="w-[200px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {songs.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-muted-foreground">No songs yet.</TableCell>
-                    </TableRow>
-                  )}
-                  {songs.map((s) => {
-                    const partnerCell = !s.partner_id
-                      ? "—"
-                      : [s.partner_first_name, s.partner_last_name].filter(Boolean).join(" ").trim() || "—";
-                    return (
-                      <TableRow key={s.id}>
-                        <TableCell>{new Date(s.created_at).toLocaleDateString()}</TableCell>
-                        <TableCell className="font-mono text-sm">
-                          {s.processed_filename?.trim() ? s.processed_filename : "—"}
-                        </TableCell>
-                        <TableCell>{s.division ?? "—"}</TableCell>
-                        <TableCell>{s.routine_name ?? "—"}</TableCell>
-                        <TableCell>{s.personal_descriptor ?? "—"}</TableCell>
-                        <TableCell>{partnerCell}</TableCell>
-                        <TableCell>
-                          {pendingDeleteSongId === s.id ? (
-                            <span className="flex flex-wrap items-center gap-2">
-                              <span className="text-xs text-muted-foreground">Delete?</span>
-                              <Button
-                                type="button" size="sm" variant="destructive"
-                                onClick={() => void handleDeleteSong(s.id)}
-                                disabled={deletingSongId === s.id}
-                              >
-                                {deletingSongId === s.id ? "Removing..." : "Yes"}
-                              </Button>
-                              <Button
-                                type="button" size="sm" variant="outline"
-                                onClick={() => setPendingDeleteSongId(null)}
-                                disabled={deletingSongId === s.id}
-                              >
-                                No
-                              </Button>
-                            </span>
-                          ) : (
-                            <Button
-                              type="button" size="sm" variant="destructive"
-                              onClick={() => setPendingDeleteSongId(s.id)}
-                            >
-                              Delete
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            )}
-          </div>
         </div>
       </div>
+
+      {/* ── Withdraw confirm dialog ── */}
+      {(() => {
+        const pendingCheckin = checkins?.find((c) => c.id === pendingWithdrawId);
+        return (
+          <Dialog
+            open={!!pendingWithdrawId}
+            onOpenChange={(open: boolean) => { if (!open) setPendingWithdrawId(null); }}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Withdraw from queue?</DialogTitle>
+                <DialogDescription>
+                  {pendingCheckin
+                    ? <>You will be removed from the <span className="font-medium">{pendingCheckin.divisionName}</span> queue. This cannot be undone.</>
+                    : "You will be removed from the queue. This cannot be undone."
+                  }
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  disabled={!!withdrawingId}
+                  onClick={() => setPendingWithdrawId(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  disabled={!!withdrawingId}
+                  onClick={() => { if (pendingWithdrawId) void handleWithdraw(pendingWithdrawId); }}
+                >
+                  {withdrawingId ? "Withdrawing…" : "Withdraw"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
+
+      {/* ── Song delete confirm dialog ── */}
+      {(() => {
+        const pendingSong = songs.find((s) => s.id === pendingDeleteSongId);
+        return (
+          <Dialog
+            open={!!pendingDeleteSongId}
+            onOpenChange={(open: boolean) => { if (!open) setPendingDeleteSongId(null); }}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Delete this song?</DialogTitle>
+                <DialogDescription>
+                  {pendingSong?.processed_filename?.trim()
+                    ? <>This will permanently remove <span className="font-mono break-all">{pendingSong.processed_filename}</span>. This cannot be undone.</>
+                    : "This will permanently remove the song. This cannot be undone."
+                  }
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  disabled={!!deletingSongId}
+                  onClick={() => setPendingDeleteSongId(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  disabled={!!deletingSongId}
+                  onClick={() => { if (pendingDeleteSongId) void handleDeleteSong(pendingDeleteSongId); }}
+                >
+                  {deletingSongId ? "Removing…" : "Delete"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
 
       {/* ── Partner add/edit dialog ── */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
@@ -735,6 +691,10 @@ export default function MyContentPage() {
           ) : deleteAssociations?.has_active_checkin ? (
             <p className="text-sm text-destructive">
               This partner has an active check-in and cannot be deleted. Complete or withdraw the check-in first.
+            </p>
+          ) : deleteAssociations?.has_checkin_history ? (
+            <p className="text-sm text-muted-foreground">
+              This partner has check-in history. Their historical data will be preserved after deletion.
             </p>
           ) : deleteAssociations && deleteAssociations.song_count > 0 ? (
             <p className="text-sm text-muted-foreground">

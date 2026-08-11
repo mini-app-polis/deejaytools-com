@@ -1,7 +1,14 @@
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/clerk-react";
+import { ChevronDown } from "lucide-react";
 import { useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import pkg from "../../../../package.json";
@@ -14,6 +21,18 @@ const PUBLIC_ITEMS: NavItem[] = [{ to: "/floor-trials", label: "Floor Trials" }]
 // Signed-in only.
 const SIGNED_IN_ITEMS: NavItem[] = [
   { to: "/my-content", label: "My Content" },
+];
+
+// Admin sections, in display order. Each one is its own URL — the
+// dropdown trigger replaces what used to be a single "Admin" link.
+const ADMIN_ITEMS: NavItem[] = [
+  { to: "/admin/events", label: "Events" },
+  { to: "/admin/sessions", label: "Sessions" },
+  { to: "/admin/queue", label: "Live Queue" },
+  { to: "/admin/runs", label: "Run History" },
+  { to: "/admin/inject", label: "Test Inject" },
+  { to: "/admin/songs", label: "Songs" },
+  { to: "/admin/users", label: "Users" },
 ];
 
 /**
@@ -29,8 +48,11 @@ const SIGNED_IN_ITEMS: NavItem[] = [
 export default function NavBar() {
   const { isAdmin } = useAuthMe();
   const [menuOpen, setMenuOpen] = useState(false);
-
-  const adminItem: NavItem | null = isAdmin ? { to: "/admin", label: "Admin" } : null;
+  const location = useLocation();
+  // The dropdown trigger should look "active" whenever we're on any
+  // admin page, since none of the individual admin URLs are the trigger
+  // itself. NavLink's isActive is per-link, so we compute this manually.
+  const isAdminRoute = location.pathname.startsWith("/admin");
 
   const desktopLinkClass = ({ isActive }: { isActive: boolean }) =>
     cn(
@@ -44,6 +66,19 @@ export default function NavBar() {
       isActive
         ? "bg-primary/10 text-primary"
         : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+    );
+
+  const adminDropdownTriggerClass = cn(
+    "inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+    isAdminRoute ? "text-primary" : "text-muted-foreground hover:text-foreground"
+  );
+
+  const adminDropdownItemClass = ({ isActive }: { isActive: boolean }) =>
+    cn(
+      "block w-full rounded-sm px-2 py-1.5 text-sm transition-colors",
+      isActive
+        ? "bg-accent text-accent-foreground"
+        : "text-foreground hover:bg-accent hover:text-accent-foreground"
     );
 
   return (
@@ -98,10 +133,22 @@ export default function NavBar() {
               Contact
             </NavLink>
             <SignedIn>
-              {adminItem && (
-                <NavLink to={adminItem.to} className={desktopLinkClass}>
-                  {adminItem.label}
-                </NavLink>
+              {isAdmin && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger className={adminDropdownTriggerClass}>
+                    Admin
+                    <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-[12rem]">
+                    {ADMIN_ITEMS.map((item) => (
+                      <DropdownMenuItem key={item.to} asChild>
+                        <NavLink to={item.to} className={adminDropdownItemClass}>
+                          {item.label}
+                        </NavLink>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
             </SignedIn>
           </div>
@@ -177,14 +224,25 @@ export default function NavBar() {
               Contact
             </NavLink>
             <SignedIn>
-              {adminItem && (
-                <NavLink
-                  to={adminItem.to}
-                  onClick={() => setMenuOpen(false)}
-                  className={mobileLinkClass}
-                >
-                  {adminItem.label}
-                </NavLink>
+              {isAdmin && (
+                <>
+                  {/* No dropdown on mobile — admin pages get a flat list
+                      under an "Admin" header so they're all reachable
+                      without a nested popover. */}
+                  <div className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/80">
+                    Admin
+                  </div>
+                  {ADMIN_ITEMS.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      onClick={() => setMenuOpen(false)}
+                      className={mobileLinkClass}
+                    >
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </>
               )}
             </SignedIn>
           </div>

@@ -1,3 +1,307 @@
+## [1.55.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.55.0...v1.55.1) (2026-05-27)
+
+
+### Bug Fixes
+
+* **tagger:** support 64-bit atom sizes in m4a parser/serializer ([d43ea4b](https://github.com/mini-app-polis/deejaytools-com/commit/d43ea4b15bcc7e2e688a0021c77f01d85c054f26))
+
+# [1.55.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.54.4...v1.55.0) (2026-05-27)
+
+
+### Features
+
+* **tagger:** m4a tagger that preserves existing ilst entries and updates stco/co64 offsets ([6e44a23](https://github.com/mini-app-polis/deejaytools-com/commit/6e44a233ef3f9017864d12d66e8806b77ef458c7))
+* **tagger:** route by byte signature instead of client-supplied MIME type ([a443937](https://github.com/mini-app-polis/deejaytools-com/commit/a44393781bee6ca3f9d98ae6b509f8286821e354))
+
+## [1.54.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.54.3...v1.54.4) (2026-05-27)
+
+
+### Bug Fixes
+
+* **tagger:** make m4a tagging a no-op until stco-aware rewrite ships ([f31b6a1](https://github.com/mini-app-polis/deejaytools-com/commit/f31b6a16cb81b10e1083e90cdaba12ab75ba8313))
+
+## [1.54.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.54.2...v1.54.3) (2026-05-27)
+
+
+### Bug Fixes
+
+* **tagger:** write WAV metadata as id3 chunk inside RIFF container instead of corrupting the header ([5e87b2c](https://github.com/mini-app-polis/deejaytools-com/commit/5e87b2c7160233a18d362e37619a842dcc38143f))
+
+## [1.54.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.54.1...v1.54.2) (2026-05-24)
+
+
+### Bug Fixes
+
+* **add-song:** refresh Clerk token per chunk fetch to prevent auth expiry on slow uploads ([564fa2a](https://github.com/mini-app-polis/deejaytools-com/commit/564fa2ab803429b4a5f334bcc1d398fc59f5b589))
+
+## [1.54.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.54.0...v1.54.1) (2026-05-23)
+
+
+### Bug Fixes
+
+* **add-song:** allow Cabaret division to upload without a partner ([986324c](https://github.com/mini-app-polis/deejaytools-com/commit/986324caca30635b9f4fcca5c2b5843c557f90f8))
+* tests ([8e5d4f5](https://github.com/mini-app-polis/deejaytools-com/commit/8e5d4f5152a18f33e67ae60e6d38c9123bc4e20f))
+
+# [1.54.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.53.1...v1.54.0) (2026-05-23)
+
+
+### Features
+
+* **queue:** split non_priority_cap into two distinct reasons with gate snapshot in promote response ([3fe9d5f](https://github.com/mini-app-polis/deejaytools-com/commit/3fe9d5fd80852c9d957862334447b5c65c850927))
+
+## [1.53.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.53.0...v1.53.1) (2026-05-23)
+
+
+### Bug Fixes
+
+* **api,app:** reliable audio upload on iOS via magic-byte detection ([7c8d251](https://github.com/mini-app-polis/deejaytools-com/commit/7c8d251684aa05a928f793a2aa1b3b960ca8b6bc))
+* tests ([816c54b](https://github.com/mini-app-polis/deejaytools-com/commit/816c54b68fecbc615b82aefa7914c5162c978f0a))
+* tests ([2c92f16](https://github.com/mini-app-polis/deejaytools-com/commit/2c92f16b863066817c956150541cf7367c611228))
+
+# [1.53.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.52.4...v1.53.0) (2026-05-15)
+
+
+### Features
+
+* admin menu restructure ([eee1c3b](https://github.com/mini-app-polis/deejaytools-com/commit/eee1c3be95c09bbab677b67613a0d32269568766))
+
+## [1.52.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.52.3...v1.52.4) (2026-05-14)
+
+
+### Bug Fixes
+
+* adding description on admin song page ([36bbc0c](https://github.com/mini-app-polis/deejaytools-com/commit/36bbc0c0446c3ec546c54ca423d8fa668a571275))
+
+## [1.52.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.52.2...v1.52.3) (2026-05-14)
+
+
+### Bug Fixes
+
+* updated ui on mobile ([f6afaed](https://github.com/mini-app-polis/deejaytools-com/commit/f6afaed2f74ff70025066f04b1ecfdc1484dfaee))
+
+## [1.52.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.52.1...v1.52.2) (2026-05-13)
+
+
+### Bug Fixes
+
+* display partner first in upload song when present ([5d77a36](https://github.com/mini-app-polis/deejaytools-com/commit/5d77a36aaf7df181780ff60baa7820f69c6e8c09))
+
+## [1.52.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.52.0...v1.52.1) (2026-05-13)
+
+
+### Bug Fixes
+
+* fix presentation of legacy songs ([6457e46](https://github.com/mini-app-polis/deejaytools-com/commit/6457e460d5989a4fe2704de57a4e2e188995a665))
+
+# [1.52.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.51.1...v1.52.0) (2026-05-13)
+
+
+### Features
+
+* auto share file with users ([0be9b5d](https://github.com/mini-app-polis/deejaytools-com/commit/0be9b5da974cb735f1bd180eddc479e7b056b945))
+
+## [1.51.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.51.0...v1.51.1) (2026-05-13)
+
+
+### Bug Fixes
+
+* adding original filename, buttons side by side ([68ccead](https://github.com/mini-app-polis/deejaytools-com/commit/68ccead131620fd5524c7f3ff4f919bc3e0084c7))
+
+# [1.51.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.50.0...v1.51.0) (2026-05-13)
+
+
+### Features
+
+* adding link to song file in song portal ([4b16d5c](https://github.com/mini-app-polis/deejaytools-com/commit/4b16d5ce2dc1bf8ac8874def3fcf3374daa3f7f2))
+
+# [1.50.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.9...v1.50.0) (2026-05-12)
+
+
+### Features
+
+* icons and images ([a29c7f3](https://github.com/mini-app-polis/deejaytools-com/commit/a29c7f3f6849d100f49d3141c94c57daf3c8b888))
+
+## [1.49.9](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.8...v1.49.9) (2026-05-07)
+
+
+### Bug Fixes
+
+* partner delete path and sentry reporting fix ([836c721](https://github.com/mini-app-polis/deejaytools-com/commit/836c7218537e9527cd0cec09902a0dd0795a7e1b))
+
+## [1.49.8](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.7...v1.49.8) (2026-05-07)
+
+
+### Bug Fixes
+
+* ui allow multiple check ins for users with multilpe partners ([c1b7620](https://github.com/mini-app-polis/deejaytools-com/commit/c1b762024df92859f8442e0b3dec9514da72ff1a))
+* ui allow multiple check ins for users with multilpe partners ([8fed63d](https://github.com/mini-app-polis/deejaytools-com/commit/8fed63d70c8bce99548076cb8d5cc126aa8b9672))
+
+## [1.49.7](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.6...v1.49.7) (2026-05-07)
+
+
+### Bug Fixes
+
+* ui elements ([563e60c](https://github.com/mini-app-polis/deejaytools-com/commit/563e60c145bb8d729c50ec32fdeda4e5a2ce2abc))
+
+## [1.49.6](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.5...v1.49.6) (2026-05-07)
+
+
+### Bug Fixes
+
+* ui elements ([e21ac4c](https://github.com/mini-app-polis/deejaytools-com/commit/e21ac4c19178cb86f4c448ee18ef62f4c3c39d87))
+
+## [1.49.5](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.4...v1.49.5) (2026-05-07)
+
+
+### Bug Fixes
+
+* unify platform experience ([fec5173](https://github.com/mini-app-polis/deejaytools-com/commit/fec517301cf607656ee2cdcd8dc1599d697f7930))
+
+## [1.49.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.3...v1.49.4) (2026-05-07)
+
+
+### Bug Fixes
+
+* unify platform experience ([d08fedb](https://github.com/mini-app-polis/deejaytools-com/commit/d08fedbfdffb7e7ef19d135a47051c3874683888))
+
+## [1.49.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.2...v1.49.3) (2026-05-07)
+
+
+### Bug Fixes
+
+* tests ([bc32f4a](https://github.com/mini-app-polis/deejaytools-com/commit/bc32f4a4304fa83fef9e21731f8f63a4807b60f8))
+
+## [1.49.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.1...v1.49.2) (2026-05-07)
+
+
+### Bug Fixes
+
+* replace inline delete confirmation with dialog modal on songs page ([d01e4d3](https://github.com/mini-app-polis/deejaytools-com/commit/d01e4d3259b783377663bfe1bff300fb3e53dbdb))
+* tests ([5c2f8f0](https://github.com/mini-app-polis/deejaytools-com/commit/5c2f8f0bc7774009fc292178c5893fa969d78d83))
+
+## [1.49.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.49.0...v1.49.1) (2026-05-07)
+
+
+### Bug Fixes
+
+* allow processed filename to wrap in songs table ([7e06dea](https://github.com/mini-app-polis/deejaytools-com/commit/7e06deaf26729f49853fb765595702a2579698bb))
+* allow processed filenames to wrap in admin queue cards ([c6113c7](https://github.com/mini-app-polis/deejaytools-com/commit/c6113c7da61d7c917539f10dd6c39874dd73adb0))
+
+# [1.49.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.48.1...v1.49.0) (2026-05-07)
+
+
+### Bug Fixes
+
+* PascalCase processed filenames (KaianoLevine_LibbyWooton_MyDivisionIsNotListed) ([cc8ddb8](https://github.com/mini-app-polis/deejaytools-com/commit/cc8ddb807333cc4660582048515fa8d3866cd57a))
+* wrap long song filenames in check-in confirmation card ([6bb6638](https://github.com/mini-app-polis/deejaytools-com/commit/6bb6638107b1290c73e99c5e8517a8293d0b5b18))
+
+
+### Features
+
+* camelCase processed filenames — names and divisions use camelCase segments ([4238d21](https://github.com/mini-app-polis/deejaytools-com/commit/4238d210bb3e31df7ab1cef6833389b3b22e39c6))
+
+## [1.48.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.48.0...v1.48.1) (2026-05-07)
+
+
+### Bug Fixes
+
+* never show original filename in song labels — use processed_filename → routine_name → division fallback ([6651463](https://github.com/mini-app-polis/deejaytools-com/commit/6651463c18d3af9e5a2ca43893e0a8ab313e41b1))
+
+# [1.48.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.47.5...v1.48.0) (2026-05-07)
+
+
+### Features
+
+* add Cabaret, Carolina Shag Divisions, and My Division Is Not Listed to DIVISIONS ([8b028bb](https://github.com/mini-app-polis/deejaytools-com/commit/8b028bbf84f246c1410b8a27db4c0be67c10797c))
+
+## [1.47.5](https://github.com/mini-app-polis/deejaytools-com/compare/v1.47.4...v1.47.5) (2026-05-07)
+
+
+### Bug Fixes
+
+* build ([2f488be](https://github.com/mini-app-polis/deejaytools-com/commit/2f488be7048a6fe8a180ca470777fbc1e16d970b))
+
+## [1.47.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.47.3...v1.47.4) (2026-05-07)
+
+
+### Bug Fixes
+
+* build ([53c3b44](https://github.com/mini-app-polis/deejaytools-com/commit/53c3b440a7cc8ad0a570c25d169fda4a6d41e25a))
+* build ([9c914ea](https://github.com/mini-app-polis/deejaytools-com/commit/9c914ea707caa160a0000f6645cafddcec65259b))
+* potential ([a1c6309](https://github.com/mini-app-polis/deejaytools-com/commit/a1c63094b168bb4548e55b953b5697bca2c48fe5))
+* surface actual fetch error in upload toast for diagnostics ([80ed34b](https://github.com/mini-app-polis/deejaytools-com/commit/80ed34b30a68835ea8faee72c5c42a3e53c17459))
+
+## [1.47.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.47.3...v1.47.4) (2026-05-07)
+
+
+### Bug Fixes
+
+* build ([9c914ea](https://github.com/mini-app-polis/deejaytools-com/commit/9c914ea707caa160a0000f6645cafddcec65259b))
+* potential ([a1c6309](https://github.com/mini-app-polis/deejaytools-com/commit/a1c63094b168bb4548e55b953b5697bca2c48fe5))
+* surface actual fetch error in upload toast for diagnostics ([80ed34b](https://github.com/mini-app-polis/deejaytools-com/commit/80ed34b30a68835ea8faee72c5c42a3e53c17459))
+
+## [1.47.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.47.3...v1.47.4) (2026-05-07)
+
+
+### Bug Fixes
+
+* potential ([a1c6309](https://github.com/mini-app-polis/deejaytools-com/commit/a1c63094b168bb4548e55b953b5697bca2c48fe5))
+* surface actual fetch error in upload toast for diagnostics ([80ed34b](https://github.com/mini-app-polis/deejaytools-com/commit/80ed34b30a68835ea8faee72c5c42a3e53c17459))
+
+## [1.47.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.47.3...v1.47.4) (2026-05-03)
+
+
+### Bug Fixes
+
+* potential ([a1c6309](https://github.com/mini-app-polis/deejaytools-com/commit/a1c63094b168bb4548e55b953b5697bca2c48fe5))
+* surface actual fetch error in upload toast for diagnostics ([80ed34b](https://github.com/mini-app-polis/deejaytools-com/commit/80ed34b30a68835ea8faee72c5c42a3e53c17459))
+
+## [1.47.4](https://github.com/mini-app-polis/deejaytools-com/compare/v1.47.3...v1.47.4) (2026-05-03)
+
+
+### Bug Fixes
+
+* surface actual fetch error in upload toast for diagnostics ([80ed34b](https://github.com/mini-app-polis/deejaytools-com/commit/80ed34b30a68835ea8faee72c5c42a3e53c17459))
+
+## [1.47.3](https://github.com/mini-app-polis/deejaytools-com/compare/v1.47.2...v1.47.3) (2026-05-03)
+
+
+### Bug Fixes
+
+* background Drive upload — return HTTP response before uploading to Drive ([84bc830](https://github.com/mini-app-polis/deejaytools-com/commit/84bc830ca19b53916e5cea2a096c699d54f81ef7))
+
+## [1.47.2](https://github.com/mini-app-polis/deejaytools-com/compare/v1.47.1...v1.47.2) (2026-05-03)
+
+
+### Bug Fixes
+
+* single timeout middleware on /v1/* — upload routes get 5 min, others 30 s ([0ee029a](https://github.com/mini-app-polis/deejaytools-com/commit/0ee029ab0ffcb310bfa4fddbd162e39e5339717c))
+
+## [1.47.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.47.0...v1.47.1) (2026-05-03)
+
+
+### Bug Fixes
+
+* DELETE /checkins/:id ownership check uses queueEntries entity IDs ([331ca3a](https://github.com/mini-app-polis/deejaytools-com/commit/331ca3a845752a3db3b3f96e900405d2a93350a9))
+* extend timeout to 5 min for song upload route (Drive uploads) ([a7a5931](https://github.com/mini-app-polis/deejaytools-com/commit/a7a59314a5b79e1e02e38662304034110a26ed2e))
+
+# [1.47.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.46.0...v1.47.0) (2026-05-03)
+
+
+### Bug Fixes
+
+* adjusting my content queue position ([f9ac93a](https://github.com/mini-app-polis/deejaytools-com/commit/f9ac93aa5ab85d2502e38ea8b98f42f4b94dfb67))
+* adjusting my content queue position ([a9144d5](https://github.com/mini-app-polis/deejaytools-com/commit/a9144d5d095554ef7626468c335e74a1a7bc3fec))
+* run count is per partnership not per user across all pairs ([c7f9eca](https://github.com/mini-app-polis/deejaytools-com/commit/c7f9ecab5bd919aa426d482e2caf898969f778c4))
+* run count uses all user pair IDs to handle partner re-creation ([7587be5](https://github.com/mini-app-polis/deejaytools-com/commit/7587be523679a819999be3c4d7746bcd360b0b84))
+* runCount undefined fallback and queue badge labels ([432fd26](https://github.com/mini-app-polis/deejaytools-com/commit/432fd2627fb56fc5b1cd00872a0fd6097cba2b04))
+* use queueEntries entity IDs as authoritative source in GET /mine ([9b8828d](https://github.com/mini-app-polis/deejaytools-com/commit/9b8828d7edf4973ab780ccac5f3831722845aa7d))
+
+
+### Features
+
+* show run count and improve check-in card layout on My Content ([a664982](https://github.com/mini-app-polis/deejaytools-com/commit/a66498235c4b3195dff03a78a939fee97bc3c2d2))
+
 # [1.46.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.45.0...v1.46.0) (2026-05-03)
 
 

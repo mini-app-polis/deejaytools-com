@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -117,12 +117,14 @@ describe("SongsPage — delete flow", () => {
     const desktopDeleteBtn = deleteButtons[deleteButtons.length - 1]; // Last one is in the desktop table
     fireEvent.click(desktopDeleteBtn);
 
-    // After the first click, a confirmation prompt should appear.
+    // After the first click, the delete confirmation dialog should appear.
     await waitFor(() => {
-      expect(screen.getByText(/delete\?/i)).toBeInTheDocument();
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
     });
-    expect(screen.getAllByRole("button", { name: /yes/i }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("button", { name: /no/i }).length).toBeGreaterThan(0);
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText(/delete this song\?/i)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: /cancel/i })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: /^delete$/i })).toBeInTheDocument();
   });
 
   it("calls api.del and removes the song from the list on confirm", async () => {
@@ -157,15 +159,14 @@ describe("SongsPage — delete flow", () => {
     const desktopDeleteBtn = deleteButtons[deleteButtons.length - 1];
     fireEvent.click(desktopDeleteBtn);
 
-    // Wait for the confirmation prompt.
+    // Wait for the confirmation dialog.
     await waitFor(() => {
-      expect(screen.getByText(/delete\?/i)).toBeInTheDocument();
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
     });
 
-    // Click the "Yes" confirm button (desktop table renders last in jsdom).
-    const yesButtons = screen.getAllByRole("button", { name: /yes/i });
-    const desktopYesBtn = yesButtons[yesButtons.length - 1];
-    fireEvent.click(desktopYesBtn);
+    // Click the "Delete" confirm button inside the dialog.
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
 
     // Song should be removed from the list and success toast shown.
     await waitFor(() => {
@@ -215,15 +216,14 @@ describe("SongsPage — delete flow", () => {
     const desktopDeleteBtn = deleteButtons[deleteButtons.length - 1];
     fireEvent.click(desktopDeleteBtn);
 
-    // Wait for the confirmation prompt.
+    // Wait for the confirmation dialog.
     await waitFor(() => {
-      expect(screen.getByText(/delete\?/i)).toBeInTheDocument();
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
     });
 
-    // Click the "Yes" confirm button (desktop table renders last in jsdom).
-    const yesButtons = screen.getAllByRole("button", { name: /yes/i });
-    const desktopYesBtn = yesButtons[yesButtons.length - 1];
-    fireEvent.click(desktopYesBtn);
+    // Click the "Delete" confirm button inside the dialog.
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
 
     // Error toast should be shown.
     await waitFor(() => {
@@ -262,19 +262,18 @@ describe("SongsPage — delete flow", () => {
     const desktopDeleteBtn = deleteButtons[deleteButtons.length - 1];
     fireEvent.click(desktopDeleteBtn);
 
-    // Wait for the confirmation prompt.
+    // Wait for the confirmation dialog.
     await waitFor(() => {
-      expect(screen.getByText(/delete\?/i)).toBeInTheDocument();
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
     });
 
-    // Click the "No" cancel button (desktop table renders last in jsdom).
-    const noButtons = screen.getAllByRole("button", { name: /no/i });
-    const desktopNoBtn = noButtons[noButtons.length - 1];
-    fireEvent.click(desktopNoBtn);
+    // Click the "Cancel" button inside the dialog.
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /cancel/i }));
 
-    // The confirmation prompt should disappear.
+    // The dialog should disappear.
     await waitFor(() => {
-      expect(screen.queryByText(/delete\?/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 
     // The Delete button should be back (one per layout — mobile + desktop both rendered in jsdom).

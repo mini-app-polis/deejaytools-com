@@ -27,17 +27,8 @@ import { timeoutMiddleware } from "./middleware/timeout.js";
 
 const logger = createLogger("deejaytools-api");
 
-Sentry.init({
-  dsn: process.env.SENTRY_DSN,
-  environment: process.env.NODE_ENV ?? "development",
-  enabled: !!process.env.SENTRY_DSN,
-  // Tag every event with the deployed version so errors link back to a
-  // specific release. Railway sets RAILWAY_DEPLOYMENT_ID per deploy; the
-  // npm fallback uses the version semantic-release bumps in package.json.
-  release:
-    process.env.RAILWAY_DEPLOYMENT_ID ??
-    process.env.npm_package_version,
-});
+// Sentry is initialised in instrument.ts, loaded via `node --import`
+// before this module runs.  This import is kept here only for captureException.
 
 export const app = new Hono();
 
@@ -75,9 +66,19 @@ app.use(
 // runaway clients or scripts from hammering the DB.
 app.use("/v1/*", rateLimitMiddleware(300, 60_000));
 
-// Hard 30-second deadline on all API routes.  Prevents a slow DB query or
-// upstream call from holding the connection open indefinitely.
-app.use("/v1/*", timeoutMiddleware(30_000));
+// Hard deadline on all API routes.  Prevents a slow DB query or upstream call
+// from holding the connection open indefinitely.  Upload routes get a 5-minute
+// budget because the final chunk triggers a Google Drive upload that can
+// legitimately take longer than 30 s for large files.  All other routes get 30 s.
+//
+// IMPORTANT: register as a single middleware on /v1/* so that only one timeout
+// is ever in the middleware chain for a given request.  Two separate app.use()
+// registrations (one for uploads, one for /v1/*) would BOTH match upload paths
+// and the inner 30-second rule would still win, defeating the longer budget.
+app.use("/v1/*", (c, next) => {
+  const ms = c.req.path.startsWith("/v1/songs/upload/") ? 300_000 : 30_000;
+  return timeoutMiddleware(ms)(c, next);
+});
 
 // Liveness + readiness probe for Railway / uptime monitors.
 // Returns 200 when the DB is reachable, 503 when it is not.

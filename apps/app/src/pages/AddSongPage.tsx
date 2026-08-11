@@ -21,27 +21,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DIVISIONS } from "@deejaytools/schemas";
 import type { AuthMe as MeResponse } from "@/hooks/useAuthMe";
 
-const DIVISION_OPTIONS = [
-  "Classic",
-  "Showcase",
-  "Rising Star Classic",
-  "Rising Star Showcase",
-  "Sophisticated",
-  "Masters",
-  "Teams",
-  "ProAm LeaderAm",
-  "ProAm FollowerAm",
-  "NovInt Routines",
-  "Juniors",
-  "Young Adult",
-  "Exhibition",
-  "Superstar",
-  "My Division Is Not Listed",
-] as const;
+const DIVISION_OPTIONS = DIVISIONS;
 
-const SOLO_ALLOWED_DIVISIONS = new Set<string>(["Teams", "Exhibition", "My Division Is Not Listed"]);
+const SOLO_ALLOWED_DIVISIONS = new Set<string>(["Teams", "Exhibition", "My Division Is Not Listed", "Cabaret"]);
 
 const SOLO_PARTNER_VALUE = "__solo__";
 
@@ -55,6 +40,28 @@ type PageMode = "upload" | "claim";
 
 function formatMB(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1);
+}
+
+/**
+ * True when the current browser is iOS Safari or any browser on iPadOS.
+ *
+ * Used to relax the file input's accept= attribute, because the iOS Files
+ * app picker filters by its own rules that don't match the W3C accept=
+ * semantics — MP3s frequently get greyed out under "On My iPhone" and in
+ * third-party app sandboxes. Server-side magic-byte validation
+ * (detectAudioFormat in apps/api) is the gate that keeps junk files out.
+ *
+ * iPadOS 13+ identifies as Mac in userAgent, so we also check for touch.
+ */
+function isIOS(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  if (/iPad|iPhone|iPod/.test(ua)) return true;
+  // iPadOS 13+ masquerades as Mac
+  if (ua.includes("Mac") && typeof document !== "undefined" && "ontouchend" in document) {
+    return true;
+  }
+  return false;
 }
 
 type Partner = {
@@ -132,6 +139,13 @@ export default function AddSongPage() {
         if (!cancelled) {
           setPartners(p);
           setMe(m);
+          // Default the partner selector to the first partner the user has,
+          // since most uploads are partnered. Only set it on initial load
+          // when nothing is selected yet — we don't want to override a
+          // deliberate "No partner" choice if partners get refetched later.
+          if (p.length > 0) {
+            setSelectedPartnerId((current) => (current === "" ? p[0].id : current));
+          }
         }
       })
       .catch((e: Error) => toast.error(e.message))
@@ -169,7 +183,6 @@ export default function AddSongPage() {
       setUploadProgress(10);
       setUploadBytesSent(0);
 
-      const token = await getToken();
       const uploadId = crypto.randomUUID();
       const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
       const MAX_RETRIES = 3;
@@ -203,24 +216,38 @@ export default function AddSongPage() {
           form.set("routine_name", routineName.trim() || "");
           form.set("personal_descriptor", descriptor.trim() || "");
 
+          let token: string | null;
+          try {
+            token = await getToken();
+          } catch {
+            token = null;
+          }
+          if (!token) {
+            throw new Error("Your session expired. Please sign in again and retry the upload.");
+          }
+
           let res: Response;
           try {
             res = await fetch(`${apiBase}/v1/songs/upload/chunk`, {
               method: "POST",
               headers: {
                 Accept: "application/json",
-                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                Authorization: `Bearer ${token}`,
               },
               body: form,
             });
-          } catch {
-            lastErr = new Error("Network error — check your connection and try again.");
+          } catch (fetchErr) {
+            const detail = fetchErr instanceof Error
+              ? `${fetchErr.name}: ${fetchErr.message}`
+              : String(fetchErr);
+            lastErr = new Error(`Network error (${detail}) — check your connection and try again.`);
             continue;
           }
 
           if (!res.ok) {
             const json = await res.json().catch(() => null) as { error?: { message?: string } } | null;
             lastErr = new Error(json?.error?.message ?? `Upload failed (${res.status})`);
+            if (res.status === 401) throw lastErr;
             continue;
           }
 
@@ -245,7 +272,9 @@ export default function AddSongPage() {
       setDivision("");
       setRoutineName("");
       setDescriptor("");
-      setSelectedPartnerId("");
+      // Re-apply the partner default after reset so the next upload also
+      // starts on a partner instead of dropping back to "No partner".
+      setSelectedPartnerId(partners.length > 0 ? partners[0].id : "");
       setUploadBytesSent(0);
       setFileInputKey((k) => k + 1);
       setFormKey((k) => k + 1);
@@ -472,16 +501,29 @@ export default function AddSongPage() {
                   key={fileInputKey}
                   id="song-file"
                   type="file"
-                  accept="audio/*"
+                  // iOS Files app picker is stricter than accept="audio/*"
+                  // implies — MP3s in "On My iPhone" and third-party app
+                  // sandboxes get greyed out even though they're valid audio.
+                  // We omit the accept attribute on iOS so the picker shows
+                  // every file, and rely on the server's magic-byte check
+                  // (detectAudioFormat) to reject anything that isn't real
+                  // audio. On desktop we keep the filter for UX.
+                  accept={isIOS() ? undefined : "audio/*"}
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                   className="cursor-pointer"
                 />
                 <p className="text-xs text-muted-foreground">MP3, WAV, FLAC, or M4A — max 100 MB</p>
               </div>
 
-              <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
-                {isSubmitting ? "Uploading…" : "Upload song"}
-              </Button>
+              {/* Sticky-on-mobile submit so users on narrow viewports (where
+                  the button would otherwise sit below the fold under the
+                  file input) can always see and tap it. On sm+ this falls
+                  back to a normal inline button. */}
+              <div className="sticky bottom-0 z-10 -mx-6 border-t bg-card/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/80 sm:static sm:mx-0 sm:border-t-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
+                <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
+                  {isSubmitting ? "Uploading…" : "Upload song"}
+                </Button>
+              </div>
               {uploadStage !== "idle" && (
                 <div className="mt-3 space-y-1">
                   <div className="flex justify-between text-xs text-muted-foreground">

@@ -344,12 +344,14 @@ checkinRoutes.delete("/:id", requireAuth, async (c) => {
   const now = Date.now();
 
   // Load the check-in and its live queue entry in one query.
+  // Use queueEntries as the authoritative entity source — checkins.entity*
+  // can be stale on legacy rows that pre-date the entity-column alignment fix.
   const [row] = await db
     .select({
       checkinId: checkins.id,
       sessionId: checkins.sessionId,
-      entityPairId: checkins.entityPairId,
-      entitySoloUserId: checkins.entitySoloUserId,
+      entityPairId: queueEntries.entityPairId,
+      entitySoloUserId: queueEntries.entitySoloUserId,
       queueEntryId: queueEntries.id,
       queueType: queueEntries.queueType,
       position: queueEntries.position,

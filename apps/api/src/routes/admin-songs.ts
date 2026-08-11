@@ -8,6 +8,7 @@ import { partners, songs, users } from "../db/schema.js";
 import { buildStructuredSongLabel } from "../lib/songLabel.js";
 import { zValidator } from "../lib/validate.js";
 import { requireAdmin } from "../middleware/auth.js";
+import { isLegacySong } from "./songs.js";
 
 export const adminSongRoutes = new Hono();
 
@@ -67,6 +68,7 @@ adminSongRoutes.get(
           ilike(songs.processedFilename, term),
           ilike(songs.division, term),
           ilike(songs.routineName, term),
+          ilike(songs.personalDescriptor, term),
           ilike(songs.seasonYear, term),
           ilike(owner.firstName, term),
           ilike(owner.lastName, term),
@@ -84,6 +86,7 @@ adminSongRoutes.get(
         processedFilename: songs.processedFilename,
         division: songs.division,
         routineName: songs.routineName,
+        personalDescriptor: songs.personalDescriptor,
         seasonYear: songs.seasonYear,
         createdAt: songs.createdAt,
         deletedAt: songs.deletedAt,
@@ -138,7 +141,9 @@ adminSongRoutes.get(
             display_name: r.displayName,
             division: r.division,
             routine_name: r.routineName,
+            personal_descriptor: r.personalDescriptor,
             season_year: r.seasonYear,
+            is_legacy: isLegacySong(r.processedFilename),
             created_at: r.createdAt,
             deleted_at: r.deletedAt,
             owner: {

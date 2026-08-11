@@ -27,6 +27,7 @@ const dbSongWithPartner = {
   processedFilename: "alice_bob_classic_2026_v03.mp3",
   division: "Classic",
   routineName: "Sky High",
+  personalDescriptor: "98%" as string | null,
   seasonYear: "2026",
   createdAt: 1_700_000_000_000,
   deletedAt: null as number | null,

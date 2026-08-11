@@ -122,6 +122,69 @@ export async function uploadSongToDrive(
 }
 
 /**
+ * Result of attempting to share a Drive file with one or more emails.
+ * Failures are reported per-email so the caller can log them without
+ * losing the successful shares.
+ */
+export interface DriveShareResult {
+  shared: string[];
+  failed: { email: string; error: unknown }[];
+}
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Grants `reader` permission on a Drive file to each unique, syntactically
+ * valid email. Notification emails are suppressed so users aren't spammed
+ * on every upload — the app surfaces the Drive link directly.
+ *
+ * Per-email failures are collected and returned rather than thrown, so a
+ * single bad address (e.g. an external partner whose Google account can't
+ * be added by the service account) doesn't drop the other shares. The
+ * caller is expected to log `failed` entries.
+ */
+export async function shareDriveFileWithUsers(
+  fileId: string,
+  emails: (string | null | undefined)[]
+): Promise<DriveShareResult> {
+  const cleaned = Array.from(
+    new Set(
+      emails
+        .map((e) => e?.trim().toLowerCase() ?? "")
+        .filter((e) => e.length > 0 && EMAIL_REGEX.test(e))
+    )
+  );
+
+  if (cleaned.length === 0) return { shared: [], failed: [] };
+
+  const auth = getAuthClient();
+  const drive = google.drive({ version: "v3", auth });
+
+  const shared: string[] = [];
+  const failed: { email: string; error: unknown }[] = [];
+
+  for (const email of cleaned) {
+    try {
+      await drive.permissions.create({
+        fileId,
+        requestBody: {
+          role: "reader",
+          type: "user",
+          emailAddress: email,
+        },
+        sendNotificationEmail: false,
+        supportsAllDrives: true,
+      });
+      shared.push(email);
+    } catch (err) {
+      failed.push({ email, error: err });
+    }
+  }
+
+  return { shared, failed };
+}
+
+/**
  * Moves a Drive file into the root-level `_deprecated` folder.
  * The deprecated folder is always a direct child of the root, regardless
  * of where the file currently lives (year/division subfolders).

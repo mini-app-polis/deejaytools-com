@@ -14,6 +14,9 @@ import {
 } from "../test/helpers.js";
 import { enqueueSelectResult, mockDb, resetSelectQueue } from "../test/mocks.js";
 
+/** Minimal bytes that pass server-side detectAudioFormat (ID3v2 header). */
+const MOCK_MP3_CHUNK_BYTES = Buffer.concat([Buffer.from("ID3"), Buffer.alloc(20)]);
+
 // ---------------------------------------------------------------------------
 // Module mocks
 // ---------------------------------------------------------------------------
@@ -35,6 +38,7 @@ vi.mock("../services/drive.js", () => ({
     folderId: "drive_folder_1",
   }),
   softDeleteOnDrive: vi.fn().mockResolvedValue(undefined),
+  shareDriveFileWithUsers: vi.fn().mockResolvedValue({ shared: [], failed: [] }),
 }));
 vi.mock("../services/tagger.js", () => ({
   tagSongBytes: vi
@@ -45,7 +49,7 @@ vi.mock("node:fs/promises", () => ({
   mkdir: vi.fn().mockResolvedValue(undefined),
   writeFile: vi.fn().mockResolvedValue(undefined),
   readdir: vi.fn().mockResolvedValue([]),
-  readFile: vi.fn().mockImplementation(() => Promise.resolve(Buffer.from("audio"))),
+  readFile: vi.fn().mockImplementation(() => Promise.resolve(MOCK_MP3_CHUNK_BYTES)),
   rm: vi.fn().mockResolvedValue(undefined),
   stat: vi.fn().mockResolvedValue({ mtimeMs: 0 }),
 }));
@@ -296,7 +300,7 @@ describe("POST /v1/songs/upload/chunk", () => {
     // Default: readdir returns a single chunk file (covers the happy path).
     // sweepStaleTmpDirs will also call readdir; stat returns epoch (old) so rm fires — that's fine.
     mockFs.readdir.mockResolvedValue(["chunk_000000"]);
-    mockFs.readFile.mockImplementation(() => Promise.resolve(Buffer.from("audio")));
+    mockFs.readFile.mockImplementation(() => Promise.resolve(MOCK_MP3_CHUNK_BYTES));
   });
 
   // --- auth & basic validation ---
@@ -499,20 +503,33 @@ describe("POST /v1/songs/upload/chunk", () => {
 
   // --- atomic guarantee ---
 
-  it("deletes the song record and returns 500 when Drive upload fails", async () => {
-    vi.mocked(drive.uploadSongToDrive).mockRejectedValueOnce(new Error("Drive unavailable"));
+  it("returns 200 immediately and deletes the song record in the background when Drive upload fails", async () => {
+    // The Drive upload now runs in the background after the HTTP response is
+    // sent, so the client always receives 200 on the final chunk — even if the
+    // upload later fails.  On failure the handler deletes the orphaned song row
+    // so the user's library stays clean.
+    let rejectDrive!: (e: Error) => void;
+    vi.mocked(drive.uploadSongToDrive).mockReturnValueOnce(
+      new Promise<never>((_, rej) => { rejectDrive = rej; })
+    );
     const finalRow = makeFinalSongRow();
     enqueueSelectResult([finalRow.song]); // post-insert song
-    enqueueSelectResult([mockUserRow]);   // user lookup
-    enqueueSelectResult([]);              // existingRows
-    // No final select — Drive throws before we get there
+    enqueueSelectResult([mockUserRow]);   // user lookup (inside background job)
+    enqueueSelectResult([]);              // existingRows (inside background job)
 
     const res = await app.request(CHUNK_BASE, {
       method: "POST",
       headers: authHeaders(),
       body: makeChunkForm(),
     });
-    expect(res.status).toBe(500);
+    // Response arrives before Drive finishes — must be 200.
+    expect(res.status).toBe(200);
+
+    // Now simulate the Drive failure and wait for the microtask queue to drain
+    // so the background .catch() handler has run.
+    rejectDrive(new Error("Drive unavailable"));
+    await new Promise((r) => setTimeout(r, 0));
+
     // The song record must be deleted so it doesn't appear in the user's list.
     expect(vi.mocked(mockDb.delete)).toHaveBeenCalled();
   });
@@ -558,7 +575,7 @@ describe("POST /v1/songs/upload/chunk", () => {
 
     // Chunk 1 (final) — both chunk files now present
     mockFs.readdir.mockResolvedValue(["chunk_000000", "chunk_000001"]);
-    mockFs.readFile.mockImplementation(() => Promise.resolve(Buffer.from("audio")));
+    mockFs.readFile.mockImplementation(() => Promise.resolve(MOCK_MP3_CHUNK_BYTES));
     enqueueHappyPath();
 
     const res1 = await app.request(CHUNK_BASE, {

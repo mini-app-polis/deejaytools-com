@@ -170,7 +170,12 @@ describe("SessionsPage", () => {
   });
 
   it("sorts future sessions soonest-first before past sessions", async () => {
-    // Two future sessions and one past.
+    // compareSessionChrono uses Date.now() for bucketing; pin "now" so fixed
+    // fixture dates stay in the future/past buckets regardless of when CI runs.
+    const nowSpy = vi
+      .spyOn(Date, "now")
+      .mockReturnValue(new Date("2026-04-27T12:00:00").getTime());
+
     const farFuture = makeSession({ id: "far",  status: "scheduled", startsAt: "2026-07-01T08:00:00" });
     const nearFuture = makeSession({ id: "near", status: "scheduled", startsAt: "2026-05-22T08:00:00" });
     const past       = makeSession({ id: "past", status: "completed", startsAt: "2026-03-01T08:00:00" });
@@ -179,14 +184,18 @@ describe("SessionsPage", () => {
     apiGet.mockResolvedValue([farFuture, nearFuture, past]);
     renderPage();
 
-    await waitFor(() => {
-      const links = screen.getAllByRole("link");
-      const hrefs = links.map((l) => l.getAttribute("href")!).filter((h) => h.startsWith("/sessions/"));
-      // Soonest future first, past at the end.
-      expect(hrefs[0]).toBe("/sessions/near");
-      expect(hrefs[1]).toBe("/sessions/far");
-      expect(hrefs[2]).toBe("/sessions/past");
-    });
+    try {
+      await waitFor(() => {
+        const links = screen.getAllByRole("link");
+        const hrefs = links.map((l) => l.getAttribute("href")!).filter((h) => h.startsWith("/sessions/"));
+        // Soonest future first, past at the end.
+        expect(hrefs[0]).toBe("/sessions/near");
+        expect(hrefs[1]).toBe("/sessions/far");
+        expect(hrefs[2]).toBe("/sessions/past");
+      });
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 
   it("shows a timezone abbreviation badge when event_timezone is set", async () => {
