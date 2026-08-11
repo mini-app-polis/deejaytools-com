@@ -24,7 +24,11 @@ async function parseEnvelope<T>(res: Response): Promise<T> {
     // 4xx are expected (validation, auth, not-found) — no need to track.
     // 5xx are unexpected server failures: forward to Sentry so they surface
     // even when the component swallows them with a toast.
-    if (res.status >= 500) {
+    // STUB(db): needs `teams` table — remove when schema lands
+    if (
+      res.status >= 500 &&
+      !("error" in json && json.error.code === "DB_STUB_PENDING")
+    ) {
       Sentry.captureException(err, {
         extra: { url: res.url, status: res.status },
       });

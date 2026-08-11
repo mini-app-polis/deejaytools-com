@@ -308,3 +308,23 @@ export const ApiLegacySongSchema = z.object({
   submitted_at: z.string().nullable(),
 });
 export type ApiLegacySong = z.infer<typeof ApiLegacySongSchema>;
+
+export const ApiTeamSchema = z.object({
+  id: z.string(),
+  user_id: z.string(),
+  identifier: z.string(),
+  created_at: z.number(),
+  updated_at: z.number(),
+});
+export type ApiTeam = z.infer<typeof ApiTeamSchema>;
+
+export const teamIdentifierSchema = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z0-9 ]+$/, "Team name may only contain letters, numbers, and spaces")
+  .min(1)
+  .max(100);
+
+export const createTeamBodySchema = z.object({
+  identifier: teamIdentifierSchema,
+});
