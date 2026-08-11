@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export type PartnerRow = {
+type PartnerRow = {
   id: string;
   first_name: string;
   last_name: string;
@@ -52,7 +52,6 @@ const partnerSchema = z.object({
       message: "Invalid email",
     }),
 });
-
 type PartnerForm = z.infer<typeof partnerSchema>;
 
 type DeleteAssociations = {
@@ -61,10 +60,11 @@ type DeleteAssociations = {
   has_checkin_history?: boolean;
 };
 
-export default function PartnersPage() {
+export default function PartnersSection() {
   const api = useApiClient();
+
   const [partners, setPartners] = useState<PartnerRow[] | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [partnersLoading, setPartnersLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<PartnerRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PartnerRow | null>(null);
@@ -78,17 +78,17 @@ export default function PartnersPage() {
     defaultValues: { first_name: "", last_name: "", partner_role: "follower", email: "" },
   });
 
-  const load = () => {
-    setLoading(true);
+  const loadPartners = () => {
+    setPartnersLoading(true);
     api
       .get<PartnerRow[]>("/v1/partners")
       .then(setPartners)
       .catch((e: Error) => toast.error(e.message))
-      .finally(() => setLoading(false));
+      .finally(() => setPartnersLoading(false));
   };
 
   useEffect(() => {
-    load();
+    loadPartners();
   }, [api]);
 
   const openCreate = () => {
@@ -138,14 +138,12 @@ export default function PartnersPage() {
     }
   });
 
-  const handleDeleteClick = async (partner: PartnerRow) => {
+  const handleDeletePartnerClick = async (partner: PartnerRow) => {
     setDeleteTarget(partner);
     setDeleteAssociations(null);
     setIsCheckingAssociations(true);
     try {
-      const result = await api.get<DeleteAssociations>(
-        `/v1/partners/${partner.id}/associations`
-      );
+      const result = await api.get<DeleteAssociations>(`/v1/partners/${partner.id}/associations`);
       setDeleteAssociations(result);
     } catch {
       setDeleteAssociations({ song_count: 0, has_active_checkin: false });
@@ -154,7 +152,7 @@ export default function PartnersPage() {
     }
   };
 
-  const confirmDelete = async () => {
+  const confirmDeletePartner = async () => {
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
@@ -164,8 +162,7 @@ export default function PartnersPage() {
       setDeleteAssociations(null);
       toast.success("Partner removed.");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Failed to delete partner.";
-      toast.error(msg);
+      toast.error(e instanceof Error ? e.message : "Failed to delete partner.");
       setDeleteTarget(null);
       setDeleteAssociations(null);
     } finally {
@@ -173,66 +170,47 @@ export default function PartnersPage() {
     }
   };
 
-  const closeDeleteDialog = () => {
-    setDeleteTarget(null);
-    setDeleteAssociations(null);
-  };
-
-  if (loading && !partners) {
-    return (
-      <div className="space-y-3">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-40 w-full" />
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="page-title text-2xl">Partners</h1>
-        <Button onClick={openCreate} className="w-full sm:w-auto">Add partner</Button>
-      </div>
-
-      <div className={`space-y-3${loading ? " opacity-60" : ""}`}>
-        {partners?.length === 0 && (
-          <p className="text-sm text-muted-foreground py-4 text-center">No partners yet.</p>
-        )}
-        {partners?.map((p) => (
-          <div key={p.id} className="rounded-lg border-2 border-primary/40 bg-card p-4 space-y-3 shadow-sm">
-            <div className="flex items-center justify-between gap-2">
-              <p className="font-medium text-base">
-                {p.first_name} {p.last_name}
-              </p>
-              {p.partner_role === "leader" ? (
-                <Badge variant="default">Leader</Badge>
-              ) : (
-                <Badge variant="secondary">Follower</Badge>
-              )}
-            </div>
-            {p.email && (
-              <p className="text-sm text-muted-foreground">{p.email}</p>
+    <>
+      <div className="rounded-lg border bg-card">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
+          <h2 className="font-semibold">Partners</h2>
+          <Button size="sm" onClick={openCreate}>Add partner</Button>
+        </div>
+        <div className="p-4 space-y-4">
+          <div className={`space-y-3${partnersLoading ? " opacity-60" : ""}`}>
+            {partnersLoading && !partners && <Skeleton className="h-40 w-full" />}
+            {partners?.length === 0 && (
+              <p className="text-sm text-muted-foreground py-4 text-center">No partners yet.</p>
             )}
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1"
-                onClick={() => openEdit(p)}
-              >
-                Edit
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                className="flex-1"
-                onClick={() => void handleDeleteClick(p)}
-              >
-                Delete
-              </Button>
-            </div>
+            {partners?.map((p) => (
+              <div key={p.id} className="rounded-lg border-2 border-primary/40 bg-card p-4 space-y-3 shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-medium text-base">{p.first_name} {p.last_name}</p>
+                  {p.partner_role === "leader" ? (
+                    <Badge variant="default">Leader</Badge>
+                  ) : (
+                    <Badge variant="secondary">Follower</Badge>
+                  )}
+                </div>
+                {p.email && <p className="text-sm text-muted-foreground">{p.email}</p>}
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(p)}>
+                    Edit
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => void handleDeletePartnerClick(p)}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
       </div>
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
@@ -248,9 +226,7 @@ export default function PartnersPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>First name</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
+                    <FormControl><Input {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -261,9 +237,7 @@ export default function PartnersPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Last name</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
+                    <FormControl><Input {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -296,20 +270,14 @@ export default function PartnersPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Email (optional)</FormLabel>
-                    <FormControl>
-                      <Input type="email" {...field} />
-                    </FormControl>
+                    <FormControl><Input type="email" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
               <DialogFooter>
                 <Button type="submit" disabled={isFormSubmitting}>
-                  {isFormSubmitting
-                    ? "Saving..."
-                    : editing
-                      ? "Save changes"
-                      : "Add partner"}
+                  {isFormSubmitting ? "Saving..." : editing ? "Save changes" : "Add partner"}
                 </Button>
               </DialogFooter>
             </form>
@@ -317,12 +285,7 @@ export default function PartnersPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={!!deleteTarget}
-        onOpenChange={(open) => {
-          if (!open) closeDeleteDialog();
-        }}
-      >
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) { setDeleteTarget(null); setDeleteAssociations(null); } }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Remove partner?</DialogTitle>
@@ -334,41 +297,38 @@ export default function PartnersPage() {
             <p className="text-sm text-muted-foreground">Checking linked data…</p>
           ) : deleteAssociations?.has_active_checkin ? (
             <p className="text-sm text-destructive">
-              This partner has an active check-in and cannot be deleted. Complete or withdraw the
-              check-in first.
+              This partner has an active check-in and cannot be deleted. Complete or withdraw the check-in first.
             </p>
           ) : deleteAssociations?.has_checkin_history ? (
             <p className="text-sm text-muted-foreground">
-              This partner has check-in history. Their historical data will be preserved after
-              deletion.
+              This partner has check-in history. Their historical data will be preserved after deletion.
             </p>
           ) : deleteAssociations && deleteAssociations.song_count > 0 ? (
             <p className="text-sm text-muted-foreground">
               This partner is linked to {deleteAssociations.song_count} song
-              {deleteAssociations.song_count === 1 ? "" : "s"}. Deleting will remove the partner from
-              those songs.
+              {deleteAssociations.song_count === 1 ? "" : "s"}. Deleting will remove the partner from those songs.
             </p>
           ) : deleteAssociations != null ? (
             <p className="text-sm text-muted-foreground">This action cannot be undone.</p>
           ) : null}
           <DialogFooter>
-            <Button variant="secondary" onClick={closeDeleteDialog} disabled={isDeleting}>
+            <Button
+              variant="secondary"
+              onClick={() => { setDeleteTarget(null); setDeleteAssociations(null); }}
+              disabled={isDeleting}
+            >
               Cancel
             </Button>
             <Button
               variant="destructive"
-              onClick={() => void confirmDelete()}
-              disabled={
-                isDeleting ||
-                isCheckingAssociations ||
-                !!deleteAssociations?.has_active_checkin
-              }
+              onClick={() => void confirmDeletePartner()}
+              disabled={isDeleting || isCheckingAssociations || !!deleteAssociations?.has_active_checkin}
             >
               {isDeleting ? "Removing..." : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

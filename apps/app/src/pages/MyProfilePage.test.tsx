@@ -5,7 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ApiAuthMe } from "@deejaytools/schemas";
 
-const { apiPatch, apiClient, reload, meState } = vi.hoisted(() => {
+const { apiGet, apiPatch, apiClient, reload, meState } = vi.hoisted(() => {
   const me: ApiAuthMe = {
     id: "user_1",
     email: "alice@example.com",
@@ -17,6 +17,7 @@ const { apiPatch, apiClient, reload, meState } = vi.hoisted(() => {
     updated_at: 2,
   };
   return {
+    apiGet: vi.fn(),
     apiPatch: vi.fn(),
     reload: vi.fn(async () => undefined),
     meState: { me, loading: false },
@@ -29,6 +30,7 @@ const { apiPatch, apiClient, reload, meState } = vi.hoisted(() => {
     },
   };
 });
+apiClient.get = apiGet;
 apiClient.patch = apiPatch;
 
 vi.mock("@/api/client", () => ({
@@ -52,9 +54,14 @@ import { toast } from "sonner";
 import MyProfilePage from "./MyProfilePage";
 
 beforeEach(() => {
+  apiGet.mockReset();
   apiPatch.mockReset();
   reload.mockReset();
   reload.mockResolvedValue(undefined);
+  apiGet.mockImplementation((path: string) => {
+    if (path === "/v1/partners") return Promise.resolve([]);
+    return Promise.resolve(undefined);
+  });
   meState.me = {
     id: "user_1",
     email: "alice@example.com",

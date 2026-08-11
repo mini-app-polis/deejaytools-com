@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import PartnersSection from "@/components/PartnersSection";
 import { useAuthMe } from "@/hooks/useAuthMe";
 
 const profileSchema = z.object({
@@ -113,6 +114,8 @@ export default function MyProfilePage() {
           )}
         </div>
       </div>
+
+      <PartnersSection />
     </div>
   );
 }
