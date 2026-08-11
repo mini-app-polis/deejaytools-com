@@ -10,6 +10,7 @@ import EventDetailPage from "./EventDetailPage";
 import EventsPage from "./EventsPage";
 import HowItWorksPage from "./HowItWorksPage";
 import MyContentPage from "./MyContentPage";
+import MyProfilePage from "./MyProfilePage";
 import PartnersPage from "./PartnersPage";
 import SessionDetailPage from "./SessionDetailPage";
 import SessionsPage from "./SessionsPage";
@@ -47,6 +48,14 @@ export default function App() {
             element={
               <RequireAuth>
                 <MyContentPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="my-profile"
+            element={
+              <RequireAuth>
+                <MyProfilePage />
               </RequireAuth>
             }
           />

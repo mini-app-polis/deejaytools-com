@@ -16,6 +16,11 @@ const syncBody = z.object({
   displayName: z.string().optional(),
 });
 
+const updateProfileBody = z.object({
+  firstName: z.string().trim().min(1).max(100),
+  lastName: z.string().trim().min(1).max(100),
+});
+
 export const authRoutes = new Hono();
 
 authRoutes.post("/sync", zValidator("json", syncBody), async (c) => {
@@ -60,13 +65,11 @@ authRoutes.post("/sync", zValidator("json", syncBody), async (c) => {
       createdAt: now,
       updatedAt: now,
     })
+    // Names are user-managed after account creation, so sync must not overwrite them.
     .onConflictDoUpdate({
       target: users.id,
       set: {
         email: body.email,
-        firstName: body.firstName ?? null,
-        lastName: body.lastName ?? null,
-        displayName: body.displayName ?? null,
         updatedAt: now,
       },
     });
@@ -109,4 +112,44 @@ authRoutes.get("/me", requireAuth, async (c) => {
       updated_at: row.updatedAt,
     })
   );
+});
+
+authRoutes.patch("/me", requireAuth, zValidator("json", updateProfileBody), async (c) => {
+  const uid = c.get("user").userId;
+  const body = c.req.valid("json");
+  try {
+    await db
+      .update(users)
+      .set({
+        firstName: body.firstName,
+        lastName: body.lastName,
+        updatedAt: Date.now(),
+      })
+      .where(eq(users.id, uid));
+
+    const [row] = await db.select().from(users).where(eq(users.id, uid)).limit(1);
+    if (!row) {
+      return c.json(CommonErrors.notFound("User"), 404);
+    }
+    return c.json(
+      success({
+        id: row.id,
+        email: row.email,
+        display_name: row.displayName,
+        first_name: row.firstName,
+        last_name: row.lastName,
+        role: row.role,
+        created_at: row.createdAt,
+        updated_at: row.updatedAt,
+      })
+    );
+  } catch (err) {
+    logger.error({
+      event: "auth_profile_update_failed",
+      category: "api",
+      context: { userId: uid },
+      error: err,
+    });
+    return c.json(CommonErrors.internalError(), 500);
+  }
 });
