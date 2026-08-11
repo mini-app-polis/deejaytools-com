@@ -68,13 +68,14 @@ describe("NavBar — signed out", () => {
 });
 
 describe("NavBar — signed in (regular user)", () => {
-  it("shows Floor Trials, My Content and the UserButton; no Admin link", () => {
+  it("shows Floor Trials, My Content, My Profile and the UserButton; no Admin link", () => {
     signedIn = true;
     isAdmin = false;
     renderNav();
 
     expect(screen.getAllByRole("link", { name: /floor trials/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /^my content$/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /^my profile$/i }).length).toBeGreaterThan(0);
     expect(screen.getByTestId("user-button")).toBeInTheDocument();
 
     expect(screen.queryByRole("link", { name: /^admin$/i })).toBeNull();
@@ -95,6 +96,7 @@ describe("NavBar — signed in (admin)", () => {
     expect(screen.getByRole("button", { name: /^admin/i })).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: /floor trials/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /^my content$/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /^my profile$/i }).length).toBeGreaterThan(0);
     expect(screen.getByTestId("user-button")).toBeInTheDocument();
   });
 });

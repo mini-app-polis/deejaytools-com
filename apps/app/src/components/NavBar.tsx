@@ -21,6 +21,7 @@ const PUBLIC_ITEMS: NavItem[] = [{ to: "/floor-trials", label: "Floor Trials" }]
 // Signed-in only.
 const SIGNED_IN_ITEMS: NavItem[] = [
   { to: "/my-content", label: "My Content" },
+  { to: "/my-profile", label: "My Profile" },
 ];
 
 // Admin sections, in display order. Each one is its own URL — the

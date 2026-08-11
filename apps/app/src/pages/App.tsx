@@ -10,7 +10,7 @@ import EventDetailPage from "./EventDetailPage";
 import EventsPage from "./EventsPage";
 import HowItWorksPage from "./HowItWorksPage";
 import MyContentPage from "./MyContentPage";
-import PartnersPage from "./PartnersPage";
+import MyProfilePage from "./MyProfilePage";
 import SessionDetailPage from "./SessionDetailPage";
 import SessionsPage from "./SessionsPage";
 import AddSongPage from "./AddSongPage";
@@ -50,15 +50,15 @@ export default function App() {
               </RequireAuth>
             }
           />
-          {/* Legacy routes — kept so existing links don't break */}
           <Route
-            path="partners"
+            path="my-profile"
             element={
               <RequireAuth>
-                <PartnersPage />
+                <MyProfilePage />
               </RequireAuth>
             }
           />
+          {/* Legacy routes — kept so existing links don't break */}
           <Route
             path="songs"
             element={

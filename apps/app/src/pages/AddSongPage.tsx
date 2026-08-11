@@ -421,8 +421,8 @@ export default function AddSongPage() {
             ) : (
               <p className="text-sm text-amber-600 dark:text-amber-500">
                 Set your first and last name on the{" "}
-                <Link to="/my-content?tab=partners" className="underline font-medium">
-                  My Content
+                <Link to="/my-profile" className="underline font-medium">
+                  My Profile
                 </Link>{" "}
                 page so we can label your uploads correctly.
               </p>
@@ -452,8 +452,8 @@ export default function AddSongPage() {
                 </Select>
                 <p className="text-xs text-muted-foreground">
                   Add partners on the{" "}
-                  <Link to="/my-content?tab=partners" className="underline">
-                    My Content
+                  <Link to="/my-profile" className="underline">
+                    My Profile
                   </Link>{" "}
                   page.
                 </p>
@@ -595,7 +595,7 @@ export default function AddSongPage() {
                 <p className="text-xs text-destructive">A partner is required to claim a song.</p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  <Link to="/my-content?tab=partners" className="underline">
+                  <Link to="/my-profile" className="underline">
                     Add a partner
                   </Link>{" "}
                   if they're not listed.

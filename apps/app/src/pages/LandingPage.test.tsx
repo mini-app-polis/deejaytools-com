@@ -11,7 +11,7 @@ vi.mock("@/components/NavBar", () => ({
 
 // Clerk's <SignedIn> / <SignedOut> wrappers gate child rendering on auth
 // state. Mock them with a flag the test can flip per case so we can exercise
-// both the signed-in and signed-out variants of the My Content card. The
+// both the signed-in and signed-out variants of the auth cards. The
 // mocked SignInButton just renders its children inside a span tagged with a
 // testid so the wrapping behavior is visible to assertions.
 let signedIn = false;
@@ -49,12 +49,13 @@ describe("LandingPage — hero", () => {
 });
 
 describe("LandingPage — entry-point cards", () => {
-  it("renders the four entry-point cards in the expected order", () => {
-    signedIn = true; // run in signed-in mode so the My Content link href is asserted directly
+  it("renders the entry-point cards in the expected order", () => {
+    signedIn = true; // run in signed-in mode so auth-card link hrefs are asserted directly
     renderPage();
     expect(screen.getByText("How Floor Trials Work")).toBeInTheDocument();
     expect(screen.getByText("Floor Trials")).toBeInTheDocument();
     expect(screen.getByText("My Content")).toBeInTheDocument();
+    expect(screen.getByText("My Profile")).toBeInTheDocument();
     expect(screen.getByText("Feedback")).toBeInTheDocument();
     // Old cards should not be back.
     expect(screen.queryByText("My Partners")).toBeNull();
@@ -69,6 +70,7 @@ describe("LandingPage — entry-point cards", () => {
       { title: "How Floor Trials Work", href: "/how-it-works" },
       { title: "Floor Trials", href: "/floor-trials" },
       { title: "My Content", href: "/my-content" },
+      { title: "My Profile", href: "/my-profile" },
       { title: "Feedback", href: "/feedback" },
     ];
     for (const { title, href } of cards) {
@@ -79,10 +81,9 @@ describe("LandingPage — entry-point cards", () => {
     }
   });
 
-  it("uses the Sign in required eyebrow on the My Content card", () => {
+  it("uses the Sign in required eyebrow on auth cards", () => {
     renderPage();
-    // Eyebrow text appears once, on the My Content card.
-    expect(screen.getByText(/sign in required/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/sign in required/i).length).toBe(2);
   });
 });
 

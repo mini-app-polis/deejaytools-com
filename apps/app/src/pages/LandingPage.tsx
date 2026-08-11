@@ -60,7 +60,14 @@ const CARDS: CardDef[] = [
     to: "/my-content",
     eyebrow: "Sign in required",
     title: "My Content",
-    body: "Manage your partners, songs, and see where you're currently checked in.",
+    body: "Manage your songs and see where you're currently checked in.",
+  },
+  {
+    kind: "auth",
+    to: "/my-profile",
+    eyebrow: "Sign in required",
+    title: "My Profile",
+    body: "Update your display name and manage your dance partners.",
   },
   {
     kind: "public",
