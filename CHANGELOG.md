@@ -1,3 +1,11 @@
+# [1.56.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.55.1...v1.56.0) (2026-08-11)
+
+
+### Features
+
+* allowing users to update their display names ([7533f22](https://github.com/mini-app-polis/deejaytools-com/commit/7533f22a75e8898941d61ce2059464aadd21a282))
+* moving partner management to my profile page ([9c83d99](https://github.com/mini-app-polis/deejaytools-com/commit/9c83d99fc17194ff6a362bac89aafe73e1bfdaef))
+
 ## [1.55.1](https://github.com/mini-app-polis/deejaytools-com/compare/v1.55.0...v1.55.1) (2026-05-27)
 
 
