@@ -43,6 +43,7 @@ runRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c) => {
   const completedBy = alias(users, "completed_by");
   const songOwner = alias(users, "song_owner");
   const songPartnerAlias = alias(partners, "song_partner");
+  const songManagedPartnership = alias(managedPartnerships, "song_managed_partnership");
 
   const filters = [];
   if (session_id) filters.push(eq(runs.sessionId, session_id));
@@ -68,6 +69,10 @@ runRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c) => {
       songOwnerLast: songOwner.lastName,
       songPartnerFirst: songPartnerAlias.firstName,
       songPartnerLast: songPartnerAlias.lastName,
+      songManagedLeaderFirst: songManagedPartnership.leaderFirstName,
+      songManagedLeaderLast: songManagedPartnership.leaderLastName,
+      songManagedFollowerFirst: songManagedPartnership.followerFirstName,
+      songManagedFollowerLast: songManagedPartnership.followerLastName,
       // The run's entity (which may equal the song's owner/partner, but for solo
       // runs comes from a different column entirely).
       pairUserFirst: pairUser.firstName,
@@ -89,6 +94,7 @@ runRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c) => {
     .leftJoin(songs, eq(songs.id, runs.songId))
     .leftJoin(songOwner, eq(songOwner.id, songs.userId))
     .leftJoin(songPartnerAlias, eq(songPartnerAlias.id, songs.partnerId))
+    .leftJoin(songManagedPartnership, eq(songManagedPartnership.id, songs.managedPartnershipId))
     .leftJoin(pairs, eq(pairs.id, runs.entityPairId))
     .leftJoin(pairUser, eq(pairUser.id, pairs.userAId))
     .leftJoin(partners, eq(partners.id, pairs.partnerBId))
@@ -125,17 +131,28 @@ runRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c) => {
         }
 
         // Song's own partnership (independent of the run's entity).
-        const songOwnerName = [r.songOwnerFirst, r.songOwnerLast]
-          .filter(Boolean)
-          .join(" ")
-          .trim();
-        const songPartnerName = [r.songPartnerFirst, r.songPartnerLast]
-          .filter(Boolean)
-          .join(" ")
-          .trim();
-        const songPartnership = songPartnerName
-          ? `${songOwnerName} & ${songPartnerName}`
-          : songOwnerName;
+        let songPartnership: string;
+        if (r.songManagedLeaderFirst != null) {
+          const leader = [r.songManagedLeaderFirst, r.songManagedLeaderLast]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+          const follower = [r.songManagedFollowerFirst, r.songManagedFollowerLast]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+          songPartnership = follower ? `${leader} & ${follower}` : leader;
+        } else {
+          const songOwnerName = [r.songOwnerFirst, r.songOwnerLast]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+          const songPartnerName = [r.songPartnerFirst, r.songPartnerLast]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+          songPartnership = songPartnerName ? `${songOwnerName} & ${songPartnerName}` : songOwnerName;
+        }
 
         const songLabel = buildStructuredSongLabel({
           partnership: songPartnership,

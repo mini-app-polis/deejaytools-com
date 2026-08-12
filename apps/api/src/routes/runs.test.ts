@@ -132,6 +132,14 @@ describe("GET /v1/runs", () => {
         pairPartnerLast: null,
         soloUserFirst: "Solo",
         soloUserLast: "Dancer",
+        managedLeaderFirst: null,
+        managedLeaderLast: null,
+        managedFollowerFirst: null,
+        managedFollowerLast: null,
+        songManagedLeaderFirst: null,
+        songManagedLeaderLast: null,
+        songManagedFollowerFirst: null,
+        songManagedFollowerLast: null,
         completedByFirst: null,
         completedByLast: null,
       },
@@ -182,6 +190,54 @@ describe("GET /v1/runs", () => {
     const body = await readJson<SuccessEnvelope<RunRow[]>>(res);
     expect(body.data[0].entity_label).toBe("—");
     expect(body.data[0].song_label).toBe("[Admin Test Placeholder]");
+  });
+
+  it("uses the song managed partnership for song_label when the song is managed", async () => {
+    enqueueSelectResult([
+      {
+        id: "run-managed",
+        completedAt: 1700000000000,
+        divisionName: "Classic",
+        sessionId: "s1",
+        sessionFloorTrialStartsAt: 1699990000000,
+        eventId: "e1",
+        eventName: "GNDC",
+        songId: "song-managed",
+        songDisplayName: "Sky High",
+        songProcessedFilename: "wendal_lara_classic_2026_v03.mp3",
+        songDivision: "Classic",
+        songSeasonYear: "2026",
+        songRoutineName: "Sky High",
+        songOwnerFirst: "Manager",
+        songOwnerLast: "User",
+        songPartnerFirst: null,
+        songPartnerLast: null,
+        songManagedLeaderFirst: "Wendal",
+        songManagedLeaderLast: "Smith",
+        songManagedFollowerFirst: "Lara",
+        songManagedFollowerLast: "Jones",
+        pairUserFirst: null,
+        pairUserLast: null,
+        pairPartnerFirst: null,
+        pairPartnerLast: null,
+        soloUserFirst: null,
+        soloUserLast: null,
+        managedLeaderFirst: "Wendal",
+        managedLeaderLast: "Smith",
+        managedFollowerFirst: "Lara",
+        managedFollowerLast: "Jones",
+        completedByFirst: "Admin",
+        completedByLast: "Person",
+      },
+    ]);
+
+    const res = await app.request(ENDPOINT, { headers: adminHeaders() });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<RunRow[]>>(res);
+    expect(body.data[0].entity_label).toBe("Wendal Smith & Lara Jones");
+    expect(body.data[0].song_label).toMatch(/^Wendal Smith & Lara Jones /);
+    expect(body.data[0].song_label).not.toMatch(/^Manager User/);
+    expect(body.data[0].song_label).toBe("Wendal Smith & Lara Jones Classic 2026 Sky High v03");
   });
 
   it("accepts session_id and event_id query params without erroring", async () => {
