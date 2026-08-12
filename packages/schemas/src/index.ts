@@ -347,3 +347,21 @@ export const createManagedPartnershipBodySchema = z.object({
   follower_first_name: z.string().trim().min(1).max(100),
   follower_last_name: z.string().trim().min(1).max(100),
 });
+
+export const ApiEventSongSubmissionSchema = z.object({
+  id: z.string(),
+  event_id: z.string(),
+  event_name: z.string(),
+  event_start_date: z.string(),
+  event_status: z.string(),
+  song_id: z.string(),
+  song_label: z.string(),
+  division: z.string().nullable(),
+  created_at: z.number(),
+});
+export type ApiEventSongSubmission = z.infer<typeof ApiEventSongSubmissionSchema>;
+
+export const createEventSongSubmissionBodySchema = z.object({
+  event_id: z.string().min(1),
+  song_id: z.string().min(1),
+});

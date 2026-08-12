@@ -1,5 +1,10 @@
-import type { ApiMyCheckin, ApiSong } from "@deejaytools/schemas";
-import { useEffect, useState } from "react";
+import type {
+  ApiEvent,
+  ApiEventSongSubmission,
+  ApiMyCheckin,
+  ApiSong,
+} from "@deejaytools/schemas";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useApiClient } from "@/api/client";
@@ -14,7 +19,27 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { compareEventChrono } from "@/lib/chronoSort";
 import { formatSessionTitle } from "@/lib/sessionFormat";
+
+function eventStatusBadge(status: string) {
+  switch (status) {
+    case "upcoming":
+      return <Badge variant="default">{status}</Badge>;
+    case "active":
+      return (
+        <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 border-transparent">
+          {status}
+        </Badge>
+      );
+    case "completed":
+      return <Badge variant="secondary">{status}</Badge>;
+    case "cancelled":
+      return <Badge variant="destructive">{status}</Badge>;
+    default:
+      return <Badge variant="outline">{status}</Badge>;
+  }
+}
 
 function queueStatusBadge(checkin: ApiMyCheckin) {
   if (checkin.queueType === "active") {
@@ -56,6 +81,11 @@ export default function MyContentPage() {
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
   const [pendingWithdrawId, setPendingWithdrawId] = useState<string | null>(null);
 
+  // ── Events / submissions state ────────────────────────────────────────────────
+  const [availableEvents, setAvailableEvents] = useState<ApiEvent[]>([]);
+  const [eventSubmissions, setEventSubmissions] = useState<ApiEventSongSubmission[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+
   // ── Data loaders ─────────────────────────────────────────────────────────────
 
   const loadSongs = () => {
@@ -76,6 +106,21 @@ export default function MyContentPage() {
       .finally(() => setCheckinsLoading(false));
   };
 
+  const loadEventsSection = () => {
+    setEventsLoading(true);
+    Promise.all([
+      api.get<ApiEvent[]>("/v1/events").catch(() => [] as ApiEvent[]),
+      api
+        .get<ApiEventSongSubmission[]>("/v1/event-song-submissions")
+        .catch(() => [] as ApiEventSongSubmission[]),
+    ])
+      .then(([evs, subs]) => {
+        setAvailableEvents(evs.filter((e) => e.status !== "completed"));
+        setEventSubmissions(subs);
+      })
+      .finally(() => setEventsLoading(false));
+  };
+
   const handleWithdraw = async (checkinId: string) => {
     setWithdrawingId(checkinId);
     try {
@@ -94,7 +139,23 @@ export default function MyContentPage() {
   useEffect(() => {
     loadSongs();
     loadCheckins();
+    loadEventsSection();
   }, [api]);
+
+  const submissionsByEventId = useMemo(() => {
+    const map = new Map<string, ApiEventSongSubmission[]>();
+    for (const s of eventSubmissions) {
+      const list = map.get(s.event_id) ?? [];
+      list.push(s);
+      map.set(s.event_id, list);
+    }
+    return map;
+  }, [eventSubmissions]);
+
+  const sortedAvailableEvents = useMemo(
+    () => availableEvents.slice().sort(compareEventChrono),
+    [availableEvents]
+  );
 
   // ── Songs actions ─────────────────────────────────────────────────────────────
 
@@ -203,6 +264,54 @@ export default function MyContentPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Events section ── */}
+      <div className="rounded-lg border bg-card">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
+          <h2 className="font-semibold">Events</h2>
+          <Button size="sm" asChild>
+            <Link to="/event-submissions">Add songs to an event</Link>
+          </Button>
+        </div>
+        <div className="p-4 space-y-3">
+          {eventsLoading ? (
+            <Skeleton className="h-24 w-full" />
+          ) : sortedAvailableEvents.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No upcoming events are available right now.</p>
+          ) : (
+            <div className="space-y-3">
+              {sortedAvailableEvents.map((event) => {
+                const subs = submissionsByEventId.get(event.id) ?? [];
+                return (
+                  <div key={event.id} className="rounded-lg border px-4 py-3 text-sm space-y-2">
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <div className="min-w-0">
+                        <p className="font-medium">{event.name}</p>
+                        <p className="text-xs text-muted-foreground">{event.start_date}</p>
+                      </div>
+                      {eventStatusBadge(event.status)}
+                    </div>
+                    {subs.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No songs added yet.</p>
+                    ) : (
+                      <ul className="space-y-1 border-t border-border/40 pt-2">
+                        {subs.map((s) => (
+                          <li key={s.id} className="text-sm">
+                            <span className="font-medium">{s.song_label}</span>
+                            {s.division && (
+                              <span className="text-muted-foreground"> · {s.division}</span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
