@@ -169,7 +169,7 @@ export default function AddSongPage() {
     Promise.all([
       api.get<Partner[]>("/v1/partners"),
       api.get<MeResponse>("/v1/auth/me"),
-      api.get<ApiManagedPartnership[]>("/v1/managed-partnerships"),
+      api.get<ApiManagedPartnership[]>("/v1/managed-partnerships").catch(() => []),
     ])
       .then(([p, m, mp]) => {
         if (!cancelled) {

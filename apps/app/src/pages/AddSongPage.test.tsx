@@ -77,6 +77,46 @@ describe("AddSongPage — mode toggle", () => {
   });
 });
 
+describe("AddSongPage — managed partnerships load is non-fatal", () => {
+  beforeEach(() => {
+    apiGet.mockReset();
+    apiPost.mockReset();
+    getTokenMock.mockReset();
+    getTokenMock.mockResolvedValue("fake-token");
+  });
+
+  it("still loads partners and the user profile when /v1/managed-partnerships rejects", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/partners") {
+        return Promise.resolve([
+          { id: "partner-1", first_name: "Bob", last_name: "Jones", partner_role: "follower" },
+        ]);
+      }
+      if (path === "/v1/auth/me") {
+        return Promise.resolve({ id: "u1", first_name: "Ann", last_name: "One" });
+      }
+      if (path === "/v1/managed-partnerships") {
+        return Promise.reject(new Error("Managed partnerships unavailable"));
+      }
+      return Promise.resolve([]);
+    });
+
+    const user = userEvent.setup();
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText(/uploading as:/i)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Ann One/)).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /partner/i })).toHaveTextContent(/bob jones/i);
+
+    await user.click(screen.getByRole("button", { name: /upload for a managed partnership/i }));
+    expect(
+      await screen.findByText(/you have no managed partnerships yet/i)
+    ).toBeInTheDocument();
+  });
+});
+
 describe("AddSongPage — Claim from history", () => {
   beforeEach(() => {
     apiGet.mockReset();
