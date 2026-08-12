@@ -57,7 +57,7 @@ describe("AddSongPage — mode toggle", () => {
     getTokenMock.mockResolvedValue("fake-token");
   });
 
-  it("shows the Upload new audio panel by default", async () => {
+  it("shows the Upload for myself panel by default", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/partners") return Promise.resolve([]);
       if (path === "/v1/auth/me") return Promise.resolve({ id: "u1", first_name: "U", last_name: "1" });
@@ -70,8 +70,8 @@ describe("AddSongPage — mode toggle", () => {
       expect(screen.getByRole("heading", { name: /add song/i })).toBeInTheDocument()
     );
 
-    // Upload toggle should be present and the upload card visible
-    expect(screen.getByRole("button", { name: /upload new audio/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /upload for myself/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /upload for a managed partnership/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /claim from history/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/audio file/i)).toBeInTheDocument();
   });
@@ -353,7 +353,7 @@ describe("AddSongPage — Upload chunk loop", () => {
     renderPage();
 
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /upload new audio/i })).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: /upload for myself/i })).toBeInTheDocument()
     );
 
     const fileBytes = new Uint8Array(opts.fileSizeBytes);
@@ -444,7 +444,7 @@ describe("AddSongPage — Upload chunk loop", () => {
     renderPage();
 
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /upload new audio/i })).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: /upload for myself/i })).toBeInTheDocument()
     );
 
     const file = new File([new Uint8Array(1024)], "test.mp3", { type: "audio/mpeg" });
@@ -522,14 +522,9 @@ describe("AddSongPage — managed partnership upload", () => {
     renderPage();
 
     await waitFor(() =>
-      expect(screen.getByLabelText(/audio file/i)).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: /upload for a managed partnership/i })).toBeInTheDocument()
     );
-
-    const uploadForTrigger = screen.getByRole("combobox", { name: /uploading for/i });
-    await user.click(uploadForTrigger);
-    await user.click(
-      await screen.findByRole("option", { name: /wendal smith & lara jones \(managed\)/i })
-    );
+    await user.click(screen.getByRole("button", { name: /upload for a managed partnership/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/leader: wendal smith · follower: lara jones/i)).toBeInTheDocument();
