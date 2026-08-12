@@ -252,4 +252,130 @@ describe("AdminPage", () => {
       expect(toast.error).toHaveBeenCalledWith("Select an event");
     });
   });
+
+  describe("Event Songs section", () => {
+    const EVENT = {
+      id: "ev1",
+      name: "Spring Classic",
+      start_date: "2026-04-01",
+      end_date: "2026-04-03",
+      timezone: "America/Los_Angeles",
+      status: "upcoming",
+      created_by: "u1",
+      created_at: 1,
+      updated_at: 1,
+    };
+
+    function mockAdminGets(opts?: {
+      events?: unknown[];
+      submissions?: unknown[] | (() => Promise<unknown>);
+    }) {
+      const events = opts?.events ?? [EVENT];
+      const submissions = opts?.submissions ?? [];
+      apiGet.mockImplementation((path: string) => {
+        if (path === "/v1/events") return Promise.resolve(events);
+        if (path.startsWith("/v1/admin/event-song-submissions")) {
+          return typeof submissions === "function"
+            ? submissions()
+            : Promise.resolve(submissions);
+        }
+        return Promise.resolve([]);
+      });
+    }
+
+    it("renders the event picker on /admin/event-songs", async () => {
+      mockAdminGets();
+      renderPage("/admin/event-songs");
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/^event$/i)).toBeInTheDocument();
+      });
+      expect(screen.getByText(/select an event to view submitted songs/i)).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: /spring classic/i })).toBeInTheDocument();
+    });
+
+    it("loads submissions when an event is selected and groups by division", async () => {
+      mockAdminGets({
+        submissions: [
+          {
+            id: "sub1",
+            event_id: "ev1",
+            event_name: "Spring Classic",
+            division: "Classic",
+            song_id: "s1",
+            song_label: "Sky High",
+            partnership_label: "Alice & Bob",
+            submitter_email: "alice@example.com",
+            created_at: 1,
+          },
+          {
+            id: "sub2",
+            event_id: "ev1",
+            event_name: "Spring Classic",
+            division: "Strictly",
+            song_id: "s2",
+            song_label: "Midnight",
+            partnership_label: "Carol & Dan",
+            submitter_email: "carol@example.com",
+            created_at: 2,
+          },
+          {
+            id: "sub3",
+            event_id: "ev1",
+            event_name: "Spring Classic",
+            division: null,
+            song_id: "s3",
+            song_label: "Untitled",
+            partnership_label: "Eve Solo",
+            submitter_email: "eve@example.com",
+            created_at: 3,
+          },
+        ],
+      });
+
+      const user = userEvent.setup();
+      renderPage("/admin/event-songs");
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/^event$/i)).toBeInTheDocument();
+      });
+
+      await user.selectOptions(screen.getByLabelText(/^event$/i), "ev1");
+
+      await waitFor(() => {
+        expect(apiGet).toHaveBeenCalledWith(
+          expect.stringMatching(/\/v1\/admin\/event-song-submissions\?event_id=ev1/)
+        );
+      });
+
+      expect(await screen.findByRole("heading", { name: /^classic$/i })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /^strictly$/i })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /^unspecified$/i })).toBeInTheDocument();
+      expect(screen.getByText(/alice & bob/i)).toBeInTheDocument();
+      expect(screen.getByText(/sky high/i)).toBeInTheDocument();
+      expect(screen.getByText("alice@example.com")).toBeInTheDocument();
+      expect(screen.getByText(/carol & dan/i)).toBeInTheDocument();
+      expect(screen.getByText(/eve solo/i)).toBeInTheDocument();
+    });
+
+    it("still renders the section when admin submissions reject", async () => {
+      mockAdminGets({
+        submissions: () => Promise.reject(new Error("not found")),
+      });
+
+      const user = userEvent.setup();
+      renderPage("/admin/event-songs");
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/^event$/i)).toBeInTheDocument();
+      });
+
+      await user.selectOptions(screen.getByLabelText(/^event$/i), "ev1");
+
+      expect(
+        await screen.findByText(/no songs submitted to this event yet/i)
+      ).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /^admin$/i })).toBeInTheDocument();
+    });
+  });
 });

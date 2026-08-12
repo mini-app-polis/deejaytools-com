@@ -365,3 +365,20 @@ export const createEventSongSubmissionBodySchema = z.object({
   event_id: z.string().min(1),
   song_id: z.string().min(1),
 });
+
+/**
+ * Admin-facing joined row for event song submissions (cross-user).
+ * Future query: event_song_submissions → songs (division + partnership) → events.
+ */
+export const ApiAdminEventSongSubmissionSchema = z.object({
+  id: z.string(),
+  event_id: z.string(),
+  event_name: z.string(),
+  division: z.string().nullable(),
+  song_id: z.string(),
+  song_label: z.string(),
+  partnership_label: z.string(),
+  submitter_email: z.string(),
+  created_at: z.number(),
+});
+export type ApiAdminEventSongSubmission = z.infer<typeof ApiAdminEventSongSubmissionSchema>;

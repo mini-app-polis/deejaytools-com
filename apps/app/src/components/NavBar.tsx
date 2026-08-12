@@ -33,6 +33,7 @@ const ADMIN_ITEMS: NavItem[] = [
   { to: "/admin/runs", label: "Run History" },
   { to: "/admin/inject", label: "Test Inject" },
   { to: "/admin/songs", label: "Songs" },
+  { to: "/admin/event-songs", label: "Event Songs" },
   { to: "/admin/users", label: "Users" },
 ];
 
