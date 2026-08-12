@@ -4,7 +4,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
 import { z } from "zod";
 import { db } from "../db/index.js";
-import { events, pairs, partners, runs, sessions, songs, users } from "../db/schema.js";
+import { events, managedPartnerships, pairs, partners, runs, sessions, songs, users } from "../db/schema.js";
 import { buildStructuredSongLabel } from "../lib/songLabel.js";
 import { zValidator } from "../lib/validate.js";
 import { requireAdmin } from "../middleware/auth.js";
@@ -76,6 +76,10 @@ runRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c) => {
       pairPartnerLast: partners.lastName,
       soloUserFirst: soloUser.firstName,
       soloUserLast: soloUser.lastName,
+      managedLeaderFirst: managedPartnerships.leaderFirstName,
+      managedLeaderLast: managedPartnerships.leaderLastName,
+      managedFollowerFirst: managedPartnerships.followerFirstName,
+      managedFollowerLast: managedPartnerships.followerLastName,
       completedByFirst: completedBy.firstName,
       completedByLast: completedBy.lastName,
     })
@@ -89,6 +93,10 @@ runRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c) => {
     .leftJoin(pairUser, eq(pairUser.id, pairs.userAId))
     .leftJoin(partners, eq(partners.id, pairs.partnerBId))
     .leftJoin(soloUser, eq(soloUser.id, runs.entitySoloUserId))
+    .leftJoin(
+      managedPartnerships,
+      eq(managedPartnerships.id, runs.entityManagedPartnershipId)
+    )
     .leftJoin(completedBy, eq(completedBy.id, runs.completedByUserId))
     .where(filters.length > 0 ? and(...filters) : undefined)
     .orderBy(desc(runs.completedAt))
@@ -97,9 +105,16 @@ runRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c) => {
   return c.json(
     successList(
       rows.map((r) => {
-        // Entity (who ran): "Leader & Follower" for pairs, full name for solo.
+        // Entity (who ran): "Leader & Follower" for pairs/managed, full name for solo.
         let entityLabel: string;
-        if (r.pairUserFirst || r.pairUserLast) {
+        if (r.managedLeaderFirst != null) {
+          const leader = [r.managedLeaderFirst, r.managedLeaderLast].filter(Boolean).join(" ").trim();
+          const follower = [r.managedFollowerFirst, r.managedFollowerLast]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+          entityLabel = follower ? `${leader} & ${follower}` : leader;
+        } else if (r.pairUserFirst || r.pairUserLast) {
           const a = [r.pairUserFirst, r.pairUserLast].filter(Boolean).join(" ").trim();
           const b = [r.pairPartnerFirst, r.pairPartnerLast].filter(Boolean).join(" ").trim();
           entityLabel = b ? `${a} & ${b}` : a || "Pair";

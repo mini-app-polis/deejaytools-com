@@ -46,12 +46,18 @@ export const createCheckinBodySchema = z
     divisionName: z.string().min(1),
     entityPairId: z.string().nullish(),
     entitySoloUserId: z.string().nullish(),
+    entityManagedPartnershipId: z.string().nullish(),
     songId: z.string().min(1),
     notes: z.string().nullish(),
   })
   .refine(
-    (b) => Boolean(b.entityPairId) !== Boolean(b.entitySoloUserId),
-    { message: "Exactly one of entityPairId / entitySoloUserId" }
+    (b) =>
+      [b.entityPairId, b.entitySoloUserId, b.entityManagedPartnershipId].filter(Boolean).length ===
+      1,
+    {
+      message:
+        "Exactly one of entityPairId / entitySoloUserId / entityManagedPartnershipId must be provided",
+    }
   );
 
 export const PartnerRoleSchema = z.enum(["leader", "follower"]);

@@ -5,6 +5,15 @@ import { runs } from "../../db/schema.js";
 export interface EntityRef {
   pairId?: string;
   soloUserId?: string;
+  managedPartnershipId?: string;
+}
+
+function entityFilter(entity: EntityRef) {
+  if (entity.pairId) return eq(runs.entityPairId, entity.pairId);
+  if (entity.managedPartnershipId) {
+    return eq(runs.entityManagedPartnershipId, entity.managedPartnershipId);
+  }
+  return eq(runs.entitySoloUserId, entity.soloUserId!);
 }
 
 /**
@@ -16,14 +25,10 @@ export async function runsForEntityInSession(
   sessionId: string,
   divisionName: string
 ): Promise<number> {
-  const entityFilter = entity.pairId
-    ? eq(runs.entityPairId, entity.pairId)
-    : eq(runs.entitySoloUserId, entity.soloUserId!);
-
   const [row] = await db
     .select({ n: count() })
     .from(runs)
-    .where(and(eq(runs.sessionId, sessionId), eq(runs.divisionName, divisionName), entityFilter));
+    .where(and(eq(runs.sessionId, sessionId), eq(runs.divisionName, divisionName), entityFilter(entity)));
   return row?.n ?? 0;
 }
 
@@ -36,13 +41,9 @@ export async function runsForEntityInEvent(
   eventId: string,
   divisionName: string
 ): Promise<number> {
-  const entityFilter = entity.pairId
-    ? eq(runs.entityPairId, entity.pairId)
-    : eq(runs.entitySoloUserId, entity.soloUserId!);
-
   const [row] = await db
     .select({ n: count() })
     .from(runs)
-    .where(and(eq(runs.eventId, eventId), eq(runs.divisionName, divisionName), entityFilter));
+    .where(and(eq(runs.eventId, eventId), eq(runs.divisionName, divisionName), entityFilter(entity)));
   return row?.n ?? 0;
 }

@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "../db/index.js";
 import {
   checkins,
+  managedPartnerships,
   pairs,
   partners,
   queueEntries,
@@ -97,6 +98,7 @@ queueRoutes.post("/promote", requireAdmin, zValidator("json", promoteBody), asyn
       sessionId: queueEntries.sessionId,
       entityPairId: queueEntries.entityPairId,
       entitySoloUserId: queueEntries.entitySoloUserId,
+      entityManagedPartnershipId: queueEntries.entityManagedPartnershipId,
       queueType: queueEntries.queueType,
       position: queueEntries.position,
     })
@@ -169,6 +171,7 @@ queueRoutes.post("/promote", requireAdmin, zValidator("json", promoteBody), asyn
         sessionId: entry.sessionId,
         entityPairId: entry.entityPairId,
         entitySoloUserId: entry.entitySoloUserId,
+        entityManagedPartnershipId: entry.entityManagedPartnershipId,
         queueType: "active",
         position: newPosition,
         enteredQueueAt: now,
@@ -249,6 +252,7 @@ async function loadActiveEntry(queueEntryId: string) {
       sessionId: queueEntries.sessionId,
       entityPairId: queueEntries.entityPairId,
       entitySoloUserId: queueEntries.entitySoloUserId,
+      entityManagedPartnershipId: queueEntries.entityManagedPartnershipId,
       position: queueEntries.position,
     })
     .from(queueEntries)
@@ -300,6 +304,7 @@ queueRoutes.post("/complete", requireAdmin, zValidator("json", entryActionBody),
         divisionName: checkin.divisionName,
         entityPairId: entry.entityPairId,
         entitySoloUserId: entry.entitySoloUserId,
+        entityManagedPartnershipId: entry.entityManagedPartnershipId,
         songId: checkin.songId,
         completedAt: now,
         completedByUserId: adminId,
@@ -580,6 +585,7 @@ async function listQueue(sessionId: string, queueType: "priority" | "non_priorit
       enteredQueueAt: queueEntries.enteredQueueAt,
       entityPairId: queueEntries.entityPairId,
       entitySoloUserId: queueEntries.entitySoloUserId,
+      entityManagedPartnershipId: queueEntries.entityManagedPartnershipId,
       divisionName: checkins.divisionName,
       songId: checkins.songId,
       notes: checkins.notes,
@@ -591,6 +597,10 @@ async function listQueue(sessionId: string, queueType: "priority" | "non_priorit
       pairPartnerLast: partners.lastName,
       soloUserFirst: soloUser.firstName,
       soloUserLast: soloUser.lastName,
+      managedLeaderFirst: managedPartnerships.leaderFirstName,
+      managedLeaderLast: managedPartnerships.leaderLastName,
+      managedFollowerFirst: managedPartnerships.followerFirstName,
+      managedFollowerLast: managedPartnerships.followerLastName,
       songDisplayName: songs.displayName,
       songProcessedFilename: songs.processedFilename,
     })
@@ -600,13 +610,24 @@ async function listQueue(sessionId: string, queueType: "priority" | "non_priorit
     .leftJoin(pairUser, eq(pairUser.id, pairs.userAId))
     .leftJoin(partners, eq(partners.id, pairs.partnerBId))
     .leftJoin(soloUser, eq(soloUser.id, queueEntries.entitySoloUserId))
+    .leftJoin(
+      managedPartnerships,
+      eq(managedPartnerships.id, queueEntries.entityManagedPartnershipId)
+    )
     .leftJoin(songs, eq(songs.id, checkins.songId))
     .where(and(eq(queueEntries.sessionId, sessionId), eq(queueEntries.queueType, queueType)))
     .orderBy(asc(queueEntries.position));
 
   return rows.map((r) => {
     let entityLabel: string;
-    if (r.entityPairId && (r.pairUserFirst || r.pairUserLast)) {
+    if (r.entityManagedPartnershipId && r.managedLeaderFirst != null) {
+      const leader = [r.managedLeaderFirst, r.managedLeaderLast].filter(Boolean).join(" ").trim();
+      const follower = [r.managedFollowerFirst, r.managedFollowerLast]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      entityLabel = follower ? `${leader} & ${follower}` : leader;
+    } else if (r.entityPairId && (r.pairUserFirst || r.pairUserLast)) {
       const a = [r.pairUserFirst, r.pairUserLast].filter(Boolean).join(" ").trim();
       const b = [r.pairPartnerFirst, r.pairPartnerLast].filter(Boolean).join(" ").trim();
       entityLabel = b ? `${a} & ${b}` : a;
@@ -622,6 +643,7 @@ async function listQueue(sessionId: string, queueType: "priority" | "non_priorit
       enteredQueueAt: r.enteredQueueAt,
       entityPairId: r.entityPairId,
       entitySoloUserId: r.entitySoloUserId,
+      entityManagedPartnershipId: r.entityManagedPartnershipId,
       entityLabel,
       divisionName: r.divisionName,
       songId: r.songId,

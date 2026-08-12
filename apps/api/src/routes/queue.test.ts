@@ -8,6 +8,7 @@ import {
   type SuccessEnvelope,
 } from "../test/helpers.js";
 import { enqueueSelectResult, mockDb, resetSelectQueue } from "../test/mocks.js";
+import { runs } from "../db/schema.js";
 import { responseCache } from "../lib/cache.js";
 
 // Global pre-test setup: flush the response cache so that a cached result from
@@ -293,6 +294,38 @@ describe("GET /v1/queue/:sessionId/active — entityLabel field", () => {
     expect(body.data[0].entityLabel).toBe("Solo Dancer");
   });
 
+  it("renders leader & follower for a managed partnership entity", async () => {
+    enqueueSelectResult([
+      {
+        queueEntryId: "qe4",
+        checkinId: "c4",
+        position: 1,
+        enteredQueueAt: 1,
+        entityPairId: null,
+        entitySoloUserId: null,
+        entityManagedPartnershipId: "mp1",
+        divisionName: "Classic",
+        songId: "song4",
+        notes: null,
+        initialQueue: "priority",
+        checkedInAt: 1,
+        pairUserFirst: null,
+        pairUserLast: null,
+        pairPartnerFirst: null,
+        pairPartnerLast: null,
+        soloUserFirst: null,
+        soloUserLast: null,
+        managedLeaderFirst: "Wendal",
+        managedLeaderLast: "Smith",
+        managedFollowerFirst: "Lara",
+        managedFollowerLast: "Jones",
+      },
+    ]);
+    const res = await app.request(`${BASE}/s1/active`);
+    const body = await readJson<SuccessEnvelope<{ entityLabel: string }[]>>(res);
+    expect(body.data[0].entityLabel).toBe("Wendal Smith & Lara Jones");
+  });
+
   it("falls back to '—' when neither pair nor solo names are present", async () => {
     enqueueSelectResult([
       {
@@ -434,6 +467,51 @@ describe("POST /v1/queue/complete", () => {
     expect(res.status).toBe(200);
     const body = await readJson<SuccessEnvelope<{ completed: boolean }>>(res);
     expect(body.data.completed).toBe(true);
+  });
+
+  it("carries entity_managed_partnership_id into the runs row on complete", async () => {
+    enqueueSelectResult([
+      {
+        id: "qe1",
+        checkinId: "c1",
+        sessionId: "s1",
+        entityPairId: null,
+        entitySoloUserId: null,
+        entityManagedPartnershipId: "mp1",
+        position: 1,
+      },
+    ]);
+    enqueueSelectResult([{ sessionId: "s1", divisionName: "Classic", songId: "song1" }]);
+    enqueueSelectResult([{ eventId: null }]);
+
+    const inserted: { table: unknown; payload: unknown }[] = [];
+    const insertMock = mockDb.insert as ReturnType<typeof vi.fn>;
+    insertMock.mockImplementation((table: unknown) => ({
+      values: vi.fn((payload: unknown) => ({
+        then(
+          onfulfilled?: ((value: unknown) => unknown) | null,
+          onrejected?: ((reason: unknown) => unknown) | null
+        ) {
+          inserted.push({ table, payload });
+          return Promise.resolve(undefined).then(onfulfilled, onrejected);
+        },
+      })),
+    }));
+
+    const res = await app.request(`${BASE}/complete`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ queueEntryId: "qe1" }),
+    });
+    expect(res.status).toBe(200);
+
+    const runInsert = inserted.find((row) => row.table === runs);
+    expect(runInsert).toBeDefined();
+    expect(runInsert!.payload).toMatchObject({
+      entityManagedPartnershipId: "mp1",
+      entityPairId: null,
+      entitySoloUserId: null,
+    });
   });
 });
 

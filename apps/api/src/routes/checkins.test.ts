@@ -57,6 +57,14 @@ const eventSession = {
   eventId: "evt_1",
 };
 
+const ownedSong = { id: "song1", managedPartnershipId: null as string | null };
+
+const testPair = { userAId: "user_test123", partnerBId: null };
+
+function managedSong(songId: string, managedPartnershipId: string) {
+  return { id: songId, managedPartnershipId };
+}
+
 describe("POST /v1/checkins", () => {
   beforeEach(() => {
     resetSelectQueue();
@@ -122,6 +130,7 @@ describe("POST /v1/checkins", () => {
 
   it("returns 400 when user is not pair leader", async () => {
     enqueueSelectResult([openSession]);
+    enqueueSelectResult([ownedSong]);
     enqueueSelectResult([{ userAId: "other_user", partnerBId: null }]);
     const res = await app.request(BASE, {
       method: "POST",
@@ -138,7 +147,8 @@ describe("POST /v1/checkins", () => {
 
   it("returns 409 when entity already has a live queue entry", async () => {
     enqueueSelectResult([openSession]);
-    enqueueSelectResult([{ userAId: "user_test123", partnerBId: null }]);
+    enqueueSelectResult([ownedSong]);
+    enqueueSelectResult([testPair]);
     enqueueSelectResult([{ id: "qe1" }]);
     const res = await app.request(BASE, {
       method: "POST",
@@ -155,7 +165,8 @@ describe("POST /v1/checkins", () => {
 
   it("returns 400 when the song has not been submitted to the session event", async () => {
     enqueueSelectResult([eventSession]);
-    enqueueSelectResult([{ userAId: "user_test123", partnerBId: null }]);
+    enqueueSelectResult([ownedSong]);
+    enqueueSelectResult([testPair]);
     enqueueSelectResult([]);
     enqueueSelectResult([]);
     const res = await app.request(BASE, {
@@ -177,7 +188,8 @@ describe("POST /v1/checkins", () => {
 
   it("returns 201 when the song has been submitted to the session event", async () => {
     enqueueSelectResult([eventSession]);
-    enqueueSelectResult([{ userAId: "user_test123", partnerBId: null }]);
+    enqueueSelectResult([ownedSong]);
+    enqueueSelectResult([testPair]);
     enqueueSelectResult([]);
     enqueueSelectResult([{ id: "sub_1" }]);
     enqueueSelectResult([eventSession]);
@@ -202,7 +214,8 @@ describe("POST /v1/checkins", () => {
 
   it("skips the submission gate for sessions with no event", async () => {
     enqueueSelectResult([openSession]);
-    enqueueSelectResult([{ userAId: "user_test123", partnerBId: null }]);
+    enqueueSelectResult([ownedSong]);
+    enqueueSelectResult([testPair]);
     enqueueSelectResult([]);
     enqueueSelectResult([openSession]);
     enqueueSelectResult([{ isPriority: false, priorityRunLimit: 0 }]);
@@ -221,7 +234,8 @@ describe("POST /v1/checkins", () => {
 
   it("returns 201 for pair check-in into priority division → priority queue", async () => {
     enqueueSelectResult([openSession]);
-    enqueueSelectResult([{ userAId: "user_test123", partnerBId: null }]);
+    enqueueSelectResult([ownedSong]);
+    enqueueSelectResult([testPair]);
     enqueueSelectResult([]);
     enqueueSelectResult([openSession]);
     enqueueSelectResult([{ isPriority: true, priorityRunLimit: 3 }]);
@@ -244,7 +258,8 @@ describe("POST /v1/checkins", () => {
 
   it("returns 201 for non-priority division → non_priority", async () => {
     enqueueSelectResult([openSession]);
-    enqueueSelectResult([{ userAId: "user_test123", partnerBId: null }]);
+    enqueueSelectResult([ownedSong]);
+    enqueueSelectResult([testPair]);
     enqueueSelectResult([]);
     enqueueSelectResult([openSession]);
     enqueueSelectResult([{ isPriority: false, priorityRunLimit: 0 }]);
@@ -265,7 +280,8 @@ describe("POST /v1/checkins", () => {
 
   it("demotes to non_priority when session run limit reached", async () => {
     enqueueSelectResult([openSession]);
-    enqueueSelectResult([{ userAId: "user_test123", partnerBId: null }]);
+    enqueueSelectResult([ownedSong]);
+    enqueueSelectResult([testPair]);
     enqueueSelectResult([]);
     enqueueSelectResult([openSession]);
     enqueueSelectResult([{ isPriority: true, priorityRunLimit: 3 }]);
@@ -287,6 +303,7 @@ describe("POST /v1/checkins", () => {
 
   it("returns 400 for solo check-in for someone else", async () => {
     enqueueSelectResult([openSession]);
+    enqueueSelectResult([ownedSong]);
     const res = await app.request(BASE, {
       method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
@@ -302,6 +319,7 @@ describe("POST /v1/checkins", () => {
 
   it("returns 201 for valid solo check-in for current user", async () => {
     enqueueSelectResult([openSession]);
+    enqueueSelectResult([ownedSong]);
     enqueueSelectResult([]);
     enqueueSelectResult([openSession]);
     enqueueSelectResult([{ isPriority: false, priorityRunLimit: 0 }]);
@@ -350,5 +368,96 @@ describe("POST /v1/checkins", () => {
     });
     expect(res.status).toBe(400);
     assertValidation400(await readJson<ErrorEnvelope>(res));
+  });
+
+  describe("managed partnership entity", () => {
+    const managedBody = (songId: string) => ({
+      sessionId: "sess1",
+      divisionName: "Classic",
+      entitySoloUserId: "user_test123",
+      songId,
+    });
+
+    function enqueueManagedAdmission(runCount = 0) {
+      enqueueSelectResult([openSession]);
+      enqueueSelectResult([{ isPriority: true, priorityRunLimit: 3 }]);
+      enqueueSelectResult([{ n: runCount }]);
+    }
+
+    it("allows two different managed partnerships to check into the same session", async () => {
+      enqueueSelectResult([openSession]);
+      enqueueSelectResult([managedSong("song_mp1", "mp1")]);
+      enqueueSelectResult([{ id: "mp1", userId: "user_test123" }]);
+      enqueueSelectResult([]);
+      enqueueManagedAdmission(0);
+
+      const first = await app.request(BASE, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(managedBody("song_mp1")),
+      });
+      expect(first.status).toBe(201);
+
+      resetSelectQueue();
+      enqueueSelectResult([openSession]);
+      enqueueSelectResult([managedSong("song_mp2", "mp2")]);
+      enqueueSelectResult([{ id: "mp2", userId: "user_test123" }]);
+      enqueueSelectResult([]);
+      enqueueManagedAdmission(0);
+
+      const second = await app.request(BASE, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(managedBody("song_mp2")),
+      });
+      expect(second.status).toBe(201);
+    });
+
+    it("rejects a duplicate check-in for the same managed partnership", async () => {
+      enqueueSelectResult([openSession]);
+      enqueueSelectResult([managedSong("song_mp1", "mp1")]);
+      enqueueSelectResult([{ id: "mp1", userId: "user_test123" }]);
+      enqueueSelectResult([{ id: "qe_existing" }]);
+
+      const res = await app.request(BASE, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(managedBody("song_mp1")),
+      });
+      expect(res.status).toBe(409);
+    });
+
+    it("computes admission run counts per managed partnership", async () => {
+      enqueueSelectResult([openSession]);
+      enqueueSelectResult([managedSong("song_mp1", "mp1")]);
+      enqueueSelectResult([{ id: "mp1", userId: "user_test123" }]);
+      enqueueSelectResult([]);
+      enqueueManagedAdmission(3);
+
+      const res = await app.request(BASE, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(managedBody("song_mp1")),
+      });
+      expect(res.status).toBe(201);
+      const body = await readJson<SuccessEnvelope<{ initialQueue: string }>>(res);
+      expect(body.data.initialQueue).toBe("non_priority");
+
+      resetSelectQueue();
+      enqueueSelectResult([openSession]);
+      enqueueSelectResult([managedSong("song_mp2", "mp2")]);
+      enqueueSelectResult([{ id: "mp2", userId: "user_test123" }]);
+      enqueueSelectResult([]);
+      enqueueManagedAdmission(0);
+
+      const other = await app.request(BASE, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(managedBody("song_mp2")),
+      });
+      expect(other.status).toBe(201);
+      const otherBody = await readJson<SuccessEnvelope<{ initialQueue: string }>>(other);
+      expect(otherBody.data.initialQueue).toBe("priority");
+    });
   });
 });
