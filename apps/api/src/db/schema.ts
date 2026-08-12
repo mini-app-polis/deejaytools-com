@@ -243,6 +243,10 @@ export const checkins = pgTable(
     divisionName: text("division_name").notNull(),
     entityPairId: text("entity_pair_id").references(() => pairs.id, { onDelete: "restrict" }),
     entitySoloUserId: text("entity_solo_user_id").references(() => users.id, { onDelete: "restrict" }),
+    entityManagedPartnershipId: text("entity_managed_partnership_id").references(
+      () => managedPartnerships.id,
+      { onDelete: "restrict" }
+    ),
     songId: text("song_id")
       .notNull()
       .references(() => songs.id, { onDelete: "restrict" }),
@@ -257,10 +261,12 @@ export const checkins = pgTable(
     sessIdx: index("idx_checkins_session_id").on(t.sessionId),
     pairIdx: index("idx_checkins_entity_pair_id").on(t.entityPairId),
     soloIdx: index("idx_checkins_entity_solo_user_id").on(t.entitySoloUserId),
+    managedIdx: index("idx_checkins_entity_managed_partnership_id").on(t.entityManagedPartnershipId),
     entityXor: check(
       "ck_checkins_entity_xor",
-      sql`(${t.entityPairId} IS NOT NULL AND ${t.entitySoloUserId} IS NULL)
-           OR (${t.entityPairId} IS NULL AND ${t.entitySoloUserId} IS NOT NULL)`
+      sql`(${t.entityPairId} IS NOT NULL AND ${t.entitySoloUserId} IS NULL AND ${t.entityManagedPartnershipId} IS NULL)
+           OR (${t.entityPairId} IS NULL AND ${t.entitySoloUserId} IS NOT NULL AND ${t.entityManagedPartnershipId} IS NULL)
+           OR (${t.entityPairId} IS NULL AND ${t.entitySoloUserId} IS NULL AND ${t.entityManagedPartnershipId} IS NOT NULL)`
     ),
   })
 );
@@ -278,6 +284,10 @@ export const queueEntries = pgTable(
       .references(() => sessions.id),
     entityPairId: text("entity_pair_id").references(() => pairs.id, { onDelete: "restrict" }),
     entitySoloUserId: text("entity_solo_user_id").references(() => users.id, { onDelete: "restrict" }),
+    entityManagedPartnershipId: text("entity_managed_partnership_id").references(
+      () => managedPartnerships.id,
+      { onDelete: "restrict" }
+    ),
     queueType: queueTypeEnum("queue_type").notNull(),
     position: integer("position").notNull(),
     enteredQueueAt: bigint("entered_queue_at", { mode: "number" }).notNull(),
@@ -294,11 +304,15 @@ export const queueEntries = pgTable(
     soloLiveUq: uniqueIndex("uq_queue_entries_session_solo_live")
       .on(t.sessionId, t.entitySoloUserId)
       .where(sql`${t.entitySoloUserId} IS NOT NULL`),
+    managedLiveUq: uniqueIndex("uq_queue_entries_session_managed_live")
+      .on(t.sessionId, t.entityManagedPartnershipId)
+      .where(sql`${t.entityManagedPartnershipId} IS NOT NULL`),
     sessionIdx: index("idx_queue_entries_session_id").on(t.sessionId),
     entityXor: check(
       "ck_queue_entries_entity_xor",
-      sql`(${t.entityPairId} IS NOT NULL AND ${t.entitySoloUserId} IS NULL)
-           OR (${t.entityPairId} IS NULL AND ${t.entitySoloUserId} IS NOT NULL)`
+      sql`(${t.entityPairId} IS NOT NULL AND ${t.entitySoloUserId} IS NULL AND ${t.entityManagedPartnershipId} IS NULL)
+           OR (${t.entityPairId} IS NULL AND ${t.entitySoloUserId} IS NOT NULL AND ${t.entityManagedPartnershipId} IS NULL)
+           OR (${t.entityPairId} IS NULL AND ${t.entitySoloUserId} IS NULL AND ${t.entityManagedPartnershipId} IS NOT NULL)`
     ),
     positionPositive: check("ck_queue_entries_position_positive", sql`${t.position} >= 1`),
   })
@@ -319,6 +333,10 @@ export const runs = pgTable(
     divisionName: text("division_name").notNull(),
     entityPairId: text("entity_pair_id").references(() => pairs.id, { onDelete: "restrict" }),
     entitySoloUserId: text("entity_solo_user_id").references(() => users.id, { onDelete: "restrict" }),
+    entityManagedPartnershipId: text("entity_managed_partnership_id").references(
+      () => managedPartnerships.id,
+      { onDelete: "restrict" }
+    ),
     songId: text("song_id")
       .notNull()
       .references(() => songs.id, { onDelete: "restrict" }),
@@ -332,10 +350,15 @@ export const runs = pgTable(
     eventIdx: index("idx_runs_event_id").on(t.eventId),
     pairDivIdx: index("idx_runs_pair_division").on(t.entityPairId, t.divisionName),
     soloDivIdx: index("idx_runs_solo_division").on(t.entitySoloUserId, t.divisionName),
+    managedDivIdx: index("idx_runs_managed_division").on(
+      t.entityManagedPartnershipId,
+      t.divisionName
+    ),
     entityXor: check(
       "ck_runs_entity_xor",
-      sql`(${t.entityPairId} IS NOT NULL AND ${t.entitySoloUserId} IS NULL)
-           OR (${t.entityPairId} IS NULL AND ${t.entitySoloUserId} IS NOT NULL)`
+      sql`(${t.entityPairId} IS NOT NULL AND ${t.entitySoloUserId} IS NULL AND ${t.entityManagedPartnershipId} IS NULL)
+           OR (${t.entityPairId} IS NULL AND ${t.entitySoloUserId} IS NOT NULL AND ${t.entityManagedPartnershipId} IS NULL)
+           OR (${t.entityPairId} IS NULL AND ${t.entitySoloUserId} IS NULL AND ${t.entityManagedPartnershipId} IS NOT NULL)`
     ),
   })
 );
