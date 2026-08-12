@@ -42,7 +42,7 @@ checkinRoutes.post(
     // whose song has not been submitted to the event that owns the target session — i.e. require an
     // event_song_submissions row for (session.event_id, song_id) before allowing the check-in.
     // Users can only check into a floor trial with songs/partnerships already submitted to that event.
-    // See STUBS.md (Event song submissions) and the DB_STUB_PENDING stub route.
+    // See STUBS.md and the /v1/event-song-submissions endpoint.
     const userId = c.get("user").userId;
     const body = c.req.valid("json");
     const now = Date.now();

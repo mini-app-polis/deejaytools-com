@@ -7,7 +7,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { and, desc, eq, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { checkins, partners, queueEntries, sessions, songs, users } from "../db/schema.js";
+import { checkins, managedPartnerships, partners, queueEntries, sessions, songs, users } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
 import { shareDriveFileWithUsers, softDeleteOnDrive, uploadSongToDrive } from "../services/drive.js";
 import { tagSongBytes } from "../services/tagger.js";
@@ -176,7 +176,21 @@ async function buildAndUploadSong(
   if (!userRow) throw new Error("User not found");
 
   let partnerRow: typeof partners.$inferSelect | null = null;
-  if (song.partnerId) {
+  let managedPartnershipRow: typeof managedPartnerships.$inferSelect | null = null;
+  if (song.managedPartnershipId) {
+    const [mp] = await db
+      .select()
+      .from(managedPartnerships)
+      .where(
+        and(
+          eq(managedPartnerships.id, song.managedPartnershipId),
+          eq(managedPartnerships.userId, userId)
+        )
+      )
+      .limit(1);
+    managedPartnershipRow = mp ?? null;
+    if (!managedPartnershipRow) throw new Error("Managed partnership not found");
+  } else if (song.partnerId) {
     const [p] = await db
       .select()
       .from(partners)
@@ -216,7 +230,16 @@ async function buildAndUploadSong(
 
   let leaderName: string;
   let followerName: string | null;
-  if (!partnerRow) {
+  if (managedPartnershipRow) {
+    leaderName = [managedPartnershipRow.leaderFirstName, managedPartnershipRow.leaderLastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    followerName = [managedPartnershipRow.followerFirstName, managedPartnershipRow.followerLastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+  } else if (!partnerRow) {
     leaderName = userName;
     followerName = null;
   } else if (partnerRow.partnerRole === "leader") {
@@ -349,6 +372,24 @@ async function assertPartnerOwned(userId: string, partnerId: string | null | und
     .where(and(eq(partners.id, partnerId), eq(partners.userId, userId)))
     .limit(1);
   return !!p;
+}
+
+async function assertManagedPartnershipOwned(
+  userId: string,
+  managedPartnershipId: string | null | undefined
+) {
+  if (managedPartnershipId == null || managedPartnershipId === "") return true;
+  const [row] = await db
+    .select({ id: managedPartnerships.id })
+    .from(managedPartnerships)
+    .where(
+      and(
+        eq(managedPartnerships.id, managedPartnershipId),
+        eq(managedPartnerships.userId, userId)
+      )
+    )
+    .limit(1);
+  return !!row;
 }
 
 songRoutes.get("/", requireAuth, zValidator("query", listQuery), async (c) => {
@@ -699,7 +740,7 @@ songRoutes.post(
 // final chunk is processed and Drive confirms the upload. Song never exists in a broken state.
 // Body fields (send on every chunk): chunk (File), upload_id (UUID), chunk_index (int),
 //   total_chunks (int), original_filename (string), mime_type (string), division (string),
-//   partner_id (string|"") XOR managed_partnership_id (string) [managed is currently stubbed],
+//   partner_id (string|"") XOR managed_partnership_id (string),
 //   routine_name (string|""), personal_descriptor (string|"")
 songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   const userId = c.get("user").userId;
@@ -734,17 +775,6 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
       : null;
   const chunkFile = body.chunk instanceof File ? body.chunk : null;
 
-  // STUB(db): needs songs.managed_partnership_id + managed check-in entity — remove when schema lands
-  if (managedPartnershipId) {
-    return c.json(
-      error(
-        "DB_STUB_PENDING",
-        "Uploading on behalf of a managed partnership is not persisted yet — database schema pending."
-      ),
-      501
-    );
-  }
-
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uploadId)) {
     return c.json(CommonErrors.badRequest("Invalid upload_id"), 400);
   }
@@ -774,8 +804,24 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
     return c.json(success({ received: true, complete: false }));
   }
 
-  // Final chunk — validate partner before assembling.
-  if (partnerId) {
+  // Final chunk — validate partner or managed partnership before assembling.
+  if (managedPartnershipId && partnerId) {
+    await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+    return c.json(
+      CommonErrors.badRequest("Specify either partner_id or managed_partnership_id, not both"),
+      400
+    );
+  }
+  if (managedPartnershipId) {
+    const ok = await assertManagedPartnershipOwned(userId, managedPartnershipId);
+    if (!ok) {
+      await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+      return c.json(
+        CommonErrors.badRequest("Managed partnership not found or does not belong to you"),
+        400
+      );
+    }
+  } else if (partnerId) {
     const ok = await assertPartnerOwned(userId, partnerId);
     if (!ok) {
       await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
@@ -832,7 +878,8 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   await db.insert(songs).values({
     id: songId,
     userId,
-    partnerId,
+    partnerId: managedPartnershipId ? null : partnerId,
+    managedPartnershipId,
     displayName: routineName || originalName || null,
     originalFilename: originalName,
     processedFilename: null,

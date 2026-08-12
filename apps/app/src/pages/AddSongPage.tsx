@@ -217,7 +217,6 @@ export default function AddSongPage() {
         return;
       }
     } else if (mode === "upload_managed") {
-      // STUB(db): needs songs.managed_partnership_id + managed check-in entity — remove when schema lands
       if (!selectedManagedPartnershipId) {
         toast.error("Please select a managed partnership.");
         return;
@@ -265,7 +264,6 @@ export default function AddSongPage() {
           if (mode === "upload_self") {
             form.set("partner_id", selectedPartnerId || "");
           } else {
-            // STUB(db): needs songs.managed_partnership_id + managed check-in entity — remove when schema lands
             form.set("managed_partnership_id", selectedManagedPartnershipId);
           }
           form.set("routine_name", routineName.trim() || "");
@@ -303,8 +301,6 @@ export default function AddSongPage() {
             const json = await res.json().catch(() => null) as { error?: { message?: string } } | null;
             lastErr = new Error(json?.error?.message ?? `Upload failed (${res.status})`);
             if (res.status === 401) throw lastErr;
-            // STUB(db): needs songs.managed_partnership_id + managed check-in entity — remove when schema lands
-            if (res.status === 501) throw lastErr;
             continue;
           }
 

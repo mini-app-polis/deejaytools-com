@@ -60,7 +60,6 @@ describe("ManagedPartnershipsSection", () => {
       expect(screen.getByText(/no managed partnerships yet/i)).toBeInTheDocument();
     });
     expect(apiGet).toHaveBeenCalledWith("/v1/managed-partnerships");
-    expect(screen.getByText(/backend pending/i)).toBeInTheDocument();
   });
 
   it("opens the add dialog, submits, and surfaces a toast when api.post rejects", async () => {

@@ -3,11 +3,14 @@ import { app } from "../app.js";
 import {
   assertErrorEnvelope,
   assertSuccessEnvelope,
+  assertSuccessListEnvelope,
+  assertValidation400,
   authHeaders,
   type ErrorEnvelope,
   readJson,
   type SuccessEnvelope,
 } from "../test/helpers.js";
+import { enqueueSelectResult, mockDb, resetSelectQueue } from "../test/mocks.js";
 
 vi.mock("../db/index.js", async () => {
   const { mockDb: db } = await import("../test/mocks.js");
@@ -24,27 +27,78 @@ vi.mock("../middleware/auth.js", async () => {
 const BASE = "/v1/teams";
 
 describe("GET /v1/teams", () => {
-  it("returns 200 with an empty list and meta.stub === true", async () => {
+  beforeEach(() => {
+    resetSelectQueue();
+  });
+
+  it("returns the user's mapped teams", async () => {
+    const team = {
+      id: "team_1",
+      userId: "user_test123",
+      identifier: "JTSwing Team Junior Varsity Season 13",
+      createdAt: 1000,
+      updatedAt: 2000,
+    };
+    enqueueSelectResult([team]);
     const res = await app.request(BASE, { headers: authHeaders() });
     expect(res.status).toBe(200);
     const body = await readJson<SuccessEnvelope<unknown[]>>(res);
-    assertSuccessEnvelope(body);
-    expect(body.data).toEqual([]);
-    expect(body.meta.stub).toBe(true);
+    assertSuccessListEnvelope(body);
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0]).toEqual({
+      id: "team_1",
+      user_id: "user_test123",
+      identifier: "JTSwing Team Junior Varsity Season 13",
+      created_at: 1000,
+      updated_at: 2000,
+    });
   });
 });
 
 describe("POST /v1/teams", () => {
-  it("returns 501 DB_STUB_PENDING for a valid identifier", async () => {
+  beforeEach(() => {
+    resetSelectQueue();
+  });
+
+  it("creates and returns a team", async () => {
+    const created = {
+      id: "team_new",
+      userId: "user_test123",
+      identifier: "JTSwing Team Junior Varsity Season 13",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    enqueueSelectResult([created]);
     const res = await app.request(BASE, {
       method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ identifier: "JTSwing Team Junior Varsity Season 13" }),
     });
-    expect(res.status).toBe(501);
+    expect(res.status).toBe(201);
+    const body = await readJson<SuccessEnvelope<Record<string, unknown>>>(res);
+    assertSuccessEnvelope(body);
+    expect(body.data).toMatchObject({
+      id: "team_new",
+      user_id: "user_test123",
+      identifier: "JTSwing Team Junior Varsity Season 13",
+    });
+  });
+
+  it("returns 409 when identifier is duplicated", async () => {
+    const insertMock = mockDb.insert as ReturnType<typeof vi.fn>;
+    insertMock.mockImplementationOnce(() => ({
+      values: vi.fn(() => Promise.reject({ code: "23505" })),
+    }));
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: "JTSwing Team" }),
+    });
+    expect(res.status).toBe(409);
     const body = await readJson<ErrorEnvelope>(res);
     assertErrorEnvelope(body);
-    expect(body.error.code).toBe("DB_STUB_PENDING");
+    expect(body.error.code).toBe("conflict");
+    expect(body.error.message).toBe("You already have a team with that name.");
   });
 
   it("returns 400 for an invalid identifier", async () => {
@@ -54,7 +108,7 @@ describe("POST /v1/teams", () => {
       body: JSON.stringify({ identifier: "bad@name!" }),
     });
     expect(res.status).toBe(400);
-    assertErrorEnvelope(await readJson<ErrorEnvelope>(res));
+    assertValidation400(await readJson<ErrorEnvelope>(res));
   });
 
   it("returns 401 without auth", async () => {
@@ -70,29 +124,61 @@ describe("POST /v1/teams", () => {
 
 describe("PATCH /v1/teams/:id", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    resetSelectQueue();
   });
 
-  it("returns 501 DB_STUB_PENDING", async () => {
+  it("returns 404 when the team is not owned or found", async () => {
+    enqueueSelectResult([]);
     const res = await app.request(`${BASE}/team_1`, {
       method: "PATCH",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ identifier: "Updated Team Name" }),
     });
-    expect(res.status).toBe(501);
-    const body = await readJson<ErrorEnvelope>(res);
-    expect(body.error.code).toBe("DB_STUB_PENDING");
+    expect(res.status).toBe(404);
+    assertErrorEnvelope(await readJson<ErrorEnvelope>(res));
+  });
+
+  it("returns 401 without auth", async () => {
+    const res = await app.request(`${BASE}/team_1`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: "Updated Team Name" }),
+    });
+    expect(res.status).toBe(401);
+    assertErrorEnvelope(await readJson<ErrorEnvelope>(res));
+  });
+
+  it("returns 400 for an invalid identifier", async () => {
+    const res = await app.request(`${BASE}/team_1`, {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: "bad@name!" }),
+    });
+    expect(res.status).toBe(400);
+    assertValidation400(await readJson<ErrorEnvelope>(res));
   });
 });
 
 describe("DELETE /v1/teams/:id", () => {
-  it("returns 501 DB_STUB_PENDING", async () => {
+  beforeEach(() => {
+    resetSelectQueue();
+  });
+
+  it("returns 404 when the team is not owned or found", async () => {
+    enqueueSelectResult([]);
     const res = await app.request(`${BASE}/team_1`, {
       method: "DELETE",
       headers: authHeaders(),
     });
-    expect(res.status).toBe(501);
-    const body = await readJson<ErrorEnvelope>(res);
-    expect(body.error.code).toBe("DB_STUB_PENDING");
+    expect(res.status).toBe(404);
+    assertErrorEnvelope(await readJson<ErrorEnvelope>(res));
+  });
+
+  it("returns 401 without auth", async () => {
+    const res = await app.request(`${BASE}/team_1`, {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(401);
+    assertErrorEnvelope(await readJson<ErrorEnvelope>(res));
   });
 });

@@ -83,6 +83,7 @@ function makeFinalSongRow(overrides: Record<string, unknown> = {}) {
       id: "song_new",
       userId: "user_test123",
       partnerId: null as string | null,
+      managedPartnershipId: null as string | null,
       displayName: "My Routine",
       originalFilename: "track.mp3",
       processedFilename: "kaianolevine_classic_2026_myroutine_v01.mp3",
@@ -589,16 +590,85 @@ describe("POST /v1/songs/upload/chunk", () => {
     expect(vi.mocked(drive.uploadSongToDrive)).toHaveBeenCalledOnce();
   });
 
-  it("returns 501 DB_STUB_PENDING when managed_partnership_id is set", async () => {
+  it("creates a song with managed_partnership_id when managed_partnership_id is set", async () => {
+    vi.mocked(mockDb.insert).mockClear();
+    const managedPartnershipRow = {
+      id: "mp_1",
+      userId: "user_test123",
+      leaderFirstName: "Wendal",
+      leaderLastName: "Smith",
+      followerFirstName: "Lara",
+      followerLastName: "Jones",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    enqueueSelectResult([{ id: "mp_1" }]);
+    enqueueSelectResult([
+      {
+        id: "song_new",
+        userId: "user_test123",
+        partnerId: null,
+        managedPartnershipId: "mp_1",
+        displayName: "My Routine",
+        originalFilename: "track.mp3",
+        processedFilename: null,
+        division: "Classic",
+        routineName: "My Routine",
+        personalDescriptor: null,
+        seasonYear: null,
+        driveFileId: null,
+        driveFolderId: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    ]);
+    enqueueSelectResult([mockUserRow]);
+    enqueueSelectResult([managedPartnershipRow]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([makeFinalSongRow({ managedPartnershipId: "mp_1" })]);
+
+    mockFs.readdir.mockResolvedValue(["chunk_000000"]);
+
     const res = await app.request(CHUNK_BASE, {
       method: "POST",
       headers: authHeaders(),
       body: makeChunkForm({ managed_partnership_id: "mp_1", partner_id: "" }),
     });
-    expect(res.status).toBe(501);
-    const body = await readJson<ErrorEnvelope>(res);
-    assertErrorEnvelope(body);
-    expect(body.error.code).toBe("DB_STUB_PENDING");
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<{ complete: boolean }>>(res);
+    expect(body.data.complete).toBe(true);
+
+    expect(vi.mocked(mockDb.insert)).toHaveBeenCalledOnce();
+    const insertMock = mockDb.insert as ReturnType<typeof vi.fn>;
+    const valuesMock = insertMock.mock.results[0].value.values as ReturnType<typeof vi.fn>;
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        managedPartnershipId: "mp_1",
+        partnerId: null,
+      })
+    );
+
+    expect(vi.mocked(drive.uploadSongToDrive)).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      expect.objectContaining({
+        filename: expect.stringMatching(/WendalSmith_LaraJones_Classic_/),
+      })
+    );
+  });
+
+  it("returns 400 when managed_partnership_id is not owned", async () => {
+    vi.mocked(mockDb.insert).mockClear();
+    mockFs.readdir.mockResolvedValue(["chunk_000000"]);
+    enqueueSelectResult([]);
+
+    const res = await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: makeChunkForm({ managed_partnership_id: "mp_bad", partner_id: "" }),
+    });
+    expect(res.status).toBe(400);
+    assertErrorEnvelope(await readJson<ErrorEnvelope>(res));
+    expect(vi.mocked(mockDb.insert)).not.toHaveBeenCalled();
   });
 });
 

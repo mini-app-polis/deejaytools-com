@@ -60,7 +60,6 @@ describe("TeamsSection", () => {
       expect(screen.getByText(/no teams yet/i)).toBeInTheDocument();
     });
     expect(apiGet).toHaveBeenCalledWith("/v1/teams");
-    expect(screen.getByText(/backend pending/i)).toBeInTheDocument();
   });
 
   it("opens the add dialog, submits, and surfaces a toast when api.post rejects", async () => {

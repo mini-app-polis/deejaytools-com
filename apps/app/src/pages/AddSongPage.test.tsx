@@ -544,18 +544,12 @@ describe("AddSongPage — managed partnership upload", () => {
     fetchSpy.mockRestore();
   });
 
-  it("uploads via /v1/songs/upload/chunk with managed_partnership_id and surfaces a 501 stub error", async () => {
+  it("uploads via /v1/songs/upload/chunk with managed_partnership_id", async () => {
     fetchSpy.mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          error: {
-            code: "DB_STUB_PENDING",
-            message:
-              "Uploading on behalf of a managed partnership is not persisted yet — database schema pending.",
-          },
-        }),
-        { status: 501 }
-      )
+      new Response(JSON.stringify({ data: { received: true, complete: true }, meta: { version: "v1" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
     );
 
     const user = userEvent.setup();
@@ -594,9 +588,7 @@ describe("AddSongPage — managed partnership upload", () => {
     expect(body.get("division")).toBe("Classic");
 
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith(
-        "Uploading on behalf of a managed partnership is not persisted yet — database schema pending."
-      );
+      expect(toast.success).toHaveBeenCalledWith("Song uploaded successfully.");
     });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(apiPost).not.toHaveBeenCalled();

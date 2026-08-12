@@ -66,6 +66,42 @@ export const partners = pgTable(
   })
 );
 
+export const teams = pgTable(
+  "teams",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    identifier: text("identifier").notNull(),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+  },
+  (t) => ({
+    userIdentifierUq: uniqueIndex("uq_teams_user_identifier").on(t.userId, t.identifier),
+    userIdx: index("idx_teams_user_id").on(t.userId),
+  })
+);
+
+export const managedPartnerships = pgTable(
+  "managed_partnerships",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    leaderFirstName: text("leader_first_name").notNull(),
+    leaderLastName: text("leader_last_name").notNull(),
+    followerFirstName: text("follower_first_name").notNull(),
+    followerLastName: text("follower_last_name").notNull(),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+  },
+  (t) => ({
+    userIdx: index("idx_managed_partnerships_user_id").on(t.userId),
+  })
+);
+
 export const pairs = pgTable(
   "pairs",
   {
@@ -89,6 +125,7 @@ export const songs = pgTable(
       .notNull()
       .references(() => users.id),
     partnerId: text("partner_id").references(() => partners.id),
+    managedPartnershipId: text("managed_partnership_id").references(() => managedPartnerships.id),
     displayName: text("display_name"),
     originalFilename: text("original_filename"),
     driveFileId: text("drive_file_id"),
@@ -123,6 +160,30 @@ export const events = pgTable(
   },
   (t) => ({
     dateRangeCheck: check("ck_events_date_range", sql`${t.startDate} <= ${t.endDate}`),
+  })
+);
+
+export const eventSongSubmissions = pgTable(
+  "event_song_submissions",
+  {
+    id: text("id").primaryKey(),
+    eventId: text("event_id")
+      .notNull()
+      .references(() => events.id),
+    songId: text("song_id")
+      .notNull()
+      .references(() => songs.id),
+    submittedByUserId: text("submitted_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+  },
+  (t) => ({
+    eventSongUq: uniqueIndex("uq_event_song_submissions_event_song").on(t.eventId, t.songId),
+    eventIdx: index("idx_event_song_submissions_event_id").on(t.eventId),
+    submitterIdx: index("idx_event_song_submissions_submitted_by_user_id").on(
+      t.submittedByUserId
+    ),
   })
 );
 

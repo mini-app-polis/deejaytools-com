@@ -136,8 +136,6 @@ export default function ManagedPartnershipsSection() {
           <div className="min-w-0 space-y-1">
             <div className="flex items-center gap-3 min-w-0 flex-wrap">
               <h2 className="font-semibold">Managed Partnerships</h2>
-              {/* STUB(db): needs `managed_partnerships` table — remove when schema lands */}
-              <p className="text-xs text-muted-foreground">Backend pending — changes won't save yet.</p>
             </div>
             <p className="text-sm text-muted-foreground">
               Partnerships you upload and check in on behalf of — a leader and a follower. Private to you.
