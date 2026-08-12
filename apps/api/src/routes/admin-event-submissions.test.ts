@@ -67,6 +67,10 @@ describe("GET /v1/admin/event-song-submissions", () => {
         ownerLast: "Smith",
         partnerFirst: "Bob",
         partnerLast: "Jones",
+        managedLeaderFirst: null,
+        managedLeaderLast: null,
+        managedFollowerFirst: null,
+        managedFollowerLast: null,
         submitterEmail: "alice@example.com",
       },
     ]);
@@ -88,5 +92,41 @@ describe("GET /v1/admin/event-song-submissions", () => {
       created_at: 1000,
     });
     expect(body.data[0]).toHaveProperty("song_label");
+  });
+
+  it("uses the managed partnership label when the song has managed_partnership_id", async () => {
+    enqueueSelectResult([
+      {
+        id: "sub_2",
+        eventId: "evt_1",
+        createdAt: 1000,
+        eventName: "Spring Classic",
+        songId: "song_2",
+        songDivision: "Classic",
+        songDisplayName: "Sky High",
+        songProcessedFilename: "wendal_lara_classic_2026_v03.mp3",
+        songRoutineName: "Sky High",
+        songSeasonYear: "2026",
+        ownerFirst: "Manager",
+        ownerLast: "User",
+        partnerFirst: null,
+        partnerLast: null,
+        managedLeaderFirst: "Wendal",
+        managedLeaderLast: "Smith",
+        managedFollowerFirst: "Lara",
+        managedFollowerLast: "Jones",
+        submitterEmail: "manager@example.com",
+      },
+    ]);
+    const res = await app.request(`${ENDPOINT}?event_id=evt_1`, {
+      headers: adminHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<unknown[]>>(res);
+    assertSuccessListEnvelope(body);
+    expect(body.data[0]).toMatchObject({
+      partnership_label: "Wendal Smith & Lara Jones",
+      song_label: "Wendal Smith & Lara Jones Classic 2026 Sky High v03",
+    });
   });
 });

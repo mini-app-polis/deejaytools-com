@@ -4,7 +4,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
 import { z } from "zod";
 import { db } from "../db/index.js";
-import { checkins, events, pairs, partners, queueEntries, queueEvents, runs, sessions, songs, users } from "../db/schema.js";
+import { checkins, events, eventSongSubmissions, pairs, partners, queueEntries, queueEvents, runs, sessions, songs, users } from "../db/schema.js";
 import { zValidator } from "../lib/validate.js";
 import { determineInitialQueue, loadAdmissionContext } from "../lib/queue/admission.js";
 import { entityHasLiveEntry } from "../lib/queue/singleEntry.js";
@@ -38,11 +38,6 @@ checkinRoutes.post(
   requireAuth,
   zValidator("json", createCheckinBody),
   async (c) => {
-    // TODO(event-submission-gate): once event_song_submissions is persisted, reject a check-in
-    // whose song has not been submitted to the event that owns the target session — i.e. require an
-    // event_song_submissions row for (session.event_id, song_id) before allowing the check-in.
-    // Users can only check into a floor trial with songs/partnerships already submitted to that event.
-    // See STUBS.md and the /v1/event-song-submissions endpoint.
     const userId = c.get("user").userId;
     const body = c.req.valid("json");
     const now = Date.now();
@@ -84,6 +79,38 @@ checkinRoutes.post(
         error("conflict", "This entity already has a live queue entry in this session"),
         409
       );
+
+    if (session.eventId != null) {
+      const [submission] = await db
+        .select({ id: eventSongSubmissions.id })
+        .from(eventSongSubmissions)
+        .where(
+          and(
+            eq(eventSongSubmissions.eventId, session.eventId),
+            eq(eventSongSubmissions.songId, body.songId)
+          )
+        )
+        .limit(1);
+
+      if (!submission) {
+        logger.error({
+          event: "checkin_song_not_submitted",
+          category: "api",
+          context: {
+            sessionId: body.sessionId,
+            eventId: session.eventId,
+            songId: body.songId,
+            userId,
+          },
+        });
+        return c.json(
+          CommonErrors.badRequest(
+            "This song hasn't been submitted to this event. Add it to the event on My Content before checking in."
+          ),
+          400
+        );
+      }
+    }
 
     let initialQueue: "priority" | "non_priority";
     try {

@@ -5,7 +5,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { db } from "../db/index.js";
-import { eventSongSubmissions, events, partners, songs, users } from "../db/schema.js";
+import { eventSongSubmissions, events, managedPartnerships, partners, songs, users } from "../db/schema.js";
 import { buildStructuredSongLabel } from "../lib/songLabel.js";
 import { zValidator } from "../lib/validate.js";
 import { requireAuth } from "../middleware/auth.js";
@@ -43,26 +43,41 @@ type JoinedSubmissionRow = {
   ownerLast: string | null;
   partnerFirst: string | null;
   partnerLast: string | null;
+  managedLeaderFirst: string | null;
+  managedLeaderLast: string | null;
+  managedFollowerFirst: string | null;
+  managedFollowerLast: string | null;
 };
 
-function partnershipLabel(
-  ownerFirst: string | null,
-  ownerLast: string | null,
-  partnerFirst: string | null,
-  partnerLast: string | null
-): string {
-  const ownerName = [ownerFirst, ownerLast].filter(Boolean).join(" ").trim();
-  const partnerName = [partnerFirst, partnerLast].filter(Boolean).join(" ").trim();
+function partnershipLabel(row: {
+  managedLeaderFirst: string | null;
+  managedLeaderLast: string | null;
+  managedFollowerFirst: string | null;
+  managedFollowerLast: string | null;
+  ownerFirst: string | null;
+  ownerLast: string | null;
+  partnerFirst: string | null;
+  partnerLast: string | null;
+}): string {
+  if (row.managedLeaderFirst != null) {
+    const leaderName = [row.managedLeaderFirst, row.managedLeaderLast]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    const followerName = [row.managedFollowerFirst, row.managedFollowerLast]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    return followerName ? `${leaderName} & ${followerName}` : leaderName;
+  }
+
+  const ownerName = [row.ownerFirst, row.ownerLast].filter(Boolean).join(" ").trim();
+  const partnerName = [row.partnerFirst, row.partnerLast].filter(Boolean).join(" ").trim();
   return partnerName ? `${ownerName} & ${partnerName}` : ownerName;
 }
 
 function mapSubmissionRow(row: JoinedSubmissionRow) {
-  const partnership = partnershipLabel(
-    row.ownerFirst,
-    row.ownerLast,
-    row.partnerFirst,
-    row.partnerLast
-  );
+  const partnership = partnershipLabel(row);
 
   return {
     id: row.id,
@@ -90,6 +105,7 @@ async function fetchUserSubmissionRows(
   filters?: { eventId?: string; submissionId?: string }
 ) {
   const songOwner = alias(users, "song_owner");
+  const managedPartnership = alias(managedPartnerships, "managed_partnership");
   const conditions = [eq(eventSongSubmissions.submittedByUserId, userId)];
   if (filters?.eventId) {
     conditions.push(eq(eventSongSubmissions.eventId, filters.eventId));
@@ -116,12 +132,17 @@ async function fetchUserSubmissionRows(
       ownerLast: songOwner.lastName,
       partnerFirst: partners.firstName,
       partnerLast: partners.lastName,
+      managedLeaderFirst: managedPartnership.leaderFirstName,
+      managedLeaderLast: managedPartnership.leaderLastName,
+      managedFollowerFirst: managedPartnership.followerFirstName,
+      managedFollowerLast: managedPartnership.followerLastName,
     })
     .from(eventSongSubmissions)
     .innerJoin(events, eq(events.id, eventSongSubmissions.eventId))
     .innerJoin(songs, eq(songs.id, eventSongSubmissions.songId))
     .leftJoin(songOwner, eq(songOwner.id, songs.userId))
     .leftJoin(partners, eq(partners.id, songs.partnerId))
+    .leftJoin(managedPartnership, eq(managedPartnership.id, songs.managedPartnershipId))
     .where(and(...conditions))
     .orderBy(desc(eventSongSubmissions.createdAt));
 }

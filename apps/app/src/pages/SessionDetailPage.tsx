@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { SignedIn, SignedOut, SignInButton, useAuth, useUser } from "@clerk/clerk-react";
-import type { ApiSession, ApiQueueEntry, ApiLeadingPair, ApiSong } from "@deejaytools/schemas";
+import type { ApiSession, ApiQueueEntry, ApiLeadingPair, ApiSong, ApiEventSongSubmission } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -60,6 +60,7 @@ export default function ApiSessionPage() {
   const [waiting, setWaiting] = useState<ApiQueueEntry[]>([]);
   const [pairs, setPairs] = useState<ApiLeadingPair[]>([]);
   const [songs, setSongs] = useState<ApiSong[]>([]);
+  const [eventSubmissions, setEventSubmissions] = useState<ApiEventSongSubmission[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkinOpen, setCheckinOpen] = useState(false);
 
@@ -72,8 +73,11 @@ export default function ApiSessionPage() {
   const [now, setNow] = useState(Date.now());
 
   const loadSession = useCallback(() => {
-    if (!id) return;
-    return api.get<ApiSession>(`/v1/sessions/${id}`).then(setSession);
+    if (!id) return Promise.resolve(undefined);
+    return api.get<ApiSession>(`/v1/sessions/${id}`).then((s) => {
+      setSession(s);
+      return s;
+    });
   }, [api, id]);
 
   const loadQueue = useCallback(async () => {
@@ -86,26 +90,45 @@ export default function ApiSessionPage() {
     setWaiting(w);
   }, [api, id]);
 
-  const loadExtras = useCallback(async () => {
-    // /v1/partners/leading-pairs and /v1/songs both require auth — skip when
-    // viewing as a signed-out visitor. The session info and queues stay visible.
-    if (!isSignedIn) {
-      setPairs([]);
-      setSongs([]);
-      return;
-    }
-    const [p, s] = await Promise.all([
-      api.get<ApiLeadingPair[]>("/v1/partners/leading-pairs"),
-      api.get<ApiSong[]>("/v1/songs"),
-    ]);
-    setPairs(p);
-    setSongs(s);
-  }, [api, isSignedIn]);
+  const loadExtras = useCallback(
+    async (eventId?: string | null) => {
+      // /v1/partners/leading-pairs and /v1/songs both require auth — skip when
+      // viewing as a signed-out visitor. The session info and queues stay visible.
+      if (!isSignedIn) {
+        setPairs([]);
+        setSongs([]);
+        setEventSubmissions(null);
+        return;
+      }
+
+      const submissionsPromise =
+        eventId != null
+          ? api
+              .get<ApiEventSongSubmission[]>(
+                `/v1/event-song-submissions?event_id=${encodeURIComponent(eventId)}`
+              )
+              .catch(() => null)
+          : Promise.resolve(null);
+
+      const [p, s, subs] = await Promise.all([
+        api.get<ApiLeadingPair[]>("/v1/partners/leading-pairs"),
+        api.get<ApiSong[]>("/v1/songs"),
+        submissionsPromise,
+      ]);
+      setPairs(p);
+      setSongs(s);
+      setEventSubmissions(subs);
+    },
+    [api, isSignedIn]
+  );
 
   const refresh = useCallback(() => {
     if (!id) return;
     setLoading(true);
-    Promise.all([loadSession(), loadQueue(), loadExtras()])
+    loadSession()
+      .then((loadedSession) =>
+        Promise.all([loadQueue(), loadExtras(loadedSession?.event_id ?? null)])
+      )
       .catch((e: Error) => toast.error(e.message))
       .finally(() => setLoading(false));
   }, [id, loadExtras, loadQueue, loadSession]);
@@ -138,10 +161,22 @@ export default function ApiSessionPage() {
     return m;
   }, [pairs]);
 
+  // Songs eligible for check-in — filtered to event submissions when known.
+  const checkinSongs = useMemo(() => {
+    if (!session?.event_id || eventSubmissions === null) {
+      return songs;
+    }
+    const submittedSongIds = new Set(eventSubmissions.map((s) => s.song_id));
+    return songs.filter((s) => submittedSongIds.has(s.id));
+  }, [songs, session?.event_id, eventSubmissions]);
+
+  const noEventSongs =
+    !!session?.event_id && eventSubmissions !== null && checkinSongs.length === 0;
+
   // Derived check-in context from the selected song
   const selectedSong = useMemo(
-    () => songs.find((s) => s.id === fSongId) ?? null,
-    [songs, fSongId]
+    () => checkinSongs.find((s) => s.id === fSongId) ?? null,
+    [checkinSongs, fSongId]
   );
 
   const derivedPair = useMemo(() => {
@@ -232,7 +267,7 @@ export default function ApiSessionPage() {
   const canCheckIn =
     !!session &&
     checkinWindowOpen &&
-    songs.length > 0;
+    checkinSongs.length > 0;
 
   const openCheckin = () => {
     setFSongId("");
@@ -350,6 +385,14 @@ export default function ApiSessionPage() {
               {now < session.checkin_opens_at
                 ? `Check-in opens ${formatDateTimeShort(session.checkin_opens_at, session.event_timezone)}`
                 : "Check-in closed"}
+            </p>
+          ) : !canCheckIn && checkinWindowOpen && noEventSongs ? (
+            <p className="text-sm text-muted-foreground">
+              You haven&apos;t added any songs to this event yet.{" "}
+              <Link to="/my-content" className="underline">
+                Add them on My Content
+              </Link>
+              .
             </p>
           ) : !canCheckIn && checkinWindowOpen && songs.length === 0 ? (
             <p className="text-sm text-muted-foreground">
@@ -621,22 +664,32 @@ export default function ApiSessionPage() {
 
             <form onSubmit={submitCheckin} className="space-y-4">
               {/* Song — drives everything else */}
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Song</label>
-                <select
-                  className={FIELD_INPUT_CLASS}
-                  value={fSongId}
-                  onChange={(e) => setFSongId(e.target.value)}
-                  autoFocus
-                >
-                  <option value="">Select a song…</option>
-                  {songs.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {songLabel(s)}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {noEventSongs ? (
+                <p className="text-sm text-muted-foreground">
+                  You haven&apos;t added any songs to this event yet.{" "}
+                  <Link to="/my-content" className="underline">
+                    Add them on My Content
+                  </Link>
+                  .
+                </p>
+              ) : (
+                <div>
+                  <label className={FIELD_LABEL_CLASS}>Song</label>
+                  <select
+                    className={FIELD_INPUT_CLASS}
+                    value={fSongId}
+                    onChange={(e) => setFSongId(e.target.value)}
+                    autoFocus
+                  >
+                    <option value="">Select a song…</option>
+                    {checkinSongs.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {songLabel(s)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Confirmation card — shown once a song is selected */}
               {fSongId && selectedSong && (
@@ -707,7 +760,12 @@ export default function ApiSessionPage() {
                 />
               </div>
 
-              <Button type="submit" disabled={submitting || selectedEntityInQueue} size="lg" className="w-full">
+              <Button
+                type="submit"
+                disabled={submitting || selectedEntityInQueue || noEventSongs}
+                size="lg"
+                className="w-full"
+              >
                 {submitting ? "Submitting…" : "Check in"}
               </Button>
             </form>

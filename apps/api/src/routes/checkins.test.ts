@@ -52,6 +52,11 @@ const closedSession = {
   floorTrialEndsAt: now - 1000,
 };
 
+const eventSession = {
+  ...openSession,
+  eventId: "evt_1",
+};
+
 describe("POST /v1/checkins", () => {
   beforeEach(() => {
     resetSelectQueue();
@@ -146,6 +151,72 @@ describe("POST /v1/checkins", () => {
       }),
     });
     expect(res.status).toBe(409);
+  });
+
+  it("returns 400 when the song has not been submitted to the session event", async () => {
+    enqueueSelectResult([eventSession]);
+    enqueueSelectResult([{ userAId: "user_test123", partnerBId: null }]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([]);
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "sess1",
+        divisionName: "Classic",
+        entityPairId: "p1",
+        songId: "song1",
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await readJson<ErrorEnvelope>(res);
+    expect(body.error.message).toBe(
+      "This song hasn't been submitted to this event. Add it to the event on My Content before checking in."
+    );
+  });
+
+  it("returns 201 when the song has been submitted to the session event", async () => {
+    enqueueSelectResult([eventSession]);
+    enqueueSelectResult([{ userAId: "user_test123", partnerBId: null }]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([{ id: "sub_1" }]);
+    enqueueSelectResult([eventSession]);
+    enqueueSelectResult([{ isPriority: true, priorityRunLimit: 3 }]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([{ n: 0 }]);
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "sess1",
+        divisionName: "Classic",
+        entityPairId: "p1",
+        songId: "song1",
+      }),
+    });
+    expect(res.status).toBe(201);
+    const body = await readJson<SuccessEnvelope<{ initialQueue: string }>>(res);
+    assertSuccessEnvelope(body);
+    expect(body.data.initialQueue).toBe("priority");
+  });
+
+  it("skips the submission gate for sessions with no event", async () => {
+    enqueueSelectResult([openSession]);
+    enqueueSelectResult([{ userAId: "user_test123", partnerBId: null }]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([openSession]);
+    enqueueSelectResult([{ isPriority: false, priorityRunLimit: 0 }]);
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "sess1",
+        divisionName: "Classic",
+        entityPairId: "p1",
+        songId: "song1",
+      }),
+    });
+    expect(res.status).toBe(201);
   });
 
   it("returns 201 for pair check-in into priority division → priority queue", async () => {

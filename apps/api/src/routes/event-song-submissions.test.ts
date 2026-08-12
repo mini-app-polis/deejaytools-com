@@ -48,6 +48,10 @@ const joinedRow = {
   ownerLast: "Smith",
   partnerFirst: "Bob",
   partnerLast: "Jones",
+  managedLeaderFirst: null,
+  managedLeaderLast: null,
+  managedFollowerFirst: null,
+  managedFollowerLast: null,
 };
 
 describe("GET /v1/event-song-submissions", () => {
@@ -73,6 +77,32 @@ describe("GET /v1/event-song-submissions", () => {
     });
     expect(body.data[0]).toHaveProperty("event_status");
     expect(body.data[0]).toHaveProperty("song_label");
+    expect(body.data[0]).toMatchObject({
+      song_label: "Alice Smith & Bob Jones Classic 2026 Sky High v03",
+    });
+  });
+
+  it("uses the managed partnership label when the song has managed_partnership_id", async () => {
+    enqueueSelectResult([
+      {
+        ...joinedRow,
+        ownerFirst: "Manager",
+        ownerLast: "User",
+        partnerFirst: null,
+        partnerLast: null,
+        managedLeaderFirst: "Wendal",
+        managedLeaderLast: "Smith",
+        managedFollowerFirst: "Lara",
+        managedFollowerLast: "Jones",
+      },
+    ]);
+    const res = await app.request(BASE, { headers: authHeaders() });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<unknown[]>>(res);
+    assertSuccessListEnvelope(body);
+    expect(body.data[0]).toMatchObject({
+      song_label: "Wendal Smith & Lara Jones Classic 2026 Sky High v03",
+    });
   });
 
   it("filters by event_id when provided", async () => {

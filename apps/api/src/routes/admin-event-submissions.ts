@@ -4,7 +4,7 @@ import { desc, eq } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { db } from "../db/index.js";
-import { eventSongSubmissions, events, partners, songs, users } from "../db/schema.js";
+import { eventSongSubmissions, events, managedPartnerships, partners, songs, users } from "../db/schema.js";
 import { buildStructuredSongLabel } from "../lib/songLabel.js";
 import { zValidator } from "../lib/validate.js";
 import { requireAdmin } from "../middleware/auth.js";
@@ -14,6 +14,33 @@ const logger = createLogger("deejaytools-api");
 const listQuery = z.object({
   event_id: z.string().min(1),
 });
+
+function partnershipLabel(row: {
+  managedLeaderFirst: string | null;
+  managedLeaderLast: string | null;
+  managedFollowerFirst: string | null;
+  managedFollowerLast: string | null;
+  ownerFirst: string | null;
+  ownerLast: string | null;
+  partnerFirst: string | null;
+  partnerLast: string | null;
+}): string {
+  if (row.managedLeaderFirst != null) {
+    const leaderName = [row.managedLeaderFirst, row.managedLeaderLast]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    const followerName = [row.managedFollowerFirst, row.managedFollowerLast]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    return followerName ? `${leaderName} & ${followerName}` : leaderName;
+  }
+
+  const ownerName = [row.ownerFirst, row.ownerLast].filter(Boolean).join(" ").trim();
+  const partnerName = [row.partnerFirst, row.partnerLast].filter(Boolean).join(" ").trim();
+  return partnerName ? `${ownerName} & ${partnerName}` : ownerName;
+}
 
 export const adminEventSubmissionRoutes = new Hono();
 
@@ -25,6 +52,7 @@ adminEventSubmissionRoutes.get(
     const { event_id: eventId } = c.req.valid("query");
     const songOwner = alias(users, "song_owner");
     const submitter = alias(users, "submitter");
+    const managedPartnership = alias(managedPartnerships, "managed_partnership");
 
     try {
       const rows = await db
@@ -43,6 +71,10 @@ adminEventSubmissionRoutes.get(
           ownerLast: songOwner.lastName,
           partnerFirst: partners.firstName,
           partnerLast: partners.lastName,
+          managedLeaderFirst: managedPartnership.leaderFirstName,
+          managedLeaderLast: managedPartnership.leaderLastName,
+          managedFollowerFirst: managedPartnership.followerFirstName,
+          managedFollowerLast: managedPartnership.followerLastName,
           submitterEmail: submitter.email,
         })
         .from(eventSongSubmissions)
@@ -50,6 +82,7 @@ adminEventSubmissionRoutes.get(
         .innerJoin(songs, eq(songs.id, eventSongSubmissions.songId))
         .leftJoin(songOwner, eq(songOwner.id, songs.userId))
         .leftJoin(partners, eq(partners.id, songs.partnerId))
+        .leftJoin(managedPartnership, eq(managedPartnership.id, songs.managedPartnershipId))
         .innerJoin(submitter, eq(submitter.id, eventSongSubmissions.submittedByUserId))
         .where(eq(eventSongSubmissions.eventId, eventId))
         .orderBy(desc(eventSongSubmissions.createdAt));
@@ -57,9 +90,7 @@ adminEventSubmissionRoutes.get(
       return c.json(
         successList(
           rows.map((r) => {
-            const ownerName = [r.ownerFirst, r.ownerLast].filter(Boolean).join(" ").trim();
-            const partnerName = [r.partnerFirst, r.partnerLast].filter(Boolean).join(" ").trim();
-            const partnershipLabel = partnerName ? `${ownerName} & ${partnerName}` : ownerName;
+            const partnershipLabelValue = partnershipLabel(r);
 
             return {
               id: r.id,
@@ -68,7 +99,7 @@ adminEventSubmissionRoutes.get(
               division: r.songDivision,
               song_id: r.songId,
               song_label: buildStructuredSongLabel({
-                partnership: partnershipLabel,
+                partnership: partnershipLabelValue,
                 division: r.songDivision,
                 seasonYear: r.songSeasonYear,
                 routineName: r.songRoutineName,
@@ -76,7 +107,7 @@ adminEventSubmissionRoutes.get(
                 displayName: r.songDisplayName,
                 songId: r.songId,
               }),
-              partnership_label: partnershipLabel,
+              partnership_label: partnershipLabelValue,
               submitter_email: r.submitterEmail ?? "",
               created_at: r.createdAt,
             };
