@@ -347,11 +347,3 @@ export const createManagedPartnershipBodySchema = z.object({
   follower_first_name: z.string().trim().min(1).max(100),
   follower_last_name: z.string().trim().min(1).max(100),
 });
-
-export const createManagedSongBodySchema = z.object({
-  managed_partnership_id: z.string().min(1),
-  division: z.string().min(1),
-  routine_name: z.string().optional(),
-  personal_descriptor: z.string().optional(),
-  original_filename: z.string().optional(),
-});

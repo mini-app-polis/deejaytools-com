@@ -2,7 +2,6 @@ import { File } from "node:buffer";
 import { mkdir, writeFile, readdir, readFile, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { CommonErrors, createLogger, error, success, successList } from "common-typescript-utils";
-import { createManagedSongBodySchema } from "@deejaytools/schemas";
 import { zValidator } from "../lib/validate.js";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -426,33 +425,6 @@ songRoutes.post("/", requireAuth, zValidator("json", createBody), async (c) => {
   const [row] = await db.select().from(songs).where(eq(songs.id, id)).limit(1);
   return c.json(success(mapSong({ ...row!, partner_first_name: null, partner_last_name: null })), 201);
 });
-
-/**
- * POST /v1/songs/managed
- *
- * STUB(db): needs songs.managed_partnership_id + managed check-in entity — remove when schema lands
- *
- * Future work:
- *   - songs needs a `managed_partnership_id` column (→ managed_partnerships)
- *   - the real version will route audio bytes through the existing chunk pipeline
- *   - the managed CHECK-IN flow additionally needs a managed-pair entity on
- *     checkins/queue_entries/runs (deferred — see STUBS.md)
- */
-songRoutes.post(
-  "/managed",
-  requireAuth,
-  zValidator("json", createManagedSongBodySchema),
-  async (c) => {
-    // STUB(db): needs songs.managed_partnership_id + managed check-in entity — remove when schema lands
-    return c.json(
-      error(
-        "DB_STUB_PENDING",
-        "Uploading on behalf of a managed partnership is not persisted yet — database schema pending."
-      ),
-      501
-    );
-  }
-);
 
 songRoutes.get("/:id", requireAuth, async (c) => {
   const userId = c.get("user").userId;
