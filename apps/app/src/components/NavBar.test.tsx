@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -111,5 +111,38 @@ describe("NavBar — wordmark", () => {
     expect(screen.getByAltText("DeejayTools")).toBeInTheDocument();
     expect(screen.getByText("DeejayTools.com")).toBeInTheDocument();
     expect(screen.getByText(/^v\d/)).toBeInTheDocument();
+  });
+});
+
+describe("NavBar — environment badge", () => {
+  const originalLocation = window.location;
+
+  afterEach(() => {
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: originalLocation,
+    });
+  });
+
+  function setHostname(hostname: string) {
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { ...originalLocation, hostname },
+    });
+  }
+
+  it("shows a DEV badge on non-production hosts (e.g. localhost)", () => {
+    signedIn = false;
+    isAdmin = false;
+    renderNav();
+    expect(screen.getByText("DEV")).toBeInTheDocument();
+  });
+
+  it("hides the DEV badge on the production host", () => {
+    signedIn = false;
+    isAdmin = false;
+    setHostname("deejaytools.com");
+    renderNav();
+    expect(screen.queryByText("DEV")).toBeNull();
   });
 });

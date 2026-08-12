@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { isProdHost } from "@/lib/env";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import pkg from "../../../../package.json";
 
@@ -103,12 +104,19 @@ export default function NavBar() {
             >
               DeejayTools.com
             </span>
-            <span
-              className="text-[10px] text-muted-foreground"
-              style={{ fontFamily: "'DM Mono', monospace" }}
-            >
-              v{pkg.version}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span
+                className="text-[10px] text-muted-foreground"
+                style={{ fontFamily: "'DM Mono', monospace" }}
+              >
+                v{pkg.version}
+              </span>
+              {!isProdHost() && (
+                <span className="rounded bg-amber-500/20 text-amber-500 text-[10px] px-1.5 py-0.5 font-medium">
+                  DEV
+                </span>
+              )}
+            </div>
           </div>
         </a>
 
