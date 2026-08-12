@@ -467,3 +467,103 @@ describe("AddSongPage — Upload chunk loop", () => {
     }
   });
 });
+
+describe("AddSongPage — managed partnership upload", () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  const samplePartnership = {
+    id: "mp_1",
+    user_id: "u1",
+    leader_first_name: "Wendal",
+    leader_last_name: "Smith",
+    follower_first_name: "Lara",
+    follower_last_name: "Jones",
+    created_at: 1,
+    updated_at: 2,
+  };
+
+  beforeEach(() => {
+    apiGet.mockReset();
+    apiPost.mockReset();
+    getTokenMock.mockReset();
+    getTokenMock.mockResolvedValue("fake-token");
+    vi.mocked(toast.error).mockClear();
+    vi.mocked(toast.success).mockClear();
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/partners") return Promise.resolve([]);
+      if (path === "/v1/auth/me") {
+        return Promise.resolve({ id: "u1", first_name: "Ann", last_name: "One" });
+      }
+      if (path === "/v1/managed-partnerships") return Promise.resolve([samplePartnership]);
+      return Promise.resolve([]);
+    });
+    fetchSpy = vi.spyOn(global, "fetch") as ReturnType<typeof vi.spyOn>;
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+  });
+
+  it("uploads via /v1/songs/upload/chunk with managed_partnership_id and surfaces a 501 stub error", async () => {
+    fetchSpy.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: "DB_STUB_PENDING",
+            message:
+              "Uploading on behalf of a managed partnership is not persisted yet — database schema pending.",
+          },
+        }),
+        { status: 501 }
+      )
+    );
+
+    const user = userEvent.setup();
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByLabelText(/audio file/i)).toBeInTheDocument()
+    );
+
+    const uploadForTrigger = screen.getByRole("combobox", { name: /uploading for/i });
+    await user.click(uploadForTrigger);
+    await user.click(
+      await screen.findByRole("option", { name: /wendal smith & lara jones \(managed\)/i })
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/leader: wendal smith · follower: lara jones/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("combobox", { name: /^partner$/i })).toBeNull();
+
+    const divisionTrigger = screen.getByRole("combobox", { name: /division/i });
+    await user.click(divisionTrigger);
+    await user.click(await screen.findByRole("option", { name: /^classic$/i }));
+
+    const file = new File(["audio"], "routine.mp3", { type: "audio/mpeg" });
+    await user.upload(screen.getByLabelText(/audio file/i), file);
+
+    await user.click(screen.getByRole("button", { name: /upload song/i }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining("/v1/songs/upload/chunk"),
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+
+    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    const body = init.body as FormData;
+    expect(body.get("managed_partnership_id")).toBe("mp_1");
+    expect(body.get("partner_id")).toBeNull();
+    expect(body.get("division")).toBe("Classic");
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        "Uploading on behalf of a managed partnership is not persisted yet — database schema pending."
+      );
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(apiPost).not.toHaveBeenCalled();
+  });
+});

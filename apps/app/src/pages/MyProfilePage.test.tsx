@@ -61,6 +61,7 @@ beforeEach(() => {
   apiGet.mockImplementation((path: string) => {
     if (path === "/v1/partners") return Promise.resolve([]);
     if (path === "/v1/teams") return Promise.resolve([]);
+    if (path === "/v1/managed-partnerships") return Promise.resolve([]);
     return Promise.resolve(undefined);
   });
   meState.me = {

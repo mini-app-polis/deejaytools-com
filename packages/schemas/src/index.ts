@@ -328,3 +328,30 @@ export const teamIdentifierSchema = z
 export const createTeamBodySchema = z.object({
   identifier: teamIdentifierSchema,
 });
+
+export const ApiManagedPartnershipSchema = z.object({
+  id: z.string(),
+  user_id: z.string(),
+  leader_first_name: z.string(),
+  leader_last_name: z.string(),
+  follower_first_name: z.string(),
+  follower_last_name: z.string(),
+  created_at: z.number(),
+  updated_at: z.number(),
+});
+export type ApiManagedPartnership = z.infer<typeof ApiManagedPartnershipSchema>;
+
+export const createManagedPartnershipBodySchema = z.object({
+  leader_first_name: z.string().trim().min(1).max(100),
+  leader_last_name: z.string().trim().min(1).max(100),
+  follower_first_name: z.string().trim().min(1).max(100),
+  follower_last_name: z.string().trim().min(1).max(100),
+});
+
+export const createManagedSongBodySchema = z.object({
+  managed_partnership_id: z.string().min(1),
+  division: z.string().min(1),
+  routine_name: z.string().optional(),
+  personal_descriptor: z.string().optional(),
+  original_filename: z.string().optional(),
+});

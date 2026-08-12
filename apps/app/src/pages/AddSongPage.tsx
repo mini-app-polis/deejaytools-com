@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DIVISIONS } from "@deejaytools/schemas";
+import { DIVISIONS, type ApiManagedPartnership } from "@deejaytools/schemas";
 import type { AuthMe as MeResponse } from "@/hooks/useAuthMe";
 
 const DIVISION_OPTIONS = DIVISIONS;
@@ -29,6 +29,7 @@ const DIVISION_OPTIONS = DIVISIONS;
 const SOLO_ALLOWED_DIVISIONS = new Set<string>(["Teams", "Exhibition", "My Division Is Not Listed", "Cabaret"]);
 
 const SOLO_PARTNER_VALUE = "__solo__";
+const UPLOAD_FOR_SELF = "__self__";
 
 const apiBase = import.meta.env.VITE_API_URL ?? "";
 
@@ -95,11 +96,20 @@ function partnerLabel(p: Partner) {
   return `${p.first_name} ${p.last_name}`.trim();
 }
 
+function managedPartnershipLabel(p: ApiManagedPartnership) {
+  return `${p.leader_first_name} ${p.leader_last_name} & ${p.follower_first_name} ${p.follower_last_name} (managed)`;
+}
+
+function managedPartnershipSummary(p: ApiManagedPartnership) {
+  return `Leader: ${p.leader_first_name} ${p.leader_last_name} · Follower: ${p.follower_first_name} ${p.follower_last_name}`;
+}
+
 export default function AddSongPage() {
   const api = useApiClient();
   const { getToken } = useAuth();
 
   const [partners, setPartners] = useState<Partner[]>([]);
+  const [managedPartnerships, setManagedPartnerships] = useState<ApiManagedPartnership[]>([]);
   const [me, setMe] = useState<MeResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -112,6 +122,7 @@ export default function AddSongPage() {
   const [routineName, setRoutineName] = useState("");
   const [descriptor, setDescriptor] = useState("");
   const [selectedPartnerId, setSelectedPartnerId] = useState("");
+  const [uploadFor, setUploadFor] = useState<string>(UPLOAD_FOR_SELF);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fileInputKey, setFileInputKey] = useState(0);
   const [formKey, setFormKey] = useState(0);
@@ -134,11 +145,13 @@ export default function AddSongPage() {
     Promise.all([
       api.get<Partner[]>("/v1/partners"),
       api.get<MeResponse>("/v1/auth/me"),
+      api.get<ApiManagedPartnership[]>("/v1/managed-partnerships"),
     ])
-      .then(([p, m]) => {
+      .then(([p, m, mp]) => {
         if (!cancelled) {
           setPartners(p);
           setMe(m);
+          setManagedPartnerships(mp);
           // Default the partner selector to the first partner the user has,
           // since most uploads are partnered. Only set it on initial load
           // when nothing is selected yet — we don't want to override a
@@ -171,7 +184,11 @@ export default function AddSongPage() {
       toast.error("Please select a division.");
       return;
     }
-    if (!SOLO_ALLOWED_DIVISIONS.has(division) && !selectedPartnerId) {
+    if (
+      uploadFor === UPLOAD_FOR_SELF &&
+      !SOLO_ALLOWED_DIVISIONS.has(division) &&
+      !selectedPartnerId
+    ) {
       toast.error("A partner is required for this division.");
       return;
     }
@@ -212,7 +229,11 @@ export default function AddSongPage() {
           form.set("original_filename", file.name);
           form.set("mime_type", file.type || "audio/mpeg");
           form.set("division", division);
-          form.set("partner_id", selectedPartnerId || "");
+          if (uploadFor === UPLOAD_FOR_SELF) {
+            form.set("partner_id", selectedPartnerId || "");
+          } else {
+            form.set("managed_partnership_id", uploadFor);
+          }
           form.set("routine_name", routineName.trim() || "");
           form.set("personal_descriptor", descriptor.trim() || "");
 
@@ -248,6 +269,8 @@ export default function AddSongPage() {
             const json = await res.json().catch(() => null) as { error?: { message?: string } } | null;
             lastErr = new Error(json?.error?.message ?? `Upload failed (${res.status})`);
             if (res.status === 401) throw lastErr;
+            // STUB(db): needs songs.managed_partnership_id + managed check-in entity — remove when schema lands
+            if (res.status === 501) throw lastErr;
             continue;
           }
 
@@ -338,6 +361,11 @@ export default function AddSongPage() {
   };
 
   const hasFullName = Boolean(me?.first_name?.trim() && me?.last_name?.trim());
+  const selectedManaged =
+    uploadFor === UPLOAD_FOR_SELF
+      ? null
+      : managedPartnerships.find((p) => p.id === uploadFor) ?? null;
+  const isManagedUpload = uploadFor !== UPLOAD_FOR_SELF;
 
   if (loading) {
     return (
@@ -411,53 +439,93 @@ export default function AddSongPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {hasFullName ? (
-              <p className="text-sm text-muted-foreground">
-                Uploading as:{" "}
-                <span className="font-medium text-foreground">
-                  {me!.first_name} {me!.last_name}
-                </span>
-              </p>
-            ) : (
-              <p className="text-sm text-amber-600 dark:text-amber-500">
-                Set your first and last name on the{" "}
-                <Link to="/my-profile" className="underline font-medium">
-                  My Profile
-                </Link>{" "}
-                page so we can label your uploads correctly.
-              </p>
-            )}
-
             <form onSubmit={(e) => void handleUpload(e)} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="song-partner">Partner</Label>
+                <Label htmlFor="song-upload-for">Uploading for</Label>
                 <Select
                   key={formKey}
-                  value={selectedPartnerId === "" ? SOLO_PARTNER_VALUE : selectedPartnerId}
-                  onValueChange={(v) =>
-                    setSelectedPartnerId(v === SOLO_PARTNER_VALUE ? "" : v)
-                  }
+                  value={uploadFor}
+                  onValueChange={setUploadFor}
                 >
-                  <SelectTrigger id="song-partner">
-                    <SelectValue placeholder="No partner" />
+                  <SelectTrigger id="song-upload-for">
+                    <SelectValue placeholder="Myself" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={SOLO_PARTNER_VALUE}>No partner</SelectItem>
-                    {partners.map((p) => (
+                    <SelectItem value={UPLOAD_FOR_SELF}>Myself</SelectItem>
+                    {managedPartnerships.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
-                        {partnerLabel(p)}
+                        {managedPartnershipLabel(p)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">
-                  Add partners on the{" "}
-                  <Link to="/my-profile" className="underline">
-                    My Profile
-                  </Link>{" "}
-                  page.
-                </p>
+                {managedPartnerships.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Add managed partnerships on{" "}
+                    <Link to="/my-profile" className="underline">
+                      My Profile
+                    </Link>
+                    .
+                  </p>
+                )}
               </div>
+
+              {!isManagedUpload && (
+                hasFullName ? (
+                  <p className="text-sm text-muted-foreground">
+                    Uploading as:{" "}
+                    <span className="font-medium text-foreground">
+                      {me!.first_name} {me!.last_name}
+                    </span>
+                  </p>
+                ) : (
+                  <p className="text-sm text-amber-600 dark:text-amber-500">
+                    Set your first and last name on the{" "}
+                    <Link to="/my-profile" className="underline font-medium">
+                      My Profile
+                    </Link>{" "}
+                    page so we can label your uploads correctly.
+                  </p>
+                )
+              )}
+
+              {isManagedUpload && selectedManaged && (
+                <p className="text-sm text-muted-foreground">
+                  {managedPartnershipSummary(selectedManaged)}
+                </p>
+              )}
+
+              {!isManagedUpload && (
+                <div className="space-y-2">
+                  <Label htmlFor="song-partner">Partner</Label>
+                  <Select
+                    key={formKey}
+                    value={selectedPartnerId === "" ? SOLO_PARTNER_VALUE : selectedPartnerId}
+                    onValueChange={(v) =>
+                      setSelectedPartnerId(v === SOLO_PARTNER_VALUE ? "" : v)
+                    }
+                  >
+                    <SelectTrigger id="song-partner">
+                      <SelectValue placeholder="No partner" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={SOLO_PARTNER_VALUE}>No partner</SelectItem>
+                      {partners.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {partnerLabel(p)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Add partners on the{" "}
+                    <Link to="/my-profile" className="underline">
+                      My Profile
+                    </Link>{" "}
+                    page.
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="song-division">Division</Label>

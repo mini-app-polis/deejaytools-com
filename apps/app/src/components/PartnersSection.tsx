@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -217,6 +218,7 @@ export default function PartnersSection() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editing ? "Edit partner" : "Add partner"}</DialogTitle>
+            <DialogDescription>Add or edit one of your dance partners.</DialogDescription>
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={onSubmit} className="space-y-4">
@@ -289,6 +291,7 @@ export default function PartnersSection() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Remove partner?</DialogTitle>
+            <DialogDescription>Remove this partner from your list.</DialogDescription>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             {deleteTarget?.first_name} {deleteTarget?.last_name} will be removed from your list.

@@ -24,7 +24,7 @@ async function parseEnvelope<T>(res: Response): Promise<T> {
     // 4xx are expected (validation, auth, not-found) — no need to track.
     // 5xx are unexpected server failures: forward to Sentry so they surface
     // even when the component swallows them with a toast.
-    // STUB(db): needs `teams` table — remove when schema lands
+    // STUB(db): shared guard — skip Sentry for stubbed endpoints; remove only when NO DB_STUB_PENDING stubs remain.
     if (
       res.status >= 500 &&
       !("error" in json && json.error.code === "DB_STUB_PENDING")

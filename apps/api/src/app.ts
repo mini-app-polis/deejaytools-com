@@ -21,6 +21,7 @@ import { queueRoutes } from "./routes/queue.js";
 import { runRoutes } from "./routes/runs.js";
 import { songRoutes } from "./routes/songs.js";
 import { teamsRoutes } from "./routes/teams.js";
+import { managedPartnershipsRoutes } from "./routes/managed-partnerships.js";
 import { feedbackRoutes } from "./routes/feedback.js";
 import { tickSessionStatuses } from "./services/cron.js";
 import { rateLimitMiddleware } from "./middleware/rate-limit.js";
@@ -120,6 +121,7 @@ app.route("/v1/runs", runRoutes);
 app.route("/v1/pairs", pairRoutes);
 app.route("/v1/partners", partnerRoutes);
 app.route("/v1/teams", teamsRoutes);
+app.route("/v1/managed-partnerships", managedPartnershipsRoutes);
 app.route("/v1/songs", songRoutes);
 // Intentionally public — read-only historical catalog, no user data.
 app.route("/v1/legacy-songs", legacySongRoutes);

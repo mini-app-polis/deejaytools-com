@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import PartnersSection from "@/components/PartnersSection";
 import TeamsSection from "@/components/TeamsSection";
+import ManagedPartnershipsSection from "@/components/ManagedPartnershipsSection";
 import { useAuthMe } from "@/hooks/useAuthMe";
 
 const profileSchema = z.object({
@@ -118,6 +119,7 @@ export default function MyProfilePage() {
 
       <PartnersSection />
       <TeamsSection />
+      <ManagedPartnershipsSection />
     </div>
   );
 }

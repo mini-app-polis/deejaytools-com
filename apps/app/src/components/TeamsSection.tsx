@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -150,6 +151,7 @@ export default function TeamsSection() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editing ? "Edit team" : "Add team"}</DialogTitle>
+            <DialogDescription>Add or edit a team name.</DialogDescription>
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={onSubmit} className="space-y-4">
@@ -178,6 +180,7 @@ export default function TeamsSection() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Remove team?</DialogTitle>
+            <DialogDescription>Remove this team from your list.</DialogDescription>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             {deleteTarget?.identifier} will be removed from your list.

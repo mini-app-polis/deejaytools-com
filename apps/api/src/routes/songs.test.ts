@@ -588,6 +588,18 @@ describe("POST /v1/songs/upload/chunk", () => {
     expect(body1.data.complete).toBe(true);
     expect(vi.mocked(drive.uploadSongToDrive)).toHaveBeenCalledOnce();
   });
+
+  it("returns 501 DB_STUB_PENDING when managed_partnership_id is set", async () => {
+    const res = await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: makeChunkForm({ managed_partnership_id: "mp_1", partner_id: "" }),
+    });
+    expect(res.status).toBe(501);
+    const body = await readJson<ErrorEnvelope>(res);
+    assertErrorEnvelope(body);
+    expect(body.error.code).toBe("DB_STUB_PENDING");
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -2,6 +2,7 @@ import { File } from "node:buffer";
 import { mkdir, writeFile, readdir, readFile, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { CommonErrors, createLogger, error, success, successList } from "common-typescript-utils";
+import { createManagedSongBodySchema } from "@deejaytools/schemas";
 import { zValidator } from "../lib/validate.js";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -426,6 +427,33 @@ songRoutes.post("/", requireAuth, zValidator("json", createBody), async (c) => {
   return c.json(success(mapSong({ ...row!, partner_first_name: null, partner_last_name: null })), 201);
 });
 
+/**
+ * POST /v1/songs/managed
+ *
+ * STUB(db): needs songs.managed_partnership_id + managed check-in entity — remove when schema lands
+ *
+ * Future work:
+ *   - songs needs a `managed_partnership_id` column (→ managed_partnerships)
+ *   - the real version will route audio bytes through the existing chunk pipeline
+ *   - the managed CHECK-IN flow additionally needs a managed-pair entity on
+ *     checkins/queue_entries/runs (deferred — see STUBS.md)
+ */
+songRoutes.post(
+  "/managed",
+  requireAuth,
+  zValidator("json", createManagedSongBodySchema),
+  async (c) => {
+    // STUB(db): needs songs.managed_partnership_id + managed check-in entity — remove when schema lands
+    return c.json(
+      error(
+        "DB_STUB_PENDING",
+        "Uploading on behalf of a managed partnership is not persisted yet — database schema pending."
+      ),
+      501
+    );
+  }
+);
+
 songRoutes.get("/:id", requireAuth, async (c) => {
   const userId = c.get("user").userId;
   const id = c.req.param("id");
@@ -699,7 +727,8 @@ songRoutes.post(
 // final chunk is processed and Drive confirms the upload. Song never exists in a broken state.
 // Body fields (send on every chunk): chunk (File), upload_id (UUID), chunk_index (int),
 //   total_chunks (int), original_filename (string), mime_type (string), division (string),
-//   partner_id (string|""), routine_name (string|""), personal_descriptor (string|"")
+//   partner_id (string|"") XOR managed_partnership_id (string) [managed is currently stubbed],
+//   routine_name (string|""), personal_descriptor (string|"")
 songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   const userId = c.get("user").userId;
 
@@ -721,6 +750,10 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   const division = typeof body.division === "string" ? body.division.trim() : "";
   const partnerId =
     typeof body.partner_id === "string" ? body.partner_id.trim() || null : null;
+  const managedPartnershipId =
+    typeof body.managed_partnership_id === "string"
+      ? body.managed_partnership_id.trim() || null
+      : null;
   const routineName =
     typeof body.routine_name === "string" ? body.routine_name.trim() || null : null;
   const personalDescriptor =
@@ -728,6 +761,17 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
       ? body.personal_descriptor.trim() || null
       : null;
   const chunkFile = body.chunk instanceof File ? body.chunk : null;
+
+  // STUB(db): needs songs.managed_partnership_id + managed check-in entity — remove when schema lands
+  if (managedPartnershipId) {
+    return c.json(
+      error(
+        "DB_STUB_PENDING",
+        "Uploading on behalf of a managed partnership is not persisted yet — database schema pending."
+      ),
+      501
+    );
+  }
 
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uploadId)) {
     return c.json(CommonErrors.badRequest("Invalid upload_id"), 400);
