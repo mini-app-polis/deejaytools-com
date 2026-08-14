@@ -74,39 +74,41 @@ export default function MyProfilePage() {
             <Skeleton className="h-40 w-full" />
           ) : (
             <>
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Email</p>
-                <p className="text-sm text-muted-foreground">{me?.email ?? "—"}</p>
+              <div className="flex items-baseline gap-2">
+                <span className="text-sm font-medium">Email</span>
+                <span className="text-sm text-muted-foreground truncate">{me?.email ?? "—"}</span>
               </div>
 
               <Form {...form}>
                 <form onSubmit={onSubmit} className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="firstName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>First name</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="lastName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Last name</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="firstName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>First name</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="lastName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Last name</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                   <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting ? "Saving..." : "Save changes"}
                   </Button>

@@ -144,22 +144,22 @@ export default function ManagedPartnershipsSection() {
           <Button size="sm" className="shrink-0" onClick={openCreate}>Add partnership</Button>
         </div>
         <div className="p-4 space-y-4">
-          <div className={`space-y-3${loading ? " opacity-60" : ""}`}>
+          <div className={`space-y-2${loading ? " opacity-60" : ""}`}>
             {loading && !items && <Skeleton className="h-40 w-full" />}
             {items?.length === 0 && (
               <p className="text-sm text-muted-foreground py-4 text-center">No managed partnerships yet.</p>
             )}
             {items?.map((p) => (
-              <div key={p.id} className="rounded-lg border-2 border-primary/40 bg-card p-4 space-y-3 shadow-sm">
-                <p className="font-medium text-base">{partnershipLabel(p)}</p>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(p)}>
+              <div key={p.id} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+                <p className="font-medium truncate">{partnershipLabel(p)}</p>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button variant="ghost" size="sm" onClick={() => openEdit(p)}>
                     Edit
                   </Button>
                   <Button
-                    variant="destructive"
+                    variant="ghost"
                     size="sm"
-                    className="flex-1"
+                    className="text-destructive hover:text-destructive"
                     onClick={() => setDeleteTarget(p)}
                   >
                     Delete
