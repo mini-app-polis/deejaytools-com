@@ -11,7 +11,7 @@ import { checkins, eventSongSubmissions, managedPartnerships, partners, queueEnt
 import { requireAuth } from "../middleware/auth.js";
 import { shareDriveFileWithUsers, softDeleteOnDrive, uploadSongToDrive } from "../services/drive.js";
 import { tagSongBytes } from "../services/tagger.js";
-import { detectAudioFormat, type DetectedAudioFormat } from "../services/audioFormat.js";
+import { detectAudioFormat } from "../services/audioFormat.js";
 
 const listQuery = z.object({
   partner_id: z.string().optional(),
@@ -773,11 +773,6 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
 
   let resolvedPartnerId: string | null = partnerId;
   let portalPlaceholderName: string | null = null;
-  let songRow: typeof songs.$inferSelect | undefined;
-  let songId: string | undefined;
-  let assembled: Buffer | undefined;
-  let detectedMimeType: DetectedAudioFormat | undefined;
-  try {
   if (isPortalUpload) {
     if (entityType === "team") {
       if (!teamId) {
@@ -866,7 +861,7 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   }
 
   const parts = await Promise.all(chunkFiles.map((f) => readFile(join(uploadDir, f))));
-  assembled = Buffer.concat(parts);
+  const assembled = Buffer.concat(parts);
   await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
 
   if (assembled.length > MAX_ASSEMBLED_BYTES) {
@@ -878,8 +873,8 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   // application/octet-stream for valid MP3s, and the iOS Files app picker
   // filters by its own rules that don't always match our accept= attribute
   // — so we keep the client filter loose and gate quality here instead.
-  const detected = detectAudioFormat(assembled);
-  if (!detected) {
+  const detectedMimeType = detectAudioFormat(assembled);
+  if (!detectedMimeType) {
     return c.json(
       error(
         "UNSUPPORTED_FORMAT",
@@ -888,28 +883,11 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
       400
     );
   }
-  detectedMimeType = detected;
 
   const now = Date.now();
 
   if (isPortalUpload && portalPlaceholderName) {
-    await db
-      .insert(partners)
-      .values({
-        id: crypto.randomUUID(),
-        userId: effectiveUserId,
-        firstName: portalPlaceholderName,
-        lastName: "",
-        partnerRole: "follower",
-        kind: entityType,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoNothing({
-        target: [partners.userId, partners.kind, partners.firstName, partners.lastName],
-      });
-
-    const [placeholder] = await db
+    const [existing] = await db
       .select({ id: partners.id })
       .from(partners)
       .where(
@@ -921,14 +899,27 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
         )
       )
       .limit(1);
-    if (!placeholder) {
-      return c.json(CommonErrors.internalError(), 500);
+
+    let placeholderPartnerId = existing?.id;
+    if (!placeholderPartnerId) {
+      placeholderPartnerId = crypto.randomUUID();
+      const partnerNow = Date.now();
+      await db.insert(partners).values({
+        id: placeholderPartnerId,
+        userId: effectiveUserId,
+        firstName: portalPlaceholderName,
+        lastName: "",
+        partnerRole: "follower",
+        kind: entityType,
+        createdAt: partnerNow,
+        updatedAt: partnerNow,
+      });
     }
-    resolvedPartnerId = placeholder.id;
+    resolvedPartnerId = placeholderPartnerId;
   }
 
   // Create the song record now — only reached if all chunks arrived successfully.
-  songId = crypto.randomUUID();
+  const songId = crypto.randomUUID();
   await db.insert(songs).values({
     id: songId,
     userId: effectiveUserId,
@@ -947,13 +938,8 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
     updatedAt: now,
   });
 
-  const [songRowResult] = await db.select().from(songs).where(eq(songs.id, songId)).limit(1);
-  songRow = songRowResult;
-  if (!songRow) return c.json(error("SONG_REINSERT_MISSING", "song row not found after insert"), 500);
-  } catch (err) {
-    logger.error({ event: "upload_final_debug", category: "api", context: { userId, uploadId, entityType }, error: err });
-    return c.json(error("UPLOAD_DEBUG", err instanceof Error ? `${err.name}: ${err.message}` : String(err)), 500);
-  }
+  const [songRow] = await db.select().from(songs).where(eq(songs.id, songId)).limit(1);
+  if (!songRow) return c.json(CommonErrors.internalError(), 500);
 
   // Return the song record immediately so the client's HTTP request completes
   // without waiting for the Google Drive upload (which can take 30–120 s for

@@ -64,9 +64,6 @@ export const partners = pgTable(
     userIdx: index("idx_partners_user_id").on(t.userId),
     linkedIdx: index("idx_partners_linked_user_id").on(t.linkedUserId),
     emailIdx: index("idx_partners_email").on(t.email),
-    placeholderUq: uniqueIndex("uq_partners_placeholder")
-      .on(t.userId, t.kind, t.firstName, t.lastName)
-      .where(sql`${t.kind} <> 'partner'`),
   })
 );
 

@@ -733,7 +733,7 @@ describe("POST /v1/songs/upload/chunk", () => {
     vi.spyOn(crypto, "randomUUID").mockReturnValue(placeholderPartnerId);
 
     enqueueSelectResult([{ identifier: "Team Alpha" }]);
-    enqueueSelectResult([{ id: placeholderPartnerId }]);
+    enqueueSelectResult([]);
 
     const insertedSong = {
       id: "song_portal",
@@ -805,7 +805,6 @@ describe("POST /v1/songs/upload/chunk", () => {
         kind: "team",
       })
     );
-    expect(valuesFn.mock.results[0]?.value?.onConflictDoNothing).toHaveBeenCalled();
     const songInsert = vi.mocked(mockDb.insert).mock.results[1]?.value?.values as ReturnType<typeof vi.fn>;
     expect(songInsert).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -823,101 +822,6 @@ describe("POST /v1/songs/upload/chunk", () => {
     );
 
     vi.mocked(crypto.randomUUID).mockRestore();
-  });
-
-  it("uses onConflictDoNothing so concurrent first-uploads share one placeholder partner row", async () => {
-    vi.mocked(mockDb.insert).mockClear();
-    mockFs.readdir.mockResolvedValue(["chunk_000000"]);
-    const sharedPartnerId = "33333333-3333-3333-3333-333333333333";
-
-    const runPortalUpload = async (routineName: string, songId: string) => {
-      resetSelectQueue();
-      enqueueSelectResult([{ identifier: "Team Alpha" }]);
-      enqueueSelectResult([{ id: sharedPartnerId }]);
-      enqueueSelectResult([
-        {
-          id: songId,
-          userId: "user_test123",
-          partnerId: sharedPartnerId,
-          managedPartnershipId: null,
-          displayName: routineName,
-          originalFilename: "track.mp3",
-          processedFilename: null,
-          division: "Teams",
-          routineName,
-          personalDescriptor: null,
-          seasonYear: null,
-          driveFileId: null,
-          driveFolderId: null,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-      ]);
-      enqueueSelectResult([mockUserRow]);
-      enqueueSelectResult([
-        {
-          id: sharedPartnerId,
-          userId: "user_test123",
-          firstName: "Team Alpha",
-          lastName: "",
-          partnerRole: "follower",
-          kind: "team",
-          email: null,
-          linkedUserId: null,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-      ]);
-      enqueueSelectResult([]);
-      enqueueSelectResult([
-        {
-          song: {
-            id: songId,
-            userId: "user_test123",
-            partnerId: sharedPartnerId,
-            managedPartnershipId: null,
-            displayName: routineName,
-            originalFilename: "track.mp3",
-            processedFilename: "teamalpha_teams_2026_routine_v01.mp3",
-            division: "Teams",
-            routineName,
-            personalDescriptor: null,
-            seasonYear: "2026",
-            driveFileId: "drive_file_1",
-            driveFolderId: "drive_folder_1",
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          },
-          partner_first_name: "Team Alpha",
-          partner_last_name: "",
-        },
-      ]);
-
-      return app.request(CHUNK_BASE, {
-        method: "POST",
-        headers: authHeaders(),
-        body: makeChunkForm({
-          upload_id: crypto.randomUUID(),
-          division: "Teams",
-          partner_id: "",
-          entity_type: "team",
-          team_id: "team_1",
-          routine_name: routineName,
-        }),
-      });
-    };
-
-    const first = await runPortalUpload("Routine A", "song_a");
-    const second = await runPortalUpload("Routine B", "song_b");
-    expect(first.status).toBe(200);
-    expect(second.status).toBe(200);
-
-    const partnerInserts = vi.mocked(mockDb.insert).mock.results.filter((_, i) => i % 2 === 0);
-    expect(partnerInserts).toHaveLength(2);
-    for (const result of partnerInserts) {
-      const valuesFn = result.value?.values as ReturnType<typeof vi.fn>;
-      expect(valuesFn.mock.results[0]?.value?.onConflictDoNothing).toHaveBeenCalled();
-    }
   });
 
   it("reuses an existing placeholder partner for repeat portal uploads of the same entity", async () => {
@@ -985,12 +889,8 @@ describe("POST /v1/songs/upload/chunk", () => {
     const body = await readJson<SuccessEnvelope<{ complete: boolean; song: Record<string, unknown> }>>(res);
     expect(body.data.song).toMatchObject({ partner_id: existingPartnerId });
 
-    expect(vi.mocked(mockDb.insert)).toHaveBeenCalledTimes(2);
-    const partnerValuesFn = vi.mocked(mockDb.insert).mock.results[0]?.value?.values as ReturnType<
-      typeof vi.fn
-    >;
-    expect(partnerValuesFn.mock.results[0]?.value?.onConflictDoNothing).toHaveBeenCalled();
-    const songInsert = vi.mocked(mockDb.insert).mock.results[1]?.value?.values as ReturnType<typeof vi.fn>;
+    expect(vi.mocked(mockDb.insert)).toHaveBeenCalledTimes(1);
+    const songInsert = vi.mocked(mockDb.insert).mock.results[0]?.value?.values as ReturnType<typeof vi.fn>;
     expect(songInsert).toHaveBeenCalledWith(
       expect.objectContaining({
         partnerId: existingPartnerId,
