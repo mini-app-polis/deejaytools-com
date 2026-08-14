@@ -8,9 +8,6 @@ import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { DIVISIONS, type ApiManagedPartnership } from "@deejaytools/schemas";
 import type { AuthMe as MeResponse } from "@/hooks/useAuthMe";
 import {
@@ -203,21 +200,16 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
       {/* Entity selector */}
       {variant === "self" ? (
         <div className="space-y-2">
-          <Label htmlFor="song-partner">Partner</Label>
-          <Select
-            key={formKey}
-            value={selectedPartnerId || undefined}
-            onValueChange={setSelectedPartnerId}
-          >
-            <SelectTrigger id="song-partner">
-              <SelectValue placeholder="Select a partner" />
-            </SelectTrigger>
-            <SelectContent>
-              {partners.map((p) => (
-                <SelectItem key={p.id} value={p.id}>{partnerLabel(p)}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Label>Partner</Label>
+          {partners.length > 0 && (
+            <ChoiceGroup
+              key={formKey}
+              ariaLabel="Partner"
+              options={partners.map((p) => ({ value: p.id, label: partnerLabel(p) }))}
+              value={selectedPartnerId}
+              onChange={setSelectedPartnerId}
+            />
+          )}
           {partners.length === 0 ? (
             <p className="text-sm text-amber-600 dark:text-amber-500">
               You need a partner to upload. Add one on the{" "}
@@ -231,7 +223,7 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
         </div>
       ) : (
         <div className="space-y-2">
-          <Label htmlFor="song-managed-partnership">Partnership</Label>
+          <Label>Partnership</Label>
           {managedPartnerships.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               You have no managed partnerships yet. Add them on{" "}
@@ -239,18 +231,16 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
             </p>
           ) : (
             <>
-              <Select
+              <ChoiceGroup
                 key={formKey}
-                value={selectedManagedPartnershipId || undefined}
-                onValueChange={setSelectedManagedPartnershipId}
-              >
-                <SelectTrigger id="song-managed-partnership"><SelectValue placeholder="Select a partnership" /></SelectTrigger>
-                <SelectContent>
-                  {managedPartnerships.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{managedPartnershipLabel(p)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                ariaLabel="Partnership"
+                options={managedPartnerships.map((mp) => ({
+                  value: mp.id,
+                  label: managedPartnershipLabel(mp),
+                }))}
+                value={selectedManagedPartnershipId}
+                onChange={setSelectedManagedPartnershipId}
+              />
               {selectedManaged && (
                 <p className="text-sm text-muted-foreground">{managedPartnershipSummary(selectedManaged)}</p>
               )}

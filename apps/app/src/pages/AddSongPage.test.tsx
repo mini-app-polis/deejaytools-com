@@ -139,7 +139,7 @@ describe("AddSongPage — managed partnerships load is non-fatal", () => {
       expect(screen.getByText(/uploading as:/i)).toBeInTheDocument();
     });
     expect(screen.getByText(/Ann One/)).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: /partner/i })).toHaveTextContent(/bob jones/i);
+    expect(screen.getByRole("radio", { name: /bob jones/i })).toHaveAttribute("aria-checked", "true");
 
     await user.click(screen.getByRole("button", { name: /upload for a managed partnership/i }));
     expect(
@@ -366,7 +366,7 @@ describe("AddSongPage — managed partnership upload", () => {
     await waitFor(() => {
       expect(screen.getByText(/leader: wendal smith · follower: lara jones/i)).toBeInTheDocument();
     });
-    expect(screen.queryByRole("combobox", { name: /^partner$/i })).toBeNull();
+    expect(screen.queryByRole("radiogroup", { name: /^partner$/i })).toBeNull();
 
     await user.click(screen.getByRole("radio", { name: /^classic$/i }));
 

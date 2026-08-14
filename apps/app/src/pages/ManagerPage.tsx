@@ -14,6 +14,7 @@ import {
 import { useApiClient } from "@/api/client";
 import SongUploadForm from "@/components/SongUploadForm";
 import { Button } from "@/components/ui/button";
+import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -252,6 +253,27 @@ export default function ManagerPage() {
     return keys.map((division) => ({ division, rows: map.get(division)! }));
   }, [esSubmissions]);
 
+  const activeSessionOptions = useMemo(() => {
+    if (!sessions) return [];
+    const now = new Date();
+    return sessions
+      .filter((s) => {
+        const d = new Date(s.floor_trial_starts_at);
+        return (
+          d.getFullYear() === now.getFullYear() &&
+          d.getMonth() === now.getMonth() &&
+          d.getDate() === now.getDate()
+        );
+      })
+      .sort((a, b) => {
+        const isLive = (s: ApiSession) =>
+          s.status === "checkin_open" || s.status === "in_progress";
+        if (isLive(a) && !isLive(b)) return -1;
+        if (!isLive(a) && isLive(b)) return 1;
+        return a.floor_trial_starts_at - b.floor_trial_starts_at;
+      });
+  }, [sessions]);
+
   const renderEntityLabel = (row: ApiQueueEntry) => {
     if (row.entityLabel && row.entityLabel !== "—") return row.entityLabel;
     if (row.entityPairId) return pairMap.get(row.entityPairId) ?? row.entityLabel;
@@ -329,50 +351,23 @@ export default function ManagerPage() {
           {/* Session selector */}
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
             <div className="w-full sm:w-72">
-              {(() => {
-                if (!sessions) return null;
-                // Show all of today's sessions so admins can manage queues
-                // even after a session ends. Active sessions appear first.
-                const now = new Date();
-                const todaySessions = sessions
-                  .filter((s) => {
-                    const d = new Date(s.floor_trial_starts_at);
-                    return (
-                      d.getFullYear() === now.getFullYear() &&
-                      d.getMonth() === now.getMonth() &&
-                      d.getDate() === now.getDate()
-                    );
-                  })
-                  .sort((a, b) => {
-                    const isLive = (s: typeof a) =>
-                      s.status === "checkin_open" || s.status === "in_progress";
-                    if (isLive(a) && !isLive(b)) return -1;
-                    if (!isLive(a) && isLive(b)) return 1;
-                    return a.floor_trial_starts_at - b.floor_trial_starts_at;
-                  });
-                if (todaySessions.length === 0) {
-                  return (
-                    <p className="text-sm text-muted-foreground">No sessions today.</p>
-                  );
-                }
-                return (
-                  <select
-                    className={FIELD_INPUT_CLASS}
-                    value={lqSessionId}
-                    onChange={(e) => setLqSessionId(e.target.value)}
-                  >
-                    <option value="">Select a session…</option>
-                    {todaySessions.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {formatSessionTitle(s, s.event_timezone)}
-                        {s.status === "completed" || s.status === "cancelled"
-                          ? ` (${s.status})`
-                          : ""}
-                      </option>
-                    ))}
-                  </select>
-                );
-              })()}
+              {sessions === null ? null : activeSessionOptions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No sessions today.</p>
+              ) : (
+                <ChoiceGroup
+                  ariaLabel="Session"
+                  options={activeSessionOptions.map((s) => ({
+                    value: s.id,
+                    label:
+                      formatSessionTitle(s, s.event_timezone) +
+                      (s.status === "completed" || s.status === "cancelled"
+                        ? ` (${s.status})`
+                        : ""),
+                  }))}
+                  value={lqSessionId}
+                  onChange={setLqSessionId}
+                />
+              )}
             </div>
             {lqSessionId && (
               <Button
@@ -605,23 +600,17 @@ export default function ManagerPage() {
         {/* ── Event Songs tab ── */}
         <TabsContent value="event-songs" className="mt-4 space-y-4">
           <div className="w-full sm:w-96">
-            <label className={FIELD_LABEL_CLASS} htmlFor="admin-event-songs-event">
-              Event
-            </label>
-            <select
-              id="admin-event-songs-event"
-              className={FIELD_INPUT_CLASS}
+            <Label>Event</Label>
+            <ChoiceGroup
+              ariaLabel="Event"
+              options={esEvents.map((ev) => ({
+                value: ev.id,
+                label: `${ev.name} · ${ev.start_date}`,
+              }))}
               value={esEventId}
+              onChange={setEsEventId}
               disabled={esEventsLoading}
-              onChange={(e) => setEsEventId(e.target.value)}
-            >
-              <option value="">Select an event…</option>
-              {esEvents.map((ev) => (
-                <option key={ev.id} value={ev.id}>
-                  {ev.name} · {ev.start_date}
-                </option>
-              ))}
-            </select>
+            />
           </div>
 
           {!esEventId ? (
@@ -794,56 +783,48 @@ export default function ManagerPage() {
             <form onSubmit={submitCheckinFor} className="space-y-4 max-w-lg">
               <div>
                 <label className={FIELD_LABEL_CLASS}>Session</label>
-                <select
-                  className={FIELD_INPUT_CLASS}
+                <ChoiceGroup
+                  ariaLabel="Session"
+                  options={cfActiveSessions.map((s) => ({
+                    value: s.id,
+                    label: formatSessionTitle(s, s.event_timezone),
+                  }))}
                   value={cfSessionId}
-                  onChange={(e) => setCfSessionId(e.target.value)}
-                >
-                  <option value="">Select a session…</option>
-                  {cfActiveSessions.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {formatSessionTitle(s, s.event_timezone)}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setCfSessionId}
+                />
               </div>
 
               <div>
                 <label className={FIELD_LABEL_CLASS}>Song</label>
-                <select
-                  className={FIELD_INPUT_CLASS}
-                  value={cfSongId}
-                  onChange={(e) => setCfSongId(e.target.value)}
-                  disabled={!cfSessionId || cfSubmissions === null}
-                >
-                  <option value="">Select a song…</option>
-                  {cfSessionObj && !cfSessionObj.event_id ? (
-                    <option value="" disabled>This session has no event</option>
-                  ) : cfSubmissions !== null && cfSubmissions.length === 0 ? (
-                    <option value="" disabled>No songs submitted to this event for this user</option>
-                  ) : (
-                    cfSubmissions?.map((sub) => (
-                      <option key={sub.song_id} value={sub.song_id}>
-                        {sub.song_label}
-                      </option>
-                    ))
-                  )}
-                </select>
+                {cfSessionObj && !cfSessionObj.event_id ? (
+                  <p className="text-sm text-muted-foreground">This session has no event</p>
+                ) : cfSubmissions !== null && cfSubmissions.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No songs submitted to this event for this user
+                  </p>
+                ) : (
+                  <ChoiceGroup
+                    ariaLabel="Song"
+                    options={(cfSubmissions ?? []).map((sub) => ({
+                      value: sub.song_id,
+                      label: sub.song_label,
+                    }))}
+                    value={cfSongId}
+                    onChange={setCfSongId}
+                    disabled={!cfSessionId || cfSubmissions === null}
+                  />
+                )}
               </div>
 
               <div>
                 <label className={FIELD_LABEL_CLASS}>Division</label>
-                <select
-                  className={FIELD_INPUT_CLASS}
+                <ChoiceGroup
+                  ariaLabel="Division"
+                  options={cfSessionDivisions.map((d) => ({ value: d, label: d }))}
                   value={cfDivision}
-                  onChange={(e) => setCfDivision(e.target.value)}
+                  onChange={setCfDivision}
                   disabled={!cfSessionId || cfSessionDivisions.length === 0}
-                >
-                  <option value="">Select a division…</option>
-                  {cfSessionDivisions.map((d) => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
+                />
               </div>
 
               <Button

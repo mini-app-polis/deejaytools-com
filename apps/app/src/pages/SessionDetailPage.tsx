@@ -6,6 +6,7 @@ import type { ApiSession, ApiQueueEntry, ApiLeadingPair, ApiSong, ApiEventSongSu
 import { useApiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr, formatDateTimeShort } from "@/lib/sessionFormat";
@@ -676,19 +677,15 @@ export default function ApiSessionPage() {
               ) : (
                 <div>
                   <label className={FIELD_LABEL_CLASS}>Song</label>
-                  <select
-                    className={FIELD_INPUT_CLASS}
+                  <ChoiceGroup
+                    ariaLabel="Song"
+                    options={checkinSongs.map((s) => ({
+                      value: s.id,
+                      label: songLabel(s),
+                    }))}
                     value={fSongId}
-                    onChange={(e) => setFSongId(e.target.value)}
-                    autoFocus
-                  >
-                    <option value="">Select a song…</option>
-                    {checkinSongs.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {songLabel(s)}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setFSongId}
+                  />
                 </div>
               )}
 
@@ -726,19 +723,12 @@ export default function ApiSessionPage() {
               {/* Division — auto-filled from song; user can override if needed */}
               <div>
                 <label className={FIELD_LABEL_CLASS}>Division</label>
-                <select
-                  className={FIELD_INPUT_CLASS}
+                <ChoiceGroup
+                  ariaLabel="Division"
+                  options={sessionDivisions.map((d) => ({ value: d, label: d }))}
                   value={fDivision}
-                  onChange={(e) => setFDivision(e.target.value)}
-                >
-                  <option value="">Select division…</option>
-                  {sessionDivisions.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                      {selectedSong?.division === d ? " ✓" : ""}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setFDivision}
+                />
                 {selectedSong?.division && !divisionInSession && (
                   <p className="text-xs text-amber-600 mt-1">
                     Your song's division ({selectedSong.division}) isn't offered in this session.

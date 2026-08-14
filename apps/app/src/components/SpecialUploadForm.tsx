@@ -8,13 +8,6 @@ import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import type { ApiTeam } from "@deejaytools/schemas";
 import {
   MAX_FILE_BYTES,
@@ -175,27 +168,20 @@ export default function SpecialUploadForm() {
 
       {division === "Teams" && (
         <div className="space-y-2">
-          <Label htmlFor="special-team">Team</Label>
+          <Label>Team</Label>
           {teams.length === 0 ? (
             <p className="text-sm text-amber-600 dark:text-amber-500">
               You need a team to upload. Add one on the{" "}
               <Link to="/my-profile" className="underline font-medium">My Profile</Link> page.
             </p>
           ) : (
-            <Select
+            <ChoiceGroup
               key={`${formKey}-team`}
-              value={selectedTeamId || undefined}
-              onValueChange={setSelectedTeamId}
-            >
-              <SelectTrigger id="special-team">
-                <SelectValue placeholder="Select a team" />
-              </SelectTrigger>
-              <SelectContent>
-                {teams.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>{t.identifier}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              ariaLabel="Team"
+              options={teams.map((t) => ({ value: t.id, label: t.identifier }))}
+              value={selectedTeamId}
+              onChange={setSelectedTeamId}
+            />
           )}
         </div>
       )}

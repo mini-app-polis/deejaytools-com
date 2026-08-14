@@ -91,10 +91,10 @@ describe("ManagerPage — Event Songs section", () => {
     renderPage("/manager/event-songs");
 
     await waitFor(() => {
-      expect(screen.getByLabelText(/^event$/i)).toBeInTheDocument();
+      expect(screen.getByRole("radiogroup", { name: /^event$/i })).toBeInTheDocument();
     });
     expect(screen.getByText(/select an event to view submitted songs/i)).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: /spring classic/i })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /spring classic · 2026-04-01/i })).toBeInTheDocument();
   });
 
   it("loads submissions when an event is selected and groups by division", async () => {
@@ -140,10 +140,10 @@ describe("ManagerPage — Event Songs section", () => {
     renderPage("/manager/event-songs");
 
     await waitFor(() => {
-      expect(screen.getByLabelText(/^event$/i)).toBeInTheDocument();
+      expect(screen.getByRole("radiogroup", { name: /^event$/i })).toBeInTheDocument();
     });
 
-    await user.selectOptions(screen.getByLabelText(/^event$/i), "ev1");
+    await user.click(screen.getByRole("radio", { name: /spring classic · 2026-04-01/i }));
 
     await waitFor(() => {
       expect(apiGet).toHaveBeenCalledWith(
@@ -170,10 +170,10 @@ describe("ManagerPage — Event Songs section", () => {
     renderPage("/manager/event-songs");
 
     await waitFor(() => {
-      expect(screen.getByLabelText(/^event$/i)).toBeInTheDocument();
+      expect(screen.getByRole("radiogroup", { name: /^event$/i })).toBeInTheDocument();
     });
 
-    await user.selectOptions(screen.getByLabelText(/^event$/i), "ev1");
+    await user.click(screen.getByRole("radio", { name: /spring classic · 2026-04-01/i }));
 
     expect(
       await screen.findByText(/no songs submitted to this event yet/i)

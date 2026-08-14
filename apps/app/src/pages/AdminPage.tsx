@@ -1261,33 +1261,27 @@ export default function AdminPage() {
           <form onSubmit={submitTestCheckin} className="space-y-4 max-w-lg">
             <div>
               <label className={FIELD_LABEL_CLASS}>Session</label>
-              <select
-                className={FIELD_INPUT_CLASS}
-                value={tcSessionId}
-                onChange={(e) => setTcSessionId(e.target.value)}
-              >
-                <option value="">Select a session…</option>
-                {sessions
-                  ?.slice()
+              <ChoiceGroup
+                ariaLabel="Session"
+                options={(sessions ?? [])
+                  .slice()
                   .sort(compareSessionChrono)
-                  .map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {formatSessionTitle(s, s.event_timezone)}
-                    </option>
-                  ))}
-              </select>
+                  .map((s) => ({
+                    value: s.id,
+                    label: formatSessionTitle(s, s.event_timezone),
+                  }))}
+                value={tcSessionId}
+                onChange={setTcSessionId}
+              />
             </div>
             <div>
               <label className={FIELD_LABEL_CLASS}>Division</label>
-              <select
-                className={FIELD_INPUT_CLASS}
+              <ChoiceGroup
+                ariaLabel="Division"
+                options={DIVISION_OPTIONS.map((d) => ({ value: d, label: d }))}
                 value={tcDivision}
-                onChange={(e) => setTcDivision(e.target.value)}
-              >
-                {DIVISION_OPTIONS.map((d) => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
+                onChange={setTcDivision}
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

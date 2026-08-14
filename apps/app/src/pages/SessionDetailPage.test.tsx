@@ -506,17 +506,17 @@ describe("SessionDetailPage — check-in song selector", () => {
     fireEvent.click(screen.getAllByRole("button", { name: /^check in$/i })[0]!);
 
     await waitFor(() => {
-      expect(screen.getByText("Select a song…")).toBeInTheDocument();
+      expect(screen.getByRole("radiogroup", { name: /^song$/i })).toBeInTheDocument();
     });
 
-    const songSelect = screen.getByText("Select a song…").closest("select")!;
-    const options = within(songSelect)
-      .getAllByRole("option")
-      .map((option) => option.textContent);
+    const songGroup = screen.getByRole("radiogroup", { name: /^song$/i });
+    const labels = within(songGroup)
+      .getAllByRole("radio")
+      .map((radio) => radio.textContent);
 
-    expect(options).toContain("Song One");
-    expect(options).toContain("Song Two");
-    expect(options).not.toContain("Song Three");
+    expect(labels).toContain("Song One");
+    expect(labels).toContain("Song Two");
+    expect(labels).not.toContain("Song Three");
   });
 
   it("falls back to all songs when event submissions cannot be loaded", async () => {
@@ -535,17 +535,17 @@ describe("SessionDetailPage — check-in song selector", () => {
     fireEvent.click(screen.getAllByRole("button", { name: /^check in$/i })[0]!);
 
     await waitFor(() => {
-      expect(screen.getByText("Select a song…")).toBeInTheDocument();
+      expect(screen.getByRole("radiogroup", { name: /^song$/i })).toBeInTheDocument();
     });
 
-    const songSelect = screen.getByText("Select a song…").closest("select")!;
-    const options = within(songSelect)
-      .getAllByRole("option")
-      .map((option) => option.textContent);
+    const songGroup = screen.getByRole("radiogroup", { name: /^song$/i });
+    const labels = within(songGroup)
+      .getAllByRole("radio")
+      .map((radio) => radio.textContent);
 
-    expect(options).toContain("Song One");
-    expect(options).toContain("Song Two");
-    expect(options).toContain("Song Three");
+    expect(labels).toContain("Song One");
+    expect(labels).toContain("Song Two");
+    expect(labels).toContain("Song Three");
   });
 
   it("shows an add-to-event message when no songs are submitted", async () => {
@@ -566,7 +566,7 @@ describe("SessionDetailPage — check-in song selector", () => {
     expect(screen.getAllByRole("link", { name: /add them on my content/i }).length).toBeGreaterThan(
       0
     );
-    expect(screen.queryByText("Select a song…")).not.toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup", { name: /^song$/i })).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /^check in$/i })[0]).toBeDisabled();
   });
 });
