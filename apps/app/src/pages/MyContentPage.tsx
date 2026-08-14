@@ -88,7 +88,6 @@ export default function MyContentPage() {
 
   // ── Check-ins state ──────────────────────────────────────────────────────────
   const [checkins, setCheckins] = useState<ApiMyCheckin[] | null>(null);
-  const [checkinsLoading, setCheckinsLoading] = useState(true);
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
   const [pendingWithdrawId, setPendingWithdrawId] = useState<string | null>(null);
 
@@ -111,12 +110,10 @@ export default function MyContentPage() {
   };
 
   const loadCheckins = () => {
-    setCheckinsLoading(true);
     api
       .get<ApiMyCheckin[]>("/v1/checkins/mine")
       .then(setCheckins)
-      .catch((e: Error) => toast.error(e.message))
-      .finally(() => setCheckinsLoading(false));
+      .catch((e: Error) => toast.error(e.message));
   };
 
   const loadEventsSection = () => {
@@ -180,6 +177,11 @@ export default function MyContentPage() {
   const sortedAvailableEvents = useMemo(
     () => availableEvents.slice().sort(compareEventChrono),
     [availableEvents]
+  );
+
+  const eventsWithSongs = useMemo(
+    () => sortedAvailableEvents.filter((e) => (submissionsByEventId.get(e.id)?.length ?? 0) > 0),
+    [sortedAvailableEvents, submissionsByEventId]
   );
 
   const eventNameById = useMemo(
@@ -259,19 +261,15 @@ export default function MyContentPage() {
         </div>
       )}
 
-      {/* ── Check-ins section ── */}
+      {/* ── Check-ins section (only when checked in somewhere) ── */}
+      {checkins && checkins.length > 0 && (
       <div className="rounded-lg border bg-card">
         <div className="px-4 py-3 border-b">
           <h2 className="font-semibold">Check-ins</h2>
         </div>
         <div className="p-4 space-y-3">
-          {checkinsLoading && !checkins ? (
-            <Skeleton className="h-40 w-full" />
-          ) : checkins?.length === 0 ? (
-            <p className="text-sm text-muted-foreground">You are not currently checked in anywhere.</p>
-          ) : (
-            <div className={`space-y-3${checkinsLoading ? " opacity-60" : ""}`}>
-              {checkins?.map((ci) => (
+            <div className="space-y-3">
+              {checkins.map((ci) => (
                 <div key={ci.id} className="flex items-start gap-3">
                   {/* Entry card */}
                   <div className="flex-1 min-w-0 rounded-lg border px-4 py-3 text-sm space-y-2">
@@ -346,9 +344,9 @@ export default function MyContentPage() {
                 </div>
               ))}
             </div>
-          )}
         </div>
       </div>
+      )}
 
       {/* ── Events section ── */}
       <div className="rounded-lg border bg-card">
@@ -361,11 +359,13 @@ export default function MyContentPage() {
         <div className="p-4 space-y-3">
           {eventsLoading ? (
             <Skeleton className="h-24 w-full" />
-          ) : sortedAvailableEvents.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No upcoming events are available right now.</p>
+          ) : eventsWithSongs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              You haven&apos;t added songs to any events yet.
+            </p>
           ) : (
             <div className="space-y-3">
-              {sortedAvailableEvents.map((event) => {
+              {eventsWithSongs.map((event) => {
                 const subs = submissionsByEventId.get(event.id) ?? [];
                 return (
                   <div key={event.id} className="rounded-lg border px-4 py-3 text-sm space-y-2">
@@ -376,20 +376,16 @@ export default function MyContentPage() {
                       </div>
                       {eventStatusBadge(event.status)}
                     </div>
-                    {subs.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No songs added yet.</p>
-                    ) : (
-                      <ul className="space-y-1 border-t border-border/40 pt-2">
-                        {subs.map((s) => (
-                          <li key={s.id} className="text-sm">
-                            <span className="font-medium">{s.song_label}</span>
-                            {s.division && (
-                              <span className="text-muted-foreground"> · {s.division}</span>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                    <ul className="space-y-1 border-t border-border/40 pt-2">
+                      {subs.map((s) => (
+                        <li key={s.id} className="text-sm">
+                          <span className="font-medium">{s.song_label}</span>
+                          {s.division && (
+                            <span className="text-muted-foreground"> · {s.division}</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 );
               })}

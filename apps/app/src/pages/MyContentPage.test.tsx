@@ -113,12 +113,28 @@ describe("MyContentPage — Events section", () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: /^check-ins$/i })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /^songs$/i })).toBeInTheDocument();
     });
-    expect(screen.getByRole("heading", { name: /^songs$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /^check-ins$/i })).toBeNull();
     expect(screen.getByRole("heading", { name: /^events$/i })).toBeInTheDocument();
-    expect(await screen.findByText("Spring Classic")).toBeInTheDocument();
-    expect(screen.getByText(/no songs added yet/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/you haven't added songs to any events yet/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Spring Classic")).toBeNull();
+  });
+
+  it("hides events with no song submissions", async () => {
+    apiGet.mockImplementation(defaultApiGet);
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /^events$/i })).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText(/you haven't added songs to any events yet/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Spring Classic")).toBeNull();
   });
 });
 
@@ -169,8 +185,9 @@ describe("MyContentPage — Active Floor Trials section", () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: /^check-ins$/i })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /^songs$/i })).toBeInTheDocument();
     });
+    expect(screen.queryByRole("heading", { name: /^check-ins$/i })).toBeNull();
     expect(screen.queryByRole("heading", { name: /^active floor trials$/i })).toBeNull();
   });
 });
