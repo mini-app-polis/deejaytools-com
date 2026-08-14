@@ -75,7 +75,7 @@ partnerRoutes.get("/", requireAuth, async (c) => {
   const rows = await db
     .select()
     .from(partners)
-    .where(eq(partners.userId, userId))
+    .where(and(eq(partners.userId, userId), eq(partners.kind, "partner")))
     .orderBy(asc(partners.lastName), asc(partners.firstName));
   return c.json(successList(rows.map(mapPartner)));
 });

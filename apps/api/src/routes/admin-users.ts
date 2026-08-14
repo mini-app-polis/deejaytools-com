@@ -208,7 +208,7 @@ adminUserRoutes.get("/:id/partners", requireAdmin, async (c) => {
   const rows = await db
     .select()
     .from(partners)
-    .where(eq(partners.userId, id))
+    .where(and(eq(partners.userId, id), eq(partners.kind, "partner")))
     .orderBy(asc(partners.lastName), asc(partners.firstName));
   return c.json(successList(rows.map(mapPartner)));
 });

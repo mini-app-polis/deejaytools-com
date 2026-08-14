@@ -105,6 +105,30 @@ describe("GET /v1/event-song-submissions", () => {
     });
   });
 
+  it("uses a single entity name for placeholder team partner songs", async () => {
+    enqueueSelectResult([
+      {
+        ...joinedRow,
+        songDivision: "Teams",
+        songProcessedFilename: "teamalpha_teams_2026_v01.mp3",
+        songRoutineName: "Team Routine",
+        partnerFirst: "Team Alpha",
+        partnerLast: "",
+        partnerKind: "team",
+      },
+    ]);
+    const res = await app.request(BASE, { headers: authHeaders() });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<unknown[]>>(res);
+    assertSuccessListEnvelope(body);
+    expect(body.data[0]).toMatchObject({
+      song_label: "Team Alpha Teams 2026 Team Routine v01",
+    });
+    expect(String((body.data[0] as { song_label: string }).song_label)).not.toContain(
+      "Alice Smith & Team Alpha"
+    );
+  });
+
   it("filters by event_id when provided", async () => {
     enqueueSelectResult([joinedRow]);
     const res = await app.request(`${BASE}?event_id=evt_1`, { headers: authHeaders() });

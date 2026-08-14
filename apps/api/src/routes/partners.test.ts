@@ -72,6 +72,28 @@ describe("GET /v1/partners", () => {
       partner_role: "follower",
     });
   });
+
+  it("returns only real partners — placeholder rows are filtered at query time", async () => {
+    const realPartner = {
+      id: "p1",
+      userId: "user_test123",
+      firstName: "Jane",
+      lastName: "Doe",
+      email: null,
+      linkedUserId: null,
+      partnerRole: "follower",
+      kind: "partner",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    enqueueSelectResult([realPartner]);
+    const res = await app.request(BASE, { headers: authHeaders() });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<unknown[]>>(res);
+    assertSuccessListEnvelope(body);
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0]).toMatchObject({ id: "p1" });
+  });
 });
 
 describe("POST /v1/partners", () => {

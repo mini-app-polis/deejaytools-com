@@ -188,6 +188,8 @@ export const ApiSongSchema = z.object({
   updated_at: z.number(),
   partner_first_name: z.string().nullable().optional(),
   partner_last_name: z.string().nullable().optional(),
+  /** 'partner' for real partners; 'solo' | 'team' | 'other' for portal placeholders. */
+  partner_kind: z.string().nullable().optional(),
 });
 export type ApiSong = z.infer<typeof ApiSongSchema>;
 

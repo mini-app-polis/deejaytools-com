@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "../db/index.js";
 import { events, managedPartnerships, pairs, partners, runs, sessions, songs, users } from "../db/schema.js";
 import { buildStructuredSongLabel } from "../lib/songLabel.js";
+import { partnershipDisplay } from "../lib/entityLabel.js";
 import { zValidator } from "../lib/validate.js";
 import { requireAdmin } from "../middleware/auth.js";
 
@@ -69,6 +70,7 @@ runRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c) => {
       songOwnerLast: songOwner.lastName,
       songPartnerFirst: songPartnerAlias.firstName,
       songPartnerLast: songPartnerAlias.lastName,
+      songPartnerKind: songPartnerAlias.kind,
       songManagedLeaderFirst: songManagedPartnership.leaderFirstName,
       songManagedLeaderLast: songManagedPartnership.leaderLastName,
       songManagedFollowerFirst: songManagedPartnership.followerFirstName,
@@ -79,6 +81,7 @@ runRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c) => {
       pairUserLast: pairUser.lastName,
       pairPartnerFirst: partners.firstName,
       pairPartnerLast: partners.lastName,
+      pairPartnerKind: partners.kind,
       soloUserFirst: soloUser.firstName,
       soloUserLast: soloUser.lastName,
       managedLeaderFirst: managedPartnerships.leaderFirstName,
@@ -123,7 +126,9 @@ runRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c) => {
         } else if (r.pairUserFirst || r.pairUserLast) {
           const a = [r.pairUserFirst, r.pairUserLast].filter(Boolean).join(" ").trim();
           const b = [r.pairPartnerFirst, r.pairPartnerLast].filter(Boolean).join(" ").trim();
-          entityLabel = b ? `${a} & ${b}` : a || "Pair";
+          entityLabel =
+            partnershipDisplay({ ownerName: a, partnerName: b, partnerKind: r.pairPartnerKind }) ||
+            "Pair";
         } else if (r.soloUserFirst || r.soloUserLast) {
           entityLabel = [r.soloUserFirst, r.soloUserLast].filter(Boolean).join(" ").trim();
         } else {
@@ -151,7 +156,11 @@ runRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c) => {
             .filter(Boolean)
             .join(" ")
             .trim();
-          songPartnership = songPartnerName ? `${songOwnerName} & ${songPartnerName}` : songOwnerName;
+          songPartnership = partnershipDisplay({
+            ownerName: songOwnerName,
+            partnerName: songPartnerName,
+            partnerKind: r.songPartnerKind,
+          });
         }
 
         const songLabel = buildStructuredSongLabel({

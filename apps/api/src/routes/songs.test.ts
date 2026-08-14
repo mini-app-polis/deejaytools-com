@@ -725,6 +725,177 @@ describe("POST /v1/songs/upload/chunk", () => {
     const valuesFn = vi.mocked(mockDb.insert).mock.results[0]?.value?.values;
     expect(valuesFn).toHaveBeenCalledWith(expect.objectContaining({ userId: targetUserId }));
   });
+
+  it("creates a kind:team placeholder partner and links the song on portal upload", async () => {
+    vi.mocked(mockDb.insert).mockClear();
+    mockFs.readdir.mockResolvedValue(["chunk_000000"]);
+    const placeholderPartnerId = "11111111-1111-1111-1111-111111111111";
+    vi.spyOn(crypto, "randomUUID").mockReturnValue(placeholderPartnerId);
+
+    enqueueSelectResult([{ identifier: "Team Alpha" }]);
+    enqueueSelectResult([]); // no existing placeholder partner
+
+    const insertedSong = {
+      id: "song_portal",
+      userId: "user_test123",
+      partnerId: placeholderPartnerId,
+      managedPartnershipId: null,
+      displayName: "Team Routine",
+      originalFilename: "track.mp3",
+      processedFilename: null,
+      division: "Teams",
+      routineName: "Team Routine",
+      personalDescriptor: null,
+      seasonYear: null,
+      driveFileId: null,
+      driveFolderId: null,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    enqueueSelectResult([insertedSong]);
+    enqueueSelectResult([mockUserRow]);
+    enqueueSelectResult([
+      {
+        id: placeholderPartnerId,
+        userId: "user_test123",
+        firstName: "Team Alpha",
+        lastName: "",
+        partnerRole: "follower",
+        kind: "team",
+        email: null,
+        linkedUserId: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    ]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([
+      {
+        song: { ...insertedSong, processedFilename: "teamalpha_teams_2026_teamroutine_v01.mp3", seasonYear: "2026", driveFileId: "drive_file_1", driveFolderId: "drive_folder_1" },
+        partner_first_name: "Team Alpha",
+        partner_last_name: "",
+      },
+    ]);
+
+    const res = await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: makeChunkForm({
+        division: "Teams",
+        partner_id: "",
+        entity_type: "team",
+        team_id: "team_1",
+        routine_name: "Team Routine",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<{ complete: boolean; song: Record<string, unknown> }>>(res);
+    expect(body.data.complete).toBe(true);
+    expect(body.data.song).toMatchObject({ division: "Teams", partner_id: placeholderPartnerId });
+
+    expect(vi.mocked(mockDb.insert)).toHaveBeenCalledTimes(2);
+    const partnerInsert = vi.mocked(mockDb.insert).mock.results[0]?.value?.values as ReturnType<typeof vi.fn>;
+    expect(partnerInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: placeholderPartnerId,
+        firstName: "Team Alpha",
+        lastName: "",
+        partnerRole: "follower",
+        kind: "team",
+      })
+    );
+    const songInsert = vi.mocked(mockDb.insert).mock.results[1]?.value?.values as ReturnType<typeof vi.fn>;
+    expect(songInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        partnerId: placeholderPartnerId,
+        managedPartnershipId: null,
+        division: "Teams",
+      })
+    );
+
+    expect(vi.mocked(drive.uploadSongToDrive)).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      expect.objectContaining({
+        filename: expect.stringMatching(/^TeamAlpha_/),
+      })
+    );
+
+    vi.mocked(crypto.randomUUID).mockRestore();
+  });
+
+  it("reuses an existing placeholder partner for repeat portal uploads of the same entity", async () => {
+    vi.mocked(mockDb.insert).mockClear();
+    mockFs.readdir.mockResolvedValue(["chunk_000000"]);
+    const existingPartnerId = "22222222-2222-2222-2222-222222222222";
+
+    enqueueSelectResult([{ identifier: "Team Alpha" }]);
+    enqueueSelectResult([{ id: existingPartnerId }]);
+
+    const insertedSong = {
+      id: "song_portal_2",
+      userId: "user_test123",
+      partnerId: existingPartnerId,
+      managedPartnershipId: null,
+      displayName: "Team Routine v2",
+      originalFilename: "track.mp3",
+      processedFilename: null,
+      division: "Teams",
+      routineName: "Team Routine v2",
+      personalDescriptor: null,
+      seasonYear: null,
+      driveFileId: null,
+      driveFolderId: null,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    enqueueSelectResult([insertedSong]);
+    enqueueSelectResult([mockUserRow]);
+    enqueueSelectResult([
+      {
+        id: existingPartnerId,
+        userId: "user_test123",
+        firstName: "Team Alpha",
+        lastName: "",
+        partnerRole: "follower",
+        kind: "team",
+        email: null,
+        linkedUserId: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    ]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([
+      {
+        song: { ...insertedSong, processedFilename: "teamalpha_teams_2026_teamroutinev2_v01.mp3", seasonYear: "2026", driveFileId: "drive_file_1", driveFolderId: "drive_folder_1" },
+        partner_first_name: "Team Alpha",
+        partner_last_name: "",
+      },
+    ]);
+
+    const res = await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: makeChunkForm({
+        division: "Teams",
+        partner_id: "",
+        entity_type: "team",
+        team_id: "team_1",
+        routine_name: "Team Routine v2",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<{ complete: boolean; song: Record<string, unknown> }>>(res);
+    expect(body.data.song).toMatchObject({ partner_id: existingPartnerId });
+
+    expect(vi.mocked(mockDb.insert)).toHaveBeenCalledTimes(1);
+    const songInsert = vi.mocked(mockDb.insert).mock.results[0]?.value?.values as ReturnType<typeof vi.fn>;
+    expect(songInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        partnerId: existingPartnerId,
+      })
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------

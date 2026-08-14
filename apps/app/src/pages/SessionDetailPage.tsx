@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr, formatDateTimeShort } from "@/lib/sessionFormat";
+import { songPartnershipLabel } from "@/lib/entityLabel";
 
 /**
  * Best human-readable label for a song, never falling back to the raw
@@ -705,9 +706,7 @@ export default function ApiSessionPage() {
                     <span className="font-medium">
                       {isSolo
                         ? <span className="text-muted-foreground italic">Solo</span>
-                        : selectedSong.partner_first_name
-                        ? `${selectedSong.partner_first_name} ${selectedSong.partner_last_name ?? ""}`.trimEnd()
-                        : "—"}
+                        : songPartnershipLabel(selectedSong) ?? "—"}
                     </span>
                   </div>
                   <div className="flex items-start gap-2">

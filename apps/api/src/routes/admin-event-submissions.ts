@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "../db/index.js";
 import { eventSongSubmissions, events, managedPartnerships, partners, songs, users } from "../db/schema.js";
 import { buildStructuredSongLabel } from "../lib/songLabel.js";
+import { partnershipDisplay } from "../lib/entityLabel.js";
 import { zValidator } from "../lib/validate.js";
 import { requireAdmin } from "../middleware/auth.js";
 
@@ -24,6 +25,7 @@ function partnershipLabel(row: {
   ownerLast: string | null;
   partnerFirst: string | null;
   partnerLast: string | null;
+  partnerKind?: string | null;
 }): string {
   if (row.managedLeaderFirst != null) {
     const leaderName = [row.managedLeaderFirst, row.managedLeaderLast]
@@ -39,7 +41,7 @@ function partnershipLabel(row: {
 
   const ownerName = [row.ownerFirst, row.ownerLast].filter(Boolean).join(" ").trim();
   const partnerName = [row.partnerFirst, row.partnerLast].filter(Boolean).join(" ").trim();
-  return partnerName ? `${ownerName} & ${partnerName}` : ownerName;
+  return partnershipDisplay({ ownerName, partnerName, partnerKind: row.partnerKind });
 }
 
 export const adminEventSubmissionRoutes = new Hono();
@@ -71,6 +73,7 @@ adminEventSubmissionRoutes.get(
           ownerLast: songOwner.lastName,
           partnerFirst: partners.firstName,
           partnerLast: partners.lastName,
+          partnerKind: partners.kind,
           managedLeaderFirst: managedPartnership.leaderFirstName,
           managedLeaderLast: managedPartnership.leaderLastName,
           managedFollowerFirst: managedPartnership.followerFirstName,

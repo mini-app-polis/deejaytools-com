@@ -7,7 +7,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { and, desc, eq, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { checkins, eventSongSubmissions, managedPartnerships, partners, queueEntries, sessions, songs, users } from "../db/schema.js";
+import { checkins, eventSongSubmissions, managedPartnerships, partners, queueEntries, sessions, songs, teams, users } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
 import { shareDriveFileWithUsers, softDeleteOnDrive, uploadSongToDrive } from "../services/drive.js";
 import { tagSongBytes } from "../services/tagger.js";
@@ -136,6 +136,7 @@ function mapSong(
   row: typeof songs.$inferSelect & {
     partner_first_name?: string | null;
     partner_last_name?: string | null;
+    partner_kind?: string | null;
   }
 ) {
   return {
@@ -156,6 +157,7 @@ function mapSong(
     updated_at: row.updatedAt,
     partner_first_name: row.partner_first_name ?? null,
     partner_last_name: row.partner_last_name ?? null,
+    partner_kind: row.partner_kind ?? null,
   };
 }
 
@@ -239,6 +241,9 @@ async function buildAndUploadSong(
       .trim();
   } else if (!partnerRow) {
     leaderName = userName;
+    followerName = null;
+  } else if (partnerRow.kind && partnerRow.kind !== "partner") {
+    leaderName = partnerName ?? "";
     followerName = null;
   } else if (partnerRow.partnerRole === "leader") {
     leaderName = partnerName ?? "";
@@ -349,6 +354,7 @@ async function buildAndUploadSong(
       song: songs,
       partner_first_name: partners.firstName,
       partner_last_name: partners.lastName,
+      partner_kind: partners.kind,
     })
     .from(songs)
     .leftJoin(partners, eq(partners.id, songs.partnerId))
@@ -359,6 +365,7 @@ async function buildAndUploadSong(
     ...r!.song,
     partner_first_name: r!.partner_first_name,
     partner_last_name: r!.partner_last_name,
+    partner_kind: r!.partner_kind,
   });
 }
 
@@ -405,6 +412,7 @@ songRoutes.get("/", requireAuth, zValidator("query", listQuery), async (c) => {
       song: songs,
       partner_first_name: partners.firstName,
       partner_last_name: partners.lastName,
+      partner_kind: partners.kind,
     })
     .from(songs)
     .leftJoin(partners, eq(partners.id, songs.partnerId))
@@ -418,6 +426,7 @@ songRoutes.get("/", requireAuth, zValidator("query", listQuery), async (c) => {
           ...r.song,
           partner_first_name: r.partner_first_name,
           partner_last_name: r.partner_last_name,
+          partner_kind: r.partner_kind,
         })
       )
     )
@@ -473,6 +482,7 @@ songRoutes.get("/:id", requireAuth, async (c) => {
       song: songs,
       partner_first_name: partners.firstName,
       partner_last_name: partners.lastName,
+      partner_kind: partners.kind,
     })
     .from(songs)
     .leftJoin(partners, eq(partners.id, songs.partnerId))
@@ -487,6 +497,7 @@ songRoutes.get("/:id", requireAuth, async (c) => {
         ...r.song,
         partner_first_name: r.partner_first_name,
         partner_last_name: r.partner_last_name,
+        partner_kind: r.partner_kind,
       })
     )
   );
@@ -541,6 +552,7 @@ songRoutes.patch("/:id", requireAuth, zValidator("json", patchBody), async (c) =
       song: songs,
       partner_first_name: partners.firstName,
       partner_last_name: partners.lastName,
+      partner_kind: partners.kind,
     })
     .from(songs)
     .leftJoin(partners, eq(partners.id, songs.partnerId))
@@ -552,6 +564,7 @@ songRoutes.patch("/:id", requireAuth, zValidator("json", patchBody), async (c) =
         ...r!.song,
         partner_first_name: r!.partner_first_name,
         partner_last_name: r!.partner_last_name,
+        partner_kind: r!.partner_kind,
       })
     )
   );
@@ -689,6 +702,12 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
     typeof body.on_behalf_of_user_id === "string"
       ? body.on_behalf_of_user_id.trim() || null
       : null;
+  const entityType =
+    typeof body.entity_type === "string" ? body.entity_type.trim() : "";
+  const entityName =
+    typeof body.entity_name === "string" ? body.entity_name.trim() : "";
+  const teamId =
+    typeof body.team_id === "string" ? body.team_id.trim() : "";
   const chunkFile = body.chunk instanceof File ? body.chunk : null;
 
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uploadId)) {
@@ -724,13 +743,18 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
     return c.json(success({ received: true, complete: false }));
   }
 
-  // Final chunk — validate partner or managed partnership before assembling.
-  if (managedPartnershipId && partnerId) {
+  // Final chunk — validate partner, managed partnership, or portal entity before assembling.
+  const isPortalUpload = entityType !== "";
+  if (isPortalUpload && (managedPartnershipId || partnerId)) {
     await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
     return c.json(
-      CommonErrors.badRequest("Specify either partner_id or managed_partnership_id, not both"),
+      CommonErrors.badRequest("Portal uploads cannot specify partner_id or managed_partnership_id"),
       400
     );
+  }
+  if (isPortalUpload && !["solo", "team", "other"].includes(entityType)) {
+    await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+    return c.json(CommonErrors.badRequest("Invalid entity_type"), 400);
   }
 
   let effectiveUserId = userId;
@@ -747,20 +771,103 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
     effectiveUserId = onBehalfOfUserId;
   }
 
-  if (managedPartnershipId) {
-    const ok = await assertManagedPartnershipOwned(effectiveUserId, managedPartnershipId);
-    if (!ok) {
+  let resolvedPartnerId: string | null = partnerId;
+  if (isPortalUpload) {
+    let placeholderName: string;
+    if (entityType === "team") {
+      if (!teamId) {
+        await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+        return c.json(CommonErrors.badRequest("team_id is required for team uploads"), 400);
+      }
+      const [team] = await db
+        .select({ identifier: teams.identifier })
+        .from(teams)
+        .where(and(eq(teams.id, teamId), eq(teams.userId, effectiveUserId)))
+        .limit(1);
+      if (!team) {
+        await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+        return c.json(CommonErrors.badRequest("Team not found"), 400);
+      }
+      placeholderName = team.identifier;
+    } else if (entityType === "other") {
+      placeholderName = entityName;
+      if (!placeholderName) {
+        await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+        return c.json(CommonErrors.badRequest("entity_name is required for other uploads"), 400);
+      }
+    } else {
+      if (entityName) {
+        placeholderName = entityName;
+      } else {
+        const [userRow] = await db
+          .select({ firstName: users.firstName, lastName: users.lastName })
+          .from(users)
+          .where(eq(users.id, effectiveUserId))
+          .limit(1);
+        if (!userRow) {
+          await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+          return c.json(CommonErrors.badRequest("User not found"), 400);
+        }
+        placeholderName = [userRow.firstName, userRow.lastName].filter(Boolean).join(" ").trim();
+        if (!placeholderName) {
+          await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+          return c.json(CommonErrors.badRequest("Set your name on My Profile or provide entity_name"), 400);
+        }
+      }
+    }
+
+    const [existing] = await db
+      .select({ id: partners.id })
+      .from(partners)
+      .where(
+        and(
+          eq(partners.userId, effectiveUserId),
+          eq(partners.kind, entityType),
+          eq(partners.firstName, placeholderName),
+          eq(partners.lastName, "")
+        )
+      )
+      .limit(1);
+
+    let placeholderPartnerId = existing?.id;
+    if (!placeholderPartnerId) {
+      placeholderPartnerId = crypto.randomUUID();
+      const partnerNow = Date.now();
+      await db.insert(partners).values({
+        id: placeholderPartnerId,
+        userId: effectiveUserId,
+        firstName: placeholderName,
+        lastName: "",
+        partnerRole: "follower",
+        kind: entityType,
+        createdAt: partnerNow,
+        updatedAt: partnerNow,
+      });
+    }
+    resolvedPartnerId = placeholderPartnerId;
+  } else {
+    if (managedPartnershipId && partnerId) {
       await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
       return c.json(
-        CommonErrors.badRequest("Managed partnership not found or does not belong to you"),
+        CommonErrors.badRequest("Specify either partner_id or managed_partnership_id, not both"),
         400
       );
     }
-  } else if (partnerId) {
-    const ok = await assertPartnerOwned(effectiveUserId, partnerId);
-    if (!ok) {
-      await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
-      return c.json(CommonErrors.badRequest("Partner not found or does not belong to you"), 400);
+    if (managedPartnershipId) {
+      const ok = await assertManagedPartnershipOwned(effectiveUserId, managedPartnershipId);
+      if (!ok) {
+        await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+        return c.json(
+          CommonErrors.badRequest("Managed partnership not found or does not belong to you"),
+          400
+        );
+      }
+    } else if (partnerId) {
+      const ok = await assertPartnerOwned(effectiveUserId, partnerId);
+      if (!ok) {
+        await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+        return c.json(CommonErrors.badRequest("Partner not found or does not belong to you"), 400);
+      }
     }
   }
 
@@ -813,7 +920,7 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   await db.insert(songs).values({
     id: songId,
     userId: effectiveUserId,
-    partnerId: managedPartnershipId ? null : partnerId,
+    partnerId: managedPartnershipId ? null : resolvedPartnerId,
     managedPartnershipId,
     displayName: routineName || originalName || null,
     originalFilename: originalName,

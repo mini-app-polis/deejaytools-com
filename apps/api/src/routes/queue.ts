@@ -16,6 +16,7 @@ import {
   songs,
   users,
 } from "../db/schema.js";
+import { partnershipDisplay } from "../lib/entityLabel.js";
 import { zValidator } from "../lib/validate.js";
 import { canPromotePriority } from "../lib/queue/admission.js";
 import { compactAfterRemoval, nextBottomPosition } from "../lib/queue/compaction.js";
@@ -595,6 +596,7 @@ async function listQueue(sessionId: string, queueType: "priority" | "non_priorit
       pairUserLast: pairUser.lastName,
       pairPartnerFirst: partners.firstName,
       pairPartnerLast: partners.lastName,
+      pairPartnerKind: partners.kind,
       soloUserFirst: soloUser.firstName,
       soloUserLast: soloUser.lastName,
       managedLeaderFirst: managedPartnerships.leaderFirstName,
@@ -630,7 +632,11 @@ async function listQueue(sessionId: string, queueType: "priority" | "non_priorit
     } else if (r.entityPairId && (r.pairUserFirst || r.pairUserLast)) {
       const a = [r.pairUserFirst, r.pairUserLast].filter(Boolean).join(" ").trim();
       const b = [r.pairPartnerFirst, r.pairPartnerLast].filter(Boolean).join(" ").trim();
-      entityLabel = b ? `${a} & ${b}` : a;
+      entityLabel = partnershipDisplay({
+        ownerName: a,
+        partnerName: b,
+        partnerKind: r.pairPartnerKind,
+      });
     } else if (r.entitySoloUserId && (r.soloUserFirst || r.soloUserLast)) {
       entityLabel = [r.soloUserFirst, r.soloUserLast].filter(Boolean).join(" ").trim();
     } else {

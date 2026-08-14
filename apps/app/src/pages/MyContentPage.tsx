@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { compareEventChrono } from "@/lib/chronoSort";
+import { songPartnershipLabel } from "@/lib/entityLabel";
 import { formatSessionTitle, formatTimeOnly } from "@/lib/sessionFormat";
 
 function eventStatusBadge(status: string) {
@@ -401,9 +402,14 @@ export default function MyContentPage() {
       <div className="rounded-lg border bg-card">
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
           <h2 className="font-semibold">Songs</h2>
-          <Button size="sm" asChild>
-            <Link to="/songs/add">Add song</Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" asChild>
+              <Link to="/songs/add-special">Special upload</Link>
+            </Button>
+            <Button size="sm" asChild>
+              <Link to="/songs/add">Add song</Link>
+            </Button>
+          </div>
         </div>
         <div className="p-4 space-y-4">
           <div className={`space-y-3${songsLoading ? " opacity-60" : ""}`}>
@@ -412,9 +418,7 @@ export default function MyContentPage() {
               <p className="text-sm text-muted-foreground py-4 text-center">No songs yet.</p>
             )}
             {songs.map((s) => {
-              const partnerName = !s.partner_id
-                ? null
-                : [s.partner_first_name, s.partner_last_name].filter(Boolean).join(" ").trim() || null;
+              const partnerName = songPartnershipLabel(s);
               const driveUrl = s.drive_file_id
                 ? `https://drive.google.com/file/d/${s.drive_file_id}/view`
                 : null;
@@ -447,7 +451,9 @@ export default function MyContentPage() {
                     )}
                     {partnerName && (
                       <span>
-                        <span className="text-muted-foreground text-xs">Partner </span>
+                        <span className="text-muted-foreground text-xs">
+                          {s.partner_kind && s.partner_kind !== "partner" ? "Entity " : "Partner "}
+                        </span>
                         {partnerName}
                       </span>
                     )}

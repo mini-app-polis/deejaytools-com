@@ -106,6 +106,56 @@ describe("GET /v1/runs", () => {
     expect(r.completed_by_label).toBe("Admin Person");
   });
 
+  it("uses a single entity name for placeholder team partner song and pair labels", async () => {
+    enqueueSelectResult([
+      {
+        id: "run-team",
+        completedAt: 1700000000000,
+        divisionName: "Teams",
+        sessionId: "s1",
+        sessionFloorTrialStartsAt: 1699990000000,
+        eventId: "e1",
+        eventName: "GNDC",
+        songId: "song-team",
+        songDisplayName: "Team Routine",
+        songProcessedFilename: "teamalpha_teams_2026_teamroutine_v01.mp3",
+        songDivision: "Teams",
+        songSeasonYear: "2026",
+        songRoutineName: "Team Routine",
+        songOwnerFirst: "Alice",
+        songOwnerLast: "Smith",
+        songPartnerFirst: "Team Alpha",
+        songPartnerLast: "",
+        songPartnerKind: "team",
+        songManagedLeaderFirst: null,
+        songManagedLeaderLast: null,
+        songManagedFollowerFirst: null,
+        songManagedFollowerLast: null,
+        pairUserFirst: "Alice",
+        pairUserLast: "Smith",
+        pairPartnerFirst: "Team Alpha",
+        pairPartnerLast: "",
+        pairPartnerKind: "team",
+        soloUserFirst: null,
+        soloUserLast: null,
+        managedLeaderFirst: null,
+        managedLeaderLast: null,
+        managedFollowerFirst: null,
+        managedFollowerLast: null,
+        completedByFirst: "Admin",
+        completedByLast: "Person",
+      },
+    ]);
+
+    const res = await app.request(ENDPOINT, { headers: adminHeaders() });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<RunRow[]>>(res);
+    expect(body.data[0].entity_label).toBe("Team Alpha");
+    expect(body.data[0].song_label).toBe("Team Alpha Teams 2026 Team Routine v01");
+    expect(body.data[0].entity_label).not.toContain("Alice Smith & Team Alpha");
+    expect(body.data[0].song_label).not.toContain("Alice Smith & Team Alpha");
+  });
+
   it("returns runs with a solo entity label when soloUser fields are populated", async () => {
     enqueueSelectResult([
       {

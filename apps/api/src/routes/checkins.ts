@@ -18,6 +18,7 @@ import {
   songs,
   users,
 } from "../db/schema.js";
+import { partnershipDisplay } from "../lib/entityLabel.js";
 import { zValidator } from "../lib/validate.js";
 import { determineInitialQueue, loadAdmissionContext } from "../lib/queue/admission.js";
 import type { EntityRef } from "../lib/queue/runCounts.js";
@@ -341,6 +342,7 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
       pairUserLast: pairUser.lastName,
       pairPartnerFirst: partners.firstName,
       pairPartnerLast: partners.lastName,
+      pairPartnerKind: partners.kind,
       managedLeaderFirst: managedPartnerships.leaderFirstName,
       managedLeaderLast: managedPartnerships.leaderLastName,
       managedFollowerFirst: managedPartnerships.followerFirstName,
@@ -442,7 +444,11 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
     } else if (r.entityPairId && (r.pairUserFirst || r.pairUserLast)) {
       const a = [r.pairUserFirst, r.pairUserLast].filter(Boolean).join(" ").trim();
       const b = [r.pairPartnerFirst, r.pairPartnerLast].filter(Boolean).join(" ").trim();
-      entityLabel = b ? `${a} & ${b}` : a;
+      entityLabel = partnershipDisplay({
+        ownerName: a,
+        partnerName: b,
+        partnerKind: r.pairPartnerKind,
+      });
     } else {
       entityLabel = "Solo";
     }

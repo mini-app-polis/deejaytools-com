@@ -71,6 +71,13 @@
       "when": 1786740101147,
       "tag": "0009_gorgeous_peter_parker",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786742658163,
+      "tag": "0010_elite_karma",
+      "breakpoints": true
     }
   ]
 }

@@ -7,6 +7,7 @@ import { z } from "zod";
 import { db } from "../db/index.js";
 import { eventSongSubmissions, events, managedPartnerships, partners, songs, users } from "../db/schema.js";
 import { buildStructuredSongLabel } from "../lib/songLabel.js";
+import { partnershipDisplay } from "../lib/entityLabel.js";
 import { zValidator } from "../lib/validate.js";
 import { requireAuth } from "../middleware/auth.js";
 import { computeStatus } from "./events.js";
@@ -43,6 +44,7 @@ type JoinedSubmissionRow = {
   ownerLast: string | null;
   partnerFirst: string | null;
   partnerLast: string | null;
+  partnerKind: string | null;
   managedLeaderFirst: string | null;
   managedLeaderLast: string | null;
   managedFollowerFirst: string | null;
@@ -58,6 +60,7 @@ function partnershipLabel(row: {
   ownerLast: string | null;
   partnerFirst: string | null;
   partnerLast: string | null;
+  partnerKind?: string | null;
 }): string {
   if (row.managedLeaderFirst != null) {
     const leaderName = [row.managedLeaderFirst, row.managedLeaderLast]
@@ -73,7 +76,7 @@ function partnershipLabel(row: {
 
   const ownerName = [row.ownerFirst, row.ownerLast].filter(Boolean).join(" ").trim();
   const partnerName = [row.partnerFirst, row.partnerLast].filter(Boolean).join(" ").trim();
-  return partnerName ? `${ownerName} & ${partnerName}` : ownerName;
+  return partnershipDisplay({ ownerName, partnerName, partnerKind: row.partnerKind });
 }
 
 export function mapSubmissionRow(row: JoinedSubmissionRow) {
@@ -132,6 +135,7 @@ export async function fetchUserSubmissionRows(
       ownerLast: songOwner.lastName,
       partnerFirst: partners.firstName,
       partnerLast: partners.lastName,
+      partnerKind: partners.kind,
       managedLeaderFirst: managedPartnership.leaderFirstName,
       managedLeaderLast: managedPartnership.leaderLastName,
       managedFollowerFirst: managedPartnership.followerFirstName,

@@ -54,6 +54,7 @@ export const partners = pgTable(
     firstName: text("first_name").notNull(),
     lastName: text("last_name").notNull(),
     partnerRole: partnerRoleEnum("partner_role").notNull().default("follower"),
+    kind: text("kind").notNull().default("partner"), // 'partner' | 'solo' | 'team' | 'other'
     email: text("email"),
     linkedUserId: text("linked_user_id").references(() => users.id),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),

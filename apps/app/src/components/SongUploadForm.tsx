@@ -12,16 +12,17 @@ import {
 } from "@/components/ui/select";
 import { DIVISIONS, type ApiManagedPartnership } from "@deejaytools/schemas";
 import type { AuthMe as MeResponse } from "@/hooks/useAuthMe";
+import {
+  MAX_FILE_BYTES,
+  uploadSongInChunks,
+  type UploadStage,
+} from "@/lib/chunkedSongUpload";
 
 const DIVISION_OPTIONS = DIVISIONS;
 // Divisions handled only by the (future) solo/teams portal — hidden from the standard upload picker.
 const PORTAL_ONLY_DIVISIONS = new Set<string>(["Teams", "Cabaret", "My Division Is Not Listed"]);
 const UPLOAD_DIVISION_OPTIONS = DIVISION_OPTIONS.filter((d) => !PORTAL_ONLY_DIVISIONS.has(d));
-const apiBase = import.meta.env.VITE_API_URL ?? "";
-const CHUNK_SIZE = 5 * 1024 * 1024;
-const MAX_FILE_BYTES = 100 * 1024 * 1024;
 
-type UploadStage = "idle" | "uploading" | "processing" | "finishing";
 type Partner = { id: string; first_name: string; last_name: string; partner_role: "leader" | "follower" };
 
 function formatMB(bytes: number): string { return (bytes / (1024 * 1024)).toFixed(1); }
@@ -118,78 +119,29 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
 
     setIsSubmitting(true);
     try {
-      setUploadStage("uploading");
-      setUploadProgress(10);
-      setUploadBytesSent(0);
-
-      const uploadId = crypto.randomUUID();
-      const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
-      const MAX_RETRIES = 3;
-
-      for (let i = 0; i < totalChunks; i++) {
-        const start = i * CHUNK_SIZE;
-        const end = Math.min(start + CHUNK_SIZE, file.size);
-        const chunk = file.slice(start, end);
-        const isLast = i === totalChunks - 1;
-        if (isLast) { setUploadStage("processing"); setUploadProgress(i > 0 ? 90 : 50); }
-
-        let lastErr: Error | null = null;
-        for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-          if (attempt > 0) await new Promise((r) => setTimeout(r, 1000 * attempt));
-
-          const form = new FormData();
-          form.set("chunk", chunk, file.name);
-          form.set("upload_id", uploadId);
-          form.set("chunk_index", String(i));
-          form.set("total_chunks", String(totalChunks));
-          form.set("original_filename", file.name);
-          form.set("mime_type", file.type || "audio/mpeg");
-          form.set("division", division);
+      await uploadSongInChunks({
+        file,
+        getToken,
+        buildFormFields: () => {
+          const fields: Record<string, string> = {
+            division,
+            routine_name: routineName.trim() || "",
+            personal_descriptor: descriptor.trim() || "",
+          };
           if (variant === "self") {
-            form.set("partner_id", selectedPartnerId || "");
+            fields.partner_id = selectedPartnerId || "";
           } else {
-            form.set("managed_partnership_id", selectedManagedPartnershipId);
+            fields.managed_partnership_id = selectedManagedPartnershipId;
           }
-          if (onBehalf) form.set("on_behalf_of_user_id", onBehalf.userId);
-          form.set("routine_name", routineName.trim() || "");
-          form.set("personal_descriptor", descriptor.trim() || "");
-
-          let token: string | null;
-          try { token = await getToken(); } catch { token = null; }
-          if (!token) throw new Error("Your session expired. Please sign in again and retry the upload.");
-
-          let res: Response;
-          try {
-            res = await fetch(`${apiBase}/v1/songs/upload/chunk`, {
-              method: "POST",
-              headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-              body: form,
-            });
-          } catch (fetchErr) {
-            const detail = fetchErr instanceof Error ? `${fetchErr.name}: ${fetchErr.message}` : String(fetchErr);
-            lastErr = new Error(`Network error (${detail}) — check your connection and try again.`);
-            continue;
-          }
-          if (!res.ok) {
-            const json = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-            lastErr = new Error(json?.error?.message ?? `Upload failed (${res.status})`);
-            if (res.status === 401) throw lastErr;
-            continue;
-          }
-          lastErr = null;
-          if (!isLast) {
-            setUploadBytesSent(end);
-            setUploadProgress(10 + Math.round((end / file.size) * 75));
-          }
-          break;
-        }
-        if (lastErr) throw lastErr;
-      }
-
-      setUploadStage("finishing");
-      setUploadProgress(95);
-      setUploadProgress(100);
-      await new Promise((r) => setTimeout(r, 400));
+          if (onBehalf) fields.on_behalf_of_user_id = onBehalf.userId;
+          return fields;
+        },
+        onProgress: ({ stage, progress, bytesSent }) => {
+          setUploadStage(stage);
+          setUploadProgress(progress);
+          setUploadBytesSent(bytesSent);
+        },
+      });
 
       toast.success("Song uploaded successfully.");
       setFile(null);

@@ -9,7 +9,7 @@ import {
   readJson,
   type SuccessEnvelope,
 } from "../test/helpers.js";
-import { enqueueSelectResult, resetSelectQueue } from "../test/mocks.js";
+import { enqueueSelectResult, mockDb, resetSelectQueue } from "../test/mocks.js";
 
 vi.mock("../db/index.js", async () => {
   const { mockDb: db } = await import("../test/mocks.js");
@@ -231,6 +231,44 @@ describe("POST /v1/checkins", () => {
       }),
     });
     expect(res.status).toBe(201);
+  });
+
+  it("checks in a portal-upload song using entityPairId for the placeholder partner pair", async () => {
+    vi.mocked(mockDb.insert).mockClear();
+    const portalSong = {
+      id: "song_portal",
+      managedPartnershipId: null as string | null,
+      partnerId: "placeholder_p1",
+    };
+    const placeholderPair = { userAId: "user_test123", partnerBId: "placeholder_p1" };
+
+    enqueueSelectResult([openSession]);
+    enqueueSelectResult([portalSong]);
+    enqueueSelectResult([placeholderPair]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([openSession]);
+    enqueueSelectResult([{ isPriority: false, priorityRunLimit: 0 }]);
+
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "sess1",
+        divisionName: "Teams",
+        entityPairId: "p1",
+        songId: "song_portal",
+      }),
+    });
+    expect(res.status).toBe(201);
+
+    const checkinInsert = vi.mocked(mockDb.insert).mock.results[0]?.value?.values as ReturnType<typeof vi.fn>;
+    expect(checkinInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entityPairId: "p1",
+        entitySoloUserId: null,
+        songId: "song_portal",
+      })
+    );
   });
 
   it("returns 201 for pair check-in into priority division → priority queue", async () => {
