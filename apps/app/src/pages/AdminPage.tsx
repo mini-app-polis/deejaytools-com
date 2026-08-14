@@ -1188,92 +1188,67 @@ export default function AdminPage() {
                 : "No songs yet."}
             </p>
           ) : (
-            <div className={cn("w-full max-w-full overflow-x-auto", adminSongsLoading && "opacity-60")}>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Song</TableHead>
-                    {/* "Owner" is the uploader; "Partner" is the second
-                        member of the partnership. Up to two owners total. */}
-                    <TableHead>Owner</TableHead>
-                    <TableHead>Partner</TableHead>
-                    <TableHead>Division</TableHead>
-                    <TableHead>Routine</TableHead>
-                    <TableHead>Descriptor</TableHead>
-                    <TableHead className="text-right whitespace-nowrap">Created</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sortedAdminSongs.map((s) => {
-                    const ownerLabel =
-                      s.owner.full_name?.trim() || s.owner.email || "—";
-                    const partnerLabel = s.partner?.full_name?.trim() || "—";
-                    return (
-                      <TableRow
-                        key={s.id}
-                        className={s.deleted_at ? "opacity-60" : ""}
-                      >
-                        <TableCell className="font-medium">
-                          <div className="flex flex-col gap-0.5">
-                            <span>{s.song_label}</span>
-                            <div className="flex gap-1 flex-wrap">
-                              {s.is_legacy && (
-                                <Badge
-                                  variant="secondary"
-                                  className="text-xs font-normal w-fit bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30"
-                                  title="Imported from the legacy catalog — no Drive file"
-                                >
-                                  Legacy
-                                </Badge>
-                              )}
-                              {s.deleted_at && (
-                                <Badge
-                                  variant="destructive"
-                                  className="text-xs font-normal w-fit"
-                                >
-                                  deleted
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          <div className="flex flex-col gap-0.5">
-                            <span>{ownerLabel}</span>
-                            {s.owner.email && s.owner.full_name && (
-                              <span className="text-xs text-muted-foreground">
-                                {s.owner.email}
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          <div className="flex flex-col gap-0.5">
-                            <span>{partnerLabel}</span>
-                            {s.partner?.linked_user_email && (
-                              <span className="text-xs text-muted-foreground">
-                                linked: {s.partner.linked_user_email}
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                          {s.division ?? "—"}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {s.routine_name ?? "—"}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {s.personal_descriptor ?? "—"}
-                        </TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground whitespace-nowrap tabular-nums">
-                          {formatTime(s.created_at)}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+            <div className={cn("space-y-3", adminSongsLoading && "opacity-60")}>
+              {sortedAdminSongs.map((s) => {
+                const ownerLabel = s.owner.full_name?.trim() || s.owner.email || "—";
+                const partnerLabel = s.partner?.full_name?.trim() || "—";
+                return (
+                  <div
+                    key={s.id}
+                    className={cn("rounded-lg border px-4 py-3 space-y-3", s.deleted_at && "opacity-60")}
+                  >
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        <span className="font-medium">{s.song_label}</span>
+                        {s.is_legacy && (
+                          <Badge
+                            variant="secondary"
+                            className="text-xs font-normal bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30"
+                            title="Imported from the legacy catalog — no Drive file"
+                          >
+                            Legacy
+                          </Badge>
+                        )}
+                        {s.deleted_at && (
+                          <Badge variant="destructive" className="text-xs font-normal">deleted</Badge>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap tabular-nums shrink-0">
+                        {formatTime(s.created_at)}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2 text-sm">
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted-foreground">Owner</p>
+                        <p className="truncate">{ownerLabel}</p>
+                        {s.owner.email && s.owner.full_name && (
+                          <p className="text-xs text-muted-foreground truncate">{s.owner.email}</p>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted-foreground">Partner</p>
+                        <p className="truncate">{partnerLabel}</p>
+                        {s.partner?.linked_user_email && (
+                          <p className="text-xs text-muted-foreground truncate">linked: {s.partner.linked_user_email}</p>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted-foreground">Division</p>
+                        <p className="truncate">{s.division ?? "—"}</p>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted-foreground">Routine</p>
+                        <p className="truncate">{s.routine_name ?? "—"}</p>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted-foreground">Descriptor</p>
+                        <p className="truncate">{s.personal_descriptor ?? "—"}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </TabsContent>
