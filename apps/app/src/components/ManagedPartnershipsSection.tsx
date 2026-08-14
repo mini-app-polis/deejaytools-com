@@ -152,16 +152,11 @@ export default function ManagedPartnershipsSection() {
             {items?.map((p) => (
               <div key={p.id} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
                 <p className="font-medium truncate">{partnershipLabel(p)}</p>
-                <div className="flex items-center gap-1 shrink-0">
-                  <Button variant="ghost" size="sm" onClick={() => openEdit(p)}>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button variant="outline" size="sm" onClick={() => openEdit(p)}>
                     Edit
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive hover:text-destructive"
-                    onClick={() => setDeleteTarget(p)}
-                  >
+                  <Button variant="destructive" size="sm" onClick={() => setDeleteTarget(p)}>
                     Delete
                   </Button>
                 </div>

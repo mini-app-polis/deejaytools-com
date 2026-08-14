@@ -204,14 +204,13 @@ export default function PartnersSection() {
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <Button variant="ghost" size="sm" onClick={() => openEdit(p)}>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button variant="outline" size="sm" onClick={() => openEdit(p)}>
                     Edit
                   </Button>
                   <Button
-                    variant="ghost"
+                    variant="destructive"
                     size="sm"
-                    className="text-destructive hover:text-destructive"
                     onClick={() => void handleDeletePartnerClick(p)}
                   >
                     Delete

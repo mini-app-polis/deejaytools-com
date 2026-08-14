@@ -126,16 +126,11 @@ export default function TeamsSection() {
             {teams?.map((t) => (
               <div key={t.id} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
                 <p className="font-medium truncate">{t.identifier}</p>
-                <div className="flex items-center gap-1 shrink-0">
-                  <Button variant="ghost" size="sm" onClick={() => openEdit(t)}>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button variant="outline" size="sm" onClick={() => openEdit(t)}>
                     Edit
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive hover:text-destructive"
-                    onClick={() => setDeleteTarget(t)}
-                  >
+                  <Button variant="destructive" size="sm" onClick={() => setDeleteTarget(t)}>
                     Delete
                   </Button>
                 </div>
