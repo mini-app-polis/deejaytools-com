@@ -2,6 +2,7 @@ import type {
   ApiEvent,
   ApiEventSongSubmission,
   ApiMyCheckin,
+  ApiSession,
   ApiSong,
 } from "@deejaytools/schemas";
 import { useEffect, useMemo, useState } from "react";
@@ -20,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { compareEventChrono } from "@/lib/chronoSort";
-import { formatSessionTitle } from "@/lib/sessionFormat";
+import { formatSessionTitle, formatTimeOnly } from "@/lib/sessionFormat";
 
 function eventStatusBadge(status: string) {
   switch (status) {
@@ -39,6 +40,15 @@ function eventStatusBadge(status: string) {
     default:
       return <Badge variant="outline">{status}</Badge>;
   }
+}
+
+function sessionStatusBadge(status: string) {
+  if (status === "checkin_open") return <Badge variant="default">check-in open</Badge>;
+  if (status === "in_progress")
+    return (
+      <Badge className="bg-primary text-primary-foreground border-transparent">in progress</Badge>
+    );
+  return <Badge variant="outline">{status}</Badge>;
 }
 
 function queueStatusBadge(checkin: ApiMyCheckin) {
@@ -86,6 +96,8 @@ export default function MyContentPage() {
   const [eventSubmissions, setEventSubmissions] = useState<ApiEventSongSubmission[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
 
+  const [activeSessions, setActiveSessions] = useState<ApiSession[] | null>(null);
+
   // ── Data loaders ─────────────────────────────────────────────────────────────
 
   const loadSongs = () => {
@@ -121,6 +133,17 @@ export default function MyContentPage() {
       .finally(() => setEventsLoading(false));
   };
 
+  const loadActiveSessions = () => {
+    api
+      .get<ApiSession[]>("/v1/sessions")
+      .then((all) =>
+        setActiveSessions(
+          all.filter((s) => s.status === "checkin_open" || s.status === "in_progress")
+        )
+      )
+      .catch(() => setActiveSessions([]));
+  };
+
   const handleWithdraw = async (checkinId: string) => {
     setWithdrawingId(checkinId);
     try {
@@ -140,6 +163,7 @@ export default function MyContentPage() {
     loadSongs();
     loadCheckins();
     loadEventsSection();
+    loadActiveSessions();
   }, [api]);
 
   const submissionsByEventId = useMemo(() => {
@@ -155,6 +179,19 @@ export default function MyContentPage() {
   const sortedAvailableEvents = useMemo(
     () => availableEvents.slice().sort(compareEventChrono),
     [availableEvents]
+  );
+
+  const eventNameById = useMemo(
+    () => new Map(availableEvents.map((e) => [e.id, e.name])),
+    [availableEvents]
+  );
+
+  const sortedActiveSessions = useMemo(
+    () =>
+      (activeSessions ?? [])
+        .slice()
+        .sort((a, b) => a.floor_trial_starts_at - b.floor_trial_starts_at),
+    [activeSessions]
   );
 
   // ── Songs actions ─────────────────────────────────────────────────────────────
@@ -177,6 +214,49 @@ export default function MyContentPage() {
   return (
     <div className="space-y-6">
       <h1 className="page-title text-2xl">My Content</h1>
+
+      {sortedActiveSessions.length > 0 && (
+        <div className="rounded-lg border bg-card">
+          <div className="px-4 py-3 border-b">
+            <h2 className="font-semibold">Active Floor Trials</h2>
+          </div>
+          <div className="p-4 space-y-3">
+            {sortedActiveSessions.map((s) => {
+              const eventName = s.event_id ? eventNameById.get(s.event_id) ?? null : null;
+              return (
+                <div
+                  key={s.id}
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border px-4 py-3"
+                >
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {eventName && (
+                        <Badge
+                          variant="outline"
+                          className="border-primary/40 bg-primary/10 text-primary font-medium"
+                        >
+                          {eventName}
+                        </Badge>
+                      )}
+                      {sessionStatusBadge(s.status)}
+                    </div>
+                    <p className="font-medium text-sm">
+                      {formatSessionTitle(s, s.event_timezone)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Floor trial: {formatTimeOnly(s.floor_trial_starts_at, s.event_timezone)} –{" "}
+                      {formatTimeOnly(s.floor_trial_ends_at, s.event_timezone)}
+                    </p>
+                  </div>
+                  <Button asChild size="sm" className="shrink-0 w-full sm:w-auto">
+                    <Link to={`/sessions/${s.id}`}>Check in</Link>
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Check-ins section ── */}
       <div className="rounded-lg border bg-card">

@@ -33,6 +33,31 @@ const EVENT = {
   updated_at: 1,
 };
 
+const ACTIVE_SESSION = {
+  id: "sess-active-1",
+  event_id: "ev1",
+  event_timezone: "America/Los_Angeles",
+  date: "2026-04-01",
+  floor_trial_starts_at: 1700000000000,
+  floor_trial_ends_at: 1700007200000,
+  checkin_opens_at: 1699998200000,
+  status: "checkin_open" as const,
+  active_priority_max: 6,
+  active_non_priority_max: 4,
+  created_at: 1,
+  updated_at: 1,
+  divisions: [],
+};
+
+function defaultApiGet(path: string) {
+  if (path === "/v1/checkins/mine") return Promise.resolve([]);
+  if (path === "/v1/songs") return Promise.resolve([]);
+  if (path === "/v1/sessions") return Promise.resolve([]);
+  if (path === "/v1/events") return Promise.resolve([EVENT]);
+  if (path === "/v1/event-song-submissions") return Promise.resolve([]);
+  return Promise.resolve([]);
+}
+
 function renderPage() {
   return render(
     <MemoryRouter>
@@ -48,9 +73,6 @@ describe("MyContentPage — Events section", () => {
 
   it("renders the Events section with upcoming events", async () => {
     apiGet.mockImplementation((path: string) => {
-      if (path === "/v1/checkins/mine") return Promise.resolve([]);
-      if (path === "/v1/songs") return Promise.resolve([]);
-      if (path === "/v1/events") return Promise.resolve([EVENT]);
       if (path === "/v1/event-song-submissions") {
         return Promise.resolve([
           {
@@ -66,7 +88,7 @@ describe("MyContentPage — Events section", () => {
           },
         ]);
       }
-      return Promise.resolve([]);
+      return defaultApiGet(path);
     });
 
     renderPage();
@@ -82,13 +104,10 @@ describe("MyContentPage — Events section", () => {
 
   it("still renders Check-ins and Songs when event-song-submissions rejects", async () => {
     apiGet.mockImplementation((path: string) => {
-      if (path === "/v1/checkins/mine") return Promise.resolve([]);
-      if (path === "/v1/songs") return Promise.resolve([]);
-      if (path === "/v1/events") return Promise.resolve([EVENT]);
       if (path === "/v1/event-song-submissions") {
         return Promise.reject(new Error("not found"));
       }
-      return Promise.resolve([]);
+      return defaultApiGet(path);
     });
 
     renderPage();
@@ -100,5 +119,58 @@ describe("MyContentPage — Events section", () => {
     expect(screen.getByRole("heading", { name: /^events$/i })).toBeInTheDocument();
     expect(await screen.findByText("Spring Classic")).toBeInTheDocument();
     expect(screen.getByText(/no songs added yet/i)).toBeInTheDocument();
+  });
+});
+
+describe("MyContentPage — Active Floor Trials section", () => {
+  beforeEach(() => {
+    apiGet.mockReset();
+  });
+
+  it("shows Active Floor Trials with a Check in link when a session is active", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/sessions") {
+        return Promise.resolve([
+          ACTIVE_SESSION,
+          {
+            ...ACTIVE_SESSION,
+            id: "sess-scheduled",
+            status: "scheduled",
+          },
+        ]);
+      }
+      return defaultApiGet(path);
+    });
+
+    renderPage();
+
+    expect(
+      await screen.findByRole("heading", { name: /^active floor trials$/i })
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("Spring Classic").length).toBeGreaterThan(0);
+    expect(screen.getByText(/check-in open/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^check in$/i })).toHaveAttribute(
+      "href",
+      "/sessions/sess-active-1"
+    );
+  });
+
+  it("hides Active Floor Trials when no sessions are checkin_open or in_progress", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/sessions") {
+        return Promise.resolve([
+          { ...ACTIVE_SESSION, id: "sess-done", status: "completed" },
+          { ...ACTIVE_SESSION, id: "sess-later", status: "scheduled" },
+        ]);
+      }
+      return defaultApiGet(path);
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /^check-ins$/i })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("heading", { name: /^active floor trials$/i })).toBeNull();
   });
 });
