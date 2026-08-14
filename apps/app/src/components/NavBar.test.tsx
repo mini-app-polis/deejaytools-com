@@ -105,8 +105,9 @@ describe("NavBar — signed in (admin)", () => {
     expect(screen.getByText("Superuser")).toBeInTheDocument();
     expect(screen.getByText("Manager")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^events$/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /^live queue$/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^active sessions$/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^checkin for$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^live queue$/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /^test inject$/i })).toBeNull();
   });
 });
@@ -119,6 +120,7 @@ describe("NavBar — signed in (manager only)", () => {
     renderNav();
 
     expect(screen.getByText("Manager")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^active sessions$/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^upload for$/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^checkin for$/i })).toBeInTheDocument();
     expect(screen.queryByText("Superuser")).toBeNull();

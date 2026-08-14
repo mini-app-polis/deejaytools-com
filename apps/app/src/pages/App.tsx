@@ -128,7 +128,7 @@ export default function App() {
               </AdminGuard>
             }
           />
-          <Route path="manager" element={<Navigate to="/manager/checkin-for" replace />} />
+          <Route path="manager" element={<Navigate to="/manager/active-sessions" replace />} />
           <Route
             path="manager/:section"
             element={

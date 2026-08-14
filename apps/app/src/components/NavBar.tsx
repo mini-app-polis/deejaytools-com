@@ -21,7 +21,6 @@ const SIGNED_IN_ITEMS: NavItem[] = [
 const SUPERUSER_ITEMS: NavItem[] = [
   { to: "/admin/events", label: "Events" },
   { to: "/admin/sessions", label: "Sessions" },
-  { to: "/admin/queue", label: "Live Queue" },
   { to: "/admin/runs", label: "Run History" },
   { to: "/admin/songs", label: "Songs" },
   { to: "/admin/event-songs", label: "Event Songs" },
@@ -30,6 +29,7 @@ const SUPERUSER_ITEMS: NavItem[] = [
 
 // Manager sections. Visible to managers and admins.
 const MANAGER_ITEMS: NavItem[] = [
+  { to: "/manager/active-sessions", label: "Active Sessions" },
   { to: "/manager/upload-for", label: "Upload For" },
   { to: "/manager/checkin-for", label: "CheckIn For" },
 ];

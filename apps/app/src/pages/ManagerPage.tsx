@@ -1,7 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { DIVISIONS, type ApiSession, type ApiTestInjection } from "@deejaytools/schemas";
+import {
+  DIVISIONS,
+  type ApiQueueEntry,
+  type ApiLeadingPair,
+  type ApiSession,
+  type ApiSong,
+  type ApiTestInjection,
+} from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 import SongUploadForm from "@/components/SongUploadForm";
 import { Badge } from "@/components/ui/badge";
@@ -36,9 +43,9 @@ function formatTime(ts: number): string {
   return new Date(ts).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
 }
 
-export const MANAGER_SECTIONS = ["upload-for", "checkin-for"] as const;
+export const MANAGER_SECTIONS = ["active-sessions", "upload-for", "checkin-for"] as const;
 export type ManagerSection = (typeof MANAGER_SECTIONS)[number];
-const DEFAULT_MANAGER_SECTION: ManagerSection = "checkin-for";
+const DEFAULT_MANAGER_SECTION: ManagerSection = "active-sessions";
 
 function isManagerSection(s: string | undefined): s is ManagerSection {
   return !!s && (MANAGER_SECTIONS as readonly string[]).includes(s);
@@ -69,6 +76,16 @@ export default function ManagerPage() {
   const [ufSearching, setUfSearching] = useState(false);
   const [ufSelected, setUfSelected] = useState<{ id: string; email: string; first_name: string | null; last_name: string | null } | null>(null);
 
+  const [lqSessionId, setLqSessionId] = useState("");
+  const [lqActive, setLqActive] = useState<ApiQueueEntry[]>([]);
+  const [lqPriority, setLqPriority] = useState<ApiQueueEntry[]>([]);
+  const [lqNonPriority, setLqNonPriority] = useState<ApiQueueEntry[]>([]);
+  const [lqPairs, setLqPairs] = useState<ApiLeadingPair[]>([]);
+  const [lqSongs, setLqSongs] = useState<ApiSong[]>([]);
+  const [lqLoading, setLqLoading] = useState(false);
+  const lqSessionRef = useRef(lqSessionId);
+  lqSessionRef.current = lqSessionId;
+
   const loadSessions = useCallback(() => {
     api.get<ApiSession[]>("/v1/sessions").then(setSessions).catch(() => setSessions([]));
   }, [api]);
@@ -82,10 +99,42 @@ export default function ManagerPage() {
     }
   }, [api]);
 
+  const loadLiveQueues = useCallback(
+    async (sessionId: string) => {
+      if (!sessionId) return;
+      setLqLoading(true);
+      try {
+        const [active, priority, nonPriority] = await Promise.all([
+          api.get<ApiQueueEntry[]>(`/v1/queue/${sessionId}/active`),
+          api.get<ApiQueueEntry[]>(`/v1/queue/${sessionId}/priority`),
+          api.get<ApiQueueEntry[]>(`/v1/queue/${sessionId}/non-priority`),
+        ]);
+        setLqActive(active);
+        setLqPriority(priority);
+        setLqNonPriority(nonPriority);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Failed to load queues");
+      } finally {
+        setLqLoading(false);
+      }
+    },
+    [api]
+  );
+
+  const loadLqExtras = useCallback(async () => {
+    const [pairs, songs] = await Promise.all([
+      api.get<ApiLeadingPair[]>("/v1/partners/leading-pairs"),
+      api.get<ApiSong[]>("/v1/songs"),
+    ]);
+    setLqPairs(pairs);
+    setLqSongs(songs);
+  }, [api]);
+
   useEffect(() => {
     loadSessions();
+    void loadLqExtras().catch(() => {});
     void loadCheckins().catch(() => {});
-  }, [loadSessions, loadCheckins]);
+  }, [loadSessions, loadLqExtras, loadCheckins]);
 
   useEffect(() => {
     if (ufSelected) return;
@@ -104,6 +153,86 @@ export default function ManagerPage() {
     }, 250);
     return () => clearTimeout(t);
   }, [ufQuery, ufSelected, api]);
+
+  useEffect(() => {
+    if (!sessions) return;
+    const active = sessions.filter(
+      (s) => s.status === "checkin_open" || s.status === "in_progress"
+    );
+    if (active.length === 1 && !lqSessionId) {
+      setLqSessionId(active[0]!.id);
+    }
+  }, [sessions]); // intentionally omit lqSessionId — only auto-select on initial session load
+
+  useEffect(() => {
+    if (!lqSessionId) return;
+    void loadLiveQueues(lqSessionId);
+  }, [lqSessionId, loadLiveQueues]);
+
+  const pairMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of lqPairs) m.set(p.id, p.display_name);
+    return m;
+  }, [lqPairs]);
+
+  const songMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of lqSongs) {
+      m.set(s.id, s.processed_filename?.trim() || s.routine_name?.trim() || s.division?.trim() || s.id);
+    }
+    return m;
+  }, [lqSongs]);
+
+  const songFilenameMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of lqSongs) {
+      if (s.processed_filename) m.set(s.id, s.processed_filename);
+    }
+    return m;
+  }, [lqSongs]);
+
+  const renderEntityLabel = (row: ApiQueueEntry) => {
+    if (row.entityLabel && row.entityLabel !== "—") return row.entityLabel;
+    if (row.entityPairId) return pairMap.get(row.entityPairId) ?? row.entityLabel;
+    return row.entityLabel;
+  };
+
+  const renderSongLabel = (row: ApiQueueEntry) =>
+    row.songDisplayName ?? (row.songId ? (songMap.get(row.songId) ?? row.songId) : "—");
+
+  const queueAction = async (path: string, body: Record<string, unknown>) => {
+    try {
+      await api.post(path, body);
+      await loadLiveQueues(lqSessionRef.current);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Action failed");
+    }
+  };
+
+  const handleComplete = (queueEntryId: string) =>
+    queueAction("/v1/queue/complete", { queueEntryId });
+
+  const handleIncomplete = (queueEntryId: string) =>
+    queueAction("/v1/queue/incomplete", { queueEntryId });
+
+  const handleMoveDown = (queueEntryId: string) =>
+    queueAction("/v1/queue/move-down", { queueEntryId });
+
+  const handleWithdraw = (queueEntryId: string) =>
+    queueAction("/v1/queue/withdraw", { queueEntryId });
+
+  const handlePromote = (queueEntryId: string) =>
+    queueAction("/v1/queue/promote", { queueEntryId });
+
+  const handlePromoteNext = () => {
+    const prioritySorted = [...lqPriority].sort((a, b) => a.position - b.position);
+    const nonPrioritySorted = [...lqNonPriority].sort((a, b) => a.position - b.position);
+    const next = prioritySorted[0] ?? nonPrioritySorted[0];
+    if (!next) return;
+    return handlePromote(next.queueEntryId);
+  };
+
+  const canPromoteNext = lqPriority.length > 0 || lqNonPriority.length > 0;
 
   const submitCheckin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,7 +299,285 @@ export default function ManagerPage() {
       <h1 className="page-title text-2xl">Manager</h1>
 
       <Tabs value={section}>
-        {/* ── Upload For (placeholder) ── */}
+        {/* ── Active Sessions (moved from admin Live Queue tab) ── */}
+        <TabsContent value="active-sessions" className="mt-4 space-y-5">
+          {/* Session selector */}
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+            <div className="w-full sm:w-72">
+              {(() => {
+                if (!sessions) return null;
+                // Show all of today's sessions so admins can manage queues
+                // even after a session ends. Active sessions appear first.
+                const now = new Date();
+                const todaySessions = sessions
+                  .filter((s) => {
+                    const d = new Date(s.floor_trial_starts_at);
+                    return (
+                      d.getFullYear() === now.getFullYear() &&
+                      d.getMonth() === now.getMonth() &&
+                      d.getDate() === now.getDate()
+                    );
+                  })
+                  .sort((a, b) => {
+                    const isLive = (s: typeof a) =>
+                      s.status === "checkin_open" || s.status === "in_progress";
+                    if (isLive(a) && !isLive(b)) return -1;
+                    if (!isLive(a) && isLive(b)) return 1;
+                    return a.floor_trial_starts_at - b.floor_trial_starts_at;
+                  });
+                if (todaySessions.length === 0) {
+                  return (
+                    <p className="text-sm text-muted-foreground">No sessions today.</p>
+                  );
+                }
+                return (
+                  <select
+                    className={FIELD_INPUT_CLASS}
+                    value={lqSessionId}
+                    onChange={(e) => setLqSessionId(e.target.value)}
+                  >
+                    <option value="">Select a session…</option>
+                    {todaySessions.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {formatSessionTitle(s, s.event_timezone)}
+                        {s.status === "completed" || s.status === "cancelled"
+                          ? ` (${s.status})`
+                          : ""}
+                      </option>
+                    ))}
+                  </select>
+                );
+              })()}
+            </div>
+            {lqSessionId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void loadLiveQueues(lqSessionId)}
+                disabled={lqLoading}
+              >
+                {lqLoading ? "Refreshing…" : "Refresh"}
+              </Button>
+            )}
+          </div>
+
+          {!lqSessionId && (
+            <p className="text-sm text-muted-foreground">Choose a session above to manage its queue.</p>
+          )}
+
+          {lqSessionId && (
+            <div className={`space-y-4 ${lqLoading ? "opacity-60" : ""}`}>
+
+              {/* Active queue */}
+              <Card className="border-primary/30">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-primary">Active</CardTitle>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground">
+                        {lqActive.length} slot{lqActive.length !== 1 ? "s" : ""}
+                      </span>
+                      <Button
+                        size="sm"
+                        onClick={handlePromoteNext}
+                        disabled={!canPromoteNext || lqLoading}
+                      >
+                        Promote next
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {lqActive.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No one on deck.</p>
+                  ) : (
+                    lqActive
+                      .slice()
+                      .sort((a, b) => a.position - b.position)
+                      .map((row) => {
+                        const isSlotOne = row.position === 1;
+                        const isLast = row.position === lqActive.length;
+                        const filename = row.songProcessedFilename ?? undefined;
+                        return (
+                          <div key={row.queueEntryId} className="flex items-start gap-3">
+                            <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
+                              {isSlotOne && <span className="text-primary mr-0.5">▶</span>}
+                              #{row.position}
+                            </span>
+                            <div
+                              className={
+                                isSlotOne
+                                  ? "border border-primary/50 bg-primary/10 rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5"
+                                  : "border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5"
+                              }
+                            >
+                              <p className="font-medium">{renderEntityLabel(row)}</p>
+                              <p className="text-muted-foreground truncate">
+                                {row.divisionName} · {renderSongLabel(row)}
+                              </p>
+                              {filename && (
+                                <p className="text-xs text-muted-foreground/70 break-all font-mono">
+                                  {filename}
+                                </p>
+                              )}
+                              {row.notes && (
+                                <p className="text-xs text-muted-foreground italic">
+                                  Note: {row.notes}
+                                </p>
+                              )}
+                              <div className="flex gap-2 flex-wrap pt-2 border-t border-border/40 mt-1.5">
+                                <Button size="sm" onClick={() => handleComplete(row.queueEntryId)}>
+                                  Run complete
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => handleIncomplete(row.queueEntryId)}>
+                                  Run incomplete
+                                </Button>
+                                {!isLast && (
+                                  <Button size="sm" variant="outline" onClick={() => handleMoveDown(row.queueEntryId)}>
+                                    Move down
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-destructive hover:text-destructive"
+                                  onClick={() => handleWithdraw(row.queueEntryId)}
+                                >
+                                  Withdraw
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Priority + Non-priority queues — side by side when there's room */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Card className="border-amber-500/30">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-amber-500 dark:text-amber-400">Priority</CardTitle>
+                      <span className="text-xs text-muted-foreground">{lqPriority.length} waiting</span>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {lqPriority.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Priority queue is empty.</p>
+                    ) : (
+                      lqPriority
+                        .slice()
+                        .sort((a, b) => a.position - b.position)
+                        .map((row) => {
+                          const isLast = row.position === lqPriority.length;
+                          const filename = row.songProcessedFilename ?? undefined;
+                          return (
+                            <div key={row.queueEntryId} className="flex items-start gap-3">
+                              <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
+                                #{row.position}
+                              </span>
+                              <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
+                                <p className="font-medium">{renderEntityLabel(row)}</p>
+                                <p className="text-muted-foreground truncate">
+                                  {row.divisionName} · {renderSongLabel(row)}
+                                </p>
+                                {filename && (
+                                  <p className="text-xs text-muted-foreground/70 break-all font-mono">
+                                    {filename}
+                                  </p>
+                                )}
+                                {row.notes && (
+                                  <p className="text-xs text-muted-foreground italic">Note: {row.notes}</p>
+                                )}
+                                <div className="flex gap-2 pt-2 border-t border-border/40 mt-1.5">
+                                  {!isLast && (
+                                    <Button size="sm" variant="outline" onClick={() => handleMoveDown(row.queueEntryId)}>
+                                      Move down
+                                    </Button>
+                                  )}
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="text-destructive hover:text-destructive"
+                                    onClick={() => handleWithdraw(row.queueEntryId)}
+                                  >
+                                    Withdraw
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="border-sky-500/30">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sky-500 dark:text-sky-400">Standard</CardTitle>
+                      <span className="text-xs text-muted-foreground">{lqNonPriority.length} waiting</span>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {lqNonPriority.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Standard queue is empty.</p>
+                    ) : (
+                      lqNonPriority
+                        .slice()
+                        .sort((a, b) => a.position - b.position)
+                        .map((row) => {
+                          const isLast = row.position === lqNonPriority.length;
+                          const filename = row.songProcessedFilename ?? undefined;
+                          return (
+                            <div key={row.queueEntryId} className="flex items-start gap-3">
+                              <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
+                                #{row.position}
+                              </span>
+                              <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
+                                <p className="font-medium">{renderEntityLabel(row)}</p>
+                                <p className="text-muted-foreground truncate">
+                                  {row.divisionName} · {renderSongLabel(row)}
+                                </p>
+                                {filename && (
+                                  <p className="text-xs text-muted-foreground/70 break-all font-mono">
+                                    {filename}
+                                  </p>
+                                )}
+                                {row.notes && (
+                                  <p className="text-xs text-muted-foreground italic">Note: {row.notes}</p>
+                                )}
+                                <div className="flex gap-2 pt-2 border-t border-border/40 mt-1.5">
+                                  {!isLast && (
+                                    <Button size="sm" variant="outline" onClick={() => handleMoveDown(row.queueEntryId)}>
+                                      Move down
+                                    </Button>
+                                  )}
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="text-destructive hover:text-destructive"
+                                    onClick={() => handleWithdraw(row.queueEntryId)}
+                                  >
+                                    Withdraw
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ── Upload For ── */}
         <TabsContent value="upload-for" className="mt-4 space-y-4">
           {!ufSelected ? (
             <Card>
