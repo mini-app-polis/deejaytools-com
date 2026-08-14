@@ -47,17 +47,20 @@ export const createCheckinBodySchema = z
     entityPairId: z.string().nullish(),
     entitySoloUserId: z.string().nullish(),
     entityManagedPartnershipId: z.string().nullish(),
+    on_behalf_of_user_id: z.string().nullish(),
     songId: z.string().min(1),
     notes: z.string().nullish(),
   })
   .refine(
-    (b) =>
-      [b.entityPairId, b.entitySoloUserId, b.entityManagedPartnershipId].filter(Boolean).length ===
-      1,
-    {
-      message:
-        "Exactly one of entityPairId / entitySoloUserId / entityManagedPartnershipId must be provided",
-    }
+    (b) => {
+      const entityCount = [b.entityPairId, b.entitySoloUserId, b.entityManagedPartnershipId].filter(
+        Boolean
+      ).length;
+      // On-behalf check-ins let the server derive the entity from the song.
+      if (b.on_behalf_of_user_id) return entityCount === 0;
+      return entityCount === 1;
+    },
+    { message: "Exactly one entity must be provided (or none when checking in on behalf)" }
   );
 
 export const PartnerRoleSchema = z.enum(["leader", "follower"]);

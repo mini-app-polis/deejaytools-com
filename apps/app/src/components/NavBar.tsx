@@ -24,6 +24,7 @@ const SUPERUSER_ITEMS: NavItem[] = [
   { to: "/admin/runs", label: "Run History" },
   { to: "/admin/songs", label: "Songs" },
   { to: "/admin/event-songs", label: "Event Songs" },
+  { to: "/admin/test-checkin", label: "Test Checkin" },
   { to: "/admin/users", label: "Users" },
 ];
 

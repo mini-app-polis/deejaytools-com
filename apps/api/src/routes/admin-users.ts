@@ -6,6 +6,7 @@ import { db } from "../db/index.js";
 import { partners, songs, users } from "../db/schema.js";
 import { zValidator } from "../lib/validate.js";
 import { requireAdmin } from "../middleware/auth.js";
+import { fetchUserSubmissionRows, mapSubmissionRow } from "./event-song-submissions.js";
 
 const logger = createLogger("deejaytools-api");
 
@@ -211,3 +212,23 @@ adminUserRoutes.get("/:id/partners", requireAdmin, async (c) => {
     .orderBy(asc(partners.lastName), asc(partners.firstName));
   return c.json(successList(rows.map(mapPartner)));
 });
+
+const submissionsParam = z.object({ id: z.string().min(1) });
+const submissionsQuery = z.object({ event_id: z.string().min(1) });
+
+adminUserRoutes.get(
+  "/:id/event-song-submissions",
+  requireAdmin,
+  zValidator("param", submissionsParam),
+  zValidator("query", submissionsQuery),
+  async (c) => {
+    const { id } = c.req.valid("param");
+    const { event_id: eventId } = c.req.valid("query");
+
+    const [target] = await db.select({ id: users.id }).from(users).where(eq(users.id, id)).limit(1);
+    if (!target) return c.json(CommonErrors.notFound("User"), 404);
+
+    const rows = await fetchUserSubmissionRows(id, { eventId });
+    return c.json(successList(rows.map(mapSubmissionRow)));
+  }
+);

@@ -9,6 +9,7 @@ import {
   type ApiAdminSong,
   type ApiAdminUser,
   type ApiAdminEventSongSubmission,
+  type ApiTestInjection,
 } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 import { useAuthMe } from "@/hooks/useAuthMe";
@@ -41,6 +42,13 @@ import { compareEventChrono, compareSessionChrono } from "@/lib/chronoSort";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const DIVISION_OPTIONS = DIVISIONS;
+
+function randomFourDigitTag(): string {
+  return Math.floor(Math.random() * 10000).toString().padStart(4, "0");
+}
+function randomDivision(): string {
+  return DIVISION_OPTIONS[Math.floor(Math.random() * DIVISION_OPTIONS.length)];
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -165,6 +173,7 @@ export const ADMIN_SECTIONS = [
   "runs",
   "songs",
   "event-songs",
+  "test-checkin",
   "users",
 ] as const;
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
@@ -263,6 +272,18 @@ export default function AdminPage() {
   const [esSubmissions, setEsSubmissions] = useState<ApiAdminEventSongSubmission[]>([]);
   const [esSubmissionsLoading, setEsSubmissionsLoading] = useState(false);
 
+  // ── Test Checkin tab ──────────────────────────────────────────────────────
+  const [tcSessionId, setTcSessionId] = useState("");
+  const [tcDivision, setTcDivision] = useState<string>(() => randomDivision());
+  const [tcLeaderFirst, setTcLeaderFirst] = useState("Leader");
+  const [tcLeaderLast, setTcLeaderLast] = useState(() => randomFourDigitTag());
+  const [tcFollowerFirst, setTcFollowerFirst] = useState("Follower");
+  const [tcFollowerLast, setTcFollowerLast] = useState(() => randomFourDigitTag());
+  const [tcSubmitting, setTcSubmitting] = useState(false);
+  const [tcData, setTcData] = useState<ApiTestInjection[] | null>(null);
+  const [tcDeleting, setTcDeleting] = useState(false);
+  const [pendingDeleteAllTestCheckins, setPendingDeleteAllTestCheckins] = useState(false);
+
   // ── Data loaders ────────────────────────────────────────────────────────────
 
   const loadEvents = useCallback(() => {
@@ -339,12 +360,22 @@ export default function AdminPage() {
     [api]
   );
 
+  const loadTestCheckins = useCallback(async () => {
+    try {
+      const data = await api.get<ApiTestInjection[]>("/v1/admin/checkins/test");
+      setTcData(data);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load test check-ins");
+    }
+  }, [api]);
+
   useEffect(() => {
     loadEvents();
     loadSessions();
     void loadUsers("").catch(() => {});
     void loadAdminSongs("", false).catch(() => {});
-  }, [loadEvents, loadSessions, loadUsers, loadAdminSongs]);
+    void loadTestCheckins().catch(() => {});
+  }, [loadEvents, loadSessions, loadUsers, loadAdminSongs, loadTestCheckins]);
 
   // Refetch run history whenever the session filter changes.
   useEffect(() => {
@@ -713,6 +744,66 @@ export default function AdminPage() {
       toast.error(err instanceof Error ? err.message : "Failed to save session");
     } finally {
       setSessSubmitting(false);
+    }
+  };
+
+  const submitTestCheckin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tcSessionId) { toast.error("Select a session"); return; }
+    if (!tcDivision) { toast.error("Select a division"); return; }
+    if (!tcLeaderFirst.trim() || !tcLeaderLast.trim()) {
+      toast.error("Leader first and last name are required");
+      return;
+    }
+    if (!tcFollowerFirst.trim() || !tcFollowerLast.trim()) {
+      toast.error("Follower first and last name are required");
+      return;
+    }
+    setTcSubmitting(true);
+    try {
+      const result = await api.post<{
+        id: string;
+        sessionId: string;
+        divisionName: string;
+        initialQueue: "priority" | "non_priority";
+        pair: { id: string; partner_b_id: string | null; display_name: string };
+      }>("/v1/admin/checkins", {
+        sessionId: tcSessionId,
+        divisionName: tcDivision,
+        leaderFirstName: tcLeaderFirst.trim(),
+        leaderLastName: tcLeaderLast.trim(),
+        followerFirstName: tcFollowerFirst.trim(),
+        followerLastName: tcFollowerLast.trim(),
+      });
+      toast.success(
+        `Checked in to ${result.initialQueue === "priority" ? "priority" : "non-priority"} queue`
+      );
+      setTcLeaderFirst("Leader");
+      setTcLeaderLast(randomFourDigitTag());
+      setTcFollowerFirst("Follower");
+      setTcFollowerLast(randomFourDigitTag());
+      setTcDivision(randomDivision());
+      void loadTestCheckins().catch(() => {});
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Check-in failed");
+    } finally {
+      setTcSubmitting(false);
+    }
+  };
+
+  const confirmDeleteAllTestCheckins = async () => {
+    setPendingDeleteAllTestCheckins(false);
+    if (!tcData) return;
+    setTcDeleting(true);
+    const expectedCount = tcData.length;
+    try {
+      await api.del("/v1/admin/checkins/test");
+      toast.success(`Deleted ${expectedCount} check-in${expectedCount === 1 ? "" : "s"}`);
+      setTcData([]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setTcDeleting(false);
     }
   };
 
@@ -1213,6 +1304,141 @@ export default function AdminPage() {
           )}
         </TabsContent>
 
+        {/* ── Test Checkin tab ── */}
+        <TabsContent value="test-checkin" className="mt-4 space-y-4">
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+            Creates throwaway user/partner/pair rows and uses a placeholder song.
+            Skips the check-in time window. Each submission adds one entry to the selected session's queue.
+          </div>
+          <form onSubmit={submitTestCheckin} className="space-y-4 max-w-lg">
+            <div>
+              <label className={FIELD_LABEL_CLASS}>Session</label>
+              <select
+                className={FIELD_INPUT_CLASS}
+                value={tcSessionId}
+                onChange={(e) => setTcSessionId(e.target.value)}
+              >
+                <option value="">Select a session…</option>
+                {sessions
+                  ?.slice()
+                  .sort(compareSessionChrono)
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {formatSessionTitle(s, s.event_timezone)}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div>
+              <label className={FIELD_LABEL_CLASS}>Division</label>
+              <select
+                className={FIELD_INPUT_CLASS}
+                value={tcDivision}
+                onChange={(e) => setTcDivision(e.target.value)}
+              >
+                {DIVISION_OPTIONS.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Leader first name</label>
+                <input className={FIELD_INPUT_CLASS} value={tcLeaderFirst}
+                  onChange={(e) => setTcLeaderFirst(e.target.value)} />
+              </div>
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Leader last name</label>
+                <input className={FIELD_INPUT_CLASS} value={tcLeaderLast}
+                  onChange={(e) => setTcLeaderLast(e.target.value)} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Follower first name</label>
+                <input className={FIELD_INPUT_CLASS} value={tcFollowerFirst}
+                  onChange={(e) => setTcFollowerFirst(e.target.value)} />
+              </div>
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Follower last name</label>
+                <input className={FIELD_INPUT_CLASS} value={tcFollowerLast}
+                  onChange={(e) => setTcFollowerLast(e.target.value)} />
+              </div>
+            </div>
+            <Button type="submit" disabled={tcSubmitting} size="lg" className="w-full sm:w-auto">
+              {tcSubmitting ? "Checking in…" : "Test check-in"}
+            </Button>
+          </form>
+
+          <section className="space-y-3 pt-2">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <h2 className="text-base font-semibold">
+                Existing test check-ins
+                {tcData !== null && (
+                  <span className="ml-2 text-sm text-muted-foreground font-normal">
+                    ({tcData.length})
+                  </span>
+                )}
+              </h2>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm"
+                  onClick={() => void loadTestCheckins()} disabled={tcDeleting}>
+                  Refresh
+                </Button>
+                <Button variant="destructive" size="sm"
+                  onClick={() => { if (tcData && tcData.length > 0) setPendingDeleteAllTestCheckins(true); }}
+                  disabled={tcDeleting || !tcData || tcData.length === 0}>
+                  {tcDeleting ? "Deleting…" : "Delete all"}
+                </Button>
+              </div>
+            </div>
+
+            {tcData === null ? (
+              <Skeleton className="h-24 w-full" />
+            ) : tcData.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No test check-ins yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {tcData.map((row) => {
+                  const queueLabel =
+                    row.queue_status === "active" ? `Active #${row.position ?? "?"}`
+                    : row.queue_status === "priority" ? `Priority #${row.position ?? "?"}`
+                    : row.queue_status === "non_priority" ? `Non-priority #${row.position ?? "?"}`
+                    : "Off queue";
+                  const sessionRow = sessions?.find((s) => s.id === row.session_id);
+                  const sessionLabel = sessionRow
+                    ? formatSessionTitle(sessionRow, sessionRow.event_timezone)
+                    : "No session";
+                  return (
+                    <div key={row.pair_id}
+                      className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm">
+                      <div className="flex items-start justify-between gap-2 flex-wrap">
+                        <div className="min-w-0 space-y-0.5">
+                          <p className="font-medium">
+                            {row.leader_name}
+                            {row.follower_name ? ` & ${row.follower_name}` : ""}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {sessionLabel}
+                            {row.division_name ? ` · ${row.division_name}` : ""}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Checked in {formatTime(row.created_at)}
+                          </p>
+                        </div>
+                        <Badge variant={row.queue_status === "off_queue" ? "outline" : "default"}
+                          className="shrink-0">
+                          {queueLabel}
+                        </Badge>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </TabsContent>
+
         {/* ── Users tab ── */}
         <TabsContent value="users" className="mt-4 space-y-4">
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
@@ -1318,6 +1544,24 @@ export default function AdminPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* ── Delete all test check-ins confirmation dialog ── */}
+      <Dialog open={pendingDeleteAllTestCheckins}
+        onOpenChange={(open: boolean) => { if (!open) setPendingDeleteAllTestCheckins(false); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete all test check-ins?</DialogTitle>
+            <DialogDescription>
+              This will remove {tcData?.length ?? 0} check-in{(tcData?.length ?? 0) === 1 ? "" : "s"} —
+              synthetic users, partners, pairs, check-ins, and queue entries. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingDeleteAllTestCheckins(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => void confirmDeleteAllTestCheckins()}>Delete all</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Delete Event confirmation dialog ── */}
       <Dialog open={!!pendingDeleteEventId} onOpenChange={(open: boolean) => { if (!open) setPendingDeleteEventId(null); }}>

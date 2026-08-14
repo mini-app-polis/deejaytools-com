@@ -4,6 +4,7 @@ import {
   assertSuccessEnvelope,
   assertValidation400,
   authHeaders,
+  adminHeaders,
   type ErrorEnvelope,
   readJson,
   type SuccessEnvelope,
@@ -57,12 +58,12 @@ const eventSession = {
   eventId: "evt_1",
 };
 
-const ownedSong = { id: "song1", managedPartnershipId: null as string | null };
+const ownedSong = { id: "song1", managedPartnershipId: null as string | null, partnerId: null as string | null };
 
 const testPair = { userAId: "user_test123", partnerBId: null };
 
 function managedSong(songId: string, managedPartnershipId: string) {
-  return { id: songId, managedPartnershipId };
+  return { id: songId, managedPartnershipId, partnerId: null as string | null };
 }
 
 describe("POST /v1/checkins", () => {
@@ -337,6 +338,47 @@ describe("POST /v1/checkins", () => {
     const body = await readJson<SuccessEnvelope<{ initialQueue: string }>>(res);
     assertSuccessEnvelope(body);
     expect(body.data.initialQueue).toBe("non_priority");
+  });
+
+  it("returns 403 when a non-admin passes on_behalf_of_user_id", async () => {
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "sess1",
+        divisionName: "Classic",
+        songId: "song1",
+        on_behalf_of_user_id: "user_target",
+      }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 201 when an admin checks in on behalf of another user", async () => {
+    const targetUserId = "user_target";
+    enqueueSelectResult([{ id: targetUserId }]);
+    enqueueSelectResult([eventSession]);
+    enqueueSelectResult([ownedSong]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([{ id: "sub_1" }]);
+    enqueueSelectResult([eventSession]);
+    enqueueSelectResult([{ isPriority: true, priorityRunLimit: 3 }]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([{ n: 0 }]);
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "sess1",
+        divisionName: "Classic",
+        songId: "song1",
+        on_behalf_of_user_id: targetUserId,
+      }),
+    });
+    expect(res.status).toBe(201);
+    const body = await readJson<SuccessEnvelope<{ initialQueue: string }>>(res);
+    assertSuccessEnvelope(body);
+    expect(body.data.initialQueue).toBe("priority");
   });
 
   it("returns 404 when session not found", async () => {

@@ -36,8 +36,24 @@ checkinRoutes.post(
   requireAuth,
   zValidator("json", createCheckinBodySchema),
   async (c) => {
-    const userId = c.get("user").userId;
     const body = c.req.valid("json");
+    const caller = c.get("user");
+    const onBehalfUserId =
+      typeof body.on_behalf_of_user_id === "string" && body.on_behalf_of_user_id.trim()
+        ? body.on_behalf_of_user_id.trim()
+        : null;
+    if (onBehalfUserId && caller.role !== "admin") {
+      return c.json(CommonErrors.forbidden(), 403);
+    }
+    const effectiveUserId = onBehalfUserId ?? caller.userId;
+    if (onBehalfUserId) {
+      const [target] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.id, onBehalfUserId))
+        .limit(1);
+      if (!target) return c.json(CommonErrors.badRequest("Target user not found"), 400);
+    }
     const now = Date.now();
 
     const [session] = await db
@@ -59,9 +75,10 @@ checkinRoutes.post(
       .select({
         id: songs.id,
         managedPartnershipId: songs.managedPartnershipId,
+        partnerId: songs.partnerId,
       })
       .from(songs)
-      .where(and(eq(songs.id, body.songId), eq(songs.userId, userId)))
+      .where(and(eq(songs.id, body.songId), eq(songs.userId, effectiveUserId)))
       .limit(1);
     if (!song) return c.json(CommonErrors.notFound("Song"), 404);
 
@@ -70,13 +87,47 @@ checkinRoutes.post(
     let entityManagedPartnershipId: string | null = null;
     let entity: EntityRef;
 
-    if (song.managedPartnershipId) {
+    if (onBehalfUserId) {
+      if (song.managedPartnershipId) {
+        const [managed] = await db
+          .select({ id: managedPartnerships.id, userId: managedPartnerships.userId })
+          .from(managedPartnerships)
+          .where(eq(managedPartnerships.id, song.managedPartnershipId))
+          .limit(1);
+        if (!managed || managed.userId !== effectiveUserId) {
+          return c.json(CommonErrors.badRequest("Managed partnership not found"), 400);
+        }
+        entityManagedPartnershipId = song.managedPartnershipId;
+        entity = { managedPartnershipId: song.managedPartnershipId };
+      } else if (song.partnerId) {
+        let [pair] = await db
+          .select({ id: pairs.id })
+          .from(pairs)
+          .where(and(eq(pairs.userAId, effectiveUserId), eq(pairs.partnerBId, song.partnerId)))
+          .limit(1);
+        if (!pair) {
+          const pairId = crypto.randomUUID();
+          await db.insert(pairs).values({
+            id: pairId,
+            userAId: effectiveUserId,
+            partnerBId: song.partnerId,
+            createdAt: now,
+          });
+          pair = { id: pairId };
+        }
+        entityPairId = pair.id;
+        entity = { pairId: pair.id };
+      } else {
+        entitySoloUserId = effectiveUserId;
+        entity = { soloUserId: effectiveUserId };
+      }
+    } else if (song.managedPartnershipId) {
       const [managed] = await db
         .select({ id: managedPartnerships.id, userId: managedPartnerships.userId })
         .from(managedPartnerships)
         .where(eq(managedPartnerships.id, song.managedPartnershipId))
         .limit(1);
-      if (!managed || managed.userId !== userId) {
+      if (!managed || managed.userId !== effectiveUserId) {
         return c.json(CommonErrors.badRequest("Managed partnership not found"), 400);
       }
       entityManagedPartnershipId = song.managedPartnershipId;
@@ -87,7 +138,7 @@ checkinRoutes.post(
         .from(pairs)
         .where(eq(pairs.id, body.entityPairId));
       if (!pair) return c.json(CommonErrors.badRequest("Pair not found"), 400);
-      if (pair.userAId !== userId)
+      if (pair.userAId !== effectiveUserId)
         return c.json(CommonErrors.badRequest("You are not a member of this pair"), 400);
       entityPairId = body.entityPairId;
       entity = { pairId: body.entityPairId };
@@ -97,7 +148,7 @@ checkinRoutes.post(
         400
       );
     } else {
-      if (body.entitySoloUserId !== userId)
+      if (body.entitySoloUserId !== effectiveUserId)
         return c.json(CommonErrors.badRequest("You may only submit a solo check-in for yourself"), 400);
       entitySoloUserId = body.entitySoloUserId ?? null;
       entity = { soloUserId: body.entitySoloUserId! };
@@ -129,7 +180,7 @@ checkinRoutes.post(
             sessionId: body.sessionId,
             eventId: session.eventId,
             songId: body.songId,
-            userId,
+            userId: effectiveUserId,
           },
         });
         return c.json(
@@ -164,7 +215,7 @@ checkinRoutes.post(
           entitySoloUserId,
           entityManagedPartnershipId,
           songId: body.songId,
-          submittedByUserId: userId,
+          submittedByUserId: effectiveUserId,
           initialQueue,
           notes: body.notes ?? null,
           createdAt: now,
@@ -193,7 +244,7 @@ checkinRoutes.post(
           fromPosition: null,
           toQueue: initialQueue,
           toPosition: position,
-          actorUserId: userId,
+          actorUserId: caller.userId,
           reason: null,
           createdAt: now,
         });
@@ -205,7 +256,7 @@ checkinRoutes.post(
         context: {
           sessionId: body.sessionId,
           divisionName: body.divisionName,
-          userId,
+          userId: effectiveUserId,
           entityPairId,
           entitySoloUserId,
           entityManagedPartnershipId,

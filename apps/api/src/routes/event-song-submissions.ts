@@ -76,7 +76,7 @@ function partnershipLabel(row: {
   return partnerName ? `${ownerName} & ${partnerName}` : ownerName;
 }
 
-function mapSubmissionRow(row: JoinedSubmissionRow) {
+export function mapSubmissionRow(row: JoinedSubmissionRow) {
   const partnership = partnershipLabel(row);
 
   return {
@@ -100,7 +100,7 @@ function mapSubmissionRow(row: JoinedSubmissionRow) {
   };
 }
 
-async function fetchUserSubmissionRows(
+export async function fetchUserSubmissionRows(
   userId: string,
   filters?: { eventId?: string; submissionId?: string }
 ) {
