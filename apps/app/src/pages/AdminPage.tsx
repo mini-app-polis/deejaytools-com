@@ -13,6 +13,7 @@ import {
 import { useApiClient } from "@/api/client";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import { CLICKABLE_ROW_CLASS } from "@/lib/clickable";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -265,6 +266,9 @@ export default function AdminPage() {
   const [adminSongsQuery, setAdminSongsQuery] = useState("");
   const [adminSongsDebouncedQuery, setAdminSongsDebouncedQuery] = useState("");
   const [adminSongsIncludeDeleted, setAdminSongsIncludeDeleted] = useState(false);
+  const [adminSongsSort, setAdminSongsSort] = useState<
+    "newest" | "oldest" | "owner" | "division" | "song"
+  >("newest");
 
   // ── Test Checkin tab ──────────────────────────────────────────────────────
   const [tcSessionId, setTcSessionId] = useState("");
@@ -398,6 +402,25 @@ export default function AdminPage() {
   useEffect(() => {
     void loadAdminSongs(adminSongsDebouncedQuery, adminSongsIncludeDeleted).catch(() => {});
   }, [adminSongsDebouncedQuery, adminSongsIncludeDeleted, loadAdminSongs]);
+
+  const sortedAdminSongs = useMemo(() => {
+    const rows = adminSongs ? [...adminSongs] : [];
+    const ownerOf = (s: (typeof rows)[number]) =>
+      (s.owner.full_name?.trim() || s.owner.email || "").toLowerCase();
+    switch (adminSongsSort) {
+      case "oldest":
+        return rows.sort((a, b) => a.created_at - b.created_at);
+      case "owner":
+        return rows.sort((a, b) => ownerOf(a).localeCompare(ownerOf(b)));
+      case "division":
+        return rows.sort((a, b) => (a.division ?? "").localeCompare(b.division ?? ""));
+      case "song":
+        return rows.sort((a, b) => (a.song_label ?? "").localeCompare(b.song_label ?? ""));
+      case "newest":
+      default:
+        return rows.sort((a, b) => b.created_at - a.created_at);
+    }
+  }, [adminSongs, adminSongsSort]);
 
   // ── Event CRUD ──────────────────────────────────────────────────────────────
 
@@ -1125,6 +1148,20 @@ export default function AdminPage() {
               />
               Show deleted
             </label>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              Sort
+              <select
+                className={FIELD_INPUT_CLASS + " w-auto"}
+                value={adminSongsSort}
+                onChange={(e) => setAdminSongsSort(e.target.value as typeof adminSongsSort)}
+              >
+                <option value="newest">Newest</option>
+                <option value="oldest">Oldest</option>
+                <option value="owner">Owner (A–Z)</option>
+                <option value="division">Division (A–Z)</option>
+                <option value="song">Song (A–Z)</option>
+              </select>
+            </label>
             <Button
               variant="outline"
               size="sm"
@@ -1151,7 +1188,7 @@ export default function AdminPage() {
                 : "No songs yet."}
             </p>
           ) : (
-            <div className={adminSongsLoading ? "opacity-60" : ""}>
+            <div className={cn("w-full max-w-full overflow-x-auto", adminSongsLoading && "opacity-60")}>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1167,7 +1204,7 @@ export default function AdminPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {adminSongs.map((s) => {
+                  {sortedAdminSongs.map((s) => {
                     const ownerLabel =
                       s.owner.full_name?.trim() || s.owner.email || "—";
                     const partnerLabel = s.partner?.full_name?.trim() || "—";
