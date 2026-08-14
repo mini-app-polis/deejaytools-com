@@ -13,7 +13,7 @@ import {
   readJson,
   type SuccessEnvelope,
 } from "../test/helpers.js";
-import { enqueueSelectResult, mockDb, resetSelectQueue } from "../test/mocks.js";
+import { enqueueSelectResult, mockDb, resetSelectQueue, skipNextSelectResult } from "../test/mocks.js";
 
 /** Minimal bytes that pass server-side detectAudioFormat (ID3v2 header). */
 const MOCK_MP3_CHUNK_BYTES = Buffer.concat([Buffer.from("ID3"), Buffer.alloc(20)]);
@@ -110,6 +110,40 @@ function enqueueHappyPath(existingFilenames: (string | null)[] = []) {
   enqueueSelectResult([mockUserRow]); // user lookup
   enqueueSelectResult(existingFilenames.map((f) => ({ processedFilename: f }))); // existing rows for version
   enqueueSelectResult([finalRow]); // final select with partner join
+}
+
+const mockPartnerRow = {
+  id: "p1",
+  userId: "user_test123",
+  firstName: "Alex",
+  lastName: "Partner",
+  partnerRole: "leader" as const,
+  kind: "partner",
+  email: null as string | null,
+  linkedUserId: null as string | null,
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
+};
+
+/** Enqueue DB results for a single-chunk upload with a validated partner_id. */
+function enqueuePartnerHappyPath(
+  partnerId: string,
+  partnerRow: typeof mockPartnerRow,
+  existingFilenames: (string | null)[] = []
+) {
+  enqueueSelectResult([{ id: partnerId }]); // assertPartnerOwned
+  const finalRow = makeFinalSongRow({ partnerId });
+  enqueueSelectResult([{ ...finalRow.song, partnerId }]); // post-insert song select
+  enqueueSelectResult([mockUserRow]); // user lookup
+  enqueueSelectResult([partnerRow]); // partner lookup
+  enqueueSelectResult(existingFilenames.map((f) => ({ processedFilename: f }))); // existing rows for version
+  enqueueSelectResult([
+    {
+      ...finalRow,
+      partner_first_name: partnerRow.firstName,
+      partner_last_name: partnerRow.lastName,
+    },
+  ]); // final select with partner join
 }
 
 /** Build a valid single-chunk FormData. Override any field via the map. */
@@ -506,6 +540,113 @@ describe("POST /v1/songs/upload/chunk", () => {
       expect.any(Buffer),
       expect.objectContaining({ filename: expect.stringContaining("_v01") })
     );
+  });
+
+  it("assigns v01 independently per partner when division/routine/year match", async () => {
+    type VersionRow = {
+      partnerId: string;
+      processedFilename: string;
+    };
+
+    const versionStore: VersionRow[] = [];
+    let versionQueryActive = false;
+    let versionWhereArg: unknown = null;
+
+    const collectSqlLiterals = (node: unknown, out: string[] = [], seen = new Set<object>()): string[] => {
+      if (typeof node === "string") {
+        if (node === "p_a" || node === "p_b") out.push(node);
+        return out;
+      }
+      if (!node || typeof node !== "object") return out;
+      if (seen.has(node)) return out;
+      seen.add(node);
+      const n = node as { queryChunks?: unknown[] };
+      if (Array.isArray(n.queryChunks)) {
+        for (const chunk of n.queryChunks) collectSqlLiterals(chunk, out, seen);
+      }
+      return out;
+    };
+
+    const sqlHasPartnerScope = (node: unknown, seen = new Set<object>()): boolean => {
+      if (!node || typeof node !== "object") return false;
+      if (seen.has(node)) return false;
+      seen.add(node);
+      const n = node as { name?: string; queryChunks?: unknown[] };
+      if (n.name === "partner_id") return true;
+      if (Array.isArray(n.queryChunks)) return n.queryChunks.some((chunk) => sqlHasPartnerScope(chunk, seen));
+      return false;
+    };
+
+    const origSelect = mockDb.select.getMockImplementation()!;
+    const origWhere = mockDb.where.getMockImplementation()!;
+    const origThen = mockDb.then.getMockImplementation()!;
+
+    vi.mocked(mockDb.select).mockImplementation(function (this: typeof mockDb, arg?: unknown) {
+      versionQueryActive =
+        !!arg &&
+        typeof arg === "object" &&
+        "processedFilename" in (arg as Record<string, unknown>);
+      return origSelect.call(this, arg);
+    });
+
+    vi.mocked(mockDb.where).mockImplementation(function (this: typeof mockDb, ...args: unknown[]) {
+      if (versionQueryActive) versionWhereArg = args[0];
+      return origWhere.apply(this, args);
+    });
+
+    vi.mocked(mockDb.then).mockImplementation(function (
+      this: typeof mockDb,
+      onfulfilled?: ((value: unknown[]) => unknown) | null,
+      onrejected?: ((reason: unknown) => unknown) | null
+    ) {
+      if (versionQueryActive && versionWhereArg) {
+        versionQueryActive = false;
+        const hasPartnerScope = sqlHasPartnerScope(versionWhereArg);
+        const partnerId = collectSqlLiterals(versionWhereArg)[0] ?? "";
+        versionWhereArg = null;
+        skipNextSelectResult();
+        const rows = (hasPartnerScope
+          ? versionStore.filter((row) => row.partnerId === partnerId)
+          : versionStore
+        ).map((row) => ({ processedFilename: row.processedFilename }));
+        return Promise.resolve(rows).then(onfulfilled, onrejected);
+      }
+      return origThen.call(this, onfulfilled, onrejected);
+    });
+
+    mockFs.readdir.mockResolvedValue(["chunk_000000"]);
+
+    const partnerA = { ...mockPartnerRow, id: "p_a", firstName: "Alice", lastName: "Alpha" };
+    const partnerB = { ...mockPartnerRow, id: "p_b", firstName: "Bob", lastName: "Beta" };
+
+    resetSelectQueue();
+    vi.mocked(drive.uploadSongToDrive).mockClear();
+    enqueuePartnerHappyPath("p_a", partnerA, []);
+    const resA = await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: makeChunkForm({ partner_id: "p_a" }),
+    });
+    expect(resA.status).toBe(200);
+    const uploadA = vi.mocked(drive.uploadSongToDrive).mock.calls.at(-1)?.[1] as { filename: string };
+    expect(uploadA.filename).toMatch(/_v01\.mp3$/);
+    versionStore.push({ partnerId: "p_a", processedFilename: uploadA.filename });
+
+    resetSelectQueue();
+    vi.mocked(drive.uploadSongToDrive).mockClear();
+    enqueuePartnerHappyPath("p_b", partnerB, []);
+    const resB = await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: makeChunkForm({ partner_id: "p_b" }),
+    });
+    expect(resB.status).toBe(200);
+    const uploadB = vi.mocked(drive.uploadSongToDrive).mock.calls.at(-1)?.[1] as { filename: string };
+    expect(uploadB.filename).toMatch(/_v01\.mp3$/);
+
+    vi.mocked(mockDb.select).mockImplementation(origSelect);
+    vi.mocked(mockDb.where).mockImplementation(origWhere);
+    vi.mocked(mockDb.then).mockImplementation(origThen);
   });
 
   // --- partner validation ---

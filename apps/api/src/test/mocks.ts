@@ -16,6 +16,10 @@ function drainSelect(): unknown[] {
   return (selectResultQueue.shift() ?? []) as unknown[];
 }
 
+export function skipNextSelectResult(): void {
+  drainSelect();
+}
+
 type DbChain = {
   select: ReturnType<typeof vi.fn>;
   from: ReturnType<typeof vi.fn>;
@@ -33,10 +37,7 @@ type DbChain = {
   /** Raw SQL execution (e.g. `SELECT 1` health probe). */
   execute: ReturnType<typeof vi.fn>;
   transaction: ReturnType<typeof vi.fn>;
-  then: (
-    onfulfilled?: ((value: unknown[]) => unknown) | null,
-    onrejected?: ((reason: unknown) => unknown) | null
-  ) => Promise<unknown>;
+  then: ReturnType<typeof vi.fn>;
 };
 
 function createMockDb(): DbChain {
@@ -77,8 +78,12 @@ function createMockDb(): DbChain {
   // Raw SQL execution used by the /health DB probe.
   chain.execute = vi.fn(() => Promise.resolve([{ "?column?": 1 }]));
   chain.transaction = vi.fn((fn: (tx: DbChain) => unknown) => fn(chain));
-  chain.then = (onfulfilled, onrejected) =>
-    Promise.resolve(drainSelect()).then(onfulfilled, onrejected);
+  chain.then = vi.fn(
+    (
+      onfulfilled?: ((value: unknown[]) => unknown) | null,
+      onrejected?: ((reason: unknown) => unknown) | null
+    ) => Promise.resolve(drainSelect()).then(onfulfilled, onrejected)
+  );
   return chain;
 }
 

@@ -213,6 +213,8 @@ async function buildAndUploadSong(
         sql`coalesce(${songs.division}, '') = ${song.division ?? ""}`,
         sql`coalesce(${songs.routineName}, '') = ${song.routineName ?? ""}`,
         eq(songs.seasonYear, seasonYearStr),
+        sql`coalesce(${songs.partnerId}, '') = ${song.partnerId ?? ""}`,
+        sql`coalesce(${songs.managedPartnershipId}, '') = ${song.managedPartnershipId ?? ""}`,
         ne(songs.id, song.id)
       )
     );
