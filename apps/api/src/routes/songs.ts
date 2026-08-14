@@ -11,7 +11,7 @@ import { checkins, eventSongSubmissions, managedPartnerships, partners, queueEnt
 import { requireAuth } from "../middleware/auth.js";
 import { shareDriveFileWithUsers, softDeleteOnDrive, uploadSongToDrive } from "../services/drive.js";
 import { tagSongBytes } from "../services/tagger.js";
-import { detectAudioFormat } from "../services/audioFormat.js";
+import { detectAudioFormat, type DetectedAudioFormat } from "../services/audioFormat.js";
 
 const listQuery = z.object({
   partner_id: z.string().optional(),
@@ -773,6 +773,11 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
 
   let resolvedPartnerId: string | null = partnerId;
   let portalPlaceholderName: string | null = null;
+  let songRow: typeof songs.$inferSelect | undefined;
+  let songId: string | undefined;
+  let assembled: Buffer | undefined;
+  let detectedMimeType: DetectedAudioFormat | undefined;
+  try {
   if (isPortalUpload) {
     if (entityType === "team") {
       if (!teamId) {
@@ -861,7 +866,7 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   }
 
   const parts = await Promise.all(chunkFiles.map((f) => readFile(join(uploadDir, f))));
-  const assembled = Buffer.concat(parts);
+  assembled = Buffer.concat(parts);
   await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
 
   if (assembled.length > MAX_ASSEMBLED_BYTES) {
@@ -873,8 +878,8 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   // application/octet-stream for valid MP3s, and the iOS Files app picker
   // filters by its own rules that don't always match our accept= attribute
   // — so we keep the client filter loose and gate quality here instead.
-  const detectedMimeType = detectAudioFormat(assembled);
-  if (!detectedMimeType) {
+  const detected = detectAudioFormat(assembled);
+  if (!detected) {
     return c.json(
       error(
         "UNSUPPORTED_FORMAT",
@@ -883,6 +888,7 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
       400
     );
   }
+  detectedMimeType = detected;
 
   const now = Date.now();
 
@@ -922,7 +928,7 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   }
 
   // Create the song record now — only reached if all chunks arrived successfully.
-  const songId = crypto.randomUUID();
+  songId = crypto.randomUUID();
   await db.insert(songs).values({
     id: songId,
     userId: effectiveUserId,
@@ -941,8 +947,13 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
     updatedAt: now,
   });
 
-  const [songRow] = await db.select().from(songs).where(eq(songs.id, songId)).limit(1);
-  if (!songRow) return c.json(CommonErrors.internalError(), 500);
+  const [songRowResult] = await db.select().from(songs).where(eq(songs.id, songId)).limit(1);
+  songRow = songRowResult;
+  if (!songRow) return c.json(error("SONG_REINSERT_MISSING", "song row not found after insert"), 500);
+  } catch (err) {
+    logger.error({ event: "upload_final_debug", category: "api", context: { userId, uploadId, entityType }, error: err });
+    return c.json(error("UPLOAD_DEBUG", err instanceof Error ? `${err.name}: ${err.message}` : String(err)), 500);
+  }
 
   // Return the song record immediately so the client's HTTP request completes
   // without waiting for the Google Drive upload (which can take 30–120 s for
