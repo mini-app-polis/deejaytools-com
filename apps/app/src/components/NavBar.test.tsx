@@ -84,20 +84,19 @@ describe("NavBar — signed in (regular user)", () => {
 });
 
 describe("NavBar — signed in (admin)", () => {
-  it("shows the Admin dropdown trigger in addition to the regular signed-in items", () => {
+  it("shows the admin sub-navbar links in addition to the regular signed-in items", () => {
     signedIn = true;
     isAdmin = true;
     renderNav();
 
-    // Admin is now a dropdown (button) on desktop instead of a single link
-    // to /admin. The individual /admin/<section> links live inside the
-    // dropdown popover and only render when it's opened, so we just verify
-    // the trigger button exists here.
-    expect(screen.getByRole("button", { name: /^admin/i })).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: /floor trials/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /^my content$/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /^my profile$/i }).length).toBeGreaterThan(0);
     expect(screen.getByTestId("user-button")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^admin$/i })).toBeNull();
+    expect(screen.getByText("Admin")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^events$/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^live queue$/i })).toBeInTheDocument();
   });
 });
 

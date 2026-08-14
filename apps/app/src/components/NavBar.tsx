@@ -1,14 +1,7 @@
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/clerk-react";
-import { ChevronDown } from "lucide-react";
 import { useState } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { isProdHost } from "@/lib/env";
 import { useAuthMe } from "@/hooks/useAuthMe";
@@ -25,8 +18,8 @@ const SIGNED_IN_ITEMS: NavItem[] = [
   { to: "/my-profile", label: "My Profile" },
 ];
 
-// Admin sections, in display order. Each one is its own URL — the
-// dropdown trigger replaces what used to be a single "Admin" link.
+// Admin sections, in display order. Rendered as a dedicated admin sub-navbar
+// (desktop) and as a flat list in the mobile menu.
 const ADMIN_ITEMS: NavItem[] = [
   { to: "/admin/events", label: "Events" },
   { to: "/admin/sessions", label: "Sessions" },
@@ -42,20 +35,12 @@ const ADMIN_ITEMS: NavItem[] = [
  * Shared top navigation. Used by both the public LandingPage and the
  * authenticated-app Layout so the bar looks identical regardless of route.
  *
- * Auth-state visibility:
- *   - Floor Trials → always
- *   - Partners, Songs → when signed in
- *   - Admin → when signed in AND role === "admin"
- *   - Right side: UserButton (signed in) / Sign in button (signed out)
+ * Admins additionally get a second sticky bar below the main one containing
+ * the admin sections (desktop only). On mobile those live in the hamburger.
  */
 export default function NavBar() {
   const { isAdmin } = useAuthMe();
   const [menuOpen, setMenuOpen] = useState(false);
-  const location = useLocation();
-  // The dropdown trigger should look "active" whenever we're on any
-  // admin page, since none of the individual admin URLs are the trigger
-  // itself. NavLink's isActive is per-link, so we compute this manually.
-  const isAdminRoute = location.pathname.startsWith("/admin");
 
   const desktopLinkClass = ({ isActive }: { isActive: boolean }) =>
     cn(
@@ -71,17 +56,12 @@ export default function NavBar() {
         : "text-muted-foreground hover:text-foreground hover:bg-white/5"
     );
 
-  const adminDropdownTriggerClass = cn(
-    "inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-    isAdminRoute ? "text-primary" : "text-muted-foreground hover:text-foreground"
-  );
-
-  const adminDropdownItemClass = ({ isActive }: { isActive: boolean }) =>
+  const adminBarLinkClass = ({ isActive }: { isActive: boolean }) =>
     cn(
-      "block w-full rounded-sm px-2 py-1.5 text-sm transition-colors",
+      "rounded-full px-3 py-1 text-sm whitespace-nowrap transition-colors",
       isActive
-        ? "bg-accent text-accent-foreground"
-        : "text-foreground hover:bg-accent hover:text-accent-foreground"
+        ? "bg-primary/10 text-primary"
+        : "text-muted-foreground hover:text-foreground"
     );
 
   return (
@@ -136,31 +116,12 @@ export default function NavBar() {
           </SignedIn>
         </div>
 
-        {/* Right cluster: Contact, Admin (if admin), user menu / sign-in, hamburger */}
+        {/* Right cluster: Contact, user menu / sign-in, hamburger */}
         <div className="flex items-center gap-3">
           <div className="hidden sm:flex items-center gap-1">
             <NavLink to="/feedback" className={desktopLinkClass}>
               Contact
             </NavLink>
-            <SignedIn>
-              {isAdmin && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger className={adminDropdownTriggerClass}>
-                    Admin
-                    <ChevronDown className="h-3.5 w-3.5 opacity-70" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="min-w-[12rem]">
-                    {ADMIN_ITEMS.map((item) => (
-                      <DropdownMenuItem key={item.to} asChild>
-                        <NavLink to={item.to} className={adminDropdownItemClass}>
-                          {item.label}
-                        </NavLink>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-            </SignedIn>
           </div>
           <SignedIn>
             <UserButton />
@@ -200,6 +161,26 @@ export default function NavBar() {
         </div>
       </div>
 
+      {/* Admin sub-navbar — desktop only, admins only. Sticks with the main
+          nav since the whole <nav> is sticky. Horizontally scrollable if the
+          links overflow. */}
+      <SignedIn>
+        {isAdmin && (
+          <div className="hidden sm:block border-t border-white/[0.07] bg-black/30">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 h-11 flex items-center gap-1 overflow-x-auto">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70 mr-2 shrink-0">
+                Admin
+              </span>
+              {ADMIN_ITEMS.map((item) => (
+                <NavLink key={item.to} to={item.to} className={adminBarLinkClass}>
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        )}
+      </SignedIn>
+
       {/* Mobile menu */}
       {menuOpen && (
         <div className="sm:hidden border-t border-white/[0.07] bg-background">
@@ -236,9 +217,6 @@ export default function NavBar() {
             <SignedIn>
               {isAdmin && (
                 <>
-                  {/* No dropdown on mobile — admin pages get a flat list
-                      under an "Admin" header so they're all reachable
-                      without a nested popover. */}
                   <div className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/80">
                     Admin
                   </div>
