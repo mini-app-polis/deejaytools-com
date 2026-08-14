@@ -14,8 +14,9 @@ import { DIVISIONS, type ApiManagedPartnership } from "@deejaytools/schemas";
 import type { AuthMe as MeResponse } from "@/hooks/useAuthMe";
 
 const DIVISION_OPTIONS = DIVISIONS;
-const SOLO_ALLOWED_DIVISIONS = new Set<string>(["Teams", "Exhibition", "My Division Is Not Listed", "Cabaret"]);
-const SOLO_PARTNER_VALUE = "__solo__";
+// Divisions handled only by the (future) solo/teams portal — hidden from the standard upload picker.
+const PORTAL_ONLY_DIVISIONS = new Set<string>(["Teams", "Cabaret", "My Division Is Not Listed"]);
+const UPLOAD_DIVISION_OPTIONS = DIVISION_OPTIONS.filter((d) => !PORTAL_ONLY_DIVISIONS.has(d));
 const apiBase = import.meta.env.VITE_API_URL ?? "";
 const CHUNK_SIZE = 5 * 1024 * 1024;
 const MAX_FILE_BYTES = 100 * 1024 * 1024;
@@ -40,7 +41,7 @@ function managedPartnershipSummary(p: ApiManagedPartnership) {
 }
 
 export type SongUploadFormProps = {
-  /** "self" = partner/solo upload; "managed" = upload for a managed partnership. */
+  /** "self" = partner upload; "managed" = upload for a managed partnership. */
   variant: "self" | "managed";
   /** When set, an admin uploads on behalf of this existing user (variant must be "self").
       Loads the target user's partners and sends on_behalf_of_user_id. */
@@ -104,8 +105,8 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
     }
     if (!division) { toast.error("Please select a division."); return; }
     if (variant === "self") {
-      if (!SOLO_ALLOWED_DIVISIONS.has(division) && !selectedPartnerId) {
-        toast.error("A partner is required for this division.");
+      if (!selectedPartnerId) {
+        toast.error("Please select a partner.");
         return;
       }
     } else {
@@ -222,6 +223,7 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
   const hasFullName = Boolean(me?.first_name?.trim() && me?.last_name?.trim());
   const selectedManaged = managedPartnerships.find((p) => p.id === selectedManagedPartnershipId) ?? null;
   const managedSubmitDisabled = isSubmitting || managedPartnerships.length === 0 || !selectedManagedPartnershipId;
+  const selfSubmitDisabled = isSubmitting || partners.length === 0 || !selectedPartnerId;
 
   return (
     <form onSubmit={(e) => void handleUpload(e)} className="space-y-4">
@@ -251,18 +253,24 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
           <Label htmlFor="song-partner">Partner</Label>
           <Select
             key={formKey}
-            value={selectedPartnerId === "" ? SOLO_PARTNER_VALUE : selectedPartnerId}
-            onValueChange={(v) => setSelectedPartnerId(v === SOLO_PARTNER_VALUE ? "" : v)}
+            value={selectedPartnerId || undefined}
+            onValueChange={setSelectedPartnerId}
           >
-            <SelectTrigger id="song-partner"><SelectValue placeholder="No partner" /></SelectTrigger>
+            <SelectTrigger id="song-partner">
+              <SelectValue placeholder="Select a partner" />
+            </SelectTrigger>
             <SelectContent>
-              <SelectItem value={SOLO_PARTNER_VALUE}>No partner</SelectItem>
               {partners.map((p) => (
                 <SelectItem key={p.id} value={p.id}>{partnerLabel(p)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {!onBehalf && (
+          {partners.length === 0 ? (
+            <p className="text-sm text-amber-600 dark:text-amber-500">
+              You need a partner to upload. Add one on the{" "}
+              <Link to="/my-profile" className="underline font-medium">My Profile</Link> page.
+            </p>
+          ) : (
             <p className="text-xs text-muted-foreground">
               Add partners on the <Link to="/my-profile" className="underline">My Profile</Link> page.
             </p>
@@ -304,7 +312,7 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
         <Select key={formKey} value={division || undefined} onValueChange={setDivision}>
           <SelectTrigger id="song-division"><SelectValue placeholder="Select a division" /></SelectTrigger>
           <SelectContent>
-            {DIVISION_OPTIONS.map((d) => (<SelectItem key={d} value={d}>{d}</SelectItem>))}
+            {UPLOAD_DIVISION_OPTIONS.map((d) => (<SelectItem key={d} value={d}>{d}</SelectItem>))}
           </SelectContent>
         </Select>
       </div>
@@ -324,7 +332,7 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
       </div>
 
       <div className="sticky bottom-0 z-10 -mx-6 border-t bg-card/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/80 sm:static sm:mx-0 sm:border-t-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
-        <Button type="submit" disabled={variant === "managed" ? managedSubmitDisabled : isSubmitting} className="w-full sm:w-auto">
+        <Button type="submit" disabled={variant === "managed" ? managedSubmitDisabled : selfSubmitDisabled} className="w-full sm:w-auto">
           {isSubmitting ? "Uploading…" : "Upload song"}
         </Button>
       </div>
