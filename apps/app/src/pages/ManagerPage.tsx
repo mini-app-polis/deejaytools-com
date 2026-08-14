@@ -11,7 +11,6 @@ import {
 } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 import SongUploadForm from "@/components/SongUploadForm";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -138,7 +137,7 @@ export default function ManagerPage() {
     if (!cfSelectedSubmission) return;
     const d = cfSelectedSubmission.division ?? "";
     setCfDivision(cfSessionDivisions.includes(d) ? d : "");
-  }, [cfSongId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cfSongId]);
 
   useEffect(() => {
     if (ufSelected) return;
@@ -183,14 +182,6 @@ export default function ManagerPage() {
     const m = new Map<string, string>();
     for (const s of lqSongs) {
       m.set(s.id, s.processed_filename?.trim() || s.routine_name?.trim() || s.division?.trim() || s.id);
-    }
-    return m;
-  }, [lqSongs]);
-
-  const songFilenameMap = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const s of lqSongs) {
-      if (s.processed_filename) m.set(s.id, s.processed_filename);
     }
     return m;
   }, [lqSongs]);

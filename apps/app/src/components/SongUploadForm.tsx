@@ -93,7 +93,6 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
       .catch((e: Error) => toast.error(e.message))
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, variant, onBehalf?.userId]);
 
   const handleUpload = async (e: React.FormEvent) => {
