@@ -1,10 +1,12 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import AdminGuard from "@/components/AdminGuard";
+import ManagerGuard from "@/components/ManagerGuard";
 import Layout from "@/components/Layout";
 import RequireAuth from "@/components/RequireAuth";
 import LandingPage from "./LandingPage";
 import AdminPage from "./AdminPage";
+import ManagerPage from "./ManagerPage";
 import FloorTrialsPage from "./FloorTrialsPage";
 import EventDetailPage from "./EventDetailPage";
 import EventsPage from "./EventsPage";
@@ -124,6 +126,15 @@ export default function App() {
               <AdminGuard>
                 <AdminPage />
               </AdminGuard>
+            }
+          />
+          <Route path="manager" element={<Navigate to="/manager/checkin-for" replace />} />
+          <Route
+            path="manager/:section"
+            element={
+              <ManagerGuard>
+                <ManagerPage />
+              </ManagerGuard>
             }
           />
         </Route>

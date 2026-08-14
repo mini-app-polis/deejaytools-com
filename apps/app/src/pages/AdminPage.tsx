@@ -8,7 +8,6 @@ import {
   type ApiQueueEntry,
   type ApiLeadingPair,
   type ApiSong,
-  type ApiTestInjection,
   type ApiRun,
   type ApiAdminSong,
   type ApiAdminUser,
@@ -152,16 +151,6 @@ const FIELD_INPUT_CLASS =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
 const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
 
-function randomFourDigitTag(): string {
-  return Math.floor(Math.random() * 10000)
-    .toString()
-    .padStart(4, "0");
-}
-
-function randomDivision(): string {
-  return DIVISION_OPTIONS[Math.floor(Math.random() * DIVISION_OPTIONS.length)];
-}
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 /**
@@ -178,7 +167,6 @@ export const ADMIN_SECTIONS = [
   "sessions",
   "queue",
   "runs",
-  "inject",
   "songs",
   "event-songs",
   "users",
@@ -235,7 +223,6 @@ export default function AdminPage() {
   /** Delete-confirmation dialog state — one per destructive action type. */
   const [pendingDeleteEventId, setPendingDeleteEventId] = useState<string | null>(null);
   const [pendingDeleteSession, setPendingDeleteSession] = useState<ApiSession | null>(null);
-  const [pendingDeleteAllTestData, setPendingDeleteAllTestData] = useState(false);
   /** Minutes before start that check-in opens. 0 = same moment as start. */
   const [sessCheckinOffsetMins, setSessCheckinOffsetMins] = useState("30");
   /** Floor trial duration in minutes. */
@@ -258,19 +245,6 @@ export default function AdminPage() {
   const [lqLoading, setLqLoading] = useState(false);
   const lqSessionRef = useRef(lqSessionId);
   lqSessionRef.current = lqSessionId;
-
-  // ── Test injection tab ──────────────────────────────────────────────────────
-  // Defaults are randomized on mount and after every successful injection.
-  // Users can override any field before submitting.
-  const [tiSessionId, setTiSessionId] = useState("");
-  const [tiDivision, setTiDivision] = useState<string>(() => randomDivision());
-  const [tiLeaderFirst, setTiLeaderFirst] = useState("Leader");
-  const [tiLeaderLast, setTiLeaderLast] = useState(() => randomFourDigitTag());
-  const [tiFollowerFirst, setTiFollowerFirst] = useState("Follower");
-  const [tiFollowerLast, setTiFollowerLast] = useState(() => randomFourDigitTag());
-  const [tiSubmitting, setTiSubmitting] = useState(false);
-  const [tiData, setTiData] = useState<ApiTestInjection[] | null>(null);
-  const [tiDeleting, setTiDeleting] = useState(false);
 
   // ── Run history tab ─────────────────────────────────────────────────────────
   const [runsSessionFilter, setRunsSessionFilter] = useState("");
@@ -355,15 +329,6 @@ export default function AdminPage() {
     setLqSongs(songs);
   }, [api]);
 
-  const loadApiTestInjections = useCallback(async () => {
-    try {
-      const data = await api.get<ApiTestInjection[]>("/v1/admin/checkins/test");
-      setTiData(data);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to load test data");
-    }
-  }, [api]);
-
   const loadRuns = useCallback(
     async (sessionId: string) => {
       setRunsLoading(true);
@@ -424,10 +389,9 @@ export default function AdminPage() {
     loadEvents();
     loadSessions();
     void loadLqExtras().catch(() => {});
-    void loadApiTestInjections().catch(() => {});
     void loadUsers("").catch(() => {});
     void loadAdminSongs("", false).catch(() => {});
-  }, [loadEvents, loadSessions, loadLqExtras, loadApiTestInjections, loadUsers, loadAdminSongs]);
+  }, [loadEvents, loadSessions, loadLqExtras, loadUsers, loadAdminSongs]);
 
   // Refetch run history whenever the session filter changes.
   useEffect(() => {
@@ -900,67 +864,6 @@ export default function AdminPage() {
 
   const canPromoteNext = lqPriority.length > 0 || lqNonPriority.length > 0;
 
-  // ── Test injection ──────────────────────────────────────────────────────────
-
-  const submitApiTestInjection = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!tiSessionId) { toast.error("Select a session"); return; }
-    if (!tiDivision) { toast.error("Select a division"); return; }
-    if (!tiLeaderFirst.trim() || !tiLeaderLast.trim()) {
-      toast.error("Leader first and last name are required");
-      return;
-    }
-    if (!tiFollowerFirst.trim() || !tiFollowerLast.trim()) {
-      toast.error("Follower first and last name are required");
-      return;
-    }
-
-    setTiSubmitting(true);
-    try {
-      const result = await api.post<{
-        id: string;
-        sessionId: string;
-        divisionName: string;
-        initialQueue: "priority" | "non_priority";
-        pair: { id: string; partner_b_id: string | null; display_name: string };
-      }>("/v1/admin/checkins", {
-        sessionId: tiSessionId,
-        divisionName: tiDivision,
-        leaderFirstName: tiLeaderFirst.trim(),
-        leaderLastName: tiLeaderLast.trim(),
-        followerFirstName: tiFollowerFirst.trim(),
-        followerLastName: tiFollowerLast.trim(),
-      });
-
-      // Append the synthetic pair to the local map so the queue tab renders
-      // the leader/follower name correctly when the same session is viewed.
-      setLqPairs((prev) => [...prev, result.pair]);
-
-      toast.success(
-        `Injected into ${result.initialQueue === "priority" ? "priority" : "non-priority"} queue`
-      );
-
-      // If the user is currently viewing this session's live queue, refresh it.
-      if (lqSessionRef.current === tiSessionId) {
-        void loadLiveQueues(tiSessionId).catch(() => {});
-      }
-
-      // Regenerate randomized defaults so the next injection gets fresh names + division.
-      // Session stays selected for repeat injects against the same session.
-      setTiLeaderFirst("Leader");
-      setTiLeaderLast(randomFourDigitTag());
-      setTiFollowerFirst("Follower");
-      setTiFollowerLast(randomFourDigitTag());
-      setTiDivision(randomDivision());
-
-      void loadApiTestInjections().catch(() => {});
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Injection failed");
-    } finally {
-      setTiSubmitting(false);
-    }
-  };
-
   // ── User role management ────────────────────────────────────────────────────
 
   /**
@@ -992,31 +895,6 @@ export default function AdminPage() {
         const { [userId]: _, ...rest } = prev;
         return rest;
       });
-    }
-  };
-
-  const deleteAllTestData = () => {
-    if (!tiData || tiData.length === 0) return;
-    setPendingDeleteAllTestData(true);
-  };
-
-  const confirmDeleteAllTestData = async () => {
-    setPendingDeleteAllTestData(false);
-    if (!tiData) return;
-    setTiDeleting(true);
-    const expectedCount = tiData.length;
-    try {
-      await api.del("/v1/admin/checkins/test");
-      toast.success(`Deleted ${expectedCount} test injection${expectedCount === 1 ? "" : "s"}`);
-      setTiData([]);
-      // Refresh queue display if a session is currently being viewed.
-      if (lqSessionRef.current) {
-        void loadLiveQueues(lqSessionRef.current).catch(() => {});
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Delete failed");
-    } finally {
-      setTiDeleting(false);
     }
   };
 
@@ -1573,168 +1451,6 @@ export default function AdminPage() {
           )}
         </TabsContent>
 
-        {/* ── Test Inject tab ── */}
-        <TabsContent value="inject" className="mt-4 space-y-4">
-          <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-            Testing-only bypass. Creates throwaway user/partner/pair rows and uses a placeholder song.
-            Skips the check-in time window. Each submission adds one entry to the selected session's queue.
-          </div>
-          <form onSubmit={submitApiTestInjection} className="space-y-4 max-w-lg">
-            <div>
-              <label className={FIELD_LABEL_CLASS}>Session</label>
-              <select
-                className={FIELD_INPUT_CLASS}
-                value={tiSessionId}
-                onChange={(e) => setTiSessionId(e.target.value)}
-              >
-                <option value="">Select a session…</option>
-                {sessions
-                  ?.slice()
-                  .sort(compareSessionChrono)
-                  .map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {formatSessionTitle(s, s.event_timezone)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className={FIELD_LABEL_CLASS}>Division</label>
-              <select
-                className={FIELD_INPUT_CLASS}
-                value={tiDivision}
-                onChange={(e) => setTiDivision(e.target.value)}
-              >
-                {DIVISION_OPTIONS.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Leader first name</label>
-                <input
-                  className={FIELD_INPUT_CLASS}
-                  value={tiLeaderFirst}
-                  onChange={(e) => setTiLeaderFirst(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Leader last name</label>
-                <input
-                  className={FIELD_INPUT_CLASS}
-                  value={tiLeaderLast}
-                  onChange={(e) => setTiLeaderLast(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Follower first name</label>
-                <input
-                  className={FIELD_INPUT_CLASS}
-                  value={tiFollowerFirst}
-                  onChange={(e) => setTiFollowerFirst(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Follower last name</label>
-                <input
-                  className={FIELD_INPUT_CLASS}
-                  value={tiFollowerLast}
-                  onChange={(e) => setTiFollowerLast(e.target.value)}
-                />
-              </div>
-            </div>
-            <Button type="submit" disabled={tiSubmitting} size="lg" className="w-full sm:w-auto">
-              {tiSubmitting ? "Injecting…" : "Inject check-in"}
-            </Button>
-          </form>
-
-          {/* Existing test data */}
-          <section className="space-y-3 pt-2">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <h2 className="text-base font-semibold">
-                Existing test data
-                {tiData !== null && (
-                  <span className="ml-2 text-sm text-muted-foreground font-normal">
-                    ({tiData.length})
-                  </span>
-                )}
-              </h2>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void loadApiTestInjections()}
-                  disabled={tiDeleting}
-                >
-                  Refresh
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => void deleteAllTestData()}
-                  disabled={tiDeleting || !tiData || tiData.length === 0}
-                >
-                  {tiDeleting ? "Deleting…" : "Delete all test data"}
-                </Button>
-              </div>
-            </div>
-
-            {tiData === null ? (
-              <Skeleton className="h-24 w-full" />
-            ) : tiData.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No test data in the system.</p>
-            ) : (
-              <div className="space-y-2">
-                {tiData.map((row) => {
-                  const queueLabel =
-                    row.queue_status === "active"
-                      ? `Active #${row.position ?? "?"}`
-                      : row.queue_status === "priority"
-                      ? `Priority #${row.position ?? "?"}`
-                      : row.queue_status === "non_priority"
-                      ? `Non-priority #${row.position ?? "?"}`
-                      : "Off queue";
-                  const sessionRow = sessions?.find((s) => s.id === row.session_id);
-                  const sessionLabel = sessionRow ? formatSessionTitle(sessionRow, sessionRow.event_timezone) : "No session";
-                  return (
-                    <div
-                      key={row.pair_id}
-                      className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm"
-                    >
-                      <div className="flex items-start justify-between gap-2 flex-wrap">
-                        <div className="min-w-0 space-y-0.5">
-                          <p className="font-medium">
-                            {row.leader_name}
-                            {row.follower_name ? ` & ${row.follower_name}` : ""}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {sessionLabel}
-                            {row.division_name ? ` · ${row.division_name}` : ""}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Injected {formatTime(row.created_at)}
-                          </p>
-                        </div>
-                        <Badge
-                          variant={row.queue_status === "off_queue" ? "outline" : "default"}
-                          className="shrink-0"
-                        >
-                          {queueLabel}
-                        </Badge>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        </TabsContent>
-
         {/* ── Songs tab ── */}
         <TabsContent value="songs" className="mt-4 space-y-4">
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center flex-wrap">
@@ -2070,24 +1786,6 @@ export default function AdminPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setPendingDeleteSession(null)}>Cancel</Button>
             <Button variant="destructive" onClick={() => void confirmDeleteSession()}>Delete</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Delete all test data confirmation dialog ── */}
-      <Dialog open={pendingDeleteAllTestData} onOpenChange={(open: boolean) => { if (!open) setPendingDeleteAllTestData(false); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete all test data?</DialogTitle>
-            <DialogDescription>
-              This will remove{" "}
-              {tiData?.length ?? 0} test injection{(tiData?.length ?? 0) === 1 ? "" : "s"} —
-              synthetic users, partners, pairs, check-ins, and queue entries. This cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPendingDeleteAllTestData(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => void confirmDeleteAllTestData()}>Delete all</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

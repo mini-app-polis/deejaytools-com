@@ -27,14 +27,18 @@ vi.mock("@clerk/clerk-react", () => ({
   UserButton: () => <div data-testid="user-button" />,
 }));
 
-// Drive useAuthMe via another mutable flag.
+// Drive useAuthMe via mutable flags.
 let isAdmin = false;
+let isManager = false;
 vi.mock("@/hooks/useAuthMe", () => ({
   useAuthMe: () => ({
-    me: signedIn ? { id: "u1", role: isAdmin ? "admin" : "user" } : null,
+    me: signedIn
+      ? { id: "u1", role: isAdmin ? "admin" : isManager ? "manager" : "user" }
+      : null,
     loading: false,
     reload: vi.fn(),
     isAdmin,
+    isManager,
   }),
 }));
 
@@ -52,6 +56,7 @@ describe("NavBar — signed out", () => {
   it("shows the Floor Trials link and the Sign in button, nothing else", () => {
     signedIn = false;
     isAdmin = false;
+    isManager = false;
     renderNav();
 
     // Floor Trials is the only public nav item — it appears in the desktop nav
@@ -68,9 +73,10 @@ describe("NavBar — signed out", () => {
 });
 
 describe("NavBar — signed in (regular user)", () => {
-  it("shows Floor Trials, My Content, My Profile and the UserButton; no Admin link", () => {
+  it("shows Floor Trials, My Content, My Profile and the UserButton; no admin bars", () => {
     signedIn = true;
     isAdmin = false;
+    isManager = false;
     renderNav();
 
     expect(screen.getAllByRole("link", { name: /floor trials/i }).length).toBeGreaterThan(0);
@@ -78,15 +84,17 @@ describe("NavBar — signed in (regular user)", () => {
     expect(screen.getAllByRole("link", { name: /^my profile$/i }).length).toBeGreaterThan(0);
     expect(screen.getByTestId("user-button")).toBeInTheDocument();
 
-    expect(screen.queryByRole("link", { name: /^admin$/i })).toBeNull();
+    expect(screen.queryByText("Superuser")).toBeNull();
+    expect(screen.queryByText("Manager")).toBeNull();
     expect(screen.queryByTestId("sign-in-button")).toBeNull();
   });
 });
 
 describe("NavBar — signed in (admin)", () => {
-  it("shows the admin sub-navbar links in addition to the regular signed-in items", () => {
+  it("shows Superuser and Manager sub-bars with their section links", () => {
     signedIn = true;
     isAdmin = true;
+    isManager = false;
     renderNav();
 
     expect(screen.getAllByRole("link", { name: /floor trials/i }).length).toBeGreaterThan(0);
@@ -94,9 +102,27 @@ describe("NavBar — signed in (admin)", () => {
     expect(screen.getAllByRole("link", { name: /^my profile$/i }).length).toBeGreaterThan(0);
     expect(screen.getByTestId("user-button")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^admin$/i })).toBeNull();
-    expect(screen.getByText("Admin")).toBeInTheDocument();
+    expect(screen.getByText("Superuser")).toBeInTheDocument();
+    expect(screen.getByText("Manager")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^events$/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^live queue$/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^checkin for$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^test inject$/i })).toBeNull();
+  });
+});
+
+describe("NavBar — signed in (manager only)", () => {
+  it("shows the Manager sub-bar but not Superuser", () => {
+    signedIn = true;
+    isAdmin = false;
+    isManager = true;
+    renderNav();
+
+    expect(screen.getByText("Manager")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^upload for$/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^checkin for$/i })).toBeInTheDocument();
+    expect(screen.queryByText("Superuser")).toBeNull();
+    expect(screen.queryByRole("link", { name: /^events$/i })).toBeNull();
   });
 });
 
@@ -104,6 +130,7 @@ describe("NavBar — wordmark", () => {
   it("renders the DJT icon, DeejayTools.com wordmark and version label", () => {
     signedIn = false;
     isAdmin = false;
+    isManager = false;
     renderNav();
     // The new layout uses a square DJT icon (alt="DeejayTools") next to a
     // visible "DeejayTools.com" text wordmark, with a small version label.
@@ -133,6 +160,7 @@ describe("NavBar — environment badge", () => {
   it("shows a DEV badge on non-production hosts (e.g. localhost)", () => {
     signedIn = false;
     isAdmin = false;
+    isManager = false;
     renderNav();
     expect(screen.getByText("DEV")).toBeInTheDocument();
   });
@@ -140,6 +168,7 @@ describe("NavBar — environment badge", () => {
   it("hides the DEV badge on the production host", () => {
     signedIn = false;
     isAdmin = false;
+    isManager = false;
     setHostname("deejaytools.com");
     renderNav();
     expect(screen.queryByText("DEV")).toBeNull();
