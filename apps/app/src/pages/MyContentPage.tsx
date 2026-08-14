@@ -249,7 +249,7 @@ export default function MyContentPage() {
                     </p>
                   </div>
                   <Button asChild size="sm" className="shrink-0 w-full sm:w-auto">
-                    <Link to={`/sessions/${s.id}`}>Check in</Link>
+                    <Link to={`/sessions/${s.id}`}>Go To Session</Link>
                   </Button>
                 </div>
               );

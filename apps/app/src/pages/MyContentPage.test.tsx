@@ -127,7 +127,7 @@ describe("MyContentPage — Active Floor Trials section", () => {
     apiGet.mockReset();
   });
 
-  it("shows Active Floor Trials with a Check in link when a session is active", async () => {
+  it("shows Active Floor Trials with a Go To Session link when a session is active", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/sessions") {
         return Promise.resolve([
@@ -149,7 +149,7 @@ describe("MyContentPage — Active Floor Trials section", () => {
     ).toBeInTheDocument();
     expect(screen.getAllByText("Spring Classic").length).toBeGreaterThan(0);
     expect(screen.getByText(/check-in open/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /^check in$/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /^go to session$/i })).toHaveAttribute(
       "href",
       "/sessions/sess-active-1"
     );
