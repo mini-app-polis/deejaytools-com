@@ -14,7 +14,6 @@ import { adminUserRoutes } from "./routes/admin-users.js";
 import { authRoutes } from "./routes/auth.js";
 import { checkinRoutes } from "./routes/checkins.js";
 import { eventRoutes } from "./routes/events.js";
-import { legacySongRoutes } from "./routes/legacy-songs.js";
 import { pairRoutes } from "./routes/pairs.js";
 import { partnerRoutes } from "./routes/partners.js";
 import { sessionRoutes } from "./routes/sessions.js";
@@ -127,8 +126,6 @@ app.route("/v1/teams", teamsRoutes);
 app.route("/v1/managed-partnerships", managedPartnershipsRoutes);
 app.route("/v1/event-song-submissions", eventSongSubmissionRoutes);
 app.route("/v1/songs", songRoutes);
-// Intentionally public — read-only historical catalog, no user data.
-app.route("/v1/legacy-songs", legacySongRoutes);
 // Intentionally public — unauthenticated feedback submissions.
 app.route("/v1/feedback", feedbackRoutes);
 

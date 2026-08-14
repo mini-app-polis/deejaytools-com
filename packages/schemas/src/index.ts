@@ -307,17 +307,6 @@ export const ApiAuthMeSchema = z.object({
 });
 export type ApiAuthMe = z.infer<typeof ApiAuthMeSchema>;
 
-export const ApiLegacySongSchema = z.object({
-  id: z.string(),
-  partnership: z.string(),
-  division: z.string().nullable(),
-  routine_name: z.string().nullable(),
-  descriptor: z.string().nullable(),
-  version: z.string().nullable(),
-  submitted_at: z.string().nullable(),
-});
-export type ApiLegacySong = z.infer<typeof ApiLegacySongSchema>;
-
 export const ApiTeamSchema = z.object({
   id: z.string(),
   user_id: z.string(),
