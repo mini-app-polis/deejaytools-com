@@ -1,9 +1,16 @@
-import { CommonErrors, createLogger, success, successList } from "common-typescript-utils";
+import { CommonErrors, createLogger, error, success, successList } from "common-typescript-utils";
 import { createManagedPartnershipBodySchema } from "@deejaytools/schemas";
 import { Hono } from "hono";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, notInArray } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { managedPartnerships } from "../db/schema.js";
+import {
+  checkins,
+  eventSongSubmissions,
+  managedPartnerships,
+  queueEntries,
+  sessions,
+  songs,
+} from "../db/schema.js";
 import { zValidator } from "../lib/validate.js";
 import { requireAuth } from "../middleware/auth.js";
 
@@ -29,7 +36,7 @@ managedPartnershipsRoutes.get("/", requireAuth, async (c) => {
   const rows = await db
     .select()
     .from(managedPartnerships)
-    .where(eq(managedPartnerships.userId, userId))
+    .where(and(eq(managedPartnerships.userId, userId), isNull(managedPartnerships.deletedAt)))
     .orderBy(desc(managedPartnerships.createdAt));
   return c.json(successList(rows.map(mapManagedPartnership)));
 });
@@ -131,17 +138,61 @@ managedPartnershipsRoutes.delete("/:id", requireAuth, async (c) => {
   const [existing] = await db
     .select()
     .from(managedPartnerships)
-    .where(and(eq(managedPartnerships.id, id), eq(managedPartnerships.userId, userId)))
+    .where(
+      and(
+        eq(managedPartnerships.id, id),
+        eq(managedPartnerships.userId, userId),
+        isNull(managedPartnerships.deletedAt)
+      )
+    )
     .limit(1);
 
   if (!existing) {
     return c.json(CommonErrors.notFound("Managed partnership"), 404);
   }
 
+  const [activeHit] = await db
+    .select({ id: checkins.id })
+    .from(checkins)
+    .innerJoin(queueEntries, eq(queueEntries.checkinId, checkins.id))
+    .innerJoin(sessions, eq(sessions.id, checkins.sessionId))
+    .where(
+      and(
+        eq(checkins.entityManagedPartnershipId, id),
+        notInArray(sessions.status, ["completed", "cancelled"])
+      )
+    )
+    .limit(1);
+
+  if (activeHit) {
+    return c.json(
+      error(
+        "MANAGED_PARTNERSHIP_IN_ACTIVE_CHECKIN",
+        "This partnership has an active check-in. Complete or withdraw it first."
+      ),
+      409
+    );
+  }
+
+  const now = Date.now();
   try {
-    await db
-      .delete(managedPartnerships)
-      .where(and(eq(managedPartnerships.id, id), eq(managedPartnerships.userId, userId)));
+    await db.transaction(async (tx) => {
+      // Songs uploaded for this partnership: drop their event references, then soft-delete them.
+      const partnershipSongs = await tx
+        .select({ id: songs.id })
+        .from(songs)
+        .where(and(eq(songs.managedPartnershipId, id), isNull(songs.deletedAt)));
+      const songIds = partnershipSongs.map((s) => s.id);
+      if (songIds.length > 0) {
+        await tx.delete(eventSongSubmissions).where(inArray(eventSongSubmissions.songId, songIds));
+        await tx.update(songs).set({ deletedAt: now }).where(inArray(songs.id, songIds));
+      }
+      // Soft-delete the partnership itself (row kept for run/check-in history FK references).
+      await tx
+        .update(managedPartnerships)
+        .set({ deletedAt: now })
+        .where(and(eq(managedPartnerships.id, id), eq(managedPartnerships.userId, userId)));
+    });
   } catch (err) {
     logger.error({
       event: "managed_partnership_delete_failed",
@@ -149,7 +200,7 @@ managedPartnershipsRoutes.delete("/:id", requireAuth, async (c) => {
       context: { userId, managedPartnershipId: id },
       error: err,
     });
-    return c.json(CommonErrors.internalError(), 500);
+    return c.json(CommonErrors.internalError("Failed to delete managed partnership"), 500);
   }
 
   return c.body(null, 204);

@@ -96,6 +96,7 @@ export const managedPartnerships = pgTable(
     followerLastName: text("follower_last_name").notNull(),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+    deletedAt: bigint("deleted_at", { mode: "number" }),
   },
   (t) => ({
     userIdx: index("idx_managed_partnerships_user_id").on(t.userId),
