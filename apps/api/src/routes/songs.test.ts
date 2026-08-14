@@ -486,6 +486,24 @@ describe("POST /v1/songs/upload/chunk", () => {
     );
   });
 
+  it("preserves division casing in processed filename (ProAm LeaderAm → ProAmLeaderAm)", async () => {
+    mockFs.readdir.mockResolvedValue(["chunk_000000"]);
+    const finalRow = makeFinalSongRow({ division: "ProAm LeaderAm" });
+    enqueueSelectResult([finalRow.song]);
+    enqueueSelectResult([mockUserRow]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([finalRow]);
+    await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: makeChunkForm({ division: "ProAm LeaderAm" }),
+    });
+    expect(vi.mocked(drive.uploadSongToDrive)).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      expect.objectContaining({ filename: expect.stringContaining("_ProAmLeaderAm_") })
+    );
+  });
+
   it("increments from max version in existing filenames (v03 → v04)", async () => {
     enqueueHappyPath(["leader_classic_2026_routine_v03.mp3"]);
     await app.request(CHUNK_BASE, {

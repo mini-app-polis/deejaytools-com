@@ -89,6 +89,13 @@ function sanitizeSegment(input: string | null | undefined): string {
     .join("");
 }
 
+/** Filename-safe segment that PRESERVES casing — for controlled values like
+ *  division names that are already well-formed (e.g. "ProAm LeaderAm" → "ProAmLeaderAm"). */
+function staticSegment(input: string | null | undefined): string {
+  if (!input) return "";
+  return input.replace(/[^a-zA-Z0-9]/g, "");
+}
+
 function splitNameAndExtension(filename: string): { base: string; ext: string } {
   const trimmed = filename.trim();
   const lastDot = trimmed.lastIndexOf(".");
@@ -262,7 +269,7 @@ async function buildAndUploadSong(
   const originalParts = splitNameAndExtension(originalName);
   const pathSegments = [
     partnershipSegment || sanitizeSegment(userId) || "user",
-    sanitizeSegment(song.division),
+    staticSegment(song.division),
     sanitizeSegment(seasonYearStr),
     sanitizeSegment(song.routineName),
     sanitizeSegment(song.personalDescriptor),

@@ -94,7 +94,7 @@ describe("MyContentPage — Events section", () => {
     renderPage();
 
     expect(await screen.findByRole("heading", { name: /^events$/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /add songs to an event/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /submit songs/i })).toHaveAttribute(
       "href",
       "/event-submissions"
     );

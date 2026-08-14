@@ -353,7 +353,7 @@ export default function MyContentPage() {
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
           <h2 className="font-semibold">Events</h2>
           <Button size="sm" asChild>
-            <Link to="/event-submissions">Add songs to an event</Link>
+            <Link to="/event-submissions">Submit songs</Link>
           </Button>
         </div>
         <div className="p-4 space-y-3">
@@ -386,6 +386,13 @@ export default function MyContentPage() {
                         </li>
                       ))}
                     </ul>
+                    {event.status === "active" && (
+                      <div className="pt-1">
+                        <Button asChild size="sm" className="w-full sm:w-auto">
+                          <Link to={`/events/${event.id}`}>Go to event</Link>
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
