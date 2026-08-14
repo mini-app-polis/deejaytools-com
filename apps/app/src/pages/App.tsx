@@ -16,7 +16,6 @@ import MyProfilePage from "./MyProfilePage";
 import SessionDetailPage from "./SessionDetailPage";
 import SessionsPage from "./SessionsPage";
 import AddSongPage from "./AddSongPage";
-import SpecialUploadPage from "./SpecialUploadPage";
 import EventSubmissionsPage from "./EventSubmissionsPage";
 import SongsPage from "./SongsPage";
 import FeedbackPage from "./FeedbackPage";
@@ -68,14 +67,6 @@ export default function App() {
             element={
               <RequireAuth>
                 <SongsPage />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="songs/add-special"
-            element={
-              <RequireAuth>
-                <SpecialUploadPage />
               </RequireAuth>
             }
           />

@@ -76,6 +76,30 @@ describe("AddSongPage — mode toggle", () => {
 
     expect(screen.getByRole("button", { name: /upload for myself/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /upload for a managed partnership/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /solo \/ team \/ other/i })).toBeInTheDocument();
+  });
+
+  it("shows the special upload form when Solo / Team / Other is selected", async () => {
+    const user = userEvent.setup();
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/partners") return Promise.resolve([]);
+      if (path === "/v1/auth/me") return Promise.resolve({ id: "u1", first_name: "U", last_name: "1" });
+      if (path === "/v1/teams") return Promise.resolve([{ id: "team-1", identifier: "Team Alpha" }]);
+      return Promise.resolve([]);
+    });
+
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /solo \/ team \/ other/i })).toBeInTheDocument()
+    );
+
+    await user.click(screen.getByRole("button", { name: /solo \/ team \/ other/i }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText(/^division$/i)).toBeInTheDocument()
+    );
+    expect(screen.getByLabelText(/^entry type$/i)).toBeInTheDocument();
   });
 });
 

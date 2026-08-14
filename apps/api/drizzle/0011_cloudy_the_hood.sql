@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "uq_partners_placeholder" ON "partners" USING btree ("user_id","kind","first_name","last_name") WHERE "partners"."kind" <> 'partner';

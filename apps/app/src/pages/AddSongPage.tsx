@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import SongUploadForm from "@/components/SongUploadForm";
+import SpecialUploadForm from "@/components/SpecialUploadForm";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,7 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-type PageMode = "upload_self" | "upload_managed";
+type PageMode = "upload_self" | "upload_managed" | "upload_special";
 
 type ModeCardProps = {
   active: boolean;
@@ -49,7 +50,7 @@ export default function AddSongPage() {
         <h1 className="page-title text-2xl">Add Song</h1>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <ModeCard
           active={mode === "upload_self"}
           title="Upload for myself"
@@ -61,6 +62,12 @@ export default function AddSongPage() {
           title="Upload for a managed partnership"
           description="Upload on behalf of a partnership you manage."
           onClick={() => setMode("upload_managed")}
+        />
+        <ModeCard
+          active={mode === "upload_special"}
+          title="Solo / Team / Other"
+          description="Teams, Cabaret, Exhibition & other special divisions."
+          onClick={() => setMode("upload_special")}
         />
       </div>
 
@@ -98,6 +105,24 @@ export default function AddSongPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <SongUploadForm variant="managed" />
+          </CardContent>
+        </Card>
+      )}
+
+      {mode === "upload_special" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Solo / Team / Other</CardTitle>
+            <CardDescription>
+              For Teams, Cabaret, Exhibition, and other special divisions. The file
+              should contain only your routine — no bow music or intro buffer.{" "}
+              <Link to="/how-it-works#submitting-music" className="text-primary hover:underline">
+                File requirements →
+              </Link>
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <SpecialUploadForm />
           </CardContent>
         </Card>
       )}

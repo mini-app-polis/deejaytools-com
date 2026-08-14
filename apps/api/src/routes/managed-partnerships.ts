@@ -93,7 +93,13 @@ managedPartnershipsRoutes.patch(
     const [existing] = await db
       .select()
       .from(managedPartnerships)
-      .where(and(eq(managedPartnerships.id, id), eq(managedPartnerships.userId, userId)))
+      .where(
+        and(
+          eq(managedPartnerships.id, id),
+          eq(managedPartnerships.userId, userId),
+          isNull(managedPartnerships.deletedAt)
+        )
+      )
       .limit(1);
 
     if (!existing) {

@@ -138,6 +138,17 @@ describe("PATCH /v1/managed-partnerships/:id", () => {
     assertErrorEnvelope(await readJson<ErrorEnvelope>(res));
   });
 
+  it("returns 404 when patching a soft-deleted managed partnership", async () => {
+    enqueueSelectResult([]);
+    const res = await app.request(`${BASE}/mp_deleted`, {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify(validBody),
+    });
+    expect(res.status).toBe(404);
+    assertErrorEnvelope(await readJson<ErrorEnvelope>(res));
+  });
+
   it("returns 401 without auth", async () => {
     const res = await app.request(`${BASE}/mp_1`, {
       method: "PATCH",

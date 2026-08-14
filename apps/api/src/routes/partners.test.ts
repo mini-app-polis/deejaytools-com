@@ -96,6 +96,37 @@ describe("GET /v1/partners", () => {
   });
 });
 
+describe("GET /v1/partners/leading-pairs", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+  });
+
+  it("returns real partner pairs and open slots but omits placeholder partner pairs", async () => {
+    enqueueSelectResult([
+      {
+        id: "pair_real",
+        partnerBId: "p_real",
+        partnerFirst: "Jane",
+        partnerLast: "Doe",
+      },
+      {
+        id: "pair_open",
+        partnerBId: null,
+        partnerFirst: null,
+        partnerLast: null,
+      },
+    ]);
+    const res = await app.request(`${BASE}/leading-pairs`, { headers: authHeaders() });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<{ id: string; display_name: string }[]>>(res);
+    assertSuccessListEnvelope(body);
+    expect(body.data).toHaveLength(2);
+    expect(body.data.map((p) => p.id)).toEqual(["pair_real", "pair_open"]);
+    expect(body.data[0]?.display_name).toBe("Jane Doe");
+    expect(body.data[1]?.display_name).toBe("Open slot");
+  });
+});
+
 describe("POST /v1/partners", () => {
   beforeEach(() => {
     resetSelectQueue();

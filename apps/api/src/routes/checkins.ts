@@ -1,6 +1,6 @@
 import { CommonErrors, createLogger, error, success } from "common-typescript-utils";
 import { createCheckinBodySchema } from "@deejaytools/schemas";
-import { and, count, desc, eq, inArray, or } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
 import { db } from "../db/index.js";
@@ -79,7 +79,9 @@ checkinRoutes.post(
         partnerId: songs.partnerId,
       })
       .from(songs)
-      .where(and(eq(songs.id, body.songId), eq(songs.userId, effectiveUserId)))
+      .where(
+        and(eq(songs.id, body.songId), eq(songs.userId, effectiveUserId), isNull(songs.deletedAt))
+      )
       .limit(1);
     if (!song) return c.json(CommonErrors.notFound("Song"), 404);
 
@@ -93,7 +95,12 @@ checkinRoutes.post(
         const [managed] = await db
           .select({ id: managedPartnerships.id, userId: managedPartnerships.userId })
           .from(managedPartnerships)
-          .where(eq(managedPartnerships.id, song.managedPartnershipId))
+          .where(
+            and(
+              eq(managedPartnerships.id, song.managedPartnershipId),
+              isNull(managedPartnerships.deletedAt)
+            )
+          )
           .limit(1);
         if (!managed || managed.userId !== effectiveUserId) {
           return c.json(CommonErrors.badRequest("Managed partnership not found"), 400);
@@ -126,7 +133,12 @@ checkinRoutes.post(
       const [managed] = await db
         .select({ id: managedPartnerships.id, userId: managedPartnerships.userId })
         .from(managedPartnerships)
-        .where(eq(managedPartnerships.id, song.managedPartnershipId))
+        .where(
+          and(
+            eq(managedPartnerships.id, song.managedPartnershipId),
+            isNull(managedPartnerships.deletedAt)
+          )
+        )
         .limit(1);
       if (!managed || managed.userId !== effectiveUserId) {
         return c.json(CommonErrors.badRequest("Managed partnership not found"), 400);

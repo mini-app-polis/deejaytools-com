@@ -47,7 +47,7 @@ export const createCheckinBodySchema = z
     entityPairId: z.string().nullish(),
     entitySoloUserId: z.string().nullish(),
     entityManagedPartnershipId: z.string().nullish(),
-    on_behalf_of_user_id: z.string().nullish(),
+    on_behalf_of_user_id: z.string().trim().nullish(),
     songId: z.string().min(1),
     notes: z.string().nullish(),
   })

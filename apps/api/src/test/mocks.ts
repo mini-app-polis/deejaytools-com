@@ -54,6 +54,7 @@ function createMockDb(): DbChain {
   chain.insert = vi.fn(() => ({
     values: vi.fn(() => {
       const afterValues = {
+        onConflictDoNothing: vi.fn(() => Promise.resolve(undefined)),
         onConflictDoUpdate: vi.fn(() => Promise.resolve(undefined)),
         then(
           onfulfilled?: ((v: unknown) => unknown) | null,

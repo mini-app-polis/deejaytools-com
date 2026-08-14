@@ -402,14 +402,9 @@ export default function MyContentPage() {
       <div className="rounded-lg border bg-card">
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
           <h2 className="font-semibold">Songs</h2>
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" asChild>
-              <Link to="/songs/add-special">Special upload</Link>
-            </Button>
-            <Button size="sm" asChild>
-              <Link to="/songs/add">Add song</Link>
-            </Button>
-          </div>
+          <Button size="sm" asChild>
+            <Link to="/songs/add">Add song</Link>
+          </Button>
         </div>
         <div className="p-4 space-y-4">
           <div className={`space-y-3${songsLoading ? " opacity-60" : ""}`}>

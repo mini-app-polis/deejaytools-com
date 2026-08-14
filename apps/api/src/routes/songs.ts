@@ -772,8 +772,8 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   }
 
   let resolvedPartnerId: string | null = partnerId;
+  let portalPlaceholderName: string | null = null;
   if (isPortalUpload) {
-    let placeholderName: string;
     if (entityType === "team") {
       if (!teamId) {
         await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
@@ -788,16 +788,16 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
         await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
         return c.json(CommonErrors.badRequest("Team not found"), 400);
       }
-      placeholderName = team.identifier;
+      portalPlaceholderName = team.identifier;
     } else if (entityType === "other") {
-      placeholderName = entityName;
-      if (!placeholderName) {
+      portalPlaceholderName = entityName;
+      if (!portalPlaceholderName) {
         await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
         return c.json(CommonErrors.badRequest("entity_name is required for other uploads"), 400);
       }
     } else {
       if (entityName) {
-        placeholderName = entityName;
+        portalPlaceholderName = entityName;
       } else {
         const [userRow] = await db
           .select({ firstName: users.firstName, lastName: users.lastName })
@@ -808,43 +808,13 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
           await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
           return c.json(CommonErrors.badRequest("User not found"), 400);
         }
-        placeholderName = [userRow.firstName, userRow.lastName].filter(Boolean).join(" ").trim();
-        if (!placeholderName) {
+        portalPlaceholderName = [userRow.firstName, userRow.lastName].filter(Boolean).join(" ").trim();
+        if (!portalPlaceholderName) {
           await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
           return c.json(CommonErrors.badRequest("Set your name on My Profile or provide entity_name"), 400);
         }
       }
     }
-
-    const [existing] = await db
-      .select({ id: partners.id })
-      .from(partners)
-      .where(
-        and(
-          eq(partners.userId, effectiveUserId),
-          eq(partners.kind, entityType),
-          eq(partners.firstName, placeholderName),
-          eq(partners.lastName, "")
-        )
-      )
-      .limit(1);
-
-    let placeholderPartnerId = existing?.id;
-    if (!placeholderPartnerId) {
-      placeholderPartnerId = crypto.randomUUID();
-      const partnerNow = Date.now();
-      await db.insert(partners).values({
-        id: placeholderPartnerId,
-        userId: effectiveUserId,
-        firstName: placeholderName,
-        lastName: "",
-        partnerRole: "follower",
-        kind: entityType,
-        createdAt: partnerNow,
-        updatedAt: partnerNow,
-      });
-    }
-    resolvedPartnerId = placeholderPartnerId;
   } else {
     if (managedPartnershipId && partnerId) {
       await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
@@ -914,8 +884,44 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
     );
   }
 
-  // Create the song record now — only reached if all chunks arrived successfully.
   const now = Date.now();
+
+  if (isPortalUpload && portalPlaceholderName) {
+    await db
+      .insert(partners)
+      .values({
+        id: crypto.randomUUID(),
+        userId: effectiveUserId,
+        firstName: portalPlaceholderName,
+        lastName: "",
+        partnerRole: "follower",
+        kind: entityType,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({
+        target: [partners.userId, partners.kind, partners.firstName, partners.lastName],
+      });
+
+    const [placeholder] = await db
+      .select({ id: partners.id })
+      .from(partners)
+      .where(
+        and(
+          eq(partners.userId, effectiveUserId),
+          eq(partners.kind, entityType),
+          eq(partners.firstName, portalPlaceholderName),
+          eq(partners.lastName, "")
+        )
+      )
+      .limit(1);
+    if (!placeholder) {
+      return c.json(CommonErrors.internalError(), 500);
+    }
+    resolvedPartnerId = placeholder.id;
+  }
+
+  // Create the song record now — only reached if all chunks arrived successfully.
   const songId = crypto.randomUUID();
   await db.insert(songs).values({
     id: songId,

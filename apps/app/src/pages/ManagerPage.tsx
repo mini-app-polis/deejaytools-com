@@ -173,6 +173,7 @@ export default function ManagerPage() {
 
   useEffect(() => {
     setCfSongId("");
+    setCfDivision("");
     setCfSubmissions(null);
     if (!cfSelectedUser || !cfSessionId) return;
     const eventId = cfSessionObj?.event_id ?? null;

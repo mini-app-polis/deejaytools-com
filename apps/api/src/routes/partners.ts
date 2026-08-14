@@ -3,7 +3,7 @@ import { PartnerRoleSchema } from "@deejaytools/schemas";
 import { zValidator } from "../lib/validate.js";
 import { Hono } from "hono";
 import { z } from "zod";
-import { and, asc, count, eq, inArray } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNull, or } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { checkins, pairs, partners, queueEntries, songs } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
@@ -31,23 +31,25 @@ partnerRoutes.get("/leading-pairs", requireAuth, async (c) => {
     .select({
       id: pairs.id,
       partnerBId: pairs.partnerBId,
+      partnerFirst: partners.firstName,
+      partnerLast: partners.lastName,
     })
     .from(pairs)
-    .where(eq(pairs.userAId, userId));
+    .leftJoin(partners, eq(partners.id, pairs.partnerBId))
+    .where(
+      and(
+        eq(pairs.userAId, userId),
+        or(isNull(pairs.partnerBId), eq(partners.kind, "partner"))
+      )
+    );
 
-  const results: { id: string; partner_b_id: string | null; display_name: string }[] = [];
-  for (const r of rows) {
-    let displayName = "Open slot";
-    if (r.partnerBId) {
-      const [p] = await db.select().from(partners).where(eq(partners.id, r.partnerBId)).limit(1);
-      if (p) displayName = partnerDisplayName(p.firstName, p.lastName);
-    }
-    results.push({
-      id: r.id,
-      partner_b_id: r.partnerBId,
-      display_name: displayName,
-    });
-  }
+  const results = rows.map((r) => ({
+    id: r.id,
+    partner_b_id: r.partnerBId,
+    display_name: r.partnerBId
+      ? partnerDisplayName(r.partnerFirst ?? "", r.partnerLast ?? "")
+      : "Open slot",
+  }));
   return c.json(successList(results));
 });
 
