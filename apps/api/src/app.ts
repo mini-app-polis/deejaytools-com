@@ -139,7 +139,14 @@ app.onError((err, c) => {
   logger.error({
     event: "unhandled_error",
     category: "api",
+    context: { path: c.req.path, method: c.req.method },
     error: err,
   });
-  return c.json(CommonErrors.internalError(), 500);
+  const message =
+    process.env.NODE_ENV === "production"
+      ? "Internal server error"
+      : err instanceof Error
+        ? err.message
+        : String(err);
+  return c.json(CommonErrors.internalError(message), 500);
 });

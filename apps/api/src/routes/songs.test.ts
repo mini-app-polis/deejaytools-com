@@ -272,6 +272,25 @@ describe("DELETE /v1/songs/:id", () => {
     expect(res.status).toBe(204);
   });
 
+  it("removes event song submissions and soft-deletes the song", async () => {
+    const existing = songSelectRow({ id: "s1" }).song;
+    enqueueSelectResult([existing]);
+    enqueueSelectResult([]);
+    vi.mocked(mockDb.delete).mockClear();
+    vi.mocked(mockDb.update).mockClear();
+    vi.mocked(mockDb.transaction).mockClear();
+
+    const res = await app.request(`${BASE}/s1`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+
+    expect(res.status).toBe(204);
+    expect(mockDb.transaction).toHaveBeenCalledTimes(1);
+    expect(mockDb.delete).toHaveBeenCalledTimes(1);
+    expect(mockDb.update).toHaveBeenCalledTimes(1);
+  });
+
   it("calls softDeleteOnDrive when drive IDs are present", async () => {
     const songWithDrive = {
       ...songSelectRow({ id: "song1" }).song,

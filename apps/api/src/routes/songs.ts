@@ -7,7 +7,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { and, desc, eq, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { checkins, managedPartnerships, partners, queueEntries, sessions, songs, users } from "../db/schema.js";
+import { checkins, eventSongSubmissions, managedPartnerships, partners, queueEntries, sessions, songs, users } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
 import { shareDriveFileWithUsers, softDeleteOnDrive, uploadSongToDrive } from "../services/drive.js";
 import { tagSongBytes } from "../services/tagger.js";
@@ -625,10 +625,25 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
   }
 
   // Soft-delete: stamp deleted_at, keep the row for historical FK references
-  await db
-    .update(songs)
-    .set({ deletedAt: Date.now() })
-    .where(and(eq(songs.id, id), eq(songs.userId, userId)));
+  try {
+    await db.transaction(async (tx) => {
+      // A removed song must not linger in any event — drop its submission references.
+      await tx.delete(eventSongSubmissions).where(eq(eventSongSubmissions.songId, id));
+      // Soft-delete the song itself (row kept for historical run/check-in FK references).
+      await tx
+        .update(songs)
+        .set({ deletedAt: Date.now() })
+        .where(and(eq(songs.id, id), eq(songs.userId, userId)));
+    });
+  } catch (err) {
+    logger.error({
+      event: "song_delete_failed",
+      category: "api",
+      context: { songId: id, userId },
+      error: err,
+    });
+    return c.json(CommonErrors.internalError("Failed to delete song"), 500);
+  }
 
   return c.body(null, 204);
 });
