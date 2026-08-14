@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { DIVISIONS, type ApiSession, type ApiTestInjection } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
+import SongUploadForm from "@/components/SongUploadForm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { formatSessionTitle } from "@/lib/sessionFormat";
@@ -62,6 +64,11 @@ export default function ManagerPage() {
   const [tiDeleting, setTiDeleting] = useState(false);
   const [pendingDeleteAll, setPendingDeleteAll] = useState(false);
 
+  const [ufQuery, setUfQuery] = useState("");
+  const [ufResults, setUfResults] = useState<Array<{ id: string; email: string; first_name: string | null; last_name: string | null }>>([]);
+  const [ufSearching, setUfSearching] = useState(false);
+  const [ufSelected, setUfSelected] = useState<{ id: string; email: string; first_name: string | null; last_name: string | null } | null>(null);
+
   const loadSessions = useCallback(() => {
     api.get<ApiSession[]>("/v1/sessions").then(setSessions).catch(() => setSessions([]));
   }, [api]);
@@ -79,6 +86,24 @@ export default function ManagerPage() {
     loadSessions();
     void loadCheckins().catch(() => {});
   }, [loadSessions, loadCheckins]);
+
+  useEffect(() => {
+    if (ufSelected) return;
+    const q = ufQuery.trim();
+    if (!q) { setUfResults([]); return; }
+    const t = setTimeout(async () => {
+      setUfSearching(true);
+      try {
+        const rows = await api.get<typeof ufResults>(`/v1/admin/users?q=${encodeURIComponent(q)}`);
+        setUfResults(rows);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Search failed");
+      } finally {
+        setUfSearching(false);
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [ufQuery, ufSelected, api]);
 
   const submitCheckin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -147,16 +172,69 @@ export default function ManagerPage() {
       <Tabs value={section}>
         {/* ── Upload For (placeholder) ── */}
         <TabsContent value="upload-for" className="mt-4 space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Upload For</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Coming soon — upload songs on behalf of a managed partnership.
-              </p>
-            </CardContent>
-          </Card>
+          {!ufSelected ? (
+            <Card>
+              <CardHeader><CardTitle>Upload For</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Find the user you're uploading for. The song is created exactly as if they uploaded it themselves.
+                </p>
+                <Input
+                  placeholder="Search by name or email…"
+                  value={ufQuery}
+                  onChange={(e) => setUfQuery(e.target.value)}
+                  autoFocus
+                />
+                {ufSearching ? (
+                  <Skeleton className="h-24 w-full" />
+                ) : ufResults.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    {ufQuery.trim() ? "No matches." : "Type a name or email to search."}
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {ufResults.map((u) => {
+                      const name = [u.first_name, u.last_name].filter(Boolean).join(" ").trim() || "(no name)";
+                      return (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={() => setUfSelected(u)}
+                          className="w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50"
+                        >
+                          <p className="font-medium">{name}</p>
+                          <p className="text-xs text-muted-foreground">{u.email}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <CardTitle>
+                    Upload For:{" "}
+                    {[ufSelected.first_name, ufSelected.last_name].filter(Boolean).join(" ").trim() || ufSelected.email}
+                  </CardTitle>
+                  <Button variant="outline" size="sm" onClick={() => { setUfSelected(null); setUfResults([]); setUfQuery(""); }}>
+                    Change user
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <SongUploadForm
+                  variant="self"
+                  onBehalf={{
+                    userId: ufSelected.id,
+                    label: `${[ufSelected.first_name, ufSelected.last_name].filter(Boolean).join(" ").trim() || ufSelected.email}${ufSelected.email ? ` (${ufSelected.email})` : ""}`,
+                  }}
+                />
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* ── CheckIn For (moved from the admin Test Inject tab) ── */}

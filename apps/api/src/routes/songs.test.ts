@@ -7,6 +7,7 @@ import {
   assertSuccessListEnvelope,
   assertSuccessEnvelope,
   assertValidation400,
+  adminHeaders,
   authHeaders,
   type ErrorEnvelope,
   readJson,
@@ -669,6 +670,41 @@ describe("POST /v1/songs/upload/chunk", () => {
     expect(res.status).toBe(400);
     assertErrorEnvelope(await readJson<ErrorEnvelope>(res));
     expect(vi.mocked(mockDb.insert)).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when a non-admin sends on_behalf_of_user_id", async () => {
+    vi.mocked(mockDb.insert).mockClear();
+    const res = await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: makeChunkForm({ on_behalf_of_user_id: "user_target456" }),
+    });
+    expect(res.status).toBe(403);
+    expect(vi.mocked(mockDb.insert)).not.toHaveBeenCalled();
+  });
+
+  it("creates a song owned by the target user when admin sends on_behalf_of_user_id", async () => {
+    vi.mocked(mockDb.insert).mockClear();
+    const targetUserId = "user_target456";
+    enqueueSelectResult([{ id: targetUserId }]);
+    const finalRow = makeFinalSongRow({ userId: targetUserId });
+    enqueueSelectResult([finalRow.song]);
+    enqueueSelectResult([{ ...mockUserRow, id: targetUserId }]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([finalRow]);
+
+    const res = await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: adminHeaders(),
+      body: makeChunkForm({ on_behalf_of_user_id: targetUserId }),
+    });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<{ complete: boolean; song: Record<string, unknown> }>>(res);
+    expect(body.data.complete).toBe(true);
+    expect(body.data.song).toMatchObject({ user_id: targetUserId });
+
+    const valuesFn = vi.mocked(mockDb.insert).mock.results[0]?.value?.values;
+    expect(valuesFn).toHaveBeenCalledWith(expect.objectContaining({ userId: targetUserId }));
   });
 });
 

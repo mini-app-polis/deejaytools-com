@@ -89,18 +89,20 @@ type MockUser = {
   role?: "user" | "admin";
 };
 
-export function mockRequireAuth(userId = "user_test123", role: "user" | "admin" = "user") {
+export function mockRequireAuth(defaultUserId = "user_test123", defaultRole: "user" | "admin" = "user") {
   return vi.fn(async (c: Context, next: () => Promise<void>) => {
     const h = c.req.header("Authorization") ?? "";
     if (!h.startsWith("Bearer ")) {
       return c.json(CommonErrors.unauthorized(), 401);
     }
-    const u: MockUser = { userId, email: "test@example.com", role };
+    const tokenUid = h.slice("Bearer mock-token-".length).trim();
+    const userId = tokenUid || defaultUserId;
+    const role = userId === ADMIN_USER_ID ? "admin" : defaultRole;
     c.set("user", {
-      userId: u.userId,
-      email: u.email,
-      role: u.role ?? "user",
-      clerk: { sub: u.userId },
+      userId,
+      email: userId === ADMIN_USER_ID ? "admin@example.com" : "test@example.com",
+      role,
+      clerk: { sub: userId },
     });
     await next();
   }) as unknown as MiddlewareHandler;

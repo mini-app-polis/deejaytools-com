@@ -773,6 +773,10 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
     typeof body.personal_descriptor === "string"
       ? body.personal_descriptor.trim() || null
       : null;
+  const onBehalfOfUserId =
+    typeof body.on_behalf_of_user_id === "string"
+      ? body.on_behalf_of_user_id.trim() || null
+      : null;
   const chunkFile = body.chunk instanceof File ? body.chunk : null;
 
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uploadId)) {
@@ -789,6 +793,10 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
     return c.json(CommonErrors.badRequest("chunk_index out of range"), 400);
   }
   if (!chunkFile) return c.json(CommonErrors.badRequest("Missing chunk field"), 400);
+
+  if (onBehalfOfUserId && c.get("user").role !== "admin") {
+    return c.json(CommonErrors.forbidden(), 403);
+  }
 
   const chunkBytes = Buffer.from(await chunkFile.arrayBuffer());
   if (chunkBytes.length > MAX_CHUNK_BYTES) {
@@ -812,8 +820,23 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
       400
     );
   }
+
+  let effectiveUserId = userId;
+  if (onBehalfOfUserId) {
+    const [target] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, onBehalfOfUserId))
+      .limit(1);
+    if (!target) {
+      await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+      return c.json(CommonErrors.badRequest("Target user not found"), 400);
+    }
+    effectiveUserId = onBehalfOfUserId;
+  }
+
   if (managedPartnershipId) {
-    const ok = await assertManagedPartnershipOwned(userId, managedPartnershipId);
+    const ok = await assertManagedPartnershipOwned(effectiveUserId, managedPartnershipId);
     if (!ok) {
       await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
       return c.json(
@@ -822,7 +845,7 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
       );
     }
   } else if (partnerId) {
-    const ok = await assertPartnerOwned(userId, partnerId);
+    const ok = await assertPartnerOwned(effectiveUserId, partnerId);
     if (!ok) {
       await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
       return c.json(CommonErrors.badRequest("Partner not found or does not belong to you"), 400);
@@ -877,7 +900,7 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   const songId = crypto.randomUUID();
   await db.insert(songs).values({
     id: songId,
-    userId,
+    userId: effectiveUserId,
     partnerId: managedPartnershipId ? null : partnerId,
     managedPartnershipId,
     displayName: routineName || originalName || null,
@@ -907,7 +930,7 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   // the user's library stays clean; they will need to retry the upload.
   const pendingSong = mapSong({ ...songRow, partner_first_name: null, partner_last_name: null });
 
-  buildAndUploadSong(songRow, userId, assembled, originalName, detectedMimeType).catch(async (err) => {
+  buildAndUploadSong(songRow, effectiveUserId, assembled, originalName, detectedMimeType).catch(async (err) => {
     logger.error({ event: "song_background_upload_failed", category: "api", context: { songId, uploadId }, error: err });
     await db.delete(songs).where(eq(songs.id, songId)).catch((deleteErr) => {
       logger.warn({

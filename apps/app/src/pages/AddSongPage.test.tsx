@@ -70,10 +70,13 @@ describe("AddSongPage — mode toggle", () => {
       expect(screen.getByRole("heading", { name: /add song/i })).toBeInTheDocument()
     );
 
+    await waitFor(() =>
+      expect(screen.getByLabelText(/audio file/i)).toBeInTheDocument()
+    );
+
     expect(screen.getByRole("button", { name: /upload for myself/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /upload for a managed partnership/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /claim from history/i })).toBeInTheDocument();
-    expect(screen.getByLabelText(/audio file/i)).toBeInTheDocument();
   });
 });
 
@@ -395,6 +398,9 @@ describe("AddSongPage — Upload chunk loop", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /upload for myself/i })).toBeInTheDocument()
     );
+    await waitFor(() =>
+      expect(screen.getByLabelText(/audio file/i)).toBeInTheDocument()
+    );
 
     const fileBytes = new Uint8Array(opts.fileSizeBytes);
     const file = new File([fileBytes], "test.mp3", { type: "audio/mpeg" });
@@ -485,6 +491,9 @@ describe("AddSongPage — Upload chunk loop", () => {
 
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /upload for myself/i })).toBeInTheDocument()
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText(/audio file/i)).toBeInTheDocument()
     );
 
     const file = new File([new Uint8Array(1024)], "test.mp3", { type: "audio/mpeg" });

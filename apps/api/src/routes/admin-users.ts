@@ -182,3 +182,32 @@ adminUserRoutes.patch(
     );
   }
 );
+
+function mapPartner(row: typeof partners.$inferSelect) {
+  return {
+    id: row.id,
+    user_id: row.userId,
+    first_name: row.firstName,
+    last_name: row.lastName,
+    partner_role: row.partnerRole,
+    email: row.email,
+    linked_user_id: row.linkedUserId,
+    created_at: row.createdAt,
+    updated_at: row.updatedAt,
+    display_name: `${row.firstName} ${row.lastName}`.trim(),
+  };
+}
+
+// GET /v1/admin/users/:id/partners — the target user's partner roster,
+// for the superuser "Upload For" flow.
+adminUserRoutes.get("/:id/partners", requireAdmin, async (c) => {
+  const id = c.req.param("id");
+  const [u] = await db.select({ id: users.id }).from(users).where(eq(users.id, id)).limit(1);
+  if (!u) return c.json(CommonErrors.notFound("User"), 404);
+  const rows = await db
+    .select()
+    .from(partners)
+    .where(eq(partners.userId, id))
+    .orderBy(asc(partners.lastName), asc(partners.firstName));
+  return c.json(successList(rows.map(mapPartner)));
+});
