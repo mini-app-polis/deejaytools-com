@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useApiClient } from "@/api/client";
 import { Button } from "@/components/ui/button";
+import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -162,17 +163,14 @@ export default function SpecialUploadForm() {
   return (
     <form onSubmit={(e) => void handleUpload(e)} className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="special-division">Division</Label>
-        <Select key={formKey} value={division || undefined} onValueChange={setDivision}>
-          <SelectTrigger id="special-division">
-            <SelectValue placeholder="Select a division" />
-          </SelectTrigger>
-          <SelectContent>
-            {SPECIAL_DIVISION_OPTIONS.map((d) => (
-              <SelectItem key={d} value={d}>{d}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Label>Division</Label>
+        <ChoiceGroup
+          key={formKey}
+          ariaLabel="Division"
+          options={SPECIAL_DIVISION_OPTIONS.map((d) => ({ value: d, label: d }))}
+          value={division}
+          onChange={setDivision}
+        />
       </div>
 
       {division === "Teams" && (

@@ -97,11 +97,10 @@ describe("AddSongPage — mode toggle", () => {
     await user.click(screen.getByRole("button", { name: /teams, cabaret, other/i }));
 
     await waitFor(() =>
-      expect(screen.getByLabelText(/^division$/i)).toBeInTheDocument()
+      expect(screen.getByRole("radiogroup", { name: /^division$/i })).toBeInTheDocument()
     );
 
-    await user.click(screen.getByLabelText(/^division$/i));
-    await user.click(await screen.findByRole("option", { name: "Cabaret" }));
+    await user.click(screen.getByRole("radio", { name: "Cabaret" }));
 
     await waitFor(() =>
       expect(screen.getByLabelText(/^group name$/i)).toBeInTheDocument()
@@ -206,9 +205,7 @@ describe("AddSongPage — Upload chunk loop", () => {
     const fileInput = screen.getByLabelText(/audio file/i) as HTMLInputElement;
     await user.upload(fileInput, file);
 
-    const divisionTrigger = screen.getByRole("combobox", { name: /division/i });
-    await user.click(divisionTrigger);
-    await user.click(await screen.findByRole("option", { name: opts.division ?? "Classic" }));
+    await user.click(screen.getByRole("radio", { name: opts.division ?? "Classic" }));
 
     await user.click(screen.getByRole("button", { name: /upload song/i }));
 
@@ -298,9 +295,7 @@ describe("AddSongPage — Upload chunk loop", () => {
     const file = new File([new Uint8Array(1024)], "test.mp3", { type: "audio/mpeg" });
     await user.upload(screen.getByLabelText(/audio file/i) as HTMLInputElement, file);
 
-    const divisionTrigger = screen.getByRole("combobox", { name: /division/i });
-    await user.click(divisionTrigger);
-    await user.click(await screen.findByRole("option", { name: "Classic" }));
+    await user.click(screen.getByRole("radio", { name: "Classic" }));
 
     vi.useFakeTimers();
     try {
@@ -373,9 +368,7 @@ describe("AddSongPage — managed partnership upload", () => {
     });
     expect(screen.queryByRole("combobox", { name: /^partner$/i })).toBeNull();
 
-    const divisionTrigger = screen.getByRole("combobox", { name: /division/i });
-    await user.click(divisionTrigger);
-    await user.click(await screen.findByRole("option", { name: /^classic$/i }));
+    await user.click(screen.getByRole("radio", { name: /^classic$/i }));
 
     const file = new File(["audio"], "routine.mp3", { type: "audio/mpeg" });
     await user.upload(screen.getByLabelText(/audio file/i), file);

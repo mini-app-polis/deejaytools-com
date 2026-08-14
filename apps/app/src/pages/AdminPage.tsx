@@ -15,6 +15,7 @@ import { useAuthMe } from "@/hooks/useAuthMe";
 import { CLICKABLE_ROW_CLASS } from "@/lib/clickable";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -1148,20 +1149,18 @@ export default function AdminPage() {
               />
               Show deleted
             </label>
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              Sort
-              <select
-                className={FIELD_INPUT_CLASS + " w-auto"}
-                value={adminSongsSort}
-                onChange={(e) => setAdminSongsSort(e.target.value as typeof adminSongsSort)}
-              >
-                <option value="newest">Newest</option>
-                <option value="oldest">Oldest</option>
-                <option value="owner">Owner (A–Z)</option>
-                <option value="division">Division (A–Z)</option>
-                <option value="song">Song (A–Z)</option>
-              </select>
-            </label>
+            <ChoiceGroup
+              ariaLabel="Sort songs"
+              options={[
+                { value: "newest", label: "Newest" },
+                { value: "oldest", label: "Oldest" },
+                { value: "owner", label: "Owner" },
+                { value: "division", label: "Division" },
+                { value: "song", label: "Song" },
+              ]}
+              value={adminSongsSort}
+              onChange={setAdminSongsSort}
+            />
             <Button
               variant="outline"
               size="sm"

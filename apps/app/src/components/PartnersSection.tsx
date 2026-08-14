@@ -25,13 +25,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Skeleton } from "@/components/ui/skeleton";
 
 type PartnerRow = {
@@ -258,17 +252,15 @@ export default function PartnersSection() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Their role</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select their role" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="leader">Leader</SelectItem>
-                        <SelectItem value="follower">Follower</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <ChoiceGroup
+                      ariaLabel="Their role"
+                      options={[
+                        { value: "leader", label: "Leader" },
+                        { value: "follower", label: "Follower" },
+                      ]}
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
                     <FormDescription>Your role will be the opposite.</FormDescription>
                     <FormMessage />
                   </FormItem>
