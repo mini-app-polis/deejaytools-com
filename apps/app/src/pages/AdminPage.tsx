@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -8,7 +8,6 @@ import {
   type ApiRun,
   type ApiAdminSong,
   type ApiAdminUser,
-  type ApiAdminEventSongSubmission,
   type ApiTestInjection,
 } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
@@ -171,7 +170,6 @@ export const ADMIN_SECTIONS = [
   "sessions",
   "runs",
   "songs",
-  "event-songs",
   "test-checkin",
   "users",
 ] as const;
@@ -263,13 +261,6 @@ export default function AdminPage() {
   const [adminSongsQuery, setAdminSongsQuery] = useState("");
   const [adminSongsDebouncedQuery, setAdminSongsDebouncedQuery] = useState("");
   const [adminSongsIncludeDeleted, setAdminSongsIncludeDeleted] = useState(false);
-
-  // ── Event Songs tab (admin aggregate of event_song_submissions) ─────────────
-  const [esEvents, setEsEvents] = useState<ApiEvent[]>([]);
-  const [esEventsLoading, setEsEventsLoading] = useState(false);
-  const [esEventId, setEsEventId] = useState("");
-  const [esSubmissions, setEsSubmissions] = useState<ApiAdminEventSongSubmission[]>([]);
-  const [esSubmissionsLoading, setEsSubmissionsLoading] = useState(false);
 
   // ── Test Checkin tab ──────────────────────────────────────────────────────
   const [tcSessionId, setTcSessionId] = useState("");
@@ -403,65 +394,6 @@ export default function AdminPage() {
   useEffect(() => {
     void loadAdminSongs(adminSongsDebouncedQuery, adminSongsIncludeDeleted).catch(() => {});
   }, [adminSongsDebouncedQuery, adminSongsIncludeDeleted, loadAdminSongs]);
-
-  // Event Songs section: resilient fetches so a missing/stub endpoint never
-  // breaks the rest of AdminPage.
-  useEffect(() => {
-    if (section !== "event-songs") return;
-    let cancelled = false;
-    setEsEventsLoading(true);
-    api
-      .get<ApiEvent[]>("/v1/events")
-      .catch(() => [] as ApiEvent[])
-      .then((evs) => {
-        if (!cancelled) setEsEvents(evs);
-      })
-      .finally(() => {
-        if (!cancelled) setEsEventsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, section]);
-
-  useEffect(() => {
-    if (section !== "event-songs" || !esEventId) {
-      setEsSubmissions([]);
-      return;
-    }
-    let cancelled = false;
-    setEsSubmissionsLoading(true);
-    api
-      .get<ApiAdminEventSongSubmission[]>(
-        `/v1/admin/event-song-submissions?event_id=${encodeURIComponent(esEventId)}`
-      )
-      .catch(() => [] as ApiAdminEventSongSubmission[])
-      .then((rows) => {
-        if (!cancelled) setEsSubmissions(rows);
-      })
-      .finally(() => {
-        if (!cancelled) setEsSubmissionsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, section, esEventId]);
-
-  const esSubmissionsByDivision = useMemo(() => {
-    const map = new Map<string, ApiAdminEventSongSubmission[]>();
-    for (const row of esSubmissions) {
-      const key = row.division?.trim() || "Unspecified";
-      const list = map.get(key) ?? [];
-      list.push(row);
-      map.set(key, list);
-    }
-    const keys = [...map.keys()].sort((a, b) => {
-      if (a === "Unspecified") return 1;
-      if (b === "Unspecified") return -1;
-      return a.localeCompare(b);
-    });
-    return keys.map((division) => ({ division, rows: map.get(division)! }));
-  }, [esSubmissions]);
 
   // ── Event CRUD ──────────────────────────────────────────────────────────────
 
@@ -1246,59 +1178,6 @@ export default function AdminPage() {
                   })}
                 </TableBody>
               </Table>
-            </div>
-          )}
-        </TabsContent>
-
-        {/* ── Event Songs tab ── */}
-        <TabsContent value="event-songs" className="mt-4 space-y-4">
-          <div className="w-full sm:w-96">
-            <label className={FIELD_LABEL_CLASS} htmlFor="admin-event-songs-event">
-              Event
-            </label>
-            <select
-              id="admin-event-songs-event"
-              className={FIELD_INPUT_CLASS}
-              value={esEventId}
-              disabled={esEventsLoading}
-              onChange={(e) => setEsEventId(e.target.value)}
-            >
-              <option value="">Select an event…</option>
-              {esEvents.map((ev) => (
-                <option key={ev.id} value={ev.id}>
-                  {ev.name} · {ev.start_date}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {!esEventId ? (
-            <p className="text-sm text-muted-foreground">Select an event to view submitted songs.</p>
-          ) : esSubmissionsLoading && esSubmissions.length === 0 ? (
-            <Skeleton className="h-32 w-full" />
-          ) : esSubmissions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No songs submitted to this event yet.</p>
-          ) : (
-            <div className={`space-y-6${esSubmissionsLoading ? " opacity-60" : ""}`}>
-              {esSubmissionsByDivision.map(({ division, rows }) => (
-                <section key={division} className="space-y-2">
-                  <h2 className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
-                    {division}
-                  </h2>
-                  <ul className="space-y-2">
-                    {rows.map((row) => (
-                      <li key={row.id} className="rounded-lg border px-4 py-3 text-sm space-y-0.5">
-                        <p className="font-medium">
-                          {row.partnership_label}{" "}
-                          <span className="font-normal text-muted-foreground">·</span>{" "}
-                          {row.song_label}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{row.submitter_email}</p>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ))}
             </div>
           )}
         </TabsContent>
