@@ -76,10 +76,10 @@ describe("AddSongPage — mode toggle", () => {
 
     expect(screen.getByRole("button", { name: /upload for myself/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /upload for a managed partnership/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /solo \/ team \/ other/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /teams, cabaret, other/i })).toBeInTheDocument();
   });
 
-  it("shows the special upload form when Solo / Team / Other is selected", async () => {
+  it("shows the special upload form when Teams, Cabaret, Other is selected", async () => {
     const user = userEvent.setup();
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/partners") return Promise.resolve([]);
@@ -91,15 +91,21 @@ describe("AddSongPage — mode toggle", () => {
     renderPage();
 
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /solo \/ team \/ other/i })).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: /teams, cabaret, other/i })).toBeInTheDocument()
     );
 
-    await user.click(screen.getByRole("button", { name: /solo \/ team \/ other/i }));
+    await user.click(screen.getByRole("button", { name: /teams, cabaret, other/i }));
 
     await waitFor(() =>
       expect(screen.getByLabelText(/^division$/i)).toBeInTheDocument()
     );
-    expect(screen.getByLabelText(/^entry type$/i)).toBeInTheDocument();
+
+    await user.click(screen.getByLabelText(/^division$/i));
+    await user.click(await screen.findByRole("option", { name: "Cabaret" }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText(/^group name$/i)).toBeInTheDocument()
+    );
   });
 });
 

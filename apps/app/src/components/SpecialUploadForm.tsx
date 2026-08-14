@@ -15,7 +15,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { ApiTeam } from "@deejaytools/schemas";
-import type { AuthMe as MeResponse } from "@/hooks/useAuthMe";
 import {
   MAX_FILE_BYTES,
   uploadSongInChunks,
@@ -23,7 +22,6 @@ import {
 } from "@/lib/chunkedSongUpload";
 
 const SPECIAL_DIVISION_OPTIONS = ["Teams", "Cabaret", "Exhibition", "My Division Is Not Listed"];
-type EntityType = "solo" | "team" | "other";
 
 function formatMB(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1);
@@ -42,12 +40,10 @@ export default function SpecialUploadForm() {
   const { getToken } = useAuth();
 
   const [teams, setTeams] = useState<ApiTeam[]>([]);
-  const [me, setMe] = useState<MeResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [file, setFile] = useState<File | null>(null);
   const [division, setDivision] = useState("");
-  const [entityType, setEntityType] = useState<EntityType>("solo");
   const [entityName, setEntityName] = useState("");
   const [selectedTeamId, setSelectedTeamId] = useState("");
   const [routineName, setRoutineName] = useState("");
@@ -62,14 +58,11 @@ export default function SpecialUploadForm() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    Promise.all([
-      api.get<ApiTeam[]>("/v1/teams"),
-      api.get<MeResponse>("/v1/auth/me"),
-    ])
-      .then(([t, m]) => {
+    api
+      .get<ApiTeam[]>("/v1/teams")
+      .then((t) => {
         if (cancelled) return;
         setTeams(t);
-        setMe(m);
         if (t.length > 0) setSelectedTeamId((cur) => (cur === "" ? t[0].id : cur));
       })
       .catch((e: Error) => toast.error(e.message))
@@ -95,12 +88,14 @@ export default function SpecialUploadForm() {
       toast.error("Please select a division.");
       return;
     }
-    if (entityType === "team" && !selectedTeamId) {
-      toast.error("Please select a team.");
-      return;
-    }
-    if (entityType === "other" && !entityName.trim()) {
-      toast.error("Please enter a name for this entry.");
+    const isTeams = division === "Teams";
+    if (isTeams) {
+      if (!selectedTeamId) {
+        toast.error("Please select a team.");
+        return;
+      }
+    } else if (!entityName.trim()) {
+      toast.error("Please enter a group name.");
       return;
     }
 
@@ -112,15 +107,13 @@ export default function SpecialUploadForm() {
         buildFormFields: () => {
           const fields: Record<string, string> = {
             division,
-            entity_type: entityType,
+            entity_type: isTeams ? "team" : "other",
             routine_name: routineName.trim() || "",
             personal_descriptor: descriptor.trim() || "",
           };
-          if (entityType === "team") {
+          if (isTeams) {
             fields.team_id = selectedTeamId;
-          } else if (entityType === "other") {
-            fields.entity_name = entityName.trim();
-          } else if (entityName.trim()) {
+          } else {
             fields.entity_name = entityName.trim();
           }
           return fields;
@@ -135,7 +128,6 @@ export default function SpecialUploadForm() {
       toast.success("Song uploaded successfully.");
       setFile(null);
       setDivision("");
-      setEntityType("solo");
       setEntityName("");
       setSelectedTeamId(teams.length > 0 ? teams[0].id : "");
       setRoutineName("");
@@ -162,29 +154,13 @@ export default function SpecialUploadForm() {
     );
   }
 
-  const hasFullName = Boolean(me?.first_name?.trim() && me?.last_name?.trim());
   const submitDisabled =
     isSubmitting ||
-    (entityType === "team" && teams.length === 0) ||
-    (entityType === "other" && !entityName.trim());
+    !division ||
+    (division === "Teams" ? teams.length === 0 || !selectedTeamId : !entityName.trim());
 
   return (
     <form onSubmit={(e) => void handleUpload(e)} className="space-y-4">
-      {hasFullName ? (
-        <p className="text-sm text-muted-foreground">
-          Uploading as:{" "}
-          <span className="font-medium text-foreground">
-            {me!.first_name} {me!.last_name}
-          </span>
-        </p>
-      ) : (
-        <p className="text-sm text-amber-600 dark:text-amber-500">
-          Set your first and last name on the{" "}
-          <Link to="/my-profile" className="underline font-medium">My Profile</Link>{" "}
-          page so solo uploads can default to your name.
-        </p>
-      )}
-
       <div className="space-y-2">
         <Label htmlFor="special-division">Division</Label>
         <Select key={formKey} value={division || undefined} onValueChange={setDivision}>
@@ -199,37 +175,7 @@ export default function SpecialUploadForm() {
         </Select>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="special-entity-type">Entry type</Label>
-        <Select
-          key={`${formKey}-entity`}
-          value={entityType}
-          onValueChange={(v) => setEntityType(v as EntityType)}
-        >
-          <SelectTrigger id="special-entity-type">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="solo">Solo</SelectItem>
-            <SelectItem value="team">Team</SelectItem>
-            <SelectItem value="other">Other</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {entityType === "solo" && (
-        <div className="space-y-2">
-          <Label htmlFor="special-solo-name">Display name (optional)</Label>
-          <Input
-            id="special-solo-name"
-            value={entityName}
-            onChange={(e) => setEntityName(e.target.value)}
-            placeholder="Defaults to your name"
-          />
-        </div>
-      )}
-
-      {entityType === "team" && (
+      {division === "Teams" && (
         <div className="space-y-2">
           <Label htmlFor="special-team">Team</Label>
           {teams.length === 0 ? (
@@ -256,14 +202,14 @@ export default function SpecialUploadForm() {
         </div>
       )}
 
-      {entityType === "other" && (
+      {division && division !== "Teams" && (
         <div className="space-y-2">
-          <Label htmlFor="special-other-name">Name</Label>
+          <Label htmlFor="special-group-name">Group Name</Label>
           <Input
-            id="special-other-name"
+            id="special-group-name"
             value={entityName}
             onChange={(e) => setEntityName(e.target.value)}
-            placeholder="Enter the entry name"
+            placeholder="Enter the group name"
             required
           />
         </div>

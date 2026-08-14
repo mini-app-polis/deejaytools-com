@@ -65,7 +65,7 @@ export default function AddSongPage() {
         />
         <ModeCard
           active={mode === "upload_special"}
-          title="Solo / Team / Other"
+          title="Teams, Cabaret, Other"
           description="Teams, Cabaret, Exhibition & other special divisions."
           onClick={() => setMode("upload_special")}
         />
@@ -112,7 +112,7 @@ export default function AddSongPage() {
       {mode === "upload_special" && (
         <Card>
           <CardHeader>
-            <CardTitle>Solo / Team / Other</CardTitle>
+            <CardTitle>Teams, Cabaret, Other</CardTitle>
             <CardDescription>
               For Teams, Cabaret, Exhibition, and other special divisions. The file
               should contain only your routine — no bow music or intro buffer.{" "}
