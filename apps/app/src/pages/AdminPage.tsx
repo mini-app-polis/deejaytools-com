@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -209,6 +209,8 @@ export default function AdminPage() {
    * this id instead of POST. Cleared when the dialog closes.
    */
   const [evEditId, setEvEditId] = useState<string | null>(null);
+  const [showEventsCompleted, setShowEventsCompleted] = useState(false);
+  const [showEventsCancelled, setShowEventsCancelled] = useState(false);
 
   // ── Sessions tab ────────────────────────────────────────────────────────────
   const [sessions, setSessions] = useState<ApiSession[] | null>(null);
@@ -236,6 +238,8 @@ export default function AdminPage() {
   const [sessDivisionPriority, setSessDivisionPriority] = useState<Record<string, boolean>>(
     Object.fromEntries(DIVISION_OPTIONS.map((d) => [d, false]))
   );
+  const [showSessionsCompleted, setShowSessionsCompleted] = useState(false);
+  const [showSessionsCancelled, setShowSessionsCancelled] = useState(false);
 
   // ── Run history tab ─────────────────────────────────────────────────────────
   const [runsSessionFilter, setRunsSessionFilter] = useState("");
@@ -774,6 +778,166 @@ export default function AdminPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
+  const eventBuckets = useMemo(() => {
+    const list = (events ?? []).slice().sort(compareEventChrono);
+    return {
+      active: list.filter((e) => e.status === "active"),
+      upcoming: list.filter((e) => e.status === "upcoming"),
+      completed: list.filter((e) => e.status === "completed"),
+      cancelled: list.filter((e) => e.status === "cancelled"),
+    };
+  }, [events]);
+
+  const sessionBuckets = useMemo(() => {
+    const list = (sessions ?? []).slice().sort(compareSessionChrono);
+    return {
+      active: list.filter((s) => s.status === "checkin_open" || s.status === "in_progress"),
+      upcoming: list.filter((s) => s.status === "scheduled"),
+      completed: list.filter((s) => s.status === "completed"),
+      cancelled: list.filter((s) => s.status === "cancelled"),
+    };
+  }, [sessions]);
+
+  const renderEventRow = (ev: ApiEvent) => (
+    <TableRow
+      key={ev.id}
+      className={CLICKABLE_ROW_CLASS}
+      onClick={() => navigate(`/events/${ev.id}`)}
+    >
+      <TableCell className="font-medium">{ev.name}</TableCell>
+      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+        {ev.start_date}
+      </TableCell>
+      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+        {ev.end_date}
+      </TableCell>
+      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+        <Badge variant="outline" className="text-xs font-normal">
+          {formatTimezoneAbbr(ev.timezone)}
+        </Badge>
+        <span className="ml-1.5 text-xs">{ev.timezone}</span>
+      </TableCell>
+      <TableCell>{eventStatusBadge(ev.status)}</TableCell>
+      <TableCell onClick={(e) => e.stopPropagation()}>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => openEvEditDialog(ev)}>
+            Edit
+          </Button>
+          <Button variant="destructive" size="sm" onClick={() => deleteEvent(ev.id)}>
+            Delete
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+
+  const renderSessionRow = (s: ApiSession) => {
+    const eventName = events?.find((ev) => ev.id === s.event_id)?.name ?? "—";
+    return (
+      <TableRow
+        key={s.id}
+        className={CLICKABLE_ROW_CLASS}
+        onClick={() => navigate(`/sessions/${s.id}`)}
+      >
+        <TableCell className="font-medium">{formatSessionTitle(s, s.event_timezone)}</TableCell>
+        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+          {eventName}
+        </TableCell>
+        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+          {s.event_timezone && (
+            <Badge variant="outline" className="text-xs font-normal">
+              {formatTimezoneAbbr(s.event_timezone, s.floor_trial_starts_at)}
+            </Badge>
+          )}
+        </TableCell>
+        <TableCell>{sessionStatusBadge(s.status)}</TableCell>
+        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+          {formatTimeOnly(s.checkin_opens_at, s.event_timezone)}
+        </TableCell>
+        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+          {formatTimeOnly(s.floor_trial_starts_at, s.event_timezone)}
+        </TableCell>
+        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+          {formatTimeOnly(s.floor_trial_ends_at, s.event_timezone)}
+        </TableCell>
+        <TableCell onClick={(e) => e.stopPropagation()}>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openSessEditDialog(s)}
+              disabled={sessDeletingId === s.id}
+            >
+              Edit
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => deleteSession(s)}
+              disabled={sessDeletingId === s.id}
+            >
+              {sessDeletingId === s.id ? "Deleting…" : "Delete"}
+            </Button>
+          </div>
+        </TableCell>
+      </TableRow>
+    );
+  };
+
+  const renderEventBox = (title: string, rows: ApiEvent[]) => (
+    <section className="rounded-lg border bg-card overflow-hidden">
+      <div className="px-4 py-3 border-b flex items-center gap-2">
+        <h2 className="font-semibold">{title}</h2>
+        <span className="text-sm text-muted-foreground">({rows.length})</span>
+      </div>
+      {rows.length === 0 ? (
+        <p className="px-4 py-3 text-sm text-muted-foreground">None.</p>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Start date</TableHead>
+              <TableHead>End date</TableHead>
+              <TableHead>Timezone</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="w-[160px]">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>{rows.map((ev) => renderEventRow(ev))}</TableBody>
+        </Table>
+      )}
+    </section>
+  );
+
+  const renderSessionBox = (title: string, rows: ApiSession[]) => (
+    <section className="rounded-lg border bg-card overflow-hidden">
+      <div className="px-4 py-3 border-b flex items-center gap-2">
+        <h2 className="font-semibold">{title}</h2>
+        <span className="text-sm text-muted-foreground">({rows.length})</span>
+      </div>
+      {rows.length === 0 ? (
+        <p className="px-4 py-3 text-sm text-muted-foreground">None.</p>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Session</TableHead>
+              <TableHead>Event</TableHead>
+              <TableHead>TZ</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Open</TableHead>
+              <TableHead>Start</TableHead>
+              <TableHead>End</TableHead>
+              <TableHead className="w-[160px]">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>{rows.map((s) => renderSessionRow(s))}</TableBody>
+        </Table>
+      )}
+    </section>
+  );
+
   return (
     <div className="space-y-6">
       <h1 className="page-title text-2xl">Admin</h1>
@@ -787,175 +951,70 @@ export default function AdminPage() {
 
         {/* ── Events tab ── */}
         <TabsContent value="events" className="mt-4 space-y-3">
-          <Button onClick={openEvDialog} className="w-full sm:w-auto">
-            New Event
-          </Button>
+          <div className="flex flex-wrap items-center gap-4">
+            <Button onClick={openEvDialog} className="w-full sm:w-auto">
+              New Event
+            </Button>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={showEventsCompleted}
+                onChange={(e) => setShowEventsCompleted(e.target.checked)}
+              />
+              Show completed
+            </label>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={showEventsCancelled}
+                onChange={(e) => setShowEventsCancelled(e.target.checked)}
+              />
+              Show cancelled
+            </label>
+          </div>
           {loadingEvents && !events ? (
             <Skeleton className="h-40 w-full" />
           ) : (
-            <div className={loadingEvents ? "opacity-60" : ""}>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Start date</TableHead>
-                    <TableHead>End date</TableHead>
-                    <TableHead>Timezone</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-[160px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {events?.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-muted-foreground">
-                        No events yet.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {events
-                    ?.slice()
-                    .sort(compareEventChrono)
-                    .map((ev) => (
-                    <TableRow
-                      key={ev.id}
-                      className={CLICKABLE_ROW_CLASS}
-                      onClick={() => navigate(`/events/${ev.id}`)}
-                    >
-                      <TableCell className="font-medium">{ev.name}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {ev.start_date}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {ev.end_date}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        <Badge variant="outline" className="text-xs font-normal">
-                          {formatTimezoneAbbr(ev.timezone)}
-                        </Badge>
-                        <span className="ml-1.5 text-xs">{ev.timezone}</span>
-                      </TableCell>
-                      <TableCell>{eventStatusBadge(ev.status)}</TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        {/* stopPropagation lets these buttons coexist with
-                            the row-level navigate(/events/:id) handler. */}
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openEvEditDialog(ev)}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => deleteEvent(ev.id)}
-                          >
-                            Delete
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <div className={`space-y-4${loadingEvents ? " opacity-60" : ""}`}>
+              {renderEventBox("Active", eventBuckets.active)}
+              {renderEventBox("Upcoming", eventBuckets.upcoming)}
+              {showEventsCompleted && renderEventBox("Completed", eventBuckets.completed)}
+              {showEventsCancelled && renderEventBox("Cancelled", eventBuckets.cancelled)}
             </div>
           )}
         </TabsContent>
 
         {/* ── Sessions tab ── */}
         <TabsContent value="sessions" className="mt-4 space-y-3">
-          <Button onClick={openSessDialog} className="w-full sm:w-auto">
-            New Session
-          </Button>
+          <div className="flex flex-wrap items-center gap-4">
+            <Button onClick={openSessDialog} className="w-full sm:w-auto">
+              New Session
+            </Button>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={showSessionsCompleted}
+                onChange={(e) => setShowSessionsCompleted(e.target.checked)}
+              />
+              Show completed
+            </label>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={showSessionsCancelled}
+                onChange={(e) => setShowSessionsCancelled(e.target.checked)}
+              />
+              Show cancelled
+            </label>
+          </div>
           {loadingSessions && !sessions ? (
             <Skeleton className="h-40 w-full" />
           ) : (
-            <div className={loadingSessions ? "opacity-60" : ""}>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Session</TableHead>
-                    <TableHead>Event</TableHead>
-                    <TableHead>TZ</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Open</TableHead>
-                    <TableHead>Start</TableHead>
-                    <TableHead>End</TableHead>
-                    <TableHead className="w-[160px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sessions?.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-muted-foreground">
-                        No sessions yet.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {sessions
-                    ?.slice()
-                    .sort(compareSessionChrono)
-                    .map((s) => {
-                    const eventName =
-                      events?.find((ev) => ev.id === s.event_id)?.name ?? "—";
-                    return (
-                      <TableRow
-                        key={s.id}
-                        className={CLICKABLE_ROW_CLASS}
-                        onClick={() => navigate(`/sessions/${s.id}`)}
-                      >
-                        <TableCell className="font-medium">{formatSessionTitle(s, s.event_timezone)}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                          {eventName}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                          {s.event_timezone && (
-                            <Badge variant="outline" className="text-xs font-normal">
-                              {formatTimezoneAbbr(s.event_timezone, s.floor_trial_starts_at)}
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>{sessionStatusBadge(s.status)}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                          {formatTimeOnly(s.checkin_opens_at, s.event_timezone)}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                          {formatTimeOnly(s.floor_trial_starts_at, s.event_timezone)}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                          {formatTimeOnly(s.floor_trial_ends_at, s.event_timezone)}
-                        </TableCell>
-                        <TableCell onClick={(e) => e.stopPropagation()}>
-                          {/* stopPropagation on the cell: row-level onClick
-                              navigates to the session detail page; the
-                              admin actions inside need to fire without
-                              triggering that. */}
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => openSessEditDialog(s)}
-                              disabled={sessDeletingId === s.id}
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => deleteSession(s)}
-                              disabled={sessDeletingId === s.id}
-                            >
-                              {sessDeletingId === s.id ? "Deleting…" : "Delete"}
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+            <div className={`space-y-4${loadingSessions ? " opacity-60" : ""}`}>
+              {renderSessionBox("Active", sessionBuckets.active)}
+              {renderSessionBox("Upcoming", sessionBuckets.upcoming)}
+              {showSessionsCompleted && renderSessionBox("Completed", sessionBuckets.completed)}
+              {showSessionsCancelled && renderSessionBox("Cancelled", sessionBuckets.cancelled)}
             </div>
           )}
         </TabsContent>
