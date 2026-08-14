@@ -267,9 +267,8 @@ export default function AdminPage() {
   const [adminSongsQuery, setAdminSongsQuery] = useState("");
   const [adminSongsDebouncedQuery, setAdminSongsDebouncedQuery] = useState("");
   const [adminSongsIncludeDeleted, setAdminSongsIncludeDeleted] = useState(false);
-  const [adminSongsSort, setAdminSongsSort] = useState<
-    "newest" | "oldest" | "owner" | "division" | "song"
-  >("newest");
+  const [adminSongsYear, setAdminSongsYear] = useState<string>("all");
+  const [adminSongsDivision, setAdminSongsDivision] = useState<string>("all");
 
   // ── Test Checkin tab ──────────────────────────────────────────────────────
   const [tcSessionId, setTcSessionId] = useState("");
@@ -404,24 +403,31 @@ export default function AdminPage() {
     void loadAdminSongs(adminSongsDebouncedQuery, adminSongsIncludeDeleted).catch(() => {});
   }, [adminSongsDebouncedQuery, adminSongsIncludeDeleted, loadAdminSongs]);
 
-  const sortedAdminSongs = useMemo(() => {
-    const rows = adminSongs ? [...adminSongs] : [];
-    const ownerOf = (s: (typeof rows)[number]) =>
-      (s.owner.full_name?.trim() || s.owner.email || "").toLowerCase();
-    switch (adminSongsSort) {
-      case "oldest":
-        return rows.sort((a, b) => a.created_at - b.created_at);
-      case "owner":
-        return rows.sort((a, b) => ownerOf(a).localeCompare(ownerOf(b)));
-      case "division":
-        return rows.sort((a, b) => (a.division ?? "").localeCompare(b.division ?? ""));
-      case "song":
-        return rows.sort((a, b) => (a.song_label ?? "").localeCompare(b.song_label ?? ""));
-      case "newest":
-      default:
-        return rows.sort((a, b) => b.created_at - a.created_at);
-    }
-  }, [adminSongs, adminSongsSort]);
+  const adminSongYears = useMemo(() => {
+    const set = new Set<string>();
+    (adminSongs ?? []).forEach((s) => {
+      if (s.season_year) set.add(s.season_year);
+    });
+    return Array.from(set).sort((a, b) => b.localeCompare(a));
+  }, [adminSongs]);
+
+  const adminSongDivisions = useMemo(() => {
+    const set = new Set<string>();
+    (adminSongs ?? []).forEach((s) => {
+      if (s.division) set.add(s.division);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [adminSongs]);
+
+  const visibleAdminSongs = useMemo(
+    () =>
+      (adminSongs ?? [])
+        .filter((s) => adminSongsYear === "all" || s.season_year === adminSongsYear)
+        .filter((s) => adminSongsDivision === "all" || s.division === adminSongsDivision)
+        .slice()
+        .sort((a, b) => b.created_at - a.created_at),
+    [adminSongs, adminSongsYear, adminSongsDivision]
+  );
 
   // ── Event CRUD ──────────────────────────────────────────────────────────────
 
@@ -1132,50 +1138,66 @@ export default function AdminPage() {
 
         {/* ── Songs tab ── */}
         <TabsContent value="songs" className="mt-4 space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center flex-wrap">
-            <div className="w-full sm:w-80">
-              <Input
-                placeholder="Search by song, owner, or partner…"
-                value={adminSongsQuery}
-                onChange={(e) => setAdminSongsQuery(e.target.value)}
-              />
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center flex-wrap">
+              <div className="w-full sm:w-80">
+                <Input
+                  placeholder="Search by song, owner, or partner…"
+                  value={adminSongsQuery}
+                  onChange={(e) => setAdminSongsQuery(e.target.value)}
+                />
+              </div>
+              <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={adminSongsIncludeDeleted}
+                  onChange={(e) => setAdminSongsIncludeDeleted(e.target.checked)}
+                />
+                Show deleted
+              </label>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void loadAdminSongs(adminSongsDebouncedQuery, adminSongsIncludeDeleted)
+                }
+                disabled={adminSongsLoading}
+              >
+                {adminSongsLoading ? "Refreshing…" : "Refresh"}
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                {adminSongs === null
+                  ? ""
+                  : `${visibleAdminSongs.length} song${visibleAdminSongs.length === 1 ? "" : "s"}`}
+              </span>
             </div>
-            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
-              <input
-                type="checkbox"
-                className="h-4 w-4"
-                checked={adminSongsIncludeDeleted}
-                onChange={(e) => setAdminSongsIncludeDeleted(e.target.checked)}
-              />
-              Show deleted
-            </label>
-            <ChoiceGroup
-              ariaLabel="Sort songs"
-              options={[
-                { value: "newest", label: "Newest" },
-                { value: "oldest", label: "Oldest" },
-                { value: "owner", label: "Owner" },
-                { value: "division", label: "Division" },
-                { value: "song", label: "Song" },
-              ]}
-              value={adminSongsSort}
-              onChange={setAdminSongsSort}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void loadAdminSongs(adminSongsDebouncedQuery, adminSongsIncludeDeleted)
-              }
-              disabled={adminSongsLoading}
-            >
-              {adminSongsLoading ? "Refreshing…" : "Refresh"}
-            </Button>
-            <span className="text-xs text-muted-foreground">
-              {adminSongs === null
-                ? ""
-                : `${adminSongs.length} song${adminSongs.length === 1 ? "" : "s"}`}
-            </span>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Year</span>
+                <ChoiceGroup
+                  ariaLabel="Filter by year"
+                  options={[
+                    { value: "all", label: "All" },
+                    ...adminSongYears.map((y) => ({ value: y, label: y })),
+                  ]}
+                  value={adminSongsYear}
+                  onChange={setAdminSongsYear}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Division</span>
+                <ChoiceGroup
+                  ariaLabel="Filter by division"
+                  options={[
+                    { value: "all", label: "All" },
+                    ...adminSongDivisions.map((d) => ({ value: d, label: d })),
+                  ]}
+                  value={adminSongsDivision}
+                  onChange={setAdminSongsDivision}
+                />
+              </div>
+            </div>
           </div>
 
           {adminSongs === null ? (
@@ -1186,9 +1208,11 @@ export default function AdminPage() {
                 ? `No songs match "${adminSongsDebouncedQuery}".`
                 : "No songs yet."}
             </p>
+          ) : visibleAdminSongs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No songs match the selected filters.</p>
           ) : (
             <div className={cn("space-y-3", adminSongsLoading && "opacity-60")}>
-              {sortedAdminSongs.map((s) => {
+              {visibleAdminSongs.map((s) => {
                 const ownerLabel = s.owner.full_name?.trim() || s.owner.email || "—";
                 const partnerLabel = s.partner?.full_name?.trim() || "—";
                 return (

@@ -46,6 +46,7 @@ export default function ManagerPage() {
   const [esEvents, setEsEvents] = useState<ApiEvent[]>([]);
   const [esEventsLoading, setEsEventsLoading] = useState(false);
   const [esEventId, setEsEventId] = useState("");
+  const [esShowPast, setEsShowPast] = useState(false);
   const [esSubmissions, setEsSubmissions] = useState<ApiAdminEventSongSubmission[]>([]);
   const [esSubmissionsLoading, setEsSubmissionsLoading] = useState(false);
 
@@ -236,6 +237,14 @@ export default function ManagerPage() {
     }
     return m;
   }, [lqSongs]);
+
+  const esVisibleEvents = useMemo(
+    () =>
+      esEvents.filter(
+        (ev) => esShowPast || (ev.status !== "completed" && ev.status !== "cancelled")
+      ),
+    [esEvents, esShowPast]
+  );
 
   const esSubmissionsByDivision = useMemo(() => {
     const map = new Map<string, ApiAdminEventSongSubmission[]>();
@@ -599,11 +608,31 @@ export default function ManagerPage() {
 
         {/* ── Event Songs tab ── */}
         <TabsContent value="event-songs" className="mt-4 space-y-4">
-          <div className="w-full sm:w-96">
-            <Label>Event</Label>
+          <div className="w-full sm:w-96 space-y-2">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <Label>Event</Label>
+              <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={esShowPast}
+                  onChange={(e) => {
+                    const next = e.target.checked;
+                    setEsShowPast(next);
+                    if (!next) {
+                      const sel = esEvents.find((ev) => ev.id === esEventId);
+                      if (sel && (sel.status === "completed" || sel.status === "cancelled")) {
+                        setEsEventId("");
+                      }
+                    }
+                  }}
+                />
+                Show past events
+              </label>
+            </div>
             <ChoiceGroup
               ariaLabel="Event"
-              options={esEvents.map((ev) => ({
+              options={esVisibleEvents.map((ev) => ({
                 value: ev.id,
                 label: `${ev.name} · ${ev.start_date}`,
               }))}
