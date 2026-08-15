@@ -153,6 +153,7 @@ describe("fillRunningSessions", () => {
     // running — inside window, promote one priority entry
     enqueueSelectResult([
       {
+        id: "running",
         status: "in_progress",
         activePriorityMax: 6,
         activeNonPriorityMax: 4,
@@ -181,6 +182,7 @@ describe("fillRunningSessions", () => {
     // ended — outside window
     enqueueSelectResult([
       {
+        id: "ended",
         status: "in_progress",
         activePriorityMax: 6,
         activeNonPriorityMax: 4,
@@ -192,6 +194,7 @@ describe("fillRunningSessions", () => {
     // cancelled
     enqueueSelectResult([
       {
+        id: "cancelled",
         status: "cancelled",
         activePriorityMax: 6,
         activeNonPriorityMax: 4,

@@ -86,9 +86,9 @@ export default function ManagerPage() {
   const cfSelectedSubmission = cfSubmissions?.find((s) => s.song_id === cfSongId) ?? null;
 
   const loadLiveQueues = useCallback(
-    async (sessionId: string) => {
+    async (sessionId: string, silent = false) => {
       if (!sessionId) return;
-      setLqLoading(true);
+      if (!silent) setLqLoading(true);
       try {
         const [active, priority, nonPriority] = await Promise.all([
           api.get<ApiQueueEntry[]>(`/v1/queue/${sessionId}/active`),
@@ -99,9 +99,9 @@ export default function ManagerPage() {
         setLqPriority(priority);
         setLqNonPriority(nonPriority);
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Failed to load queues");
+        if (!silent) toast.error(e instanceof Error ? e.message : "Failed to load queues");
       } finally {
-        setLqLoading(false);
+        if (!silent) setLqLoading(false);
       }
     },
     [api]
@@ -230,6 +230,12 @@ export default function ManagerPage() {
   useEffect(() => {
     if (!lqSessionId) return;
     void loadLiveQueues(lqSessionId);
+  }, [lqSessionId, loadLiveQueues]);
+
+  useEffect(() => {
+    if (!lqSessionId) return;
+    const id = setInterval(() => void loadLiveQueues(lqSessionId, true), 8000);
+    return () => clearInterval(id);
   }, [lqSessionId, loadLiveQueues]);
 
   const pairMap = useMemo(() => {

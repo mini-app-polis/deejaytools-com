@@ -4,7 +4,7 @@ import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "../db/schema.js";
 import { invalidateQueueCache } from "../lib/cache.js";
 import type { DbTransaction } from "../lib/queue/compaction.js";
-import { fillActiveQueue } from "../lib/queue/fill.js";
+import { fillActiveQueue, lockSessionForFill } from "../lib/queue/fill.js";
 
 type Db = PostgresJsDatabase<typeof schema>;
 
@@ -85,9 +85,11 @@ export async function fillRunningSessions(database: Db): Promise<number> {
   let totalPromoted = 0;
   for (const s of rows) {
     try {
-      const promoted = await database.transaction((tx) =>
-        fillActiveQueue(tx as DbTransaction, s.id, null, now)
-      );
+      const promoted = await database.transaction(async (tx) => {
+        const locked = await lockSessionForFill(tx as DbTransaction, s.id);
+        if (!locked) return 0;
+        return fillActiveQueue(tx as DbTransaction, locked, null, now);
+      });
       if (promoted > 0) {
         totalPromoted += promoted;
         invalidateQueueCache(s.id);

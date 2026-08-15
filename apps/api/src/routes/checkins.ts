@@ -24,7 +24,7 @@ import { determineInitialQueue, loadAdmissionContext } from "../lib/queue/admiss
 import type { EntityRef } from "../lib/queue/runCounts.js";
 import { entityHasLiveEntry } from "../lib/queue/singleEntry.js";
 import { nextBottomPosition, compactAfterRemoval } from "../lib/queue/compaction.js";
-import { fillActiveQueue } from "../lib/queue/fill.js";
+import { fillActiveQueue, lockSessionForFill } from "../lib/queue/fill.js";
 import { invalidateQueueCache } from "../lib/cache.js";
 import { requireAuth } from "../middleware/auth.js";
 import { invalidateSessionCache } from "./sessions.js";
@@ -222,6 +222,7 @@ checkinRoutes.post(
 
     try {
       await db.transaction(async (tx) => {
+        const lockedSession = await lockSessionForFill(tx, body.sessionId);
         await tx.insert(checkins).values({
           id: checkinId,
           sessionId: body.sessionId,
@@ -264,7 +265,7 @@ checkinRoutes.post(
           createdAt: now,
         });
 
-        await fillActiveQueue(tx, body.sessionId, caller.userId, now);
+        if (lockedSession) await fillActiveQueue(tx, lockedSession, caller.userId, now);
       });
     } catch (err) {
       logger.error({
@@ -557,6 +558,7 @@ checkinRoutes.delete("/:id", requireAuth, async (c) => {
 
   try {
     await db.transaction(async (tx) => {
+      const lockedSession = await lockSessionForFill(tx, row.sessionId);
       await tx.delete(queueEntries).where(eq(queueEntries.id, row.queueEntryId));
       await compactAfterRemoval(tx, row.sessionId, row.queueType, row.position);
 
@@ -574,7 +576,7 @@ checkinRoutes.delete("/:id", requireAuth, async (c) => {
         createdAt: now,
       });
 
-      await fillActiveQueue(tx, row.sessionId, userId, now);
+      if (lockedSession) await fillActiveQueue(tx, lockedSession, userId, now);
     });
   } catch (err) {
     logger.error({

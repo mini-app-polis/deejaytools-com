@@ -406,9 +406,10 @@ describe("POST /v1/queue/withdraw", () => {
         position: 3,
       },
     ]);
-    // fillActiveQueue session lock — window closed so fill short-circuits
+    // lockSessionForFill FIRST in tx — window closed so fill short-circuits
     enqueueSelectResult([
       {
+        id: "s1",
         status: "in_progress",
         activePriorityMax: 6,
         activeNonPriorityMax: 4,
@@ -468,9 +469,10 @@ describe("POST /v1/queue/complete", () => {
     enqueueSelectResult([{ sessionId: "s1", divisionName: "Classic", songId: "song1" }]);
     // SELECT session (for eventId)
     enqueueSelectResult([{ eventId: null }]);
-    // fillActiveQueue session lock — window closed so fill short-circuits
+    // lockSessionForFill FIRST in tx — window closed so fill short-circuits
     enqueueSelectResult([
       {
+        id: "s1",
         status: "in_progress",
         activePriorityMax: 6,
         activeNonPriorityMax: 4,
@@ -504,6 +506,7 @@ describe("POST /v1/queue/complete", () => {
     enqueueSelectResult([{ eventId: null }]);
     enqueueSelectResult([
       {
+        id: "s1",
         status: "in_progress",
         activePriorityMax: 6,
         activeNonPriorityMax: 4,
@@ -556,9 +559,10 @@ describe("POST /v1/queue/complete", () => {
     ]);
     enqueueSelectResult([{ sessionId: "s1", divisionName: "Classic", songId: "song1" }]);
     enqueueSelectResult([{ eventId: null }]);
-    // fillActiveQueue: running session
+    // lockSessionForFill FIRST in tx — running window so fill promotes
     enqueueSelectResult([
       {
+        id: "s1",
         status: "in_progress",
         activePriorityMax: 6,
         activeNonPriorityMax: 4,
@@ -633,9 +637,19 @@ describe("POST /v1/queue/incomplete", () => {
   it("returns 200 and { rotated: true } on success", async () => {
     // loadActiveEntry → active entry (sessionId now included)
     enqueueSelectResult([{ id: "qe1", checkinId: "c1", sessionId: "s1", entityPairId: null, entitySoloUserId: "u1", position: 1 }]);
-    // tx: SELECT active entries for rotation (position 1 is the only entry)
+    // lockSessionForFill FIRST in tx — window closed (early-return path never fills)
+    enqueueSelectResult([
+      {
+        id: "s1",
+        status: "in_progress",
+        activePriorityMax: 6,
+        activeNonPriorityMax: 4,
+        floorTrialStartsAt: 1,
+        floorTrialEndsAt: 2,
+      },
+    ]);
+    // tx: SELECT active entries for rotation (position 1 is the only entry → early return)
     enqueueSelectResult([{ id: "qe1", position: 1 }]);
-    // Transaction: updates only (sentinel swap, resequence, insert queueEvents) — no further drains
     const res = await app.request(`${BASE}/incomplete`, {
       method: "POST",
       headers: { ...adminHeaders(), "Content-Type": "application/json" },
@@ -733,6 +747,7 @@ describe("POST /v1/queue/withdraw — cache invalidation", () => {
     ]);
     enqueueSelectResult([
       {
+        id: "s1",
         status: "in_progress",
         activePriorityMax: 6,
         activeNonPriorityMax: 4,
@@ -985,9 +1000,10 @@ describe("full-flow: promote then complete", () => {
     enqueueSelectResult([{ sessionId: priorityEntry.sessionId, divisionName: "Classic", songId: "song1" }]);
     // SELECT session (eventId)
     enqueueSelectResult([{ eventId: null }]);
-    // fillActiveQueue session lock — window closed
+    // lockSessionForFill FIRST in tx — window closed
     enqueueSelectResult([
       {
+        id: priorityEntry.sessionId,
         status: "in_progress",
         activePriorityMax: 6,
         activeNonPriorityMax: 4,
