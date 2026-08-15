@@ -688,7 +688,7 @@ export default function ManagerPage() {
                       </h2>
                       <div className="space-y-2">
                         {rows.map((row) => (
-                          <div key={row.id} className="rounded-lg border px-4 py-3 text-sm space-y-0.5">
+                          <div key={row.id} className="rounded-lg bg-muted/40 px-4 py-3 text-sm space-y-0.5">
                             <p className="font-medium">
                               {row.partnership_label}{" "}
                               <span className="font-normal text-muted-foreground">·</span>{" "}
