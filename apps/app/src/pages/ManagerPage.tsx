@@ -649,7 +649,7 @@ export default function ManagerPage() {
                 ) : esVisibleEvents.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No events to show.</p>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {esVisibleEvents.map((ev) => {
                       const active = ev.id === esEventId;
                       return (
