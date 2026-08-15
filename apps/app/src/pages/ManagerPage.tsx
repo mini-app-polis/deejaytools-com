@@ -649,7 +649,7 @@ export default function ManagerPage() {
                 ) : esVisibleEvents.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No events to show.</p>
                 ) : (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
                     {esVisibleEvents.map((ev) => {
                       const active = ev.id === esEventId;
                       return (
@@ -658,7 +658,7 @@ export default function ManagerPage() {
                           type="button"
                           onClick={() => setEsEventId(active ? "" : ev.id)}
                           className={cn(
-                            "rounded-lg border px-4 py-2 text-left transition-colors",
+                            "w-full h-full rounded-lg border px-4 py-2 text-left transition-colors",
                             active
                               ? "border-primary bg-primary/5 ring-1 ring-primary"
                               : "hover:bg-muted/50"
