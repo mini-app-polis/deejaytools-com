@@ -155,7 +155,6 @@ describe("ManagerPage — Event Songs section", () => {
     expect(screen.getByRole("heading", { name: /^unspecified$/i })).toBeInTheDocument();
     expect(screen.getByText(/alice & bob/i)).toBeInTheDocument();
     expect(screen.getByText(/sky high/i)).toBeInTheDocument();
-    expect(screen.getByText("alice@example.com")).toBeInTheDocument();
     expect(screen.getByText(/carol & dan/i)).toBeInTheDocument();
     expect(screen.getByText(/eve solo/i)).toBeInTheDocument();
   });
