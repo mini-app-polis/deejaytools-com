@@ -72,7 +72,7 @@ adminUserRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c)
       role: users.role,
       createdAt: users.createdAt,
       songCount: sql<number>`(SELECT COUNT(*)::int FROM songs WHERE songs.user_id = users.id AND songs.deleted_at IS NULL)`,
-      partnerCount: sql<number>`(SELECT COUNT(*)::int FROM partners WHERE partners.user_id = users.id)`,
+      partnerCount: sql<number>`(SELECT COUNT(*)::int FROM partners WHERE partners.user_id = users.id AND partners.kind = 'partner')`,
     })
     .from(users)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
@@ -162,8 +162,8 @@ adminUserRoutes.patch(
         lastName: users.lastName,
         role: users.role,
         createdAt: users.createdAt,
-        songCount: sql<number>`(SELECT COUNT(*)::int FROM ${songs} WHERE ${songs.userId} = ${users.id})`,
-        partnerCount: sql<number>`(SELECT COUNT(*)::int FROM ${partners} WHERE ${partners.userId} = ${users.id})`,
+        songCount: sql<number>`(SELECT COUNT(*)::int FROM ${songs} WHERE ${songs.userId} = ${users.id} AND ${songs.deletedAt} IS NULL)`,
+        partnerCount: sql<number>`(SELECT COUNT(*)::int FROM ${partners} WHERE ${partners.userId} = ${users.id} AND ${partners.kind} = 'partner')`,
       })
       .from(users)
       .where(eq(users.id, id))
