@@ -150,9 +150,9 @@ describe("ManagerPage — Event Songs section", () => {
       );
     });
 
-    expect(await screen.findByRole("heading", { name: /^classic$/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /^strictly$/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /^unspecified$/i })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /classic\s+1/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /strictly\s+1/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /unspecified\s+1/i })).toBeInTheDocument();
     expect(screen.getByText(/alice & bob/i)).toBeInTheDocument();
     expect(screen.getByText(/sky high/i)).toBeInTheDocument();
     expect(screen.getByText(/carol & dan/i)).toBeInTheDocument();

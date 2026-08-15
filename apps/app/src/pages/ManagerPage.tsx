@@ -58,6 +58,15 @@ export default function ManagerPage() {
   const [esShowPast, setEsShowPast] = useState(false);
   const [esSubmissions, setEsSubmissions] = useState<ApiAdminEventSongSubmission[]>([]);
   const [esSubmissionsLoading, setEsSubmissionsLoading] = useState(false);
+  const [esCollapsedDivisions, setEsCollapsedDivisions] = useState<Set<string>>(new Set());
+
+  const toggleDivision = (division: string) =>
+    setEsCollapsedDivisions((prev) => {
+      const next = new Set(prev);
+      if (next.has(division)) next.delete(division);
+      else next.add(division);
+      return next;
+    });
 
   const [cfUserQuery, setCfUserQuery] = useState("");
   const [cfUserResults, setCfUserResults] = useState<ApiAdminUser[]>([]);
@@ -177,6 +186,10 @@ export default function ManagerPage() {
       cancelled = true;
     };
   }, [api, section, esEventId]);
+
+  useEffect(() => {
+    setEsCollapsedDivisions(new Set());
+  }, [esEventId]);
 
   useEffect(() => {
     if (cfSelectedUser) return;
@@ -719,28 +732,51 @@ export default function ManagerPage() {
                         No songs submitted to this event yet.
                       </p>
                     ) : (
-                      esSubmissionsByDivision.map(({ division, rows }) => (
-                        <section key={division} className="space-y-2">
-                          <h2 className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
-                            {division}
-                          </h2>
-                          <div className="space-y-2">
-                            {rows.map((row) => (
-                              <div
-                                key={row.id}
-                                className="flex items-baseline justify-between gap-4 rounded-lg bg-white/[0.06] px-4 py-3 text-sm"
+                      esSubmissionsByDivision.map(({ division, rows }) => {
+                        const collapsed = esCollapsedDivisions.has(division);
+                        return (
+                          <section key={division} className="space-y-2">
+                            <button
+                              type="button"
+                              onClick={() => toggleDivision(division)}
+                              aria-expanded={!collapsed}
+                              className="flex w-full items-center gap-2 text-left"
+                            >
+                              <span
+                                className={cn(
+                                  "text-[10px] text-muted-foreground transition-transform",
+                                  collapsed ? "" : "rotate-90"
+                                )}
                               >
-                                <span className="font-medium min-w-0 truncate">
-                                  {row.partnership_label}
-                                </span>
-                                <span className="text-muted-foreground text-right shrink-0">
-                                  {row.song_label}
-                                </span>
+                                ▶
+                              </span>
+                              <span className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
+                                {division}
+                              </span>
+                              <span className="text-xs font-normal text-muted-foreground/70">
+                                {rows.length}
+                              </span>
+                            </button>
+                            {!collapsed && (
+                              <div className="space-y-2">
+                                {rows.map((row) => (
+                                  <div
+                                    key={row.id}
+                                    className="flex items-baseline justify-between gap-4 rounded-lg bg-white/[0.06] px-4 py-3 text-sm"
+                                  >
+                                    <span className="font-medium min-w-0 truncate">
+                                      {row.partnership_label}
+                                    </span>
+                                    <span className="text-muted-foreground text-right shrink-0">
+                                      {row.song_label}
+                                    </span>
+                                  </div>
+                                ))}
                               </div>
-                            ))}
-                          </div>
-                        </section>
-                      ))
+                            )}
+                          </section>
+                        );
+                      })
                     )}
                   </CardContent>
                 </Card>
