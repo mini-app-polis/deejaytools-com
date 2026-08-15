@@ -615,69 +615,74 @@ export default function ManagerPage() {
 
         {/* ── Event Songs tab ── */}
         <TabsContent value="event-songs" className="mt-4 space-y-4">
-          <div className="w-full sm:w-96 space-y-2">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <Label>Event</Label>
-              <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4"
-                  checked={esShowPast}
-                  onChange={(e) => {
-                    const next = e.target.checked;
-                    setEsShowPast(next);
-                    if (!next) {
-                      const sel = esEvents.find((ev) => ev.id === esEventId);
-                      if (sel && (sel.status === "completed" || sel.status === "cancelled")) {
-                        setEsEventId("");
-                      }
-                    }
-                  }}
+          <Card>
+            <CardHeader><CardTitle>Event Songs</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="w-full sm:w-96 space-y-2">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <Label>Event</Label>
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={esShowPast}
+                      onChange={(e) => {
+                        const next = e.target.checked;
+                        setEsShowPast(next);
+                        if (!next) {
+                          const sel = esEvents.find((ev) => ev.id === esEventId);
+                          if (sel && (sel.status === "completed" || sel.status === "cancelled")) {
+                            setEsEventId("");
+                          }
+                        }
+                      }}
+                    />
+                    Show past events
+                  </label>
+                </div>
+                <ChoiceGroup
+                  ariaLabel="Event"
+                  options={esVisibleEvents.map((ev) => ({
+                    value: ev.id,
+                    label: `${ev.name} · ${ev.start_date}`,
+                  }))}
+                  value={esEventId}
+                  onChange={setEsEventId}
+                  disabled={esEventsLoading}
                 />
-                Show past events
-              </label>
-            </div>
-            <ChoiceGroup
-              ariaLabel="Event"
-              options={esVisibleEvents.map((ev) => ({
-                value: ev.id,
-                label: `${ev.name} · ${ev.start_date}`,
-              }))}
-              value={esEventId}
-              onChange={setEsEventId}
-              disabled={esEventsLoading}
-            />
-          </div>
+              </div>
 
-          {!esEventId ? (
-            <p className="text-sm text-muted-foreground">Select an event to view submitted songs.</p>
-          ) : esSubmissionsLoading && esSubmissions.length === 0 ? (
-            <Skeleton className="h-32 w-full" />
-          ) : esSubmissions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No songs submitted to this event yet.</p>
-          ) : (
-            <div className={`space-y-6${esSubmissionsLoading ? " opacity-60" : ""}`}>
-              {esSubmissionsByDivision.map(({ division, rows }) => (
-                <section key={division} className="space-y-2">
-                  <h2 className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
-                    {division}
-                  </h2>
-                  <ul className="space-y-2">
-                    {rows.map((row) => (
-                      <li key={row.id} className="rounded-lg border px-4 py-3 text-sm space-y-0.5">
-                        <p className="font-medium">
-                          {row.partnership_label}{" "}
-                          <span className="font-normal text-muted-foreground">·</span>{" "}
-                          {row.song_label}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{row.submitter_email}</p>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ))}
-            </div>
-          )}
+              {!esEventId ? (
+                <p className="text-sm text-muted-foreground">Select an event to view submitted songs.</p>
+              ) : esSubmissionsLoading && esSubmissions.length === 0 ? (
+                <Skeleton className="h-32 w-full" />
+              ) : esSubmissions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No songs submitted to this event yet.</p>
+              ) : (
+                <div className={`space-y-6${esSubmissionsLoading ? " opacity-60" : ""}`}>
+                  {esSubmissionsByDivision.map(({ division, rows }) => (
+                    <section key={division} className="space-y-2">
+                      <h2 className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
+                        {division}
+                      </h2>
+                      <div className="space-y-2">
+                        {rows.map((row) => (
+                          <div key={row.id} className="rounded-lg border px-4 py-3 text-sm space-y-0.5">
+                            <p className="font-medium">
+                              {row.partnership_label}{" "}
+                              <span className="font-normal text-muted-foreground">·</span>{" "}
+                              {row.song_label}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{row.submitter_email}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* ── Upload For ── */}
