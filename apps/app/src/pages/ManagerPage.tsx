@@ -680,27 +680,35 @@ export default function ManagerPage() {
               ) : esSubmissions.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No songs submitted to this event yet.</p>
               ) : (
-                <div className={`space-y-6${esSubmissionsLoading ? " opacity-60" : ""}`}>
-                  {esSubmissionsByDivision.map(({ division, rows }) => (
-                    <section key={division} className="space-y-2">
-                      <h2 className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
-                        {division}
-                      </h2>
-                      <div className="space-y-2">
-                        {rows.map((row) => (
-                          <div key={row.id} className="rounded-lg bg-white/[0.06] px-4 py-3 text-sm space-y-0.5">
-                            <p className="font-medium">
-                              {row.partnership_label}{" "}
-                              <span className="font-normal text-muted-foreground">·</span>{" "}
-                              {row.song_label}
-                            </p>
-                            <p className="text-xs text-muted-foreground">{row.submitter_email}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  ))}
-                </div>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">
+                      {esEvents.find((ev) => ev.id === esEventId)?.name ?? "Submissions"}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className={`space-y-6${esSubmissionsLoading ? " opacity-60" : ""}`}>
+                    {esSubmissionsByDivision.map(({ division, rows }) => (
+                      <section key={division} className="space-y-2">
+                        <h2 className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
+                          {division}
+                        </h2>
+                        <div className="space-y-2">
+                            {rows.map((row) => (
+                              <div
+                                key={row.id}
+                                className="flex items-baseline justify-between gap-4 rounded-lg bg-white/[0.06] px-4 py-3 text-sm"
+                              >
+                                <span className="font-medium min-w-0 truncate">{row.partnership_label}</span>
+                                <span className="text-muted-foreground text-right shrink-0">
+                                  {row.song_label}
+                                </span>
+                              </div>
+                            ))}
+                        </div>
+                      </section>
+                    ))}
+                  </CardContent>
+                </Card>
               )}
             </CardContent>
           </Card>
