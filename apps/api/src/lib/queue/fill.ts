@@ -19,10 +19,10 @@ import { canPromoteNonPriority, canPromotePriority, type PromotionGate } from ".
  * within [floorTrialStartsAt, floorTrialEndsAt) and not cancelled — matching
  * deriveSessionStatus()'s "in_progress" definition. Check-ins that arrive
  * before the trial starts simply accumulate in the waiting queues and are
- * filled when the trial opens (via the cron backstop).
+ * filled when the trial opens (by the scheduler's next pass).
  *
  * actorUserId is the user who triggered the fill (the admin completing /
- * withdrawing, or the member checking in). Pass null for the cron backstop.
+ * withdrawing, or the member checking in). Pass null for the scheduler.
  *
  * Returns the number of entries promoted (0 when nothing was eligible).
  */

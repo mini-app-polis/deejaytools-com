@@ -24,7 +24,7 @@ import { teamsRoutes } from "./routes/teams.js";
 import { managedPartnershipsRoutes } from "./routes/managed-partnerships.js";
 import { eventSongSubmissionRoutes } from "./routes/event-song-submissions.js";
 import { feedbackRoutes } from "./routes/feedback.js";
-import { fillRunningSessions, tickSessionStatuses } from "./services/cron.js";
+import { runTick } from "./services/scheduler.js";
 import { rateLimitMiddleware } from "./middleware/rate-limit.js";
 import { timeoutMiddleware } from "./middleware/timeout.js";
 
@@ -94,8 +94,10 @@ app.get("/health", async (c) => {
   }
 });
 
-// Intentionally unversioned — Railway cron hits this at a stable path.
-// Not public: gated by TICK_SECRET header when TICK_SECRET is set.
+// Manual/optional trigger for the tick (status advance + queue auto-fill).
+// The in-process scheduler in index.ts is the primary driver; this endpoint
+// lets an operator (or an external monitor) force a pass. Gated by TICK_SECRET.
+// Intentionally unversioned so the path stays stable across API versions.
 app.get("/internal/tick", async (c) => {
   // Guard against an empty-string TICK_SECRET: `secret && ...` would be falsy
   // for an empty string, bypassing the check entirely. Use `!== undefined`
@@ -104,8 +106,7 @@ app.get("/internal/tick", async (c) => {
   if (secret !== undefined && c.req.header("x-tick-secret") !== secret) {
     return c.json(CommonErrors.forbidden(), 403);
   }
-  await tickSessionStatuses(db);
-  await fillRunningSessions(db);
+  await runTick(db);
   return c.json(success({ ticked: true }));
 });
 

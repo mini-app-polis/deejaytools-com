@@ -19,7 +19,14 @@ exemptions:
 
   - rule: API-004
     reason: >-
-      Effective route /internal/tick is intentionally unversioned — it is the Railway cron hook target and must be reachable at a stable version-independent path. Authentication is via the TICK_SECRET header check, not Clerk. All substantive API routes are mounted under /v1/. See src/app.ts for the inline intent marker.
+      Effective route /internal/tick is intentionally unversioned — it is a
+      manual/optional trigger for the tick (session-status advance + queue
+      auto-fill). The in-process scheduler started from index.ts is the
+      primary driver; this endpoint must stay reachable at a stable
+      version-independent path for operators or external monitors.
+      Authentication is via the TICK_SECRET header check, not Clerk. All
+      substantive API routes are mounted under /v1/. See src/app.ts for the
+      inline intent marker.
 
   - rule: API-006
     reason: >-
