@@ -33,6 +33,15 @@ function isManagerSection(s: string | undefined): s is ManagerSection {
   return !!s && (MANAGER_SECTIONS as readonly string[]).includes(s);
 }
 
+function formatAgo(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 5) return "just now";
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  return `${Math.floor(m / 60)}h ago`;
+}
+
 export default function ManagerPage() {
   const api = useApiClient();
   const { section: rawSection } = useParams<{ section: string }>();
@@ -71,6 +80,9 @@ export default function ManagerPage() {
   const [lqPairs, setLqPairs] = useState<ApiLeadingPair[]>([]);
   const [lqSongs, setLqSongs] = useState<ApiSong[]>([]);
   const [lqLoading, setLqLoading] = useState(false);
+  const [lqUpdatedAt, setLqUpdatedAt] = useState<number | null>(null);
+  const [lqRefreshFailed, setLqRefreshFailed] = useState(false);
+  const [lqNowTick, setLqNowTick] = useState(() => Date.now());
   const lqSessionRef = useRef(lqSessionId);
   lqSessionRef.current = lqSessionId;
 
@@ -98,7 +110,10 @@ export default function ManagerPage() {
         setLqActive(active);
         setLqPriority(priority);
         setLqNonPriority(nonPriority);
+        setLqUpdatedAt(Date.now());
+        setLqRefreshFailed(false);
       } catch (e) {
+        setLqRefreshFailed(true);
         if (!silent) toast.error(e instanceof Error ? e.message : "Failed to load queues");
       } finally {
         if (!silent) setLqLoading(false);
@@ -229,6 +244,8 @@ export default function ManagerPage() {
 
   useEffect(() => {
     if (!lqSessionId) return;
+    setLqUpdatedAt(null);
+    setLqRefreshFailed(false);
     void loadLiveQueues(lqSessionId);
   }, [lqSessionId, loadLiveQueues]);
 
@@ -237,6 +254,12 @@ export default function ManagerPage() {
     const id = setInterval(() => void loadLiveQueues(lqSessionId, true), 8000);
     return () => clearInterval(id);
   }, [lqSessionId, loadLiveQueues]);
+
+  useEffect(() => {
+    if (!lqSessionId) return;
+    const id = setInterval(() => setLqNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [lqSessionId]);
 
   const pairMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -365,7 +388,9 @@ export default function ManagerPage() {
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
             <div className="w-full sm:w-72">
               {sessions === null ? null : activeSessionOptions.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No sessions today.</p>
+                <p className="text-sm text-muted-foreground">
+                  No floor-trial sessions scheduled for today. When one is scheduled for today, it&apos;ll appear here to manage.
+                </p>
               ) : (
                 <ChoiceGroup
                   ariaLabel="Session"
@@ -383,18 +408,28 @@ export default function ManagerPage() {
               )}
             </div>
             {lqSessionId && (
-              <Button
-                variant="outline"
-                size="sm"
+              <button
+                type="button"
                 onClick={() => void loadLiveQueues(lqSessionId)}
                 disabled={lqLoading}
+                title="Refresh now"
+                className={cn(
+                  "text-xs transition-colors hover:underline disabled:opacity-60",
+                  lqRefreshFailed ? "text-amber-600 dark:text-amber-500" : "text-muted-foreground"
+                )}
               >
-                {lqLoading ? "Refreshing…" : "Refresh"}
-              </Button>
+                {lqLoading
+                  ? "Refreshing…"
+                  : lqRefreshFailed
+                    ? "Couldn't refresh — tap to retry"
+                    : lqUpdatedAt !== null
+                      ? `Updated ${formatAgo(lqNowTick - lqUpdatedAt)}`
+                      : "Updating…"}
+              </button>
             )}
           </div>
 
-          {!lqSessionId && (
+          {sessions !== null && activeSessionOptions.length > 0 && !lqSessionId && (
             <p className="text-sm text-muted-foreground">Choose a session above to manage its queue.</p>
           )}
 
