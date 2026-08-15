@@ -1,5 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
-import { tickSessionStatuses } from "./cron.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fillRunningSessions, tickSessionStatuses } from "./cron.js";
+import { enqueueSelectResult, mockDb, resetSelectQueue } from "../test/mocks.js";
+
+vi.mock("../db/index.js", async () => {
+  const { mockDb: db } = await import("../test/mocks.js");
+  return { db };
+});
 
 const now = Date.now();
 const past = now - 10_000;
@@ -131,5 +137,70 @@ describe("tickSessionStatuses", () => {
     );
     const result = await tickSessionStatuses(db);
     expect(result).toBe(2);
+  });
+});
+
+describe("fillRunningSessions", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+    vi.clearAllMocks();
+  });
+
+  it("promotes for a session inside its window and skips sessions outside it / cancelled", async () => {
+    // Sessions returned by the outer select
+    enqueueSelectResult([{ id: "running" }, { id: "ended" }, { id: "cancelled" }]);
+
+    // running — inside window, promote one priority entry
+    enqueueSelectResult([
+      {
+        status: "in_progress",
+        activePriorityMax: 6,
+        activeNonPriorityMax: 4,
+        floorTrialStartsAt: past,
+        floorTrialEndsAt: future,
+      },
+    ]);
+    enqueueSelectResult([{ n: 0 }]);
+    enqueueSelectResult([{ n: 1 }]);
+    enqueueSelectResult([
+      {
+        id: "qe1",
+        checkinId: "c1",
+        entityPairId: null,
+        entitySoloUserId: "u1",
+        entityManagedPartnershipId: null,
+        position: 1,
+      },
+    ]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([{ max: 0 }]);
+    enqueueSelectResult([{ n: 1 }]);
+    enqueueSelectResult([{ n: 0 }]);
+    enqueueSelectResult([]);
+
+    // ended — outside window
+    enqueueSelectResult([
+      {
+        status: "in_progress",
+        activePriorityMax: 6,
+        activeNonPriorityMax: 4,
+        floorTrialStartsAt: past - 100_000,
+        floorTrialEndsAt: past,
+      },
+    ]);
+
+    // cancelled
+    enqueueSelectResult([
+      {
+        status: "cancelled",
+        activePriorityMax: 6,
+        activeNonPriorityMax: 4,
+        floorTrialStartsAt: past,
+        floorTrialEndsAt: future,
+      },
+    ]);
+
+    const total = await fillRunningSessions(mockDb as unknown as Parameters<typeof fillRunningSessions>[0]);
+    expect(total).toBe(1);
   });
 });

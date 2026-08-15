@@ -324,19 +324,6 @@ export default function ManagerPage() {
   const handleWithdraw = (queueEntryId: string) =>
     queueAction("/v1/queue/withdraw", { queueEntryId });
 
-  const handlePromote = (queueEntryId: string) =>
-    queueAction("/v1/queue/promote", { queueEntryId });
-
-  const handlePromoteNext = () => {
-    const prioritySorted = [...lqPriority].sort((a, b) => a.position - b.position);
-    const nonPrioritySorted = [...lqNonPriority].sort((a, b) => a.position - b.position);
-    const next = prioritySorted[0] ?? nonPrioritySorted[0];
-    if (!next) return;
-    return handlePromote(next.queueEntryId);
-  };
-
-  const canPromoteNext = lqPriority.length > 0 || lqNonPriority.length > 0;
-
   const submitCheckinFor = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cfSelectedUser) { toast.error("Select a user"); return; }
@@ -417,13 +404,7 @@ export default function ManagerPage() {
                       <span className="text-xs text-muted-foreground">
                         {lqActive.length} slot{lqActive.length !== 1 ? "s" : ""}
                       </span>
-                      <Button
-                        size="sm"
-                        onClick={handlePromoteNext}
-                        disabled={!canPromoteNext || lqLoading}
-                      >
-                        Promote next
-                      </Button>
+                      <span className="text-xs text-muted-foreground">Fills automatically</span>
                     </div>
                   </div>
                 </CardHeader>

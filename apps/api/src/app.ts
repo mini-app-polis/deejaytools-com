@@ -24,7 +24,7 @@ import { teamsRoutes } from "./routes/teams.js";
 import { managedPartnershipsRoutes } from "./routes/managed-partnerships.js";
 import { eventSongSubmissionRoutes } from "./routes/event-song-submissions.js";
 import { feedbackRoutes } from "./routes/feedback.js";
-import { tickSessionStatuses } from "./services/cron.js";
+import { fillRunningSessions, tickSessionStatuses } from "./services/cron.js";
 import { rateLimitMiddleware } from "./middleware/rate-limit.js";
 import { timeoutMiddleware } from "./middleware/timeout.js";
 
@@ -105,6 +105,7 @@ app.get("/internal/tick", async (c) => {
     return c.json(CommonErrors.forbidden(), 403);
   }
   await tickSessionStatuses(db);
+  await fillRunningSessions(db);
   return c.json(success({ ticked: true }));
 });
 

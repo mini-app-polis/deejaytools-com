@@ -379,7 +379,6 @@ export const queueEvents = pgTable(
     toQueue: queueTypeEnum("to_queue"),
     toPosition: integer("to_position"),
     actorUserId: text("actor_user_id")
-      .notNull()
       .references(() => users.id),
     reason: text("reason"),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),

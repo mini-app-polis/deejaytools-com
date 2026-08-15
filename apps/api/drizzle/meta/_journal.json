@@ -78,6 +78,13 @@
       "when": 1786742658163,
       "tag": "0010_elite_karma",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786764136824,
+      "tag": "0011_naive_lockjaw",
+      "breakpoints": true
     }
   ]
 }

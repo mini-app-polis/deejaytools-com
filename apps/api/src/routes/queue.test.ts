@@ -406,6 +406,16 @@ describe("POST /v1/queue/withdraw", () => {
         position: 3,
       },
     ]);
+    // fillActiveQueue session lock — window closed so fill short-circuits
+    enqueueSelectResult([
+      {
+        status: "in_progress",
+        activePriorityMax: 6,
+        activeNonPriorityMax: 4,
+        floorTrialStartsAt: 1,
+        floorTrialEndsAt: 2,
+      },
+    ]);
     const res = await app.request(`${BASE}/withdraw`, {
       method: "POST",
       headers: { ...adminHeaders(), "Content-Type": "application/json" },
@@ -458,7 +468,16 @@ describe("POST /v1/queue/complete", () => {
     enqueueSelectResult([{ sessionId: "s1", divisionName: "Classic", songId: "song1" }]);
     // SELECT session (for eventId)
     enqueueSelectResult([{ eventId: null }]);
-    // Transaction: delete + compactAfterRemoval (updates only) + insert runs + insert queueEvents — no drains
+    // fillActiveQueue session lock — window closed so fill short-circuits
+    enqueueSelectResult([
+      {
+        status: "in_progress",
+        activePriorityMax: 6,
+        activeNonPriorityMax: 4,
+        floorTrialStartsAt: 1,
+        floorTrialEndsAt: 2,
+      },
+    ]);
     const res = await app.request(`${BASE}/complete`, {
       method: "POST",
       headers: { ...adminHeaders(), "Content-Type": "application/json" },
@@ -483,6 +502,15 @@ describe("POST /v1/queue/complete", () => {
     ]);
     enqueueSelectResult([{ sessionId: "s1", divisionName: "Classic", songId: "song1" }]);
     enqueueSelectResult([{ eventId: null }]);
+    enqueueSelectResult([
+      {
+        status: "in_progress",
+        activePriorityMax: 6,
+        activeNonPriorityMax: 4,
+        floorTrialStartsAt: 1,
+        floorTrialEndsAt: 2,
+      },
+    ]);
 
     const inserted: { table: unknown; payload: unknown }[] = [];
     const insertMock = mockDb.insert as ReturnType<typeof vi.fn>;
@@ -512,6 +540,59 @@ describe("POST /v1/queue/complete", () => {
       entityPairId: null,
       entitySoloUserId: null,
     });
+  });
+
+  it("auto-promotes the next waiting entry when the session is in its running window", async () => {
+    const now = Date.now();
+    enqueueSelectResult([
+      {
+        id: "qe1",
+        checkinId: "c1",
+        sessionId: "s1",
+        entityPairId: null,
+        entitySoloUserId: "u1",
+        position: 1,
+      },
+    ]);
+    enqueueSelectResult([{ sessionId: "s1", divisionName: "Classic", songId: "song1" }]);
+    enqueueSelectResult([{ eventId: null }]);
+    // fillActiveQueue: running session
+    enqueueSelectResult([
+      {
+        status: "in_progress",
+        activePriorityMax: 6,
+        activeNonPriorityMax: 4,
+        floorTrialStartsAt: now - 10_000,
+        floorTrialEndsAt: now + 10_000,
+      },
+    ]);
+    enqueueSelectResult([{ n: 0 }]); // active after complete
+    enqueueSelectResult([{ n: 1 }]); // priority waiting
+    enqueueSelectResult([
+      {
+        id: "qe_wait",
+        checkinId: "c_wait",
+        entityPairId: null,
+        entitySoloUserId: "u2",
+        entityManagedPartnershipId: null,
+        position: 1,
+      },
+    ]);
+    enqueueSelectResult([]); // compact
+    enqueueSelectResult([{ max: 0 }]); // nextBottom active
+    // stop: active now 1, priority empty
+    enqueueSelectResult([{ n: 1 }]);
+    enqueueSelectResult([{ n: 0 }]);
+    enqueueSelectResult([]); // no standard waiting
+
+    const res = await app.request(`${BASE}/complete`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ queueEntryId: "qe1" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<{ completed: boolean }>>(res);
+    expect(body.data.completed).toBe(true);
   });
 });
 
@@ -649,6 +730,15 @@ describe("POST /v1/queue/withdraw — cache invalidation", () => {
     // Perform a withdraw (enqueue the entry lookup result).
     enqueueSelectResult([
       { id: "qe1", checkinId: "c1", sessionId: "s1", queueType: "non_priority", position: 3 },
+    ]);
+    enqueueSelectResult([
+      {
+        status: "in_progress",
+        activePriorityMax: 6,
+        activeNonPriorityMax: 4,
+        floorTrialStartsAt: 1,
+        floorTrialEndsAt: 2,
+      },
     ]);
     const withdraw = await app.request(`${BASE}/withdraw`, {
       method: "POST",
@@ -895,6 +985,16 @@ describe("full-flow: promote then complete", () => {
     enqueueSelectResult([{ sessionId: priorityEntry.sessionId, divisionName: "Classic", songId: "song1" }]);
     // SELECT session (eventId)
     enqueueSelectResult([{ eventId: null }]);
+    // fillActiveQueue session lock — window closed
+    enqueueSelectResult([
+      {
+        status: "in_progress",
+        activePriorityMax: 6,
+        activeNonPriorityMax: 4,
+        floorTrialStartsAt: 1,
+        floorTrialEndsAt: 2,
+      },
+    ]);
 
     const completeRes = await app.request(`${BASE}/complete`, {
       method: "POST",

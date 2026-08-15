@@ -1,7 +1,10 @@
 import { createLogger } from "common-typescript-utils";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, gt, inArray, lte, ne } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "../db/schema.js";
+import { invalidateQueueCache } from "../lib/cache.js";
+import type { DbTransaction } from "../lib/queue/compaction.js";
+import { fillActiveQueue } from "../lib/queue/fill.js";
 
 type Db = PostgresJsDatabase<typeof schema>;
 
@@ -57,4 +60,52 @@ export async function tickSessionStatuses(database: Db): Promise<number> {
     context: { sessions_checked: rows.length, sessions_updated: updated },
   });
   return updated;
+}
+
+/**
+ * Auto-advance the active queue for every session currently inside its
+ * floor-trial window. This is the backstop that fills a session at start
+ * (when the trial opens no user event fires — the cron is the trigger) and
+ * tops up any running session each tick. Event-driven fills in the queue /
+ * check-in handlers cover the in-between moments.
+ */
+export async function fillRunningSessions(database: Db): Promise<number> {
+  const now = Date.now();
+  const rows = await database
+    .select({ id: schema.sessions.id })
+    .from(schema.sessions)
+    .where(
+      and(
+        ne(schema.sessions.status, "cancelled"),
+        lte(schema.sessions.floorTrialStartsAt, now),
+        gt(schema.sessions.floorTrialEndsAt, now)
+      )
+    );
+
+  let totalPromoted = 0;
+  for (const s of rows) {
+    try {
+      const promoted = await database.transaction((tx) =>
+        fillActiveQueue(tx as DbTransaction, s.id, null, now)
+      );
+      if (promoted > 0) {
+        totalPromoted += promoted;
+        invalidateQueueCache(s.id);
+      }
+    } catch (err) {
+      logger.error({
+        event: "auto_fill_failed",
+        category: "infra",
+        context: { session_id: s.id },
+        error: err,
+      });
+    }
+  }
+
+  logger.info({
+    event: "auto_fill_completed",
+    category: "infra",
+    context: { sessions_checked: rows.length, entries_promoted: totalPromoted },
+  });
+  return totalPromoted;
 }

@@ -24,6 +24,8 @@ import { determineInitialQueue, loadAdmissionContext } from "../lib/queue/admiss
 import type { EntityRef } from "../lib/queue/runCounts.js";
 import { entityHasLiveEntry } from "../lib/queue/singleEntry.js";
 import { nextBottomPosition, compactAfterRemoval } from "../lib/queue/compaction.js";
+import { fillActiveQueue } from "../lib/queue/fill.js";
+import { invalidateQueueCache } from "../lib/cache.js";
 import { requireAuth } from "../middleware/auth.js";
 import { invalidateSessionCache } from "./sessions.js";
 
@@ -261,6 +263,8 @@ checkinRoutes.post(
           reason: null,
           createdAt: now,
         });
+
+        await fillActiveQueue(tx, body.sessionId, caller.userId, now);
       });
     } catch (err) {
       logger.error({
@@ -282,6 +286,7 @@ checkinRoutes.post(
       );
     }
 
+    invalidateQueueCache(body.sessionId);
     return c.json(
       success({
         id: checkinId,
@@ -568,6 +573,8 @@ checkinRoutes.delete("/:id", requireAuth, async (c) => {
         reason: "self_withdrew",
         createdAt: now,
       });
+
+      await fillActiveQueue(tx, row.sessionId, userId, now);
     });
   } catch (err) {
     logger.error({
@@ -580,5 +587,6 @@ checkinRoutes.delete("/:id", requireAuth, async (c) => {
   }
 
   invalidateSessionCache(row.sessionId);
+  invalidateQueueCache(row.sessionId);
   return c.json(success({ withdrawn: true }));
 });
