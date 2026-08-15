@@ -622,7 +622,7 @@ export default function ManagerPage() {
           <Card>
             <CardHeader><CardTitle>Event Songs</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <div className="w-full sm:w-96 space-y-2">
+              <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                   <Label>Event</Label>
                   <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
@@ -649,7 +649,7 @@ export default function ManagerPage() {
                 ) : esVisibleEvents.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No events to show.</p>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                     {esVisibleEvents.map((ev) => {
                       const active = ev.id === esEventId;
                       return (
@@ -664,7 +664,7 @@ export default function ManagerPage() {
                               : "hover:bg-muted/50"
                           )}
                         >
-                          <p className="font-medium text-sm">{ev.name}</p>
+                          <p className="font-medium text-sm line-clamp-2">{ev.name}</p>
                           <p className="text-xs text-muted-foreground">{ev.start_date}</p>
                         </button>
                       );
