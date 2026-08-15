@@ -22,8 +22,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { formatSessionTitle } from "@/lib/sessionFormat";
 
-const FIELD_INPUT_CLASS =
-  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
 const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
 
 export const MANAGER_SECTIONS = ["active-sessions", "event-songs", "upload-for", "checkin-for"] as const;
@@ -52,6 +50,7 @@ export default function ManagerPage() {
 
   const [cfUserQuery, setCfUserQuery] = useState("");
   const [cfUserResults, setCfUserResults] = useState<ApiAdminUser[]>([]);
+  const [cfSearching, setCfSearching] = useState(false);
   const [cfSelectedUser, setCfSelectedUser] = useState<ApiAdminUser | null>(null);
   const [cfSessionId, setCfSessionId] = useState("");
   const [cfSubmissions, setCfSubmissions] = useState<ApiEventSongSubmission[] | null>(null);
@@ -166,9 +165,17 @@ export default function ManagerPage() {
     if (cfSelectedUser) return;
     const q = cfUserQuery.trim();
     if (!q) { setCfUserResults([]); return; }
-    const t = setTimeout(() => {
-      api.get<ApiAdminUser[]>(`/v1/admin/users?q=${encodeURIComponent(q)}`)
-        .then(setCfUserResults).catch(() => setCfUserResults([]));
+    const t = setTimeout(async () => {
+      setCfSearching(true);
+      try {
+        const rows = await api.get<ApiAdminUser[]>(`/v1/admin/users?q=${encodeURIComponent(q)}`);
+        setCfUserResults(rows);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Search failed");
+        setCfUserResults([]);
+      } finally {
+        setCfSearching(false);
+      }
     }, 250);
     return () => clearTimeout(t);
   }, [cfUserQuery, cfSelectedUser, api]);
@@ -743,133 +750,136 @@ export default function ManagerPage() {
         {/* ── CheckIn For — real on-behalf check-in ── */}
         <TabsContent value="checkin-for" className="mt-4 space-y-4">
           {!cfSelectedUser ? (
-            <div className="space-y-3 max-w-lg">
-              <div>
-                <Label htmlFor="cf-user-search" className={FIELD_LABEL_CLASS}>User</Label>
+            <Card>
+              <CardHeader><CardTitle>CheckIn For</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Find the user you&apos;re checking in for. The check-in is recorded exactly as if they did it themselves.
+                </p>
                 <Input
-                  id="cf-user-search"
-                  className={FIELD_INPUT_CLASS}
                   placeholder="Search by name or email…"
                   value={cfUserQuery}
                   onChange={(e) => setCfUserQuery(e.target.value)}
+                  autoFocus
                 />
-              </div>
-              {cfUserResults.length > 0 && (
-                <ul className="rounded-md border divide-y max-h-48 overflow-y-auto">
-                  {cfUserResults.map((u) => {
-                    const name = [u.first_name, u.last_name].filter(Boolean).join(" ").trim();
-                    return (
-                      <li key={u.id}>
+                {cfSearching ? (
+                  <Skeleton className="h-24 w-full" />
+                ) : cfUserResults.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    {cfUserQuery.trim() ? "No matches." : "Type a name or email to search."}
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {cfUserResults.map((u) => {
+                      const name = [u.first_name, u.last_name].filter(Boolean).join(" ").trim() || "(no name)";
+                      return (
                         <button
+                          key={u.id}
                           type="button"
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
                           onClick={() => {
                             setCfSelectedUser(u);
                             setCfUserQuery("");
                             setCfUserResults([]);
                           }}
+                          className="w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50"
                         >
-                          <span className="font-medium">{name || u.email}</span>
-                          {name && (
-                            <span className="ml-2 text-muted-foreground">{u.email}</span>
-                          )}
+                          <p className="font-medium">{name}</p>
+                          <p className="text-xs text-muted-foreground">{u.email}</p>
                         </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           ) : (
-            <div className="flex items-center justify-between gap-3 flex-wrap max-w-lg">
-              <p className="text-sm">
-                Checking in for{" "}
-                <span className="font-medium">
-                  {[cfSelectedUser.first_name, cfSelectedUser.last_name].filter(Boolean).join(" ") || cfSelectedUser.email}
-                </span>
-                {cfSelectedUser.email && (
-                  <span className="text-muted-foreground ml-1">({cfSelectedUser.email})</span>
-                )}
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setCfSelectedUser(null);
-                  setCfUserQuery("");
-                  setCfSessionId("");
-                  setCfSongId("");
-                  setCfDivision("");
-                  setCfSubmissions(null);
-                }}
-              >
-                Change
-              </Button>
-            </div>
-          )}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <CardTitle>
+                    CheckIn For:{" "}
+                    {[cfSelectedUser.first_name, cfSelectedUser.last_name].filter(Boolean).join(" ").trim() || cfSelectedUser.email}
+                  </CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setCfSelectedUser(null);
+                      setCfUserQuery("");
+                      setCfSessionId("");
+                      setCfSongId("");
+                      setCfDivision("");
+                      setCfSubmissions(null);
+                    }}
+                  >
+                    Change user
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={submitCheckinFor} className="space-y-4 max-w-lg">
+                  <div>
+                    <label className={FIELD_LABEL_CLASS}>Session</label>
+                    <ChoiceGroup
+                      ariaLabel="Session"
+                      options={cfActiveSessions.map((s) => ({
+                        value: s.id,
+                        label: formatSessionTitle(s, s.event_timezone),
+                      }))}
+                      value={cfSessionId}
+                      onChange={setCfSessionId}
+                    />
+                  </div>
 
-          {cfSelectedUser && (
-            <form onSubmit={submitCheckinFor} className="space-y-4 max-w-lg">
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Session</label>
-                <ChoiceGroup
-                  ariaLabel="Session"
-                  options={cfActiveSessions.map((s) => ({
-                    value: s.id,
-                    label: formatSessionTitle(s, s.event_timezone),
-                  }))}
-                  value={cfSessionId}
-                  onChange={setCfSessionId}
-                />
-              </div>
+                  <div>
+                    <label className={FIELD_LABEL_CLASS}>Song</label>
+                    {cfSessionObj && !cfSessionObj.event_id ? (
+                      <p className="text-sm text-muted-foreground">This session has no event</p>
+                    ) : cfSubmissions !== null && cfSubmissions.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No songs submitted to this event for this user
+                      </p>
+                    ) : (
+                      <ChoiceGroup
+                        ariaLabel="Song"
+                        options={(cfSubmissions ?? []).map((sub) => ({
+                          value: sub.song_id,
+                          label: sub.song_label,
+                        }))}
+                        value={cfSongId}
+                        onChange={setCfSongId}
+                        disabled={!cfSessionId || cfSubmissions === null}
+                      />
+                    )}
+                  </div>
 
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Song</label>
-                {cfSessionObj && !cfSessionObj.event_id ? (
-                  <p className="text-sm text-muted-foreground">This session has no event</p>
-                ) : cfSubmissions !== null && cfSubmissions.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No songs submitted to this event for this user
-                  </p>
-                ) : (
-                  <ChoiceGroup
-                    ariaLabel="Song"
-                    options={(cfSubmissions ?? []).map((sub) => ({
-                      value: sub.song_id,
-                      label: sub.song_label,
-                    }))}
-                    value={cfSongId}
-                    onChange={setCfSongId}
-                    disabled={!cfSessionId || cfSubmissions === null}
-                  />
-                )}
-              </div>
+                  <div>
+                    <label className={FIELD_LABEL_CLASS}>Division</label>
+                    <ChoiceGroup
+                      ariaLabel="Division"
+                      options={cfSessionDivisions.map((d) => ({ value: d, label: d }))}
+                      value={cfDivision}
+                      onChange={setCfDivision}
+                      disabled={!cfSessionId || cfSessionDivisions.length === 0}
+                    />
+                  </div>
 
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Division</label>
-                <ChoiceGroup
-                  ariaLabel="Division"
-                  options={cfSessionDivisions.map((d) => ({ value: d, label: d }))}
-                  value={cfDivision}
-                  onChange={setCfDivision}
-                  disabled={!cfSessionId || cfSessionDivisions.length === 0}
-                />
-              </div>
-
-              <Button
-                type="submit"
-                disabled={
-                  cfSubmitting ||
-                  !cfSessionId ||
-                  !cfSongId ||
-                  !cfDivision
-                }
-                size="lg"
-                className="w-full sm:w-auto"
-              >
-                {cfSubmitting ? "Checking in…" : "Check in"}
-              </Button>
-            </form>
+                  <Button
+                    type="submit"
+                    disabled={
+                      cfSubmitting ||
+                      !cfSessionId ||
+                      !cfSongId ||
+                      !cfDivision
+                    }
+                    size="lg"
+                    className="w-full sm:w-auto"
+                  >
+                    {cfSubmitting ? "Checking in…" : "Check in"}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
           )}
         </TabsContent>
       </Tabs>
