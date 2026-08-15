@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { formatSessionTitle } from "@/lib/sessionFormat";
+import { cn } from "@/lib/utils";
 
 const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
 
@@ -640,16 +641,36 @@ export default function ManagerPage() {
                     Show past events
                   </label>
                 </div>
-                <ChoiceGroup
-                  ariaLabel="Event"
-                  options={esVisibleEvents.map((ev) => ({
-                    value: ev.id,
-                    label: `${ev.name} · ${ev.start_date}`,
-                  }))}
-                  value={esEventId}
-                  onChange={setEsEventId}
-                  disabled={esEventsLoading}
-                />
+                {esEventsLoading ? (
+                  <Skeleton className="h-24 w-full" />
+                ) : esVisibleEvents.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No events to show.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {esVisibleEvents.map((ev) => {
+                      const active = ev.id === esEventId;
+                      return (
+                        <button
+                          key={ev.id}
+                          type="button"
+                          onClick={() => setEsEventId(active ? "" : ev.id)}
+                          className={cn(
+                            "w-full rounded-lg border px-4 py-3 text-left transition-colors",
+                            active
+                              ? "border-primary bg-primary/5 ring-1 ring-primary"
+                              : "hover:bg-muted/50"
+                          )}
+                        >
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <span className="font-medium">{ev.name}</span>
+                            <span className="text-xs text-muted-foreground">{ev.status}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{ev.start_date}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {!esEventId ? (
