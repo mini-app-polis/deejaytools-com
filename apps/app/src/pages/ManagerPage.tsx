@@ -248,9 +248,12 @@ export default function ManagerPage() {
 
   const esVisibleEvents = useMemo(
     () =>
-      esEvents.filter(
-        (ev) => esShowPast || (ev.status !== "completed" && ev.status !== "cancelled")
-      ),
+      esEvents
+        .filter(
+          (ev) => esShowPast || (ev.status !== "completed" && ev.status !== "cancelled")
+        )
+        .slice()
+        .sort((a, b) => a.start_date.localeCompare(b.start_date)),
     [esEvents, esShowPast]
   );
 
@@ -646,7 +649,7 @@ export default function ManagerPage() {
                 ) : esVisibleEvents.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No events to show.</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
                     {esVisibleEvents.map((ev) => {
                       const active = ev.id === esEventId;
                       return (
@@ -655,16 +658,13 @@ export default function ManagerPage() {
                           type="button"
                           onClick={() => setEsEventId(active ? "" : ev.id)}
                           className={cn(
-                            "w-full rounded-lg border px-4 py-3 text-left transition-colors",
+                            "rounded-lg border px-4 py-2 text-left transition-colors",
                             active
                               ? "border-primary bg-primary/5 ring-1 ring-primary"
                               : "hover:bg-muted/50"
                           )}
                         >
-                          <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <span className="font-medium">{ev.name}</span>
-                            <span className="text-xs text-muted-foreground">{ev.status}</span>
-                          </div>
+                          <p className="font-medium text-sm">{ev.name}</p>
                           <p className="text-xs text-muted-foreground">{ev.start_date}</p>
                         </button>
                       );
