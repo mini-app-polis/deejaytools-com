@@ -675,10 +675,6 @@ export default function ManagerPage() {
 
               {!esEventId ? (
                 <p className="text-sm text-muted-foreground">Select an event to view submitted songs.</p>
-              ) : esSubmissionsLoading && esSubmissions.length === 0 ? (
-                <Skeleton className="h-32 w-full" />
-              ) : esSubmissions.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No songs submitted to this event yet.</p>
               ) : (
                 <Card>
                   <CardHeader className="pb-2">
@@ -687,26 +683,36 @@ export default function ManagerPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className={`space-y-6${esSubmissionsLoading ? " opacity-60" : ""}`}>
-                    {esSubmissionsByDivision.map(({ division, rows }) => (
-                      <section key={division} className="space-y-2">
-                        <h2 className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
-                          {division}
-                        </h2>
-                        <div className="space-y-2">
+                    {esSubmissionsLoading && esSubmissions.length === 0 ? (
+                      <Skeleton className="h-24 w-full" />
+                    ) : esSubmissions.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No songs submitted to this event yet.
+                      </p>
+                    ) : (
+                      esSubmissionsByDivision.map(({ division, rows }) => (
+                        <section key={division} className="space-y-2">
+                          <h2 className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
+                            {division}
+                          </h2>
+                          <div className="space-y-2">
                             {rows.map((row) => (
                               <div
                                 key={row.id}
                                 className="flex items-baseline justify-between gap-4 rounded-lg bg-white/[0.06] px-4 py-3 text-sm"
                               >
-                                <span className="font-medium min-w-0 truncate">{row.partnership_label}</span>
+                                <span className="font-medium min-w-0 truncate">
+                                  {row.partnership_label}
+                                </span>
                                 <span className="text-muted-foreground text-right shrink-0">
                                   {row.song_label}
                                 </span>
                               </div>
                             ))}
-                        </div>
-                      </section>
-                    ))}
+                          </div>
+                        </section>
+                      ))
+                    )}
                   </CardContent>
                 </Card>
               )}
