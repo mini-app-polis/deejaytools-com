@@ -13,6 +13,7 @@ import {
 } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 import SongUploadForm from "@/components/SongUploadForm";
+import { SessionInfoHeader } from "@/components/SessionInfoHeader";
 import { Button } from "@/components/ui/button";
 import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -323,6 +324,11 @@ export default function ManagerPage() {
       });
   }, [sessions]);
 
+  const lqSession = useMemo(
+    () => sessions?.find((s) => s.id === lqSessionId) ?? null,
+    [sessions, lqSessionId]
+  );
+
   const renderEntityLabel = (row: ApiQueueEntry) => {
     if (row.entityLabel && row.entityLabel !== "—") return row.entityLabel;
     if (row.entityPairId) return pairMap.get(row.entityPairId) ?? row.entityLabel;
@@ -435,6 +441,7 @@ export default function ManagerPage() {
 
           {lqSessionId && (
             <div className={`space-y-4 ${lqLoading ? "opacity-60" : ""}`}>
+              {lqSession && <SessionInfoHeader session={lqSession} showTitle={false} />}
 
               {/* Active queue */}
               <Card className="border-primary/30">
