@@ -101,6 +101,42 @@ describe("POST /v1/managed-partnerships", () => {
     });
   });
 
+  it("normalizes name fields with titleCaseWords before save", async () => {
+    vi.mocked(mockDb.insert).mockClear();
+    const created = {
+      id: "mp_norm",
+      userId: "user_test123",
+      leaderFirstName: "John",
+      leaderLastName: "Doe",
+      followerFirstName: "Jane",
+      followerLastName: "Roe",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    enqueueSelectResult([created]);
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        leader_first_name: "john",
+        leader_last_name: "doe",
+        follower_first_name: "jane",
+        follower_last_name: "roe",
+      }),
+    });
+    expect(res.status).toBe(201);
+    const insertMock = mockDb.insert as ReturnType<typeof vi.fn>;
+    const valuesMock = insertMock.mock.results[0]!.value.values as ReturnType<typeof vi.fn>;
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        leaderFirstName: "John",
+        leaderLastName: "Doe",
+        followerFirstName: "Jane",
+        followerLastName: "Roe",
+      })
+    );
+  });
+
   it("returns 400 for an invalid body", async () => {
     const res = await app.request(BASE, {
       method: "POST",

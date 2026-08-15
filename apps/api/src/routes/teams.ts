@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { teams } from "../db/schema.js";
+import { titleCaseIfNoCaps } from "../lib/text.js";
 import { zValidator } from "../lib/validate.js";
 import { requireAuth } from "../middleware/auth.js";
 
@@ -45,7 +46,7 @@ teamsRoutes.post("/", requireAuth, zValidator("json", createTeamBodySchema), asy
   const body = c.req.valid("json");
   const now = Date.now();
   const id = crypto.randomUUID();
-  const identifier = body.identifier.trim();
+  const identifier = titleCaseIfNoCaps(body.identifier);
 
   try {
     await db.insert(teams).values({
@@ -76,7 +77,7 @@ teamsRoutes.patch("/:id", requireAuth, zValidator("json", createTeamBodySchema),
   const userId = c.get("user").userId;
   const id = c.req.param("id");
   const body = c.req.valid("json");
-  const identifier = body.identifier.trim();
+  const identifier = titleCaseIfNoCaps(body.identifier);
 
   const [existing] = await db
     .select()

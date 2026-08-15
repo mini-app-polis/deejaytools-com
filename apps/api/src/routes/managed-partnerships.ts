@@ -12,6 +12,7 @@ import {
   songs,
 } from "../db/schema.js";
 import { zValidator } from "../lib/validate.js";
+import { titleCaseWords } from "../lib/text.js";
 import { requireAuth } from "../middleware/auth.js";
 
 const logger = createLogger("deejaytools-api");
@@ -55,10 +56,10 @@ managedPartnershipsRoutes.post(
       await db.insert(managedPartnerships).values({
         id,
         userId,
-        leaderFirstName: body.leader_first_name.trim(),
-        leaderLastName: body.leader_last_name.trim(),
-        followerFirstName: body.follower_first_name.trim(),
-        followerLastName: body.follower_last_name.trim(),
+        leaderFirstName: titleCaseWords(body.leader_first_name),
+        leaderLastName: titleCaseWords(body.leader_last_name),
+        followerFirstName: titleCaseWords(body.follower_first_name),
+        followerLastName: titleCaseWords(body.follower_last_name),
         createdAt: now,
         updatedAt: now,
       });
@@ -111,10 +112,10 @@ managedPartnershipsRoutes.patch(
       await db
         .update(managedPartnerships)
         .set({
-          leaderFirstName: body.leader_first_name.trim(),
-          leaderLastName: body.leader_last_name.trim(),
-          followerFirstName: body.follower_first_name.trim(),
-          followerLastName: body.follower_last_name.trim(),
+          leaderFirstName: titleCaseWords(body.leader_first_name),
+          leaderLastName: titleCaseWords(body.leader_last_name),
+          followerFirstName: titleCaseWords(body.follower_first_name),
+          followerLastName: titleCaseWords(body.follower_last_name),
           updatedAt: now,
         })
         .where(and(eq(managedPartnerships.id, id), eq(managedPartnerships.userId, userId)));

@@ -84,6 +84,72 @@ describe("POST /v1/teams", () => {
     });
   });
 
+  it("normalizes identifier with titleCaseIfNoCaps before save", async () => {
+    vi.mocked(mockDb.insert).mockClear();
+    const created = {
+      id: "team_norm",
+      userId: "user_test123",
+      identifier: "Jtswing Team Jv",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    enqueueSelectResult([created]);
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: "jtswing team jv" }),
+    });
+    expect(res.status).toBe(201);
+    const insertMock = mockDb.insert as ReturnType<typeof vi.fn>;
+    const valuesMock = insertMock.mock.results[0]!.value.values as ReturnType<typeof vi.fn>;
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ identifier: "Jtswing Team Jv" })
+    );
+  });
+
+  it("preserves existing capitals in team identifiers", async () => {
+    vi.mocked(mockDb.insert).mockClear();
+    const created = {
+      id: "team_caps",
+      userId: "user_test123",
+      identifier: "JTSwing Team JV",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    enqueueSelectResult([created]);
+    let res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: "JTSwing Team JV" }),
+    });
+    expect(res.status).toBe(201);
+    let insertMock = mockDb.insert as ReturnType<typeof vi.fn>;
+    let valuesMock = insertMock.mock.results[0]!.value.values as ReturnType<typeof vi.fn>;
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ identifier: "JTSwing Team JV" })
+    );
+
+    vi.mocked(mockDb.insert).mockClear();
+    enqueueSelectResult([
+      {
+        ...created,
+        id: "team_mixed",
+        identifier: "jtSwing Team",
+      },
+    ]);
+    res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: "jtSwing team" }),
+    });
+    expect(res.status).toBe(201);
+    insertMock = mockDb.insert as ReturnType<typeof vi.fn>;
+    valuesMock = insertMock.mock.results[0]!.value.values as ReturnType<typeof vi.fn>;
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ identifier: "jtSwing Team" })
+    );
+  });
+
   it("returns 409 when identifier is duplicated", async () => {
     const insertMock = mockDb.insert as ReturnType<typeof vi.fn>;
     insertMock.mockImplementationOnce(() => ({
