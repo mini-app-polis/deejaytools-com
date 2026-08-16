@@ -38,8 +38,15 @@ const MANAGER_ITEMS: NavItem[] = [
   { to: "/manager/guide", label: "Guide" },
 ];
 
+// Stamped at build time by vite.config.ts. Empty when the sha could not be
+// resolved (no git, no CF_PAGES_COMMIT_SHA), in which case we show the version.
+const buildSha = import.meta.env.VITE_COMMIT_SHA ?? "";
+
 export default function NavBar() {
   const { isAdmin, isManager } = useAuthMe();
+  // Dev and preview hosts show the commit instead of the semver version: the
+  // version only moves on release, so it cannot identify a dev build.
+  const showSha = !isProdHost() && buildSha !== "";
   const [menuOpen, setMenuOpen] = useState(false);
   const showManagerBar = isAdmin || isManager;
 
@@ -86,8 +93,9 @@ export default function NavBar() {
               <span
                 className="text-[10px] text-muted-foreground"
                 style={{ fontFamily: "'DM Mono', monospace" }}
+                title={buildSha ? `v${pkg.version} · ${buildSha}` : `v${pkg.version}`}
               >
-                v{pkg.version}
+                {showSha ? `#${buildSha}` : `v${pkg.version}`}
               </span>
               {!isProdHost() && (
                 <span className="rounded bg-amber-500/20 text-amber-500 text-[10px] px-1.5 py-0.5 font-medium">
