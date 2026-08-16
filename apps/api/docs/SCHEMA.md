@@ -21,6 +21,7 @@ Every table primary key is `text` holding a UUID string from `crypto.randomUUID(
 | Table | PK column | Value |
 |-------|-----------|--------|
 | `users` | `id` | Clerk user id (JWT `sub` claim), not a random UUID |
+| `event_division_run_limits` | *(none)* | Logical key `(event_id, division_name)` via unique index `uq_event_division_run_limits_pk` |
 
 ### Foreign-key delete behavior
 

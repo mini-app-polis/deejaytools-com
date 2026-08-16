@@ -77,6 +77,13 @@ export default function HelpSubmittingMusicPage() {
             <code className="px-1 rounded bg-muted/30 text-foreground">98%, -2%, v3, 2026-02-01</code>.
             Use whatever helps <em>you</em> tell versions apart — tempo tweak, mix date, practice take
             number. It becomes part of the processed filename the deejay sees in Drive (see below).
+            Non-alphanumeric characters are stripped from the descriptor in the filename —{" "}
+            <code className="px-1 rounded bg-muted/30 text-foreground">98%</code> becomes{" "}
+            <code className="px-1 rounded bg-muted/30 text-foreground">98</code>,{" "}
+            <code className="px-1 rounded bg-muted/30 text-foreground">-2%</code> becomes{" "}
+            <code className="px-1 rounded bg-muted/30 text-foreground">2</code>, and{" "}
+            <code className="px-1 rounded bg-muted/30 text-foreground">2026-02-01</code> becomes{" "}
+            <code className="px-1 rounded bg-muted/30 text-foreground">20260201</code>.
           </p>
 
           <p>
@@ -99,7 +106,7 @@ export default function HelpSubmittingMusicPage() {
               leader and follower names (PascalCase segments joined with underscores), then division,
               season year, routine name, descriptor, and version — for example{" "}
               <code className="px-1 rounded bg-muted/30 text-foreground break-all">
-                KaianoLevine_LibbyWooton_Classic_2026_MyRoutine_98percent_v01.mp3
+                KaianoLevine_LibbyWooton_Classic_2026_MyRoutine_98_v01.mp3
               </code>
               . Solo uploads use your name only. The{" "}
               <strong className="text-foreground">leader&apos;s name always comes first</strong>, even if
@@ -142,7 +149,7 @@ export default function HelpSubmittingMusicPage() {
             </li>
           </ul>
           <p>
-            Each chunk is retried up to <strong className="text-foreground">3 times</strong> automatically
+            Each chunk is tried up to <strong className="text-foreground">3 times</strong> automatically
             (with a short wait between attempts) if the network hiccups. If your Clerk session expires
             mid-upload, you will see exactly: &ldquo;Your session expired. Please sign in again and retry
             the upload.&rdquo; Sign in and start the upload again from the beginning.

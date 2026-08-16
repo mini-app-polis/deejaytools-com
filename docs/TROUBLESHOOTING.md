@@ -164,7 +164,7 @@ Production on Railway uses the injected `PORT` — this error is almost always l
 
 **Symptom:** API **400** with message exactly: `File exceeds 100 MB limit`.
 
-**Cause:** Assembled file after chunked upload exceeds `MAX_ASSEMBLED_BYTES` (100 MB) in `apps/api/src/routes/songs.ts`.
+**Cause:** Assembled file after chunked upload exceeds `MAX_ASSEMBLED_BYTES` (~110 MB) in `apps/api/src/routes/songs.ts`. The API error message still says “100 MB”; the browser rejects uploads over 100 MB client-side (`MAX_FILE_BYTES` in `chunkedSongUpload.ts`), so a file between 100 and 110 MB never reaches the server from the app but would pass a direct API upload.
 
 **Fix:** Upload a smaller file. Client-side `SongUploadForm` also rejects files over 100 MB before upload starts.
 

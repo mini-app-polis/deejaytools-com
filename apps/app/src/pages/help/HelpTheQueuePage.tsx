@@ -125,8 +125,10 @@ export default function HelpTheQueuePage() {
           </li>
         </ul>
         <p>
-          If a check-in needs your attention (the deejay flags it), the session page will surface that.
-          Come to the booth before your turn comes up.
+          If you left a note on the check-in form (optional{" "}
+          <strong className="text-foreground">Notes</strong> field — placeholder &ldquo;Any special
+          instructions for the deejay&rdquo;), the deejay sees it in the queue as &ldquo;Note:
+          …&rdquo;. Come to the booth before your turn comes up.
         </p>
         <p>
           For check-in prerequisites, see{" "}

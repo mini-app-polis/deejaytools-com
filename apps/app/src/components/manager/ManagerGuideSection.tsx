@@ -262,10 +262,6 @@ export default function ManagerGuideSection() {
       <Section title="Known limitations">
         <ul>
           <li>
-            <strong>Managed partnerships</strong> cannot be checked in yet. Use a regular
-            partnership or solo entry for now.
-          </li>
-          <li>
             <strong>Event-level priority run limit</strong> (<code>event_division_run_limits</code>)
             is enforced by the server but has no UI to set or view. If a dancer is unexpectedly in
             Standard and the session-level priority run limit is not the cause, an event-level cap

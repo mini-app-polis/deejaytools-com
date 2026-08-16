@@ -258,10 +258,10 @@ Releasing a version **does not** by itself deploy Railway or Cloudflare — thos
 
 | Variable | Where | Purpose |
 |----------|-------|---------|
-| `RAILWAY_DEPLOYMENT_ID` | Railway | Sentry release tag on API (`instrument.ts`), fallback after `npm_package_version`. |
+| `RAILWAY_DEPLOYMENT_ID` | Railway | Primary Sentry release tag on API (`instrument.ts`); falls back to `npm_package_version` when unset. |
 | `npm_package_version` | Node / package context | Sentry release fallback on API. |
 | `MODE` | Vite build | `"production"` or `"development"` — Sentry environment in the browser. |
-| `VITE_APP_VERSION` | Vite `define` in `vite.config.ts` | Root `package.json` version at build time; Sentry release + nav display. Not an env var you set in `.env` — injected at compile time. |
+| `VITE_APP_VERSION` | Vite `define` in `vite.config.ts` | Root `package.json` version at build time; Sentry browser release tag only (`instrument.ts`). Not an env var you set in `.env` — injected at compile time. |
 
 ---
 

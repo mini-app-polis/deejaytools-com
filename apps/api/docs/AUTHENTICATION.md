@@ -27,7 +27,7 @@ requireAuth / requireAdmin middleware
   │
   ├─ verifyClerkToken(token, CLERK_JWKS_URL)
   │     JWKS fetch (cached 1h) → import RS256 public key by kid (cached 1h)
-  │     → signature verify → exp check → payload.sub
+  │     → signature verify → exp check (if numeric) → payload.sub
   │
   ├─ SELECT users WHERE id = payload.sub
   │     no row → 401 USER_NOT_SYNCED
@@ -70,7 +70,7 @@ Implemented in `common-typescript-utils` (`dist/auth.js`) — a hand-rolled **We
 | JWKS cache | Module-level `{ jwks, expiry }`, **1 hour TTL** (`CACHE_TTL_MS = 3_600_000`) |
 | Key cache | `Map<kid, { key, expiry }>`, **1 hour TTL** per `kid` |
 | Algorithm | `RSASSA-PKCS1-v1_5` with **SHA-256** (`crypto.subtle.verify`) |
-| `exp` | Reject if `Date.now() / 1000 >= exp` |
+| `exp` | Reject only if `exp` is a number and `Date.now() / 1000 >= exp`; omitted `exp` is not checked |
 | `sub` | Require non-empty string; returned as `ClerkPayload.sub` |
 | Email | Optional: `payload.email` or first `email_addresses[].email_address` |
 
@@ -81,8 +81,9 @@ JWKS URL comes from **`CLERK_JWKS_URL`** (read via `jwksUrl()` in [`middleware/a
 - **`iss` (issuer)** — not validated
 - **`aud` (audience)** — not validated
 - **`nbf` (not before)** — not validated
+- **`exp` absent** — not rejected; token treated as non-expiring
 
-Only **signature**, **`exp`**, and presence/shape of **`sub`** are enforced. This matches [ADR-003](decisions/ADR-003-jwt-only-clerk-verification.md): session JWTs only, no M2M opaque tokens.
+**Signature** and presence/shape of **`sub`** are always enforced; **`exp`** is enforced only when the claim is a number. This matches [ADR-003](decisions/ADR-003-jwt-only-clerk-verification.md): session JWTs only, no M2M opaque tokens.
 
 ### `CLERK_JWKS_URL` missing
 
@@ -169,6 +170,7 @@ Additional **403** on specific routes (after auth succeeds):
 | Route | Code | Message |
 |-------|------|---------|
 | `POST /v1/checkins` | `FORBIDDEN` | Admin access required |
+| `DELETE /v1/checkins/:id` | `FORBIDDEN` | Admin access required |
 | `POST /v1/songs/upload/chunk` | `FORBIDDEN` | Admin access required |
 | `PATCH /v1/admin/users/:id/role` | `forbidden` | You cannot change your own admin role. |
 
@@ -216,12 +218,14 @@ Derived from middleware on each route handler. **Public** = no bearer required. 
 
 Legend: **●** = allowed. **○** = optional enrichment (optional-user). **—** = not allowed.
 
+‡ When `TICK_SECRET` is defined (including as an empty string), requires matching `x-tick-secret` header; otherwise **403** `FORBIDDEN`.
+
 ### App-level
 
 | Endpoint | Public | User | Admin |
 |----------|--------|------|-------|
 | `GET /health` | ● | ● | ● |
-| `GET /internal/tick` | ● | ● | ● |
+| `GET /internal/tick` | ●‡ | ●‡ | ●‡ |
 
 ### `/v1/auth`
 
@@ -490,7 +494,7 @@ Tests that hit **`getOptionalSyncedUserId`** (session list/detail) should mock [
 
 - **One DB round-trip per authenticated request** — `resolveAuthUser` always `SELECT`s `users` by `sub`. No caching of role or sync state on the JWT.
 
-- **No `iss` / `aud` validation** — any RS256 JWT signed by a key in the configured JWKS document with valid `exp` and `sub` is accepted. Protect `CLERK_JWKS_URL` and network path to Clerk JWKS.
+- **No `iss` / `aud` validation** — any RS256 JWT signed by a key in the configured JWKS document with a valid or absent `exp` and a valid `sub` is accepted. Protect `CLERK_JWKS_URL` and network path to Clerk JWKS.
 
 - **`ManagerGuard` / `isManager` discrepancy** — [`useAuthMe.ts`](../../app/src/hooks/useAuthMe.ts) exposes `isManager: me?.role === "manager"`, but the database enum **`user_role` only contains `user` and `admin`**. No API path assigns `manager`. **`/manager/*` routes are admin-only in practice** (`isAdmin` satisfies `ManagerGuard`). **TODO:** either add `manager` to the schema and role patch endpoint, or remove `isManager` and align `ManagerGuard` with admin-only intent.
 
