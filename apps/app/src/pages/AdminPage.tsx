@@ -247,6 +247,7 @@ export default function AdminPage() {
 
   // ── Run history tab ─────────────────────────────────────────────────────────
   const RUNS_FETCH_LIMIT = 500;
+  const RUNS_PARTNERSHIP_CHIP_LIMIT = 10;
   const [runsEventId, setRunsEventId] = useState("");
   const [runsShowFuture, setRunsShowFuture] = useState(false);
   const [runsSessionFilter, setRunsSessionFilter] = useState("");
@@ -254,6 +255,8 @@ export default function AdminPage() {
   const [runsLoading, setRunsLoading] = useState(false);
   const [runsHitLimit, setRunsHitLimit] = useState(false);
   const [runsDivisionFilter, setRunsDivisionFilter] = useState<string | null>(null);
+  const [runsPartnershipFilter, setRunsPartnershipFilter] = useState<string | null>(null);
+  const [runsShowAllPartnerships, setRunsShowAllPartnerships] = useState(false);
 
   // ── Users tab ───────────────────────────────────────────────────────────────
   // `usersQuery` updates on every keystroke; `usersDebouncedQuery` is what
@@ -324,6 +327,8 @@ export default function AdminPage() {
         setRuns(data);
         setRunsHitLimit(data.length === RUNS_FETCH_LIMIT);
         setRunsDivisionFilter(null);
+        setRunsPartnershipFilter(null);
+        setRunsShowAllPartnerships(false);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to load run history");
       } finally {
@@ -408,6 +413,8 @@ export default function AdminPage() {
     return list.filter((s) => s.event_id === runsEventId);
   }, [sessions, runsEventId]);
 
+  // Summary chip counts always reflect the full fetched result set — not the
+  // active division/partnership filter — so numbers stay stable while filtering.
   const runsDivisionSummary = useMemo(() => {
     if (!runs?.length) return [];
     const map = new Map<string, number>();
@@ -420,13 +427,59 @@ export default function AdminPage() {
       .sort((a, b) => b.count - a.count || a.division.localeCompare(b.division));
   }, [runs]);
 
+  const runsPartnershipSummary = useMemo(() => {
+    if (!runs?.length) return [];
+    const map = new Map<string, { label: string; count: number }>();
+    for (const row of runs) {
+      const key = row.entity_key;
+      const existing = map.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        // Rows arrive newest-first; first label wins for this key.
+        map.set(key, { label: row.entity_label, count: 1 });
+      }
+    }
+    return [...map.entries()]
+      .map(([key, { label, count }]) => ({ key, label, count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  }, [runs]);
+
+  const runsPartnershipHiddenCount = Math.max(
+    0,
+    runsPartnershipSummary.length - RUNS_PARTNERSHIP_CHIP_LIMIT
+  );
+
+  const runsPartnershipVisible = useMemo(() => {
+    if (runsShowAllPartnerships) return runsPartnershipSummary;
+    return runsPartnershipSummary.slice(0, RUNS_PARTNERSHIP_CHIP_LIMIT);
+  }, [runsPartnershipSummary, runsShowAllPartnerships]);
+
+  const runsActivePartnershipLabel = useMemo(() => {
+    if (!runsPartnershipFilter || !runs) return null;
+    return (
+      runsPartnershipSummary.find((p) => p.key === runsPartnershipFilter)?.label ??
+      runs.find((r) => r.entity_key === runsPartnershipFilter)?.entity_label ??
+      runsPartnershipFilter
+    );
+  }, [runs, runsPartnershipFilter, runsPartnershipSummary]);
+
   const runsDisplayRows = useMemo(() => {
     if (!runs) return null;
-    if (!runsDivisionFilter) return runs;
-    return runs.filter(
-      (row) => (row.division_name?.trim() || "Unspecified") === runsDivisionFilter
-    );
-  }, [runs, runsDivisionFilter]);
+    return runs.filter((row) => {
+      const division = row.division_name?.trim() || "Unspecified";
+      if (runsDivisionFilter && division !== runsDivisionFilter) return false;
+      if (runsPartnershipFilter && row.entity_key !== runsPartnershipFilter) return false;
+      return true;
+    });
+  }, [runs, runsDivisionFilter, runsPartnershipFilter]);
+
+  const runsHasActiveFilters = runsDivisionFilter !== null || runsPartnershipFilter !== null;
+
+  const clearRunsFilters = () => {
+    setRunsDivisionFilter(null);
+    setRunsPartnershipFilter(null);
+  };
 
   // Debounce keystrokes in the Users tab search box → only the trailing value
   // wins, so typing "alic" hits the API once with q=alic instead of four
@@ -1238,37 +1291,106 @@ export default function AdminPage() {
               )}
 
               {runs && runs.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setRunsDivisionFilter(null)}
-                    className={cn(
-                      "rounded-full border px-3 py-1 text-xs transition-colors",
-                      runsDivisionFilter === null
-                        ? "border-primary bg-primary/10 text-foreground"
-                        : "border-border text-muted-foreground hover:bg-muted/50"
-                    )}
-                  >
-                    All divisions ({runs.length})
-                  </button>
-                  {runsDivisionSummary.map(({ division, count }) => (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
-                      key={division}
                       type="button"
-                      onClick={() =>
-                        setRunsDivisionFilter((prev) => (prev === division ? null : division))
-                      }
+                      onClick={() => setRunsDivisionFilter(null)}
                       className={cn(
                         "rounded-full border px-3 py-1 text-xs transition-colors",
-                        runsDivisionFilter === division
+                        runsDivisionFilter === null
                           ? "border-primary bg-primary/10 text-foreground"
                           : "border-border text-muted-foreground hover:bg-muted/50"
                       )}
                     >
-                      {division} ({count})
+                      All divisions ({runs.length})
                     </button>
-                  ))}
-                </div>
+                    {runsDivisionSummary.map(({ division, count }) => (
+                      <button
+                        key={division}
+                        type="button"
+                        onClick={() =>
+                          setRunsDivisionFilter((prev) => (prev === division ? null : division))
+                        }
+                        className={cn(
+                          "rounded-full border px-3 py-1 text-xs transition-colors",
+                          runsDivisionFilter === division
+                            ? "border-primary bg-primary/10 text-foreground"
+                            : "border-border text-muted-foreground hover:bg-muted/50"
+                        )}
+                      >
+                        {division} ({count})
+                      </button>
+                    ))}
+                  </div>
+
+                  {runsPartnershipSummary.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setRunsPartnershipFilter(null)}
+                        className={cn(
+                          "rounded-full border px-3 py-1 text-xs transition-colors",
+                          runsPartnershipFilter === null
+                            ? "border-primary bg-primary/10 text-foreground"
+                            : "border-border text-muted-foreground hover:bg-muted/50"
+                        )}
+                      >
+                        All partnerships ({runsPartnershipSummary.length})
+                      </button>
+                      {runsPartnershipVisible.map(({ key, label, count }) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() =>
+                            setRunsPartnershipFilter((prev) => (prev === key ? null : key))
+                          }
+                          className={cn(
+                            "rounded-full border px-3 py-1 text-xs transition-colors max-w-full truncate",
+                            runsPartnershipFilter === key
+                              ? "border-primary bg-primary/10 text-foreground"
+                              : "border-border text-muted-foreground hover:bg-muted/50"
+                          )}
+                          title={label}
+                        >
+                          {label} ({count})
+                        </button>
+                      ))}
+                      {!runsShowAllPartnerships && runsPartnershipHiddenCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setRunsShowAllPartnerships(true)}
+                          className="rounded-full border border-dashed px-3 py-1 text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
+                        >
+                          Show all ({runsPartnershipHiddenCount})
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {runsHasActiveFilters && (
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                      <span className="text-muted-foreground">Filters:</span>
+                      {runsDivisionFilter && (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                          Division: {runsDivisionFilter}
+                        </span>
+                      )}
+                      {runsPartnershipFilter && runsActivePartnershipLabel && (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                          Partnership: {runsActivePartnershipLabel}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={clearRunsFilters}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Clear all filters
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
 
               {runs === null ? (
@@ -1291,11 +1413,27 @@ export default function AdminPage() {
                       : "No runs recorded yet."}
                 </p>
               ) : runsDisplayRows!.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No runs in <strong className="text-foreground">{runsDivisionFilter}</strong>.
-                  Clear the division filter above to see all {runs.length} run
-                  {runs.length === 1 ? "" : "s"}.
-                </p>
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <p>
+                    No runs match the active filter{runsHasActiveFilters ? "s" : ""}.
+                    {runsDivisionFilter && runsPartnershipFilter
+                      ? ` Showing runs in ${runsDivisionFilter} for ${runsActivePartnershipLabel}.`
+                      : runsDivisionFilter
+                        ? ` Showing runs in ${runsDivisionFilter} only.`
+                        : runsPartnershipFilter
+                          ? ` Showing runs for ${runsActivePartnershipLabel} only.`
+                          : ""}
+                  </p>
+                  {runsHasActiveFilters && (
+                    <button
+                      type="button"
+                      onClick={clearRunsFilters}
+                      className="text-primary hover:underline text-xs"
+                    >
+                      Clear all filters
+                    </button>
+                  )}
+                </div>
               ) : (
                 <div className={`space-y-2${runsLoading ? " opacity-60" : ""}`}>
                   {runsDisplayRows!.map((row) => {

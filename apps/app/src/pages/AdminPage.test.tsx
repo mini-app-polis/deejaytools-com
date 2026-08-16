@@ -270,4 +270,72 @@ describe("AdminPage", () => {
       );
     });
   });
+
+  it("shows partnership breakdown chips and combined filter empty state", async () => {
+    const mockRuns = [
+      {
+        id: "run-1",
+        completed_at: 3,
+        division_name: "Classic",
+        session_id: "s1",
+        session_floor_trial_starts_at: 1,
+        event_id: "e1",
+        event_name: "Test Event",
+        song_id: "song-1",
+        song_label: "Song A",
+        entity_label: "Alice & Bob",
+        entity_key: "pair:pair-1",
+        completed_by_label: "Admin",
+      },
+      {
+        id: "run-2",
+        completed_at: 2,
+        division_name: "Teams",
+        session_id: "s1",
+        session_floor_trial_starts_at: 1,
+        event_id: "e1",
+        event_name: "Test Event",
+        song_id: "song-2",
+        song_label: "Song B",
+        entity_label: "Alice & Bob",
+        entity_key: "pair:pair-1",
+        completed_by_label: "Admin",
+      },
+      {
+        id: "run-3",
+        completed_at: 1,
+        division_name: "Classic",
+        session_id: "s1",
+        session_floor_trial_starts_at: 1,
+        event_id: "e1",
+        event_name: "Test Event",
+        song_id: "song-3",
+        song_label: "Song C",
+        entity_label: "Carol Solo",
+        entity_key: "solo:user-1",
+        completed_by_label: "Admin",
+      },
+    ];
+    apiGet.mockImplementation((path: string) => {
+      if (path.startsWith("/v1/runs")) return Promise.resolve(mockRuns);
+      return Promise.resolve([]);
+    });
+
+    const user = userEvent.setup();
+    renderPage("/admin/runs");
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /all partnerships \(2\)/i })).toBeInTheDocument()
+    );
+    expect(screen.getByRole("button", { name: /alice & bob \(2\)/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /carol solo \(1\)/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^teams \(1\)$/i }));
+    await user.click(screen.getByRole("button", { name: /carol solo \(1\)/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/no runs match the active filters/i)).toBeInTheDocument()
+    );
+    expect(screen.getAllByRole("button", { name: /clear all filters/i }).length).toBeGreaterThanOrEqual(1);
+  });
 });

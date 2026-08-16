@@ -18,6 +18,18 @@ const listQuery = z.object({
   limit: z.coerce.number().int().min(1).max(500).optional(),
 });
 
+/** Stable grouping key — branch order matches entityLabel (managed → pair → solo). */
+function entityKeyFromRun(r: {
+  entityManagedPartnershipId: string | null;
+  entityPairId: string | null;
+  entitySoloUserId: string | null;
+}): string {
+  if (r.entityManagedPartnershipId) return `managed:${r.entityManagedPartnershipId}`;
+  if (r.entityPairId) return `pair:${r.entityPairId}`;
+  if (r.entitySoloUserId) return `solo:${r.entitySoloUserId}`;
+  return "unknown";
+}
+
 /**
  * GET /v1/runs
  *
@@ -55,6 +67,9 @@ runRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c) => {
       id: runs.id,
       completedAt: runs.completedAt,
       divisionName: runs.divisionName,
+      entityPairId: runs.entityPairId,
+      entitySoloUserId: runs.entitySoloUserId,
+      entityManagedPartnershipId: runs.entityManagedPartnershipId,
       sessionId: runs.sessionId,
       sessionFloorTrialStartsAt: sessions.floorTrialStartsAt,
       eventId: runs.eventId,
@@ -187,6 +202,7 @@ runRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c) => {
           song_id: r.songId,
           song_label: songLabel,
           entity_label: entityLabel,
+          entity_key: entityKeyFromRun(r),
           completed_by_label: completedByLabel,
         };
       })

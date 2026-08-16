@@ -1108,6 +1108,7 @@ const listQuery = z.object({
       "song_id": "song_…",
       "song_label": "Ada Lovelace & Bob Jones · Classic · 2026 · Routine v01",
       "entity_label": "Ada Lovelace & Bob Jones",
+      "entity_key": "pair:pair_…",
       "completed_by_label": "Admin Name"
     }
   ],
@@ -1116,6 +1117,8 @@ const listQuery = z.object({
 ```
 
 Default `limit` 200.
+
+**`entity_key`:** stable grouping id for the run's entity — `managed:{id}`, `pair:{id}`, `solo:{userId}`, or `unknown`. Branch order matches `entity_label` resolution (managed → pair → solo).
 
 **Errors:**
 

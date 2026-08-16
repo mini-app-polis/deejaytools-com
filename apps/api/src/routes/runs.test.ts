@@ -36,6 +36,7 @@ type RunRow = {
   song_id: string;
   song_label: string;
   entity_label: string;
+  entity_key: string;
   completed_by_label: string;
 };
 
@@ -87,6 +88,9 @@ describe("GET /v1/runs", () => {
         pairUserLast: "Smith",
         pairPartnerFirst: "Bob",
         pairPartnerLast: "Jones",
+        entityPairId: "pair-1",
+        entitySoloUserId: null,
+        entityManagedPartnershipId: null,
         soloUserFirst: null,
         soloUserLast: null,
         completedByFirst: "Admin",
@@ -101,6 +105,7 @@ describe("GET /v1/runs", () => {
     const r = body.data[0];
     expect(r.id).toBe("run-1");
     expect(r.entity_label).toBe("Alice Smith & Bob Jones");
+    expect(r.entity_key).toBe("pair:pair-1");
     expect(r.song_label).toBe("Alice Smith & Bob Jones Classic 2026 Sky High v03");
     expect(r.event_name).toBe("GNDC");
     expect(r.completed_by_label).toBe("Admin Person");
@@ -136,6 +141,9 @@ describe("GET /v1/runs", () => {
         pairPartnerFirst: "Team Alpha",
         pairPartnerLast: "",
         pairPartnerKind: "team",
+        entityPairId: "pair-team",
+        entitySoloUserId: null,
+        entityManagedPartnershipId: null,
         soloUserFirst: null,
         soloUserLast: null,
         managedLeaderFirst: null,
@@ -180,6 +188,9 @@ describe("GET /v1/runs", () => {
         pairUserLast: null,
         pairPartnerFirst: null,
         pairPartnerLast: null,
+        entityPairId: null,
+        entitySoloUserId: "user-solo",
+        entityManagedPartnershipId: null,
         soloUserFirst: "Solo",
         soloUserLast: "Dancer",
         managedLeaderFirst: null,
@@ -198,6 +209,7 @@ describe("GET /v1/runs", () => {
     const res = await app.request(ENDPOINT, { headers: adminHeaders() });
     const body = await readJson<SuccessEnvelope<RunRow[]>>(res);
     expect(body.data[0].entity_label).toBe("Solo Dancer");
+    expect(body.data[0].entity_key).toBe("solo:user-solo");
     // No structured fields and no displayName/processedFilename → falls back
     // through to the partnership string (built from the song's owner name).
     expect(body.data[0].song_label).toBe("Solo Dancer");
@@ -229,6 +241,9 @@ describe("GET /v1/runs", () => {
         pairUserLast: null,
         pairPartnerFirst: null,
         pairPartnerLast: null,
+        entityPairId: null,
+        entitySoloUserId: null,
+        entityManagedPartnershipId: null,
         soloUserFirst: null,
         soloUserLast: null,
         completedByFirst: "Admin",
@@ -239,6 +254,7 @@ describe("GET /v1/runs", () => {
     const res = await app.request(ENDPOINT, { headers: adminHeaders() });
     const body = await readJson<SuccessEnvelope<RunRow[]>>(res);
     expect(body.data[0].entity_label).toBe("—");
+    expect(body.data[0].entity_key).toBe("unknown");
     expect(body.data[0].song_label).toBe("[Admin Test Placeholder]");
   });
 
@@ -276,6 +292,9 @@ describe("GET /v1/runs", () => {
         managedLeaderLast: "Smith",
         managedFollowerFirst: "Lara",
         managedFollowerLast: "Jones",
+        entityPairId: null,
+        entitySoloUserId: null,
+        entityManagedPartnershipId: "mp-1",
         completedByFirst: "Admin",
         completedByLast: "Person",
       },
@@ -285,6 +304,7 @@ describe("GET /v1/runs", () => {
     expect(res.status).toBe(200);
     const body = await readJson<SuccessEnvelope<RunRow[]>>(res);
     expect(body.data[0].entity_label).toBe("Wendal Smith & Lara Jones");
+    expect(body.data[0].entity_key).toBe("managed:mp-1");
     expect(body.data[0].song_label).toMatch(/^Wendal Smith & Lara Jones /);
     expect(body.data[0].song_label).not.toMatch(/^Manager User/);
     expect(body.data[0].song_label).toBe("Wendal Smith & Lara Jones Classic 2026 Sky High v03");

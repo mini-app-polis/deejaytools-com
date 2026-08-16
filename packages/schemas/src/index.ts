@@ -231,6 +231,7 @@ export const ApiRunSchema = z.object({
   song_id: z.string(),
   song_label: z.string(),
   entity_label: z.string(),
+  entity_key: z.string(),
   completed_by_label: z.string(),
 });
 export type ApiRun = z.infer<typeof ApiRunSchema>;
