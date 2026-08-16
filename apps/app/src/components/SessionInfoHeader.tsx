@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 
 function derivedStatus(s: ApiSession, now: number): string {
+  if (s.status === "cancelled") return "cancelled";
   if (now < s.checkin_opens_at) return "scheduled";
   if (now <= s.floor_trial_ends_at) return "open";
   return "ended";
@@ -21,6 +22,8 @@ function derivedStatusBadge(status: string) {
       );
     case "ended":
       return <Badge variant="outline">{status}</Badge>;
+    case "cancelled":
+      return <Badge variant="destructive">{status}</Badge>;
     default:
       return <Badge variant="outline">{status}</Badge>;
   }
