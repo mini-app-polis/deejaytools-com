@@ -4,7 +4,8 @@
  *
  * Rationale and ecosystem fit: ecosystem-standards CD-002 / CD-010 Layer 3
  * (unhandled-exception capture). The API uses @sentry/node initialised in
- * apps/api/src/app.ts; the React app uses @sentry/react initialised here.
+ * apps/api/src/instrument.ts, loaded via `node --import` before app.ts;
+ * the React app uses @sentry/react initialised here.
  *
  * No-op when VITE_SENTRY_DSN is unset — local development does not send
  * events. The `enabled` flag mirrors the API-side pattern.

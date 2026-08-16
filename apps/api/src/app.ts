@@ -50,7 +50,7 @@ app.use(
 );
 app.use("*", honoLogger());
 
-// Global request body cap — 11 MB covers the maximum song-chunk upload (10 MB
+// Global request body cap — 11 MB covers the maximum song-chunk upload (5 MB
 // of binary data + multipart envelope overhead) while rejecting truly oversized
 // requests before any handler allocates memory for them.
 app.use(
