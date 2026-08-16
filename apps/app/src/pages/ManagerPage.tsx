@@ -27,7 +27,7 @@ import { cn } from "@/lib/utils";
 
 const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
 
-export const MANAGER_SECTIONS = ["guide", "active-sessions", "event-songs", "upload-for", "checkin-for"] as const;
+export const MANAGER_SECTIONS = ["active-sessions", "event-songs", "upload-for", "checkin-for", "guide"] as const;
 export type ManagerSection = (typeof MANAGER_SECTIONS)[number];
 const DEFAULT_MANAGER_SECTION: ManagerSection = "active-sessions";
 

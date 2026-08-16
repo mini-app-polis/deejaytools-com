@@ -133,7 +133,7 @@ The frontend pages map to these routes:
 | `/admin` | Redirects to `/admin/events` | AdminGuard |
 | `/admin/:section` | Admin dashboard (events, sessions, songs, users, test checkin, …) | AdminGuard |
 | `/manager` | Redirects to `/manager/active-sessions` | ManagerGuard |
-| `/manager/:section` | Manager tools (guide, active sessions, event songs, upload-for, checkin-for) | ManagerGuard |
+| `/manager/:section` | Manager tools (active sessions, event songs, upload-for, checkin-for, guide) | ManagerGuard |
 
 There is no top-level `/partners` route — partner records are managed on My Profile (`/my-profile`). Help content about partners lives at `/how-it-works/partners`. `/songs`, `/sessions`, `/events`, and `/events/:id` are reachable but absent from all navigation (legacy/deep links).
 

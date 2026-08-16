@@ -12,7 +12,6 @@ type NavItem = { to: string; label: string };
 
 const PUBLIC_ITEMS: NavItem[] = [
   { to: "/floor-trials", label: "Floor Trials" },
-  { to: "/how-it-works", label: "Help" },
 ];
 
 const SIGNED_IN_ITEMS: NavItem[] = [
@@ -32,11 +31,11 @@ const SUPERUSER_ITEMS: NavItem[] = [
 
 // Manager sections. Visible to managers and admins.
 const MANAGER_ITEMS: NavItem[] = [
-  { to: "/manager/guide", label: "Guide" },
   { to: "/manager/active-sessions", label: "Active Sessions" },
   { to: "/manager/event-songs", label: "Event Songs" },
   { to: "/manager/upload-for", label: "Upload For" },
   { to: "/manager/checkin-for", label: "CheckIn For" },
+  { to: "/manager/guide", label: "Guide" },
 ];
 
 export default function NavBar() {
@@ -117,6 +116,9 @@ export default function NavBar() {
 
         <div className="flex items-center gap-3">
           <div className="hidden sm:flex items-center gap-1">
+            <NavLink to="/how-it-works" className={desktopLinkClass}>
+              Help
+            </NavLink>
             <NavLink to="/feedback" className={desktopLinkClass}>
               Contact
             </NavLink>
@@ -201,6 +203,9 @@ export default function NavBar() {
                 </NavLink>
               ))}
             </SignedIn>
+            <NavLink to="/how-it-works" onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
+              Help
+            </NavLink>
             <NavLink to="/feedback" onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
               Contact
             </NavLink>

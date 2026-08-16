@@ -233,11 +233,11 @@ export const ADMIN_SECTIONS = [
 
 ```ts
 export const MANAGER_SECTIONS = [
-  "guide", "active-sessions", "event-songs", "upload-for", "checkin-for",
+  "active-sessions", "event-songs", "upload-for", "checkin-for", "guide",
 ] as const;
 ```
 
-`guide` renders `ManagerGuideSection` (floor-trial ops reference). NavBar lists **Guide** first in `MANAGER_ITEMS` (`/manager/guide`); the bare `/manager` redirect still lands on `active-sessions`.
+`guide` renders `ManagerGuideSection` (floor-trial ops reference). NavBar lists **Guide** last in `MANAGER_ITEMS` (`/manager/guide`); the bare `/manager` redirect still lands on `active-sessions`.
 
 Each page reads `:section` from `useParams`, validates against its `*_SECTIONS` array, and falls back to a default (`events` / `active-sessions`) when the slug is missing or unknown — so `/admin/foo` shows the default section instead of a blank screen.
 
