@@ -232,8 +232,8 @@ export default function ManagerGuideSection() {
       <Section title="Admin screens">
         <ul>
           <li>
-            <Link to="/admin/runs">Run History</Link> — Every completed run: partnership, division,
-            song, session, timestamp. <strong>by &lt;name&gt;</strong> is whoever pressed Run
+            <Link to="/admin/runs">Run History</Link> — Completed runs filterable by event and
+            session, grouped by division. <strong>by &lt;name&gt;</strong> is whoever pressed Run
             complete, not necessarily the dancer.
           </li>
           <li>

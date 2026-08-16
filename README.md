@@ -131,7 +131,7 @@ The frontend pages map to these routes:
 | `/events` | Event list | RequireAuth |
 | `/events/:id` | Event detail | RequireAuth |
 | `/admin` | Redirects to `/admin/events` | AdminGuard |
-| `/admin/:section` | Admin dashboard (events, sessions, songs, users, test checkin, …) | AdminGuard |
+| `/admin/:section` | Admin dashboard (events, sessions, run history, songs, users, test checkin, …) | AdminGuard |
 | `/manager` | Redirects to `/manager/active-sessions` | ManagerGuard |
 | `/manager/:section` | Manager tools (active sessions, event songs, upload-for, checkin-for, guide) | ManagerGuard |
 

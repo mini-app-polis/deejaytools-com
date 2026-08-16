@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -244,9 +246,23 @@ export default function AdminPage() {
   const [showSessionsCancelled, setShowSessionsCancelled] = useState(false);
 
   // ── Run history tab ─────────────────────────────────────────────────────────
+  const RUNS_FETCH_LIMIT = 500;
+  const [runsEventId, setRunsEventId] = useState("");
+  const [runsShowPast, setRunsShowPast] = useState(false);
   const [runsSessionFilter, setRunsSessionFilter] = useState("");
   const [runs, setRuns] = useState<ApiRun[] | null>(null);
   const [runsLoading, setRunsLoading] = useState(false);
+  const [runsHitLimit, setRunsHitLimit] = useState(false);
+  const [runsDivisionFilter, setRunsDivisionFilter] = useState<string | null>(null);
+  const [runsCollapsedDivisions, setRunsCollapsedDivisions] = useState<Set<string>>(new Set());
+
+  const toggleRunsDivision = (division: string) =>
+    setRunsCollapsedDivisions((prev) => {
+      const next = new Set(prev);
+      if (next.has(division)) next.delete(division);
+      else next.add(division);
+      return next;
+    });
 
   // ── Users tab ───────────────────────────────────────────────────────────────
   // `usersQuery` updates on every keystroke; `usersDebouncedQuery` is what
@@ -303,14 +319,20 @@ export default function AdminPage() {
   }, [api]);
 
   const loadRuns = useCallback(
-    async (sessionId: string) => {
+    async ({ eventId, sessionId }: { eventId: string; sessionId: string }) => {
       setRunsLoading(true);
       try {
-        const path = sessionId
-          ? `/v1/runs?session_id=${encodeURIComponent(sessionId)}`
-          : "/v1/runs";
-        const data = await api.get<ApiRun[]>(path);
+        const params = new URLSearchParams();
+        params.set("limit", String(RUNS_FETCH_LIMIT));
+        if (sessionId) {
+          params.set("session_id", sessionId);
+        } else if (eventId) {
+          params.set("event_id", eventId);
+        }
+        const data = await api.get<ApiRun[]>(`/v1/runs?${params.toString()}`);
         setRuns(data);
+        setRunsHitLimit(data.length === RUNS_FETCH_LIMIT);
+        setRunsDivisionFilter(null);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to load run history");
       } finally {
@@ -375,10 +397,64 @@ export default function AdminPage() {
     void loadTestCheckins().catch(() => {});
   }, [loadEvents, loadSessions, loadUsers, loadAdminSongs, loadTestCheckins]);
 
-  // Refetch run history whenever the session filter changes.
+  // Refetch run history whenever the event or session filter changes.
   useEffect(() => {
-    void loadRuns(runsSessionFilter).catch(() => {});
-  }, [runsSessionFilter, loadRuns]);
+    void loadRuns({ eventId: runsEventId, sessionId: runsSessionFilter }).catch(() => {});
+  }, [runsEventId, runsSessionFilter, loadRuns]);
+
+  const runsVisibleEvents = useMemo(
+    () =>
+      (events ?? [])
+        .filter(
+          (ev) => runsShowPast || (ev.status !== "completed" && ev.status !== "cancelled")
+        )
+        .slice()
+        .sort((a, b) => a.start_date.localeCompare(b.start_date)),
+    [events, runsShowPast]
+  );
+
+  const runsFilteredSessions = useMemo(() => {
+    const list = sessions ?? [];
+    if (!runsEventId) return list;
+    return list.filter((s) => s.event_id === runsEventId);
+  }, [sessions, runsEventId]);
+
+  const runsDivisionSummary = useMemo(() => {
+    if (!runs?.length) return [];
+    const map = new Map<string, number>();
+    for (const row of runs) {
+      const key = row.division_name?.trim() || "Unspecified";
+      map.set(key, (map.get(key) ?? 0) + 1);
+    }
+    return [...map.entries()]
+      .map(([division, count]) => ({ division, count }))
+      .sort((a, b) => b.count - a.count || a.division.localeCompare(b.division));
+  }, [runs]);
+
+  const runsDisplayRows = useMemo(() => {
+    if (!runs) return null;
+    if (!runsDivisionFilter) return runs;
+    return runs.filter(
+      (row) => (row.division_name?.trim() || "Unspecified") === runsDivisionFilter
+    );
+  }, [runs, runsDivisionFilter]);
+
+  const runsByDivision = useMemo(() => {
+    const rows = runsDisplayRows ?? [];
+    const map = new Map<string, ApiRun[]>();
+    for (const row of rows) {
+      const key = row.division_name?.trim() || "Unspecified";
+      const list = map.get(key) ?? [];
+      list.push(row);
+      map.set(key, list);
+    }
+    const keys = [...map.keys()].sort((a, b) => {
+      if (a === "Unspecified") return 1;
+      if (b === "Unspecified") return -1;
+      return a.localeCompare(b);
+    });
+    return keys.map((division) => ({ division, rows: map.get(division)! }));
+  }, [runsDisplayRows]);
 
   // Debounce keystrokes in the Users tab search box → only the trailing value
   // wins, so typing "alic" hits the API once with q=alic instead of four
@@ -1051,89 +1127,260 @@ export default function AdminPage() {
 
         {/* ── Run History tab ── */}
         <TabsContent value="runs" className="mt-4 space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-            <div className="w-full sm:w-72">
-              <select
-                className={FIELD_INPUT_CLASS}
-                value={runsSessionFilter}
-                onChange={(e) => setRunsSessionFilter(e.target.value)}
-              >
-                <option value="">All sessions</option>
-                {sessions
-                  ?.slice()
-                  .sort(compareSessionChrono)
-                  .map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {formatSessionTitle(s, s.event_timezone)}
-                    </option>
-                  ))}
-              </select>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void loadRuns(runsSessionFilter)}
-              disabled={runsLoading}
-            >
-              {runsLoading ? "Refreshing…" : "Refresh"}
-            </Button>
-            <span className="text-xs text-muted-foreground">
-              {runs === null ? "" : `${runs.length} run${runs.length === 1 ? "" : "s"}`}
-            </span>
-          </div>
-
-          {runs === null ? (
-            <Skeleton className="h-32 w-full" />
-          ) : runs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No runs recorded yet.</p>
-          ) : (
-            <div className={`space-y-2${runsLoading ? " opacity-60" : ""}`}>
-              {runs.map((row) => {
-                const sessionRow = sessions?.find((s) => s.id === row.session_id);
-                const runEventTz = row.event_id
-                  ? (events?.find((e) => e.id === row.event_id)?.timezone ?? null)
-                  : null;
-                const sessionLabel = sessionRow
-                  ? formatSessionTitle(sessionRow, sessionRow.event_timezone)
-                  : row.session_floor_trial_starts_at
-                  ? formatSessionTitle(
-                      { floor_trial_starts_at: row.session_floor_trial_starts_at },
-                      runEventTz
-                    )
-                  : "Unknown session";
-                return (
-                  <div
-                    key={row.id}
-                    className="rounded-lg border px-3 py-3 text-sm space-y-1"
-                  >
-                    <div className="flex items-start justify-between gap-2 flex-wrap">
-                      <div className="min-w-0 space-y-0.5">
-                        <p className="font-medium">
-                          {row.entity_label}
-                          <span className="text-muted-foreground"> · {row.division_name}</span>
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {row.song_label}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {sessionLabel}
-                          {row.event_name ? ` · ${row.event_name}` : ""}
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-xs text-muted-foreground">
-                          {formatTime(row.completed_at)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          by {row.completed_by_label}
-                        </p>
-                      </div>
-                    </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Run History</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <Label>Event</Label>
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={runsShowPast}
+                      onChange={(e) => {
+                        const next = e.target.checked;
+                        setRunsShowPast(next);
+                        if (!next) {
+                          const sel = events?.find((ev) => ev.id === runsEventId);
+                          if (sel && (sel.status === "completed" || sel.status === "cancelled")) {
+                            setRunsEventId("");
+                            setRunsSessionFilter("");
+                          }
+                        }
+                      }}
+                    />
+                    Show past events
+                  </label>
+                </div>
+                {loadingEvents ? (
+                  <Skeleton className="h-24 w-full" />
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRunsEventId("");
+                        setRunsSessionFilter("");
+                      }}
+                      className={cn(
+                        "w-full h-full rounded-lg border px-4 py-2 text-left transition-colors",
+                        runsEventId === ""
+                          ? "border-primary bg-primary/5 ring-1 ring-primary"
+                          : "hover:bg-muted/50"
+                      )}
+                    >
+                      <p className="font-medium text-sm">All events</p>
+                    </button>
+                    {runsVisibleEvents.map((ev) => {
+                      const active = ev.id === runsEventId;
+                      return (
+                        <button
+                          key={ev.id}
+                          type="button"
+                          onClick={() => {
+                            setRunsEventId(active ? "" : ev.id);
+                            setRunsSessionFilter("");
+                          }}
+                          className={cn(
+                            "w-full h-full rounded-lg border px-4 py-2 text-left transition-colors",
+                            active
+                              ? "border-primary bg-primary/5 ring-1 ring-primary"
+                              : "hover:bg-muted/50"
+                          )}
+                        >
+                          <p className="font-medium text-sm line-clamp-2">{ev.name}</p>
+                          <p className="text-xs text-muted-foreground">{ev.start_date}</p>
+                        </button>
+                      );
+                    })}
                   </div>
-                );
-              })}
-            </div>
-          )}
+                )}
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center flex-wrap">
+                <div className="w-full sm:w-72 space-y-1">
+                  <Label htmlFor="runs-session-filter">Session</Label>
+                  <select
+                    id="runs-session-filter"
+                    className={FIELD_INPUT_CLASS}
+                    value={runsSessionFilter}
+                    onChange={(e) => setRunsSessionFilter(e.target.value)}
+                  >
+                    <option value="">All sessions</option>
+                    {runsFilteredSessions
+                      .slice()
+                      .sort(compareSessionChrono)
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {formatSessionTitle(s, s.event_timezone)}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="sm:mt-6"
+                  onClick={() =>
+                    void loadRuns({ eventId: runsEventId, sessionId: runsSessionFilter })
+                  }
+                  disabled={runsLoading}
+                >
+                  {runsLoading ? "Refreshing…" : "Refresh"}
+                </Button>
+                <span className="text-xs text-muted-foreground sm:mt-6">
+                  {runs === null ? "" : `${runs.length} run${runs.length === 1 ? "" : "s"}`}
+                </span>
+              </div>
+
+              {runsHitLimit && (
+                <p className="text-sm text-amber-600 dark:text-amber-400">
+                  Showing the first {RUNS_FETCH_LIMIT} runs only — narrow by event or session to
+                  see more.
+                </p>
+              )}
+
+              {runs && runs.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRunsDivisionFilter(null)}
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-xs transition-colors",
+                      runsDivisionFilter === null
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border text-muted-foreground hover:bg-muted/50"
+                    )}
+                  >
+                    All divisions ({runs.length})
+                  </button>
+                  {runsDivisionSummary.map(({ division, count }) => (
+                    <button
+                      key={division}
+                      type="button"
+                      onClick={() =>
+                        setRunsDivisionFilter((prev) => (prev === division ? null : division))
+                      }
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs transition-colors",
+                        runsDivisionFilter === division
+                          ? "border-primary bg-primary/10 text-foreground"
+                          : "border-border text-muted-foreground hover:bg-muted/50"
+                      )}
+                    >
+                      {division} ({count})
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {runs === null ? (
+                <Skeleton className="h-32 w-full" />
+              ) : runs.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {runsSessionFilter
+                    ? `No runs recorded for ${
+                        (() => {
+                          const session = sessions?.find((s) => s.id === runsSessionFilter);
+                          return session
+                            ? formatSessionTitle(session, session.event_timezone)
+                            : "this session";
+                        })()
+                      } yet.`
+                    : runsEventId
+                      ? `No runs recorded for ${
+                          events?.find((ev) => ev.id === runsEventId)?.name ?? "this event"
+                        } yet.`
+                      : "No runs recorded yet."}
+                </p>
+              ) : runsDisplayRows!.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No runs in <strong className="text-foreground">{runsDivisionFilter}</strong>.
+                  Clear the division filter above to see all {runs.length} run
+                  {runs.length === 1 ? "" : "s"}.
+                </p>
+              ) : (
+                <div className={`space-y-6${runsLoading ? " opacity-60" : ""}`}>
+                  {runsByDivision.map(({ division, rows }) => {
+                    const collapsed = runsCollapsedDivisions.has(division);
+                    return (
+                      <section key={division} className="space-y-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleRunsDivision(division)}
+                          aria-expanded={!collapsed}
+                          className="flex w-full items-center gap-2 text-left"
+                        >
+                          <span
+                            className={cn(
+                              "text-[10px] text-muted-foreground transition-transform",
+                              collapsed ? "" : "rotate-90"
+                            )}
+                          >
+                            ▶
+                          </span>
+                          <span className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
+                            {division}
+                          </span>
+                          <span className="text-xs font-normal text-muted-foreground/70">
+                            {rows.length}
+                          </span>
+                        </button>
+                        {!collapsed && (
+                          <div className="space-y-2">
+                            {rows.map((row) => {
+                              const sessionRow = sessions?.find((s) => s.id === row.session_id);
+                              const runEventTz = row.event_id
+                                ? (events?.find((e) => e.id === row.event_id)?.timezone ?? null)
+                                : null;
+                              const sessionLabel = sessionRow
+                                ? formatSessionTitle(sessionRow, sessionRow.event_timezone)
+                                : row.session_floor_trial_starts_at
+                                  ? formatSessionTitle(
+                                      { floor_trial_starts_at: row.session_floor_trial_starts_at },
+                                      runEventTz
+                                    )
+                                  : "Unknown session";
+                              return (
+                                <div
+                                  key={row.id}
+                                  className="rounded-lg border px-3 py-3 text-sm space-y-1"
+                                >
+                                  <div className="flex items-start justify-between gap-2 flex-wrap">
+                                    <div className="min-w-0 space-y-0.5">
+                                      <p className="font-medium">{row.entity_label}</p>
+                                      <p className="text-xs text-muted-foreground truncate">
+                                        {row.song_label}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {sessionLabel}
+                                        {row.event_name ? ` · ${row.event_name}` : ""}
+                                      </p>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                      <p className="text-xs text-muted-foreground">
+                                        {formatTime(row.completed_at)}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">
+                                        by {row.completed_by_label}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </section>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* ── Songs tab ── */}

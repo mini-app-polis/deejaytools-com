@@ -253,4 +253,19 @@ describe("AdminPage", () => {
       expect(toast.error).toHaveBeenCalledWith("Select an event");
     });
   });
+
+  it("renders Run History with All events selected and fetches with limit=500", async () => {
+    apiGet.mockResolvedValue([]);
+    renderPage("/admin/runs");
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /^all events$/i })).toBeInTheDocument()
+    );
+
+    await waitFor(() => {
+      expect(apiGet).toHaveBeenCalledWith(
+        expect.stringMatching(/\/v1\/runs\?limit=500$/)
+      );
+    });
+  });
 });
