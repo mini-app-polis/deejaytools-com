@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "../db/index.js";
 import {
   checkins,
+  managedPartnerships,
   pairs,
   partners,
   queueEntries,
@@ -15,16 +16,13 @@ import {
   songs,
   users,
 } from "../db/schema.js";
+import { partnershipDisplay } from "../lib/entityLabel.js";
 import { zValidator } from "../lib/validate.js";
 import { canPromotePriority } from "../lib/queue/admission.js";
 import { compactAfterRemoval, nextBottomPosition } from "../lib/queue/compaction.js";
+import { fillActiveQueue, lockSessionForFill } from "../lib/queue/fill.js";
 import { requireAdmin } from "../middleware/auth.js";
-import { responseCache, CACHE_TTL } from "../lib/cache.js";
-
-/** Invalidate all cached queue views for a session after any mutation. */
-function invalidateQueueCache(sessionId: string): void {
-  responseCache.invalidatePrefix(`queue:${sessionId}:`);
-}
+import { responseCache, CACHE_TTL, invalidateQueueCache } from "../lib/cache.js";
 
 const logger = createLogger("deejaytools-api");
 
@@ -97,6 +95,7 @@ queueRoutes.post("/promote", requireAdmin, zValidator("json", promoteBody), asyn
       sessionId: queueEntries.sessionId,
       entityPairId: queueEntries.entityPairId,
       entitySoloUserId: queueEntries.entitySoloUserId,
+      entityManagedPartnershipId: queueEntries.entityManagedPartnershipId,
       queueType: queueEntries.queueType,
       position: queueEntries.position,
     })
@@ -169,6 +168,7 @@ queueRoutes.post("/promote", requireAdmin, zValidator("json", promoteBody), asyn
         sessionId: entry.sessionId,
         entityPairId: entry.entityPairId,
         entitySoloUserId: entry.entitySoloUserId,
+        entityManagedPartnershipId: entry.entityManagedPartnershipId,
         queueType: "active",
         position: newPosition,
         enteredQueueAt: now,
@@ -249,6 +249,7 @@ async function loadActiveEntry(queueEntryId: string) {
       sessionId: queueEntries.sessionId,
       entityPairId: queueEntries.entityPairId,
       entitySoloUserId: queueEntries.entitySoloUserId,
+      entityManagedPartnershipId: queueEntries.entityManagedPartnershipId,
       position: queueEntries.position,
     })
     .from(queueEntries)
@@ -289,6 +290,7 @@ queueRoutes.post("/complete", requireAdmin, zValidator("json", entryActionBody),
 
   try {
     await db.transaction(async (tx) => {
+      const lockedSession = await lockSessionForFill(tx, sessionId);
       await tx.delete(queueEntries).where(eq(queueEntries.id, entry.id));
       await compactAfterRemoval(tx, sessionId, "active", entry.position);
 
@@ -300,6 +302,7 @@ queueRoutes.post("/complete", requireAdmin, zValidator("json", entryActionBody),
         divisionName: checkin.divisionName,
         entityPairId: entry.entityPairId,
         entitySoloUserId: entry.entitySoloUserId,
+        entityManagedPartnershipId: entry.entityManagedPartnershipId,
         songId: checkin.songId,
         completedAt: now,
         completedByUserId: adminId,
@@ -318,6 +321,8 @@ queueRoutes.post("/complete", requireAdmin, zValidator("json", entryActionBody),
         reason: reason ?? null,
         createdAt: now,
       });
+
+      if (lockedSession) await fillActiveQueue(tx, lockedSession, adminId, now);
     });
   } catch (err) {
     logger.error({
@@ -346,6 +351,7 @@ queueRoutes.post("/incomplete", requireAdmin, zValidator("json", entryActionBody
 
   try {
     await db.transaction(async (tx) => {
+      const lockedSession = await lockSessionForFill(tx, sessionId);
       const rows = await tx
         .select({ id: queueEntries.id, position: queueEntries.position })
         .from(queueEntries)
@@ -401,6 +407,8 @@ queueRoutes.post("/incomplete", requireAdmin, zValidator("json", entryActionBody
         reason: reason ?? null,
         createdAt: now,
       });
+
+      if (lockedSession) await fillActiveQueue(tx, lockedSession, adminId, now);
     });
   } catch (e) {
     if (e instanceof Error && e.message === "entry_missing") {
@@ -506,6 +514,7 @@ queueRoutes.post("/withdraw", requireAdmin, zValidator("json", withdrawBody), as
 
   try {
     await db.transaction(async (tx) => {
+      const lockedSession = await lockSessionForFill(tx, entry.sessionId);
       await tx.delete(queueEntries).where(eq(queueEntries.id, entry.id));
       await compactAfterRemoval(tx, entry.sessionId, entry.queueType, entry.position);
 
@@ -522,6 +531,8 @@ queueRoutes.post("/withdraw", requireAdmin, zValidator("json", withdrawBody), as
         reason: reason ?? null,
         createdAt: now,
       });
+
+      if (lockedSession) await fillActiveQueue(tx, lockedSession, adminId, now);
     });
   } catch (err) {
     logger.error({
@@ -580,6 +591,7 @@ async function listQueue(sessionId: string, queueType: "priority" | "non_priorit
       enteredQueueAt: queueEntries.enteredQueueAt,
       entityPairId: queueEntries.entityPairId,
       entitySoloUserId: queueEntries.entitySoloUserId,
+      entityManagedPartnershipId: queueEntries.entityManagedPartnershipId,
       divisionName: checkins.divisionName,
       songId: checkins.songId,
       notes: checkins.notes,
@@ -589,8 +601,13 @@ async function listQueue(sessionId: string, queueType: "priority" | "non_priorit
       pairUserLast: pairUser.lastName,
       pairPartnerFirst: partners.firstName,
       pairPartnerLast: partners.lastName,
+      pairPartnerKind: partners.kind,
       soloUserFirst: soloUser.firstName,
       soloUserLast: soloUser.lastName,
+      managedLeaderFirst: managedPartnerships.leaderFirstName,
+      managedLeaderLast: managedPartnerships.leaderLastName,
+      managedFollowerFirst: managedPartnerships.followerFirstName,
+      managedFollowerLast: managedPartnerships.followerLastName,
       songDisplayName: songs.displayName,
       songProcessedFilename: songs.processedFilename,
     })
@@ -600,16 +617,31 @@ async function listQueue(sessionId: string, queueType: "priority" | "non_priorit
     .leftJoin(pairUser, eq(pairUser.id, pairs.userAId))
     .leftJoin(partners, eq(partners.id, pairs.partnerBId))
     .leftJoin(soloUser, eq(soloUser.id, queueEntries.entitySoloUserId))
+    .leftJoin(
+      managedPartnerships,
+      eq(managedPartnerships.id, queueEntries.entityManagedPartnershipId)
+    )
     .leftJoin(songs, eq(songs.id, checkins.songId))
     .where(and(eq(queueEntries.sessionId, sessionId), eq(queueEntries.queueType, queueType)))
     .orderBy(asc(queueEntries.position));
 
   return rows.map((r) => {
     let entityLabel: string;
-    if (r.entityPairId && (r.pairUserFirst || r.pairUserLast)) {
+    if (r.entityManagedPartnershipId && r.managedLeaderFirst != null) {
+      const leader = [r.managedLeaderFirst, r.managedLeaderLast].filter(Boolean).join(" ").trim();
+      const follower = [r.managedFollowerFirst, r.managedFollowerLast]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      entityLabel = follower ? `${leader} & ${follower}` : leader;
+    } else if (r.entityPairId && (r.pairUserFirst || r.pairUserLast)) {
       const a = [r.pairUserFirst, r.pairUserLast].filter(Boolean).join(" ").trim();
       const b = [r.pairPartnerFirst, r.pairPartnerLast].filter(Boolean).join(" ").trim();
-      entityLabel = b ? `${a} & ${b}` : a;
+      entityLabel = partnershipDisplay({
+        ownerName: a,
+        partnerName: b,
+        partnerKind: r.pairPartnerKind,
+      });
     } else if (r.entitySoloUserId && (r.soloUserFirst || r.soloUserLast)) {
       entityLabel = [r.soloUserFirst, r.soloUserLast].filter(Boolean).join(" ").trim();
     } else {
@@ -622,6 +654,7 @@ async function listQueue(sessionId: string, queueType: "priority" | "non_priorit
       enteredQueueAt: r.enteredQueueAt,
       entityPairId: r.entityPairId,
       entitySoloUserId: r.entitySoloUserId,
+      entityManagedPartnershipId: r.entityManagedPartnershipId,
       entityLabel,
       divisionName: r.divisionName,
       songId: r.songId,

@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { songPartnershipLabel } from "@/lib/entityLabel";
 
 export default function SongsPage() {
   const api = useApiClient();
@@ -99,12 +100,16 @@ export default function SongsPage() {
 
       <div className={`space-y-3${loading ? " opacity-60" : ""}`}>
         {songs.length === 0 && (
-          <p className="text-sm text-muted-foreground py-4 text-center">No songs yet.</p>
+          <p className="text-sm text-muted-foreground py-4 text-center">
+            No songs yet.{" "}
+            <Link to="/songs/add" className="underline">
+              Add a song
+            </Link>
+            .
+          </p>
         )}
         {songs.map((s) => {
-          const partnerName = !s.partner_id
-            ? null
-            : [s.partner_first_name, s.partner_last_name].filter(Boolean).join(" ").trim() || null;
+          const partnerName = songPartnershipLabel(s);
           return (
             <div key={s.id} className="rounded-lg border-2 border-primary/40 bg-card p-4 space-y-2 shadow-sm">
               <div className="flex items-start justify-between gap-2">
@@ -124,7 +129,9 @@ export default function SongsPage() {
                 )}
                 {partnerName && (
                   <span>
-                    <span className="text-muted-foreground text-xs">Partner </span>
+                    <span className="text-muted-foreground text-xs">
+                      {s.partner_kind && s.partner_kind !== "partner" ? "Entity " : "Partner "}
+                    </span>
                     {partnerName}
                   </span>
                 )}

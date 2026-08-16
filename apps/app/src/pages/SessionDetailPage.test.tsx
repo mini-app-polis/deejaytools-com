@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
@@ -77,13 +77,14 @@ function makeSession(opts: {
   };
 }
 
-/** Stub the four GET calls SessionDetailPage makes. */
+/** Stub the GET calls SessionDetailPage makes. */
 function stubGets(opts: {
   session: ReturnType<typeof makeSession>;
   active?: unknown[];
   waiting?: unknown[];
   pairs?: unknown[];
   songs?: unknown[];
+  eventSubmissions?: unknown[] | "reject";
 }) {
   apiGet.mockImplementation((path: string) => {
     if (path.startsWith("/v1/sessions/")) return Promise.resolve(opts.session);
@@ -91,8 +92,60 @@ function stubGets(opts: {
     if (path.includes("/waiting")) return Promise.resolve(opts.waiting ?? []);
     if (path === "/v1/partners/leading-pairs") return Promise.resolve(opts.pairs ?? []);
     if (path === "/v1/songs") return Promise.resolve(opts.songs ?? []);
+    if (path.startsWith("/v1/event-song-submissions")) {
+      if (opts.eventSubmissions === "reject") {
+        return Promise.reject(new Error("event submissions unavailable"));
+      }
+      return Promise.resolve(opts.eventSubmissions ?? []);
+    }
     return Promise.resolve([]);
   });
+}
+
+function openCheckinWindowSession(eventName = "GNDC") {
+  const nowMs = Date.now();
+  return makeSession({
+    eventName,
+    checkinOpensAt: new Date(nowMs - 60 * 60 * 1000).toISOString(),
+    floorTrialStartsAt: new Date(nowMs).toISOString(),
+    floorTrialEndsAt: new Date(nowMs + 4 * 60 * 60 * 1000).toISOString(),
+    divisions: [{ division_name: "Classic", is_priority: true }],
+  });
+}
+
+const sampleSongs = [
+  {
+    id: "song1",
+    processed_filename: "Song One",
+    division: "Classic",
+    partner_id: null,
+  },
+  {
+    id: "song2",
+    processed_filename: "Song Two",
+    division: "Classic",
+    partner_id: null,
+  },
+  {
+    id: "song3",
+    processed_filename: "Song Three",
+    division: "Classic",
+    partner_id: null,
+  },
+];
+
+function makeSubmission(songId: string) {
+  return {
+    id: `sub_${songId}`,
+    event_id: "event-1",
+    event_name: "GNDC",
+    event_start_date: "2026-05-22",
+    event_status: "upcoming",
+    song_id: songId,
+    song_label: songId,
+    division: "Classic",
+    created_at: 1,
+  };
 }
 
 function renderAt(id = "s1") {
@@ -433,5 +486,87 @@ describe("SessionDetailPage — queue rendering", () => {
     });
     expect(screen.getByText(/priority queue is empty/i)).toBeInTheDocument();
     expect(screen.getByText(/standard queue is empty/i)).toBeInTheDocument();
+  });
+});
+
+describe("SessionDetailPage — check-in song selector", () => {
+  it("shows only songs submitted to the session event", async () => {
+    signedIn = true;
+    stubGets({
+      session: openCheckinWindowSession(),
+      songs: sampleSongs,
+      eventSubmissions: [makeSubmission("song1"), makeSubmission("song2")],
+    });
+    renderAt();
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: /^check in$/i }).length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getAllByRole("button", { name: /^check in$/i })[0]!);
+
+    await waitFor(() => {
+      expect(screen.getByRole("radiogroup", { name: /^song$/i })).toBeInTheDocument();
+    });
+
+    const songGroup = screen.getByRole("radiogroup", { name: /^song$/i });
+    const labels = within(songGroup)
+      .getAllByRole("radio")
+      .map((radio) => radio.textContent);
+
+    expect(labels).toContain("Song One");
+    expect(labels).toContain("Song Two");
+    expect(labels).not.toContain("Song Three");
+  });
+
+  it("falls back to all songs when event submissions cannot be loaded", async () => {
+    signedIn = true;
+    stubGets({
+      session: openCheckinWindowSession(),
+      songs: sampleSongs,
+      eventSubmissions: "reject",
+    });
+    renderAt();
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: /^check in$/i }).length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getAllByRole("button", { name: /^check in$/i })[0]!);
+
+    await waitFor(() => {
+      expect(screen.getByRole("radiogroup", { name: /^song$/i })).toBeInTheDocument();
+    });
+
+    const songGroup = screen.getByRole("radiogroup", { name: /^song$/i });
+    const labels = within(songGroup)
+      .getAllByRole("radio")
+      .map((radio) => radio.textContent);
+
+    expect(labels).toContain("Song One");
+    expect(labels).toContain("Song Two");
+    expect(labels).toContain("Song Three");
+  });
+
+  it("shows an add-to-event message when no songs are submitted", async () => {
+    signedIn = true;
+    stubGets({
+      session: openCheckinWindowSession(),
+      songs: sampleSongs,
+      eventSubmissions: [],
+    });
+    renderAt();
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByText(/you haven't added any songs to this event yet/i).length
+      ).toBeGreaterThan(0);
+    });
+
+    expect(screen.getAllByRole("link", { name: /submit songs to this event/i }).length).toBeGreaterThan(
+      0
+    );
+    expect(screen.queryByRole("radiogroup", { name: /^song$/i })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^check in$/i })[0]).toBeDisabled();
   });
 });

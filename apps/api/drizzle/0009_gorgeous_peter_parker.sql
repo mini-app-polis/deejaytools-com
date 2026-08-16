@@ -1,0 +1,1 @@
+ALTER TABLE "managed_partnerships" ADD COLUMN "deleted_at" bigint;

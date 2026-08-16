@@ -57,7 +57,7 @@ describe("AddSongPage — mode toggle", () => {
     getTokenMock.mockResolvedValue("fake-token");
   });
 
-  it("shows the Upload new audio panel by default", async () => {
+  it("shows the Upload for myself panel by default", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/partners") return Promise.resolve([]);
       if (path === "/v1/auth/me") return Promise.resolve({ id: "u1", first_name: "U", last_name: "1" });
@@ -70,14 +70,45 @@ describe("AddSongPage — mode toggle", () => {
       expect(screen.getByRole("heading", { name: /add song/i })).toBeInTheDocument()
     );
 
-    // Upload toggle should be present and the upload card visible
-    expect(screen.getByRole("button", { name: /upload new audio/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /claim from history/i })).toBeInTheDocument();
-    expect(screen.getByLabelText(/audio file/i)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByLabelText(/audio file/i)).toBeInTheDocument()
+    );
+
+    expect(screen.getByRole("button", { name: /upload for myself/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /upload for a managed partnership/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /teams, cabaret, other/i })).toBeInTheDocument();
+  });
+
+  it("shows the special upload form when Teams, Cabaret, Other is selected", async () => {
+    const user = userEvent.setup();
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/partners") return Promise.resolve([]);
+      if (path === "/v1/auth/me") return Promise.resolve({ id: "u1", first_name: "U", last_name: "1" });
+      if (path === "/v1/teams") return Promise.resolve([{ id: "team-1", identifier: "Team Alpha" }]);
+      return Promise.resolve([]);
+    });
+
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /teams, cabaret, other/i })).toBeInTheDocument()
+    );
+
+    await user.click(screen.getByRole("button", { name: /teams, cabaret, other/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("radiogroup", { name: /^division$/i })).toBeInTheDocument()
+    );
+
+    await user.click(screen.getByRole("radio", { name: "Cabaret" }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText(/^group name$/i)).toBeInTheDocument()
+    );
   });
 });
 
-describe("AddSongPage — Claim from history", () => {
+describe("AddSongPage — managed partnerships load is non-fatal", () => {
   beforeEach(() => {
     apiGet.mockReset();
     apiPost.mockReset();
@@ -85,190 +116,34 @@ describe("AddSongPage — Claim from history", () => {
     getTokenMock.mockResolvedValue("fake-token");
   });
 
-  it("switches to the claim panel and searches /v1/legacy-songs as the user types", async () => {
-    apiGet.mockImplementation((path: string) => {
-      if (path === "/v1/partners") return Promise.resolve([]);
-      if (path === "/v1/auth/me") return Promise.resolve({ id: "u1", first_name: "U", last_name: "1" });
-      if (path.startsWith("/v1/legacy-songs")) {
-        return Promise.resolve([
-          {
-            id: "L1",
-            partnership: "Alice & Bob",
-            division: "Classic",
-            routine_name: "The Open 2025",
-            descriptor: null,
-            version: "The Open 2025",
-            submitted_at: null,
-          },
-        ]);
-      }
-      return Promise.resolve([]);
-    });
-
-    renderPage();
-
-    // Wait past initial loads.
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /claim from history/i })).toBeInTheDocument()
-    );
-
-    const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /claim from history/i }));
-
-    // Search input appears inline (no dialog).
-    const search = await screen.findByLabelText(/search past songs/i);
-    await user.type(search, "Alice");
-
-    // Result row renders (debounced search hits the API).
-    await waitFor(() => {
-      expect(screen.getByText("Alice & Bob")).toBeInTheDocument();
-    });
-    expect(screen.getByText(/Classic · The Open 2025/)).toBeInTheDocument();
-  });
-
-  it("shows a partner-required error when claiming without a partner selected", async () => {
-    apiGet.mockImplementation((path: string) => {
-      if (path === "/v1/partners") return Promise.resolve([
-        { id: "partner-1", first_name: "Bob", last_name: "Jones", partner_role: "follower" },
-      ]);
-      if (path === "/v1/auth/me") return Promise.resolve({ id: "u1", first_name: "U", last_name: "1" });
-      if (path.startsWith("/v1/legacy-songs")) return Promise.resolve([
-        {
-          id: "L1",
-          partnership: "Alice & Bob",
-          division: "Classic",
-          routine_name: "The Open 2025",
-          descriptor: null,
-          version: "The Open 2025",
-          submitted_at: null,
-        },
-      ]);
-      return Promise.resolve([]);
-    });
-
-    renderPage();
-
-    const user = userEvent.setup();
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /claim from history/i })).toBeInTheDocument()
-    );
-    await user.click(screen.getByRole("button", { name: /claim from history/i }));
-
-    const search = await screen.findByLabelText(/search past songs/i);
-    await user.type(search, "Alice");
-
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /^claim$/i })).toBeInTheDocument()
-    );
-
-    // Click Claim without selecting a partner — should show an error, NOT call the API.
-    await user.click(screen.getByRole("button", { name: /^claim$/i }));
-
-    expect(
-      await screen.findByText(/a partner is required to claim a song/i)
-    ).toBeInTheDocument();
-    expect(apiPost).not.toHaveBeenCalled();
-  });
-
-  it("calls POST /v1/songs/claim-legacy after selecting a partner and confirming", async () => {
+  it("still loads partners and the user profile when /v1/managed-partnerships rejects", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/partners") {
         return Promise.resolve([
-          {
-            id: "partner-1",
-            first_name: "Bob",
-            last_name: "Jones",
-            partner_role: "follower",
-          },
+          { id: "partner-1", first_name: "Bob", last_name: "Jones", partner_role: "follower" },
         ]);
       }
-      if (path === "/v1/auth/me") return Promise.resolve({ id: "u1", first_name: "U", last_name: "1" });
-      if (path.startsWith("/v1/legacy-songs")) {
-        return Promise.resolve([
-          {
-            id: "L1",
-            partnership: "Alice & Bob",
-            division: "Classic",
-            routine_name: "The Open 2025",
-            descriptor: null,
-            version: "The Open 2025",
-            submitted_at: null,
-          },
-        ]);
+      if (path === "/v1/auth/me") {
+        return Promise.resolve({ id: "u1", first_name: "Ann", last_name: "One" });
+      }
+      if (path === "/v1/managed-partnerships") {
+        return Promise.reject(new Error("Managed partnerships unavailable"));
       }
       return Promise.resolve([]);
     });
 
-    apiPost.mockResolvedValue({
-      id: "song-new",
-      partner_id: "partner-1",
-      processed_filename: null,
-      division: "Classic",
-      routine_name: "The Open 2025",
-      personal_descriptor: null,
-      created_at: Date.now(),
-      partner_first_name: "Bob",
-      partner_last_name: "Jones",
-    });
-
+    const user = userEvent.setup();
     renderPage();
 
-    const user = userEvent.setup();
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /claim from history/i })).toBeInTheDocument()
-    );
-    await user.click(screen.getByRole("button", { name: /claim from history/i }));
-
-    // Select a partner via the combobox trigger.
-    const partnerTrigger = await screen.findByRole("combobox", { name: /partner/i });
-    await user.click(partnerTrigger);
-    await user.click(await screen.findByRole("option", { name: /bob jones/i }));
-
-    // Type to trigger search.
-    const search = screen.getByLabelText(/search past songs/i);
-    await user.type(search, "Alice");
-
-    // Wait for the Claim button.
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /^claim$/i })).toBeInTheDocument();
+      expect(screen.getByText(/uploading as:/i)).toBeInTheDocument();
     });
+    expect(screen.getByText(/Ann One/)).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /bob jones/i })).toHaveAttribute("aria-checked", "true");
 
-    // First click shows the confirmation.
-    await user.click(screen.getByRole("button", { name: /^claim$/i }));
-
-    // Confirm step appears.
-    const confirmBtn = await screen.findByRole("button", { name: /^confirm$/i });
-    expect(screen.getByText(/add this song to your library/i)).toBeInTheDocument();
-
-    // Confirming calls the API.
-    await user.click(confirmBtn);
-
-    await waitFor(() => {
-      expect(apiPost).toHaveBeenCalledWith(
-        "/v1/songs/claim-legacy",
-        expect.objectContaining({ legacy_song_id: "L1" })
-      );
-    });
-  });
-
-  it("shows the typing-prompt empty state when the search input is blank", async () => {
-    apiGet.mockImplementation((path: string) => {
-      if (path === "/v1/partners") return Promise.resolve([]);
-      if (path === "/v1/auth/me") return Promise.resolve({ id: "u1", first_name: "U", last_name: "1" });
-      if (path.startsWith("/v1/legacy-songs")) return Promise.resolve([]);
-      return Promise.resolve([]);
-    });
-
-    renderPage();
-
-    const user = userEvent.setup();
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /claim from history/i })).toBeInTheDocument()
-    );
-    await user.click(screen.getByRole("button", { name: /claim from history/i }));
-
+    await user.click(screen.getByRole("button", { name: /upload for a managed partnership/i }));
     expect(
-      await screen.findByText(/type a partnership or routine name to search/i)
+      await screen.findByText(/you have no managed partnerships yet/i)
     ).toBeInTheDocument();
   });
 });
@@ -290,58 +165,24 @@ describe("AddSongPage — upload", () => {
     vi.unstubAllGlobals();
   });
 
-  it("allows Cabaret upload without a partner", async () => {
+  it("disables upload when the user has no partners", async () => {
     apiGet.mockImplementation((path: string) => {
-      if (path === "/v1/partners") {
-        return Promise.resolve([
-          {
-            id: "partner-1",
-            first_name: "Bob",
-            last_name: "Jones",
-            partner_role: "follower",
-          },
-        ]);
-      }
+      if (path === "/v1/partners") return Promise.resolve([]);
       if (path === "/v1/auth/me") {
         return Promise.resolve({ id: "u1", first_name: "Ann", last_name: "One" });
       }
       return Promise.resolve([]);
     });
 
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ data: { complete: true, song: { id: "song-new" } } }),
-    });
-
     renderPage();
 
-    const user = userEvent.setup();
     await waitFor(() =>
       expect(screen.getByLabelText(/audio file/i)).toBeInTheDocument()
     );
 
-    const partnerTrigger = screen.getByRole("combobox", { name: /partner/i });
-    await user.click(partnerTrigger);
-    await user.click(await screen.findByRole("option", { name: /no partner/i }));
-
-    const divisionTrigger = screen.getByRole("combobox", { name: /division/i });
-    await user.click(divisionTrigger);
-    await user.click(await screen.findByRole("option", { name: /^cabaret$/i }));
-
-    const file = new File(["audio"], "track.mp3", { type: "audio/mpeg" });
-    await user.upload(screen.getByLabelText(/audio file/i), file);
-
-    await user.click(screen.getByRole("button", { name: /upload song/i }));
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining("/v1/songs/upload/chunk"),
-        expect.objectContaining({ method: "POST" })
-      );
-    });
-    expect(toast.error).not.toHaveBeenCalledWith(
-      "A partner is required for this division."
-    );
+    expect(screen.getByText(/you need a partner to upload/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /upload song/i })).toBeDisabled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
@@ -353,7 +194,10 @@ describe("AddSongPage — Upload chunk loop", () => {
     renderPage();
 
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /upload new audio/i })).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: /upload for myself/i })).toBeInTheDocument()
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText(/audio file/i)).toBeInTheDocument()
     );
 
     const fileBytes = new Uint8Array(opts.fileSizeBytes);
@@ -361,9 +205,7 @@ describe("AddSongPage — Upload chunk loop", () => {
     const fileInput = screen.getByLabelText(/audio file/i) as HTMLInputElement;
     await user.upload(fileInput, file);
 
-    const divisionTrigger = screen.getByRole("combobox", { name: /division/i });
-    await user.click(divisionTrigger);
-    await user.click(await screen.findByRole("option", { name: opts.division ?? "Classic" }));
+    await user.click(screen.getByRole("radio", { name: opts.division ?? "Classic" }));
 
     await user.click(screen.getByRole("button", { name: /upload song/i }));
 
@@ -444,15 +286,16 @@ describe("AddSongPage — Upload chunk loop", () => {
     renderPage();
 
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /upload new audio/i })).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: /upload for myself/i })).toBeInTheDocument()
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText(/audio file/i)).toBeInTheDocument()
     );
 
     const file = new File([new Uint8Array(1024)], "test.mp3", { type: "audio/mpeg" });
     await user.upload(screen.getByLabelText(/audio file/i) as HTMLInputElement, file);
 
-    const divisionTrigger = screen.getByRole("combobox", { name: /division/i });
-    await user.click(divisionTrigger);
-    await user.click(await screen.findByRole("option", { name: "Classic" }));
+    await user.click(screen.getByRole("radio", { name: "Classic" }));
 
     vi.useFakeTimers();
     try {
@@ -465,5 +308,90 @@ describe("AddSongPage — Upload chunk loop", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("AddSongPage — managed partnership upload", () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  const samplePartnership = {
+    id: "mp_1",
+    user_id: "u1",
+    leader_first_name: "Wendal",
+    leader_last_name: "Smith",
+    follower_first_name: "Lara",
+    follower_last_name: "Jones",
+    created_at: 1,
+    updated_at: 2,
+  };
+
+  beforeEach(() => {
+    apiGet.mockReset();
+    apiPost.mockReset();
+    getTokenMock.mockReset();
+    getTokenMock.mockResolvedValue("fake-token");
+    vi.mocked(toast.error).mockClear();
+    vi.mocked(toast.success).mockClear();
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/partners") return Promise.resolve([]);
+      if (path === "/v1/auth/me") {
+        return Promise.resolve({ id: "u1", first_name: "Ann", last_name: "One" });
+      }
+      if (path === "/v1/managed-partnerships") return Promise.resolve([samplePartnership]);
+      return Promise.resolve([]);
+    });
+    fetchSpy = vi.spyOn(global, "fetch") as ReturnType<typeof vi.spyOn>;
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+  });
+
+  it("uploads via /v1/songs/upload/chunk with managed_partnership_id", async () => {
+    fetchSpy.mockResolvedValue(
+      new Response(JSON.stringify({ data: { received: true, complete: true }, meta: { version: "v1" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const user = userEvent.setup();
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /upload for a managed partnership/i })).toBeInTheDocument()
+    );
+    await user.click(screen.getByRole("button", { name: /upload for a managed partnership/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/leader: wendal smith · follower: lara jones/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("radiogroup", { name: /^partner$/i })).toBeNull();
+
+    await user.click(screen.getByRole("radio", { name: /^classic$/i }));
+
+    const file = new File(["audio"], "routine.mp3", { type: "audio/mpeg" });
+    await user.upload(screen.getByLabelText(/audio file/i), file);
+
+    await user.click(screen.getByRole("button", { name: /upload song/i }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining("/v1/songs/upload/chunk"),
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+
+    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    const body = init.body as FormData;
+    expect(body.get("managed_partnership_id")).toBe("mp_1");
+    expect(body.get("partner_id")).toBeNull();
+    expect(body.get("division")).toBe("Classic");
+
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith("Song uploaded successfully.");
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(apiPost).not.toHaveBeenCalled();
   });
 });

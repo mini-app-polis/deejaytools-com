@@ -46,7 +46,7 @@ pnpm install
 
 ```bash
 cp apps/api/.env.example apps/api/.env
-cp apps/app/.env.example apps/app/.env
+cp apps/app/.env.example apps/app/.env.local
 # Fill in DATABASE_URL, CLERK_JWKS_URL, VITE_CLERK_PUBLISHABLE_KEY at minimum
 ```
 
@@ -81,32 +81,61 @@ The API exposes the following route prefixes (all under `/v1` unless noted). Aut
 
 | Prefix | Purpose | Auth |
 |--------|---------|------|
-| `/health` | Liveness probe | public |
-| `/internal/tick` | Railway cron hook for session-status transitions | `TICK_SECRET` header |
+| `/health` | Liveness probe (runs `SELECT 1`; 503 when DB unreachable) | public |
+| `/internal/tick` | Manual operator override: runs the same tick pass as the in-process scheduler | `x-tick-secret` header when `TICK_SECRET` is set (see apps/api README) |
 | `/v1/auth` | Sync the current Clerk user to the DB / whoami | required |
-| `/v1/events` | Event CRUD | mixed (list public, mutations admin) |
-| `/v1/sessions` | Session lifecycle, divisions, queue depth | mixed |
+| `/v1/events` | Event CRUD | list public; `GET /:id` required; mutations admin |
+| `/v1/sessions` | Session lifecycle, divisions, queue depth (derived status from wall clock) | mixed (reads public; mutations admin) |
 | `/v1/checkins` | Dancer check-in (creates queue entry) | required |
 | `/v1/queue` | Active / priority / non-priority queue reads + admin actions (promote, complete, withdraw) | mixed |
 | `/v1/runs` | Admin run history with structured labels | admin |
 | `/v1/admin/checkins` | Admin test-injection (create/list/delete synthetic queue entries) | admin |
+| `/v1/admin/songs` | Admin directory of all songs (search, soft-delete filter) | admin |
+| `/v1/admin/users` | Admin user directory (search, role patch, per-user partners/submissions) | admin |
+| `/v1/admin/event-song-submissions` | All song submissions for one event (Manager Event Songs tab) | admin |
 | `/v1/partners` | Partner CRUD scoped to current user | required |
 | `/v1/pairs` | Find-or-create the current user's pair with a chosen partner | required |
-| `/v1/songs` | Song upload (chunked + atomic), CRUD, claim-legacy | required |
-| `/v1/legacy-songs` | Read-only historical song catalog | public |
+| `/v1/teams` | Team CRUD scoped to current user (Teams / Cabaret uploads) | required |
+| `/v1/managed-partnerships` | Managed partnership CRUD scoped to current user | required |
+| `/v1/event-song-submissions` | Submit a song to an event; list/delete own submissions | required |
+| `/v1/songs` | Song upload (chunked + atomic), CRUD | required |
+| `/v1/feedback` | Public feedback form submission (optional Brevo email) | public |
+
+**Legacy data:** the `legacy_songs` table exists from migration `0002`, is not represented in `schema.ts`, and is unused by any route. Legacy song rows in the live `songs` table are identified by a `processed_filename` starting with `"[Legacy] "` and render read-only in the UI.
 
 The session-detail and queue-read endpoints accept unauthenticated callers — public visitors can browse Floor Trials and individual sessions without signing in. Submitting a check-in still requires auth.
 
 The frontend pages map to these routes:
 
-| Route | Page | Auth |
-|-------|------|------|
-| `/` | LandingPage with legacy-music search | public |
+| Route | Page | Guard |
+|-------|------|-------|
+| `/` | LandingPage (card grid entry points) | public |
 | `/floor-trials` | Active and upcoming sessions | public |
-| `/sessions/:id` | Session detail with queue and check-in | public read, signed-in to check in |
-| `/partners` | "My Partners" CRUD | signed in |
-| `/songs` | "My Songs" upload + claim from history | signed in |
-| `/admin` | Admin dashboard (events, sessions, live queue, run history, test inject) | admin |
+| `/check-in` | Alias → FloorTrialsPage | public |
+| `/how-it-works` | Floor-trial help hub | public |
+| `/how-it-works/floor-trials` | Help — floor trials | public |
+| `/how-it-works/submitting-music` | Help — submitting music | public |
+| `/how-it-works/checking-in` | Help — checking in | public |
+| `/how-it-works/the-queue` | Help — watching the queue | public |
+| `/how-it-works/partners` | Help — partners & teams (guide content) | public |
+| `/how-it-works/on-the-floor` | Help — on the floor | public |
+| `/how-it-works/troubleshooting` | Help — error message lookup | public |
+| `/feedback` | Feedback form | public |
+| `/sessions/:id` | Session detail with queue and check-in | public read; signed-in to check in |
+| `/my-content` | Events, songs, check-ins hub | RequireAuth |
+| `/my-profile` | Profile, partners, teams, managed partnerships | RequireAuth |
+| `/songs` | Legacy "My Songs" page | RequireAuth |
+| `/songs/add` | Upload song (standard + special) | RequireAuth |
+| `/event-submissions` | Submit songs to events | RequireAuth |
+| `/sessions` | Session list | RequireAuth |
+| `/events` | Event list | RequireAuth |
+| `/events/:id` | Event detail | RequireAuth |
+| `/admin` | Redirects to `/admin/events` | AdminGuard |
+| `/admin/:section` | Admin dashboard (events, sessions, run history, songs, users, test checkin, …) | AdminGuard |
+| `/manager` | Redirects to `/manager/active-sessions` | ManagerGuard |
+| `/manager/:section` | Manager tools (active sessions, event songs, upload-for, checkin-for, guide) | ManagerGuard |
+
+There is no top-level `/partners` route — partner records are managed on My Profile (`/my-profile`). Help content about partners lives at `/how-it-works/partners`. `/songs`, `/sessions`, `/events`, and `/events/:id` are reachable but absent from all navigation (legacy/deep links).
 
 ## Environment
 
@@ -119,7 +148,7 @@ See `.env.example` in each app for the complete list.
 
 Both packages use Vitest. The API runs Node-environment unit and route tests against a chained mock of the Drizzle client. The app runs pure-function tests in Node and component tests in jsdom (opt-in per file via `// @vitest-environment jsdom`).
 
-Coverage is broad on the API surface (route handlers, queue logic, admission rules, song upload, run history, admin endpoints, middleware) and on the most critical frontend paths (NavBar visibility, FloorTrialsPage filtering, SessionDetailPage queue + check-in block, SongsPage claim-legacy, the api client, useAuthMe, RequireAuth/AdminGuard, LandingPage search, PartnersPage list).
+Coverage is broad on the API surface (route handlers, queue logic, admission rules, song upload, run history, admin endpoints, middleware) and on the most critical frontend paths (NavBar visibility, FloorTrialsPage filtering, SessionDetailPage queue + check-in block, SongsPage, the api client, useAuthMe, RequireAuth/AdminGuard/ManagerGuard, LandingPage, MyProfilePage partners section).
 
 To add new tests, follow the patterns already in place — see `apps/api/src/test/mocks.ts` for the chained-mock helper and `apps/app/src/test/setup.ts` for the jsdom-conditional Testing Library setup.
 

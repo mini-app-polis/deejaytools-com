@@ -5,15 +5,13 @@ import { CommonErrors, createLogger, error, success, successList } from "common-
 import { zValidator } from "../lib/validate.js";
 import { Hono } from "hono";
 import { z } from "zod";
-import { and, desc, eq, isNull, ne, notInArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, notInArray, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { checkins, partners, queueEntries, sessions, songs, users } from "../db/schema.js";
+import { checkins, eventSongSubmissions, managedPartnerships, partners, queueEntries, sessions, songs, teams, users } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
 import { shareDriveFileWithUsers, softDeleteOnDrive, uploadSongToDrive } from "../services/drive.js";
 import { tagSongBytes } from "../services/tagger.js";
 import { detectAudioFormat } from "../services/audioFormat.js";
-import { legacySongs } from "./legacy-songs.js";
-
 
 const listQuery = z.object({
   partner_id: z.string().optional(),
@@ -91,6 +89,13 @@ function sanitizeSegment(input: string | null | undefined): string {
     .join("");
 }
 
+/** Filename-safe segment that PRESERVES casing — for controlled values like
+ *  division names that are already well-formed (e.g. "ProAm LeaderAm" → "ProAmLeaderAm"). */
+function staticSegment(input: string | null | undefined): string {
+  if (!input) return "";
+  return input.replace(/[^a-zA-Z0-9]/g, "");
+}
+
 function splitNameAndExtension(filename: string): { base: string; ext: string } {
   const trimmed = filename.trim();
   const lastDot = trimmed.lastIndexOf(".");
@@ -124,7 +129,7 @@ function computedSongDisplayName(row: typeof songs.$inferSelect): string | null 
 }
 
 /**
- * Legacy rows are created by /v1/songs/claim-legacy with a sentinel
+ * Legacy rows were created by the removed claim-legacy flow with a sentinel
  * processed_filename that starts with "[Legacy] ". They have no Drive file
  * and no playable audio — they exist purely so a user can attach historical
  * metadata to their account. Detecting them off the prefix keeps the logic
@@ -138,6 +143,11 @@ function mapSong(
   row: typeof songs.$inferSelect & {
     partner_first_name?: string | null;
     partner_last_name?: string | null;
+    partner_kind?: string | null;
+    managed_leader_first_name?: string | null;
+    managed_leader_last_name?: string | null;
+    managed_follower_first_name?: string | null;
+    managed_follower_last_name?: string | null;
   }
 ) {
   return {
@@ -158,6 +168,12 @@ function mapSong(
     updated_at: row.updatedAt,
     partner_first_name: row.partner_first_name ?? null,
     partner_last_name: row.partner_last_name ?? null,
+    partner_kind: row.partner_kind ?? null,
+    managed_partnership_id: row.managedPartnershipId ?? null,
+    managed_leader_first_name: row.managed_leader_first_name ?? null,
+    managed_leader_last_name: row.managed_leader_last_name ?? null,
+    managed_follower_first_name: row.managed_follower_first_name ?? null,
+    managed_follower_last_name: row.managed_follower_last_name ?? null,
   };
 }
 
@@ -176,7 +192,21 @@ async function buildAndUploadSong(
   if (!userRow) throw new Error("User not found");
 
   let partnerRow: typeof partners.$inferSelect | null = null;
-  if (song.partnerId) {
+  let managedPartnershipRow: typeof managedPartnerships.$inferSelect | null = null;
+  if (song.managedPartnershipId) {
+    const [mp] = await db
+      .select()
+      .from(managedPartnerships)
+      .where(
+        and(
+          eq(managedPartnerships.id, song.managedPartnershipId),
+          eq(managedPartnerships.userId, userId)
+        )
+      )
+      .limit(1);
+    managedPartnershipRow = mp ?? null;
+    if (!managedPartnershipRow) throw new Error("Managed partnership not found");
+  } else if (song.partnerId) {
     const [p] = await db
       .select()
       .from(partners)
@@ -199,6 +229,8 @@ async function buildAndUploadSong(
         sql`coalesce(${songs.division}, '') = ${song.division ?? ""}`,
         sql`coalesce(${songs.routineName}, '') = ${song.routineName ?? ""}`,
         eq(songs.seasonYear, seasonYearStr),
+        sql`coalesce(${songs.partnerId}, '') = ${song.partnerId ?? ""}`,
+        sql`coalesce(${songs.managedPartnershipId}, '') = ${song.managedPartnershipId ?? ""}`,
         ne(songs.id, song.id)
       )
     );
@@ -216,8 +248,20 @@ async function buildAndUploadSong(
 
   let leaderName: string;
   let followerName: string | null;
-  if (!partnerRow) {
+  if (managedPartnershipRow) {
+    leaderName = [managedPartnershipRow.leaderFirstName, managedPartnershipRow.leaderLastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    followerName = [managedPartnershipRow.followerFirstName, managedPartnershipRow.followerLastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+  } else if (!partnerRow) {
     leaderName = userName;
+    followerName = null;
+  } else if (partnerRow.kind && partnerRow.kind !== "partner") {
+    leaderName = partnerName ?? "";
     followerName = null;
   } else if (partnerRow.partnerRole === "leader") {
     leaderName = partnerName ?? "";
@@ -234,7 +278,7 @@ async function buildAndUploadSong(
   const originalParts = splitNameAndExtension(originalName);
   const pathSegments = [
     partnershipSegment || sanitizeSegment(userId) || "user",
-    sanitizeSegment(song.division),
+    staticSegment(song.division),
     sanitizeSegment(seasonYearStr),
     sanitizeSegment(song.routineName),
     sanitizeSegment(song.personalDescriptor),
@@ -265,11 +309,7 @@ async function buildAndUploadSong(
   // can't see it from their own Drive UI until we explicitly grant them
   // read access. We collect two potential recipients:
   //   1. The uploader's user account email (always present, always shared).
-  //   2. The partner's known email, which can come from two places — the
-  //      partner row's own `email` column (free text the user typed in) and,
-  //      if the partner is linked to an actual user account, that linked
-  //      user's email. Both can differ, so we collect both candidates and
-  //      let shareDriveFileWithUsers dedupe by lowercased email.
+  //   2. The partner row's `email` column (free text the owner typed in).
   //
   // Sharing is best-effort: a per-email failure (e.g. a malformed address
   // or a non-Google account that Drive refuses) must not break the upload,
@@ -278,14 +318,6 @@ async function buildAndUploadSong(
   const shareTargets: (string | null | undefined)[] = [userRow.email];
   if (partnerRow) {
     shareTargets.push(partnerRow.email);
-    if (partnerRow.linkedUserId) {
-      const [linkedUser] = await db
-        .select({ email: users.email })
-        .from(users)
-        .where(eq(users.id, partnerRow.linkedUserId))
-        .limit(1);
-      if (linkedUser?.email) shareTargets.push(linkedUser.email);
-    }
   }
   try {
     const result = await shareDriveFileWithUsers(uploadResult.fileId, shareTargets);
@@ -328,6 +360,7 @@ async function buildAndUploadSong(
       song: songs,
       partner_first_name: partners.firstName,
       partner_last_name: partners.lastName,
+      partner_kind: partners.kind,
     })
     .from(songs)
     .leftJoin(partners, eq(partners.id, songs.partnerId))
@@ -338,6 +371,7 @@ async function buildAndUploadSong(
     ...r!.song,
     partner_first_name: r!.partner_first_name,
     partner_last_name: r!.partner_last_name,
+    partner_kind: r!.partner_kind,
   });
 }
 
@@ -351,11 +385,29 @@ async function assertPartnerOwned(userId: string, partnerId: string | null | und
   return !!p;
 }
 
+async function assertManagedPartnershipOwned(
+  userId: string,
+  managedPartnershipId: string | null | undefined
+) {
+  if (managedPartnershipId == null || managedPartnershipId === "") return true;
+  const [row] = await db
+    .select({ id: managedPartnerships.id })
+    .from(managedPartnerships)
+    .where(
+      and(
+        eq(managedPartnerships.id, managedPartnershipId),
+        eq(managedPartnerships.userId, userId)
+      )
+    )
+    .limit(1);
+  return !!row;
+}
+
 songRoutes.get("/", requireAuth, zValidator("query", listQuery), async (c) => {
   const userId = c.get("user").userId;
   const { partner_id } = c.req.valid("query");
 
-  const visibility = or(eq(songs.userId, userId), eq(partners.linkedUserId, userId));
+  const visibility = eq(songs.userId, userId);
   const partnerFilter =
     partner_id !== undefined && partner_id !== ""
       ? and(visibility, eq(songs.partnerId, partner_id), isNull(songs.deletedAt))
@@ -366,9 +418,15 @@ songRoutes.get("/", requireAuth, zValidator("query", listQuery), async (c) => {
       song: songs,
       partner_first_name: partners.firstName,
       partner_last_name: partners.lastName,
+      partner_kind: partners.kind,
+      managed_leader_first_name: managedPartnerships.leaderFirstName,
+      managed_leader_last_name: managedPartnerships.leaderLastName,
+      managed_follower_first_name: managedPartnerships.followerFirstName,
+      managed_follower_last_name: managedPartnerships.followerLastName,
     })
     .from(songs)
     .leftJoin(partners, eq(partners.id, songs.partnerId))
+    .leftJoin(managedPartnerships, eq(managedPartnerships.id, songs.managedPartnershipId))
     .where(partnerFilter)
     .orderBy(desc(songs.createdAt));
 
@@ -379,6 +437,11 @@ songRoutes.get("/", requireAuth, zValidator("query", listQuery), async (c) => {
           ...r.song,
           partner_first_name: r.partner_first_name,
           partner_last_name: r.partner_last_name,
+          partner_kind: r.partner_kind,
+          managed_leader_first_name: r.managed_leader_first_name,
+          managed_leader_last_name: r.managed_leader_last_name,
+          managed_follower_first_name: r.managed_follower_first_name,
+          managed_follower_last_name: r.managed_follower_last_name,
         })
       )
     )
@@ -434,10 +497,11 @@ songRoutes.get("/:id", requireAuth, async (c) => {
       song: songs,
       partner_first_name: partners.firstName,
       partner_last_name: partners.lastName,
+      partner_kind: partners.kind,
     })
     .from(songs)
     .leftJoin(partners, eq(partners.id, songs.partnerId))
-    .where(and(eq(songs.id, id), or(eq(songs.userId, userId), eq(partners.linkedUserId, userId)), isNull(songs.deletedAt)))
+    .where(and(eq(songs.id, id), eq(songs.userId, userId), isNull(songs.deletedAt)))
     .limit(1);
   if (!r) {
     return c.json(CommonErrors.notFound("Song"), 404);
@@ -448,6 +512,7 @@ songRoutes.get("/:id", requireAuth, async (c) => {
         ...r.song,
         partner_first_name: r.partner_first_name,
         partner_last_name: r.partner_last_name,
+        partner_kind: r.partner_kind,
       })
     )
   );
@@ -502,6 +567,7 @@ songRoutes.patch("/:id", requireAuth, zValidator("json", patchBody), async (c) =
       song: songs,
       partner_first_name: partners.firstName,
       partner_last_name: partners.lastName,
+      partner_kind: partners.kind,
     })
     .from(songs)
     .leftJoin(partners, eq(partners.id, songs.partnerId))
@@ -513,6 +579,7 @@ songRoutes.patch("/:id", requireAuth, zValidator("json", patchBody), async (c) =
         ...r!.song,
         partner_first_name: r!.partner_first_name,
         partner_last_name: r!.partner_last_name,
+        partner_kind: r!.partner_kind,
       })
     )
   );
@@ -586,120 +653,35 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
   }
 
   // Soft-delete: stamp deleted_at, keep the row for historical FK references
-  await db
-    .update(songs)
-    .set({ deletedAt: Date.now() })
-    .where(and(eq(songs.id, id), eq(songs.userId, userId)));
+  try {
+    await db.transaction(async (tx) => {
+      // A removed song must not linger in any event — drop its submission references.
+      await tx.delete(eventSongSubmissions).where(eq(eventSongSubmissions.songId, id));
+      // Soft-delete the song itself (row kept for historical run/check-in FK references).
+      await tx
+        .update(songs)
+        .set({ deletedAt: Date.now() })
+        .where(and(eq(songs.id, id), eq(songs.userId, userId)));
+    });
+  } catch (err) {
+    logger.error({
+      event: "song_delete_failed",
+      category: "api",
+      context: { songId: id, userId },
+      error: err,
+    });
+    return c.json(CommonErrors.internalError("Failed to delete song"), 500);
+  }
 
   return c.body(null, 204);
 });
-
-/**
- * POST /v1/songs/claim-legacy
- *
- * Convenience for users who submitted music to past events: pick one of the
- * historical entries from /v1/legacy-songs and materialize it as a regular
- * song row owned by the current user. No audio is attached — the user can
- * upload one later via the chunked upload flow if they want.
- *
- * Body: { legacy_song_id, partner_id? }
- * Returns: the new song row (same shape as POST /).
- */
-const claimLegacyBody = z.object({
-  legacy_song_id: z.string().min(1),
-  partner_id: z.string().nullable().optional(),
-});
-
-songRoutes.post(
-  "/claim-legacy",
-  requireAuth,
-  zValidator("json", claimLegacyBody),
-  async (c) => {
-    const userId = c.get("user").userId;
-    const body = c.req.valid("json");
-    const now = Date.now();
-
-    if (body.partner_id != null && body.partner_id !== "") {
-      const ok = await assertPartnerOwned(userId, body.partner_id);
-      if (!ok) {
-        return c.json(CommonErrors.badRequest("Partner not found or does not belong to you"), 400);
-      }
-    }
-
-    const [legacy] = await db
-      .select()
-      .from(legacySongs)
-      .where(eq(legacySongs.id, body.legacy_song_id))
-      .limit(1);
-    if (!legacy) return c.json(CommonErrors.notFound("Legacy song"), 404);
-
-    const id = crypto.randomUUID();
-    const partnerId =
-      body.partner_id && body.partner_id !== "" ? body.partner_id : null;
-
-    // Legacy entries often have an empty routineName and stash event/season
-    // info in `version` (e.g. "The Open 2025"). Coalesce so the claimed song
-    // carries useful routine text into the structured label.
-    const claimedRoutineName =
-      legacy.routineName?.trim() || legacy.version?.trim() || null;
-
-    const displayName = claimedRoutineName || legacy.partnership.trim() || null;
-
-    // Build a human-readable filename from the legacy metadata so the song
-    // shows something useful in the "Processed filename" column even though
-    // no audio file has been attached yet.
-    const legacyMeta =
-      [legacy.partnership.trim(), legacy.division?.trim(), legacy.version?.trim()]
-        .filter(Boolean)
-        .join(" · ");
-    const processedFilename = legacyMeta ? `[Legacy] ${legacyMeta}` : null;
-
-    await db.insert(songs).values({
-      id,
-      userId,
-      partnerId,
-      displayName,
-      originalFilename: null,
-      processedFilename,
-      driveFileId: null,
-      driveFolderId: null,
-      division: legacy.division ?? null,
-      routineName: claimedRoutineName,
-      personalDescriptor: legacy.descriptor ?? null,
-      seasonYear: null,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    const [r] = await db
-      .select({
-        song: songs,
-        partner_first_name: partners.firstName,
-        partner_last_name: partners.lastName,
-      })
-      .from(songs)
-      .leftJoin(partners, eq(partners.id, songs.partnerId))
-      .where(eq(songs.id, id))
-      .limit(1);
-
-    return c.json(
-      success(
-        mapSong({
-          ...r!.song,
-          partner_first_name: r!.partner_first_name,
-          partner_last_name: r!.partner_last_name,
-        })
-      ),
-      201
-    );
-  }
-);
 
 // POST /v1/songs/upload/chunk — atomic chunked upload: no song record is created until the
 // final chunk is processed and Drive confirms the upload. Song never exists in a broken state.
 // Body fields (send on every chunk): chunk (File), upload_id (UUID), chunk_index (int),
 //   total_chunks (int), original_filename (string), mime_type (string), division (string),
-//   partner_id (string|""), routine_name (string|""), personal_descriptor (string|"")
+//   partner_id (string|"") XOR managed_partnership_id (string),
+//   routine_name (string|""), personal_descriptor (string|"")
 songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   const userId = c.get("user").userId;
 
@@ -721,12 +703,26 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   const division = typeof body.division === "string" ? body.division.trim() : "";
   const partnerId =
     typeof body.partner_id === "string" ? body.partner_id.trim() || null : null;
+  const managedPartnershipId =
+    typeof body.managed_partnership_id === "string"
+      ? body.managed_partnership_id.trim() || null
+      : null;
   const routineName =
     typeof body.routine_name === "string" ? body.routine_name.trim() || null : null;
   const personalDescriptor =
     typeof body.personal_descriptor === "string"
       ? body.personal_descriptor.trim() || null
       : null;
+  const onBehalfOfUserId =
+    typeof body.on_behalf_of_user_id === "string"
+      ? body.on_behalf_of_user_id.trim() || null
+      : null;
+  const entityType =
+    typeof body.entity_type === "string" ? body.entity_type.trim() : "";
+  const entityName =
+    typeof body.entity_name === "string" ? body.entity_name.trim() : "";
+  const teamId =
+    typeof body.team_id === "string" ? body.team_id.trim() : "";
   const chunkFile = body.chunk instanceof File ? body.chunk : null;
 
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uploadId)) {
@@ -744,6 +740,10 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   }
   if (!chunkFile) return c.json(CommonErrors.badRequest("Missing chunk field"), 400);
 
+  if (onBehalfOfUserId && c.get("user").role !== "admin") {
+    return c.json(CommonErrors.forbidden(), 403);
+  }
+
   const chunkBytes = Buffer.from(await chunkFile.arrayBuffer());
   if (chunkBytes.length > MAX_CHUNK_BYTES) {
     return c.json(CommonErrors.badRequest("Chunk exceeds 10 MB limit"), 400);
@@ -758,12 +758,101 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
     return c.json(success({ received: true, complete: false }));
   }
 
-  // Final chunk — validate partner before assembling.
-  if (partnerId) {
-    const ok = await assertPartnerOwned(userId, partnerId);
-    if (!ok) {
+  // Final chunk — validate partner, managed partnership, or portal entity before assembling.
+  const isPortalUpload = entityType !== "";
+  if (isPortalUpload && (managedPartnershipId || partnerId)) {
+    await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+    return c.json(
+      CommonErrors.badRequest("Portal uploads cannot specify partner_id or managed_partnership_id"),
+      400
+    );
+  }
+  if (isPortalUpload && !["solo", "team", "other"].includes(entityType)) {
+    await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+    return c.json(CommonErrors.badRequest("Invalid entity_type"), 400);
+  }
+
+  let effectiveUserId = userId;
+  if (onBehalfOfUserId) {
+    const [target] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, onBehalfOfUserId))
+      .limit(1);
+    if (!target) {
       await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
-      return c.json(CommonErrors.badRequest("Partner not found or does not belong to you"), 400);
+      return c.json(CommonErrors.badRequest("Target user not found"), 400);
+    }
+    effectiveUserId = onBehalfOfUserId;
+  }
+
+  let resolvedPartnerId: string | null = partnerId;
+  let portalPlaceholderName: string | null = null;
+  if (isPortalUpload) {
+    if (entityType === "team") {
+      if (!teamId) {
+        await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+        return c.json(CommonErrors.badRequest("team_id is required for team uploads"), 400);
+      }
+      const [team] = await db
+        .select({ identifier: teams.identifier })
+        .from(teams)
+        .where(and(eq(teams.id, teamId), eq(teams.userId, effectiveUserId)))
+        .limit(1);
+      if (!team) {
+        await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+        return c.json(CommonErrors.badRequest("Team not found"), 400);
+      }
+      portalPlaceholderName = team.identifier;
+    } else if (entityType === "other") {
+      portalPlaceholderName = entityName;
+      if (!portalPlaceholderName) {
+        await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+        return c.json(CommonErrors.badRequest("entity_name is required for other uploads"), 400);
+      }
+    } else {
+      if (entityName) {
+        portalPlaceholderName = entityName;
+      } else {
+        const [userRow] = await db
+          .select({ firstName: users.firstName, lastName: users.lastName })
+          .from(users)
+          .where(eq(users.id, effectiveUserId))
+          .limit(1);
+        if (!userRow) {
+          await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+          return c.json(CommonErrors.badRequest("User not found"), 400);
+        }
+        portalPlaceholderName = [userRow.firstName, userRow.lastName].filter(Boolean).join(" ").trim();
+        if (!portalPlaceholderName) {
+          await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+          return c.json(CommonErrors.badRequest("Set your name on My Profile or provide entity_name"), 400);
+        }
+      }
+    }
+  } else {
+    if (managedPartnershipId && partnerId) {
+      await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+      return c.json(
+        CommonErrors.badRequest("Specify either partner_id or managed_partnership_id, not both"),
+        400
+      );
+    }
+    if (managedPartnershipId) {
+      const ok = await assertManagedPartnershipOwned(effectiveUserId, managedPartnershipId);
+      if (!ok) {
+        await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+        return c.json(
+          CommonErrors.badRequest("Managed partnership not found or does not belong to you"),
+          400
+        );
+      }
+    } else if (partnerId) {
+      const ok = await assertPartnerOwned(effectiveUserId, partnerId);
+      if (!ok) {
+        await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
+        return c.json(CommonErrors.badRequest("Partner not found or does not belong to you"), 400);
+      }
     }
   }
 
@@ -810,13 +899,47 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
     );
   }
 
-  // Create the song record now — only reached if all chunks arrived successfully.
   const now = Date.now();
+
+  if (isPortalUpload && portalPlaceholderName) {
+    const [existing] = await db
+      .select({ id: partners.id })
+      .from(partners)
+      .where(
+        and(
+          eq(partners.userId, effectiveUserId),
+          eq(partners.kind, entityType),
+          eq(partners.firstName, portalPlaceholderName),
+          eq(partners.lastName, "")
+        )
+      )
+      .limit(1);
+
+    let placeholderPartnerId = existing?.id;
+    if (!placeholderPartnerId) {
+      placeholderPartnerId = crypto.randomUUID();
+      const partnerNow = Date.now();
+      await db.insert(partners).values({
+        id: placeholderPartnerId,
+        userId: effectiveUserId,
+        firstName: portalPlaceholderName,
+        lastName: "",
+        partnerRole: "follower",
+        kind: entityType,
+        createdAt: partnerNow,
+        updatedAt: partnerNow,
+      });
+    }
+    resolvedPartnerId = placeholderPartnerId;
+  }
+
+  // Create the song record now — only reached if all chunks arrived successfully.
   const songId = crypto.randomUUID();
   await db.insert(songs).values({
     id: songId,
-    userId,
-    partnerId,
+    userId: effectiveUserId,
+    partnerId: managedPartnershipId ? null : resolvedPartnerId,
+    managedPartnershipId,
     displayName: routineName || originalName || null,
     originalFilename: originalName,
     processedFilename: null,
@@ -844,7 +967,7 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   // the user's library stays clean; they will need to retry the upload.
   const pendingSong = mapSong({ ...songRow, partner_first_name: null, partner_last_name: null });
 
-  buildAndUploadSong(songRow, userId, assembled, originalName, detectedMimeType).catch(async (err) => {
+  buildAndUploadSong(songRow, effectiveUserId, assembled, originalName, detectedMimeType).catch(async (err) => {
     logger.error({ event: "song_background_upload_failed", category: "api", context: { songId, uploadId }, error: err });
     await db.delete(songs).where(eq(songs.id, songId)).catch((deleteErr) => {
       logger.warn({

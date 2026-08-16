@@ -64,3 +64,8 @@ export const CACHE_TTL = {
   QUEUE: 3_000,
   SESSION: 5_000,
 } as const;
+
+/** Invalidate all cached queue views for a session after any mutation. */
+export function invalidateQueueCache(sessionId: string): void {
+  responseCache.invalidatePrefix(`queue:${sessionId}:`);
+}

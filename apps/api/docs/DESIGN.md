@@ -1,5 +1,7 @@
 # deejaytools-com — design decisions
 
+This codebase replaced **`routine-management-platform`**, which ran on Cloudflare Workers + D1.
+
 ## Stack choices
 
 **Hono on Node over Cloudflare Workers**
@@ -35,8 +37,14 @@ Generic cross-project utilities (structured logger, success/error envelopes, Cle
 **Three-layer stack**
 Layer 1 (liveness): Railway auto-restart. Layer 2 (structured logs): `common-typescript-utils` logger emitting JSON with standard shape. Layer 3 (exceptions): Sentry capturing unhandled errors. Each layer covers a distinct failure mode.
 
-**Session status via cron tick**
-Session status transitions (scheduled → checkin_open → in_progress → completed) are driven by `GET /internal/tick` called by a Railway cron job every minute. Protected by `x-tick-secret` header. Replaces Cloudflare Workers' native `scheduled()` handler.
+**Session status via in-process scheduler**
+Session status transitions (`scheduled` → `checkin_open` → `in_progress` → `completed`) and active-queue auto-fill are driven by `startScheduler()` in `index.ts` — an in-process `setInterval` loop (default 30 000 ms, configurable via `TICK_INTERVAL_MS`), disabled only when `DISABLE_SCHEDULER === "1"` (the exact string; `"true"` does **not** disable it). The loop has an overlap guard (`running` flag) and calls `handle.unref()` so it never keeps the process alive at shutdown. Each tick runs `tickSessionStatuses()` then `fillRunningSessions()` (via the shared `runTick()` helper).
+
+`tickSessionStatuses()` advances **one step per session per tick**, so a dormant session that needs to walk the full chain can take up to three ticks to reach `completed`. The persisted DB status is updated for side effects, but **clients never see it directly**: `deriveSessionStatus()` in `routes/sessions.ts` recomputes status from the wall clock on every response, so a lagging or disabled scheduler never shows a wrong status in the UI. `cancelled` is a manual admin override and is preserved by both paths.
+
+`GET /internal/tick` is a **manual override** for an operator or external monitor, not the primary driver. It runs the same `runTick()` pass. It is gated by the `x-tick-secret` header using a `!== undefined` check on `TICK_SECRET`, so an empty-string secret still gates; if `TICK_SECRET` is unset the endpoint is completely open (deployment warning).
+
+Multi-replica safety: `tickSessionStatuses()` is idempotent, and `fillActiveQueue` takes `SELECT … FOR UPDATE` per session via `lockSessionForFill()`.
 
 ## Music management
 

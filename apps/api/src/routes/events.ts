@@ -53,7 +53,7 @@ const patchEvent = z.object({
 export const eventRoutes = new Hono();
 
 /** Derive status from start/end dates without storing it. */
-function computeStatus(startDate: string, endDate: string): string {
+export function computeStatus(startDate: string, endDate: string): string {
   const today = new Date().toISOString().slice(0, 10);
   if (today < startDate) return "upcoming";
   if (today > endDate) return "completed";

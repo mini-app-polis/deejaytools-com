@@ -46,6 +46,7 @@ const dbRunRow = {
   songPartnerLast: "Jones" as string | null,
   entityPairId: "pair-1" as string | null,
   entitySoloUserId: null as string | null,
+  entityManagedPartnershipId: null as string | null,
   pairUserFirst: "Alice" as string | null,
   pairUserLast: "Smith" as string | null,
   pairPartnerFirst: "Bob" as string | null,

@@ -54,6 +54,7 @@ export const partners = pgTable(
     firstName: text("first_name").notNull(),
     lastName: text("last_name").notNull(),
     partnerRole: partnerRoleEnum("partner_role").notNull().default("follower"),
+    kind: text("kind").notNull().default("partner"), // 'partner' | 'solo' | 'team' | 'other'
     email: text("email"),
     linkedUserId: text("linked_user_id").references(() => users.id),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
@@ -63,6 +64,43 @@ export const partners = pgTable(
     userIdx: index("idx_partners_user_id").on(t.userId),
     linkedIdx: index("idx_partners_linked_user_id").on(t.linkedUserId),
     emailIdx: index("idx_partners_email").on(t.email),
+  })
+);
+
+export const teams = pgTable(
+  "teams",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    identifier: text("identifier").notNull(),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+  },
+  (t) => ({
+    userIdentifierUq: uniqueIndex("uq_teams_user_identifier").on(t.userId, t.identifier),
+    userIdx: index("idx_teams_user_id").on(t.userId),
+  })
+);
+
+export const managedPartnerships = pgTable(
+  "managed_partnerships",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    leaderFirstName: text("leader_first_name").notNull(),
+    leaderLastName: text("leader_last_name").notNull(),
+    followerFirstName: text("follower_first_name").notNull(),
+    followerLastName: text("follower_last_name").notNull(),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+    deletedAt: bigint("deleted_at", { mode: "number" }),
+  },
+  (t) => ({
+    userIdx: index("idx_managed_partnerships_user_id").on(t.userId),
   })
 );
 
@@ -89,6 +127,7 @@ export const songs = pgTable(
       .notNull()
       .references(() => users.id),
     partnerId: text("partner_id").references(() => partners.id),
+    managedPartnershipId: text("managed_partnership_id").references(() => managedPartnerships.id),
     displayName: text("display_name"),
     originalFilename: text("original_filename"),
     driveFileId: text("drive_file_id"),
@@ -123,6 +162,30 @@ export const events = pgTable(
   },
   (t) => ({
     dateRangeCheck: check("ck_events_date_range", sql`${t.startDate} <= ${t.endDate}`),
+  })
+);
+
+export const eventSongSubmissions = pgTable(
+  "event_song_submissions",
+  {
+    id: text("id").primaryKey(),
+    eventId: text("event_id")
+      .notNull()
+      .references(() => events.id),
+    songId: text("song_id")
+      .notNull()
+      .references(() => songs.id),
+    submittedByUserId: text("submitted_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+  },
+  (t) => ({
+    eventSongUq: uniqueIndex("uq_event_song_submissions_event_song").on(t.eventId, t.songId),
+    eventIdx: index("idx_event_song_submissions_event_id").on(t.eventId),
+    submitterIdx: index("idx_event_song_submissions_submitted_by_user_id").on(
+      t.submittedByUserId
+    ),
   })
 );
 
@@ -182,6 +245,10 @@ export const checkins = pgTable(
     divisionName: text("division_name").notNull(),
     entityPairId: text("entity_pair_id").references(() => pairs.id, { onDelete: "restrict" }),
     entitySoloUserId: text("entity_solo_user_id").references(() => users.id, { onDelete: "restrict" }),
+    entityManagedPartnershipId: text("entity_managed_partnership_id").references(
+      () => managedPartnerships.id,
+      { onDelete: "restrict" }
+    ),
     songId: text("song_id")
       .notNull()
       .references(() => songs.id, { onDelete: "restrict" }),
@@ -196,10 +263,12 @@ export const checkins = pgTable(
     sessIdx: index("idx_checkins_session_id").on(t.sessionId),
     pairIdx: index("idx_checkins_entity_pair_id").on(t.entityPairId),
     soloIdx: index("idx_checkins_entity_solo_user_id").on(t.entitySoloUserId),
+    managedIdx: index("idx_checkins_entity_managed_partnership_id").on(t.entityManagedPartnershipId),
     entityXor: check(
       "ck_checkins_entity_xor",
-      sql`(${t.entityPairId} IS NOT NULL AND ${t.entitySoloUserId} IS NULL)
-           OR (${t.entityPairId} IS NULL AND ${t.entitySoloUserId} IS NOT NULL)`
+      sql`(${t.entityPairId} IS NOT NULL AND ${t.entitySoloUserId} IS NULL AND ${t.entityManagedPartnershipId} IS NULL)
+           OR (${t.entityPairId} IS NULL AND ${t.entitySoloUserId} IS NOT NULL AND ${t.entityManagedPartnershipId} IS NULL)
+           OR (${t.entityPairId} IS NULL AND ${t.entitySoloUserId} IS NULL AND ${t.entityManagedPartnershipId} IS NOT NULL)`
     ),
   })
 );
@@ -217,6 +286,10 @@ export const queueEntries = pgTable(
       .references(() => sessions.id),
     entityPairId: text("entity_pair_id").references(() => pairs.id, { onDelete: "restrict" }),
     entitySoloUserId: text("entity_solo_user_id").references(() => users.id, { onDelete: "restrict" }),
+    entityManagedPartnershipId: text("entity_managed_partnership_id").references(
+      () => managedPartnerships.id,
+      { onDelete: "restrict" }
+    ),
     queueType: queueTypeEnum("queue_type").notNull(),
     position: integer("position").notNull(),
     enteredQueueAt: bigint("entered_queue_at", { mode: "number" }).notNull(),
@@ -233,11 +306,15 @@ export const queueEntries = pgTable(
     soloLiveUq: uniqueIndex("uq_queue_entries_session_solo_live")
       .on(t.sessionId, t.entitySoloUserId)
       .where(sql`${t.entitySoloUserId} IS NOT NULL`),
+    managedLiveUq: uniqueIndex("uq_queue_entries_session_managed_live")
+      .on(t.sessionId, t.entityManagedPartnershipId)
+      .where(sql`${t.entityManagedPartnershipId} IS NOT NULL`),
     sessionIdx: index("idx_queue_entries_session_id").on(t.sessionId),
     entityXor: check(
       "ck_queue_entries_entity_xor",
-      sql`(${t.entityPairId} IS NOT NULL AND ${t.entitySoloUserId} IS NULL)
-           OR (${t.entityPairId} IS NULL AND ${t.entitySoloUserId} IS NOT NULL)`
+      sql`(${t.entityPairId} IS NOT NULL AND ${t.entitySoloUserId} IS NULL AND ${t.entityManagedPartnershipId} IS NULL)
+           OR (${t.entityPairId} IS NULL AND ${t.entitySoloUserId} IS NOT NULL AND ${t.entityManagedPartnershipId} IS NULL)
+           OR (${t.entityPairId} IS NULL AND ${t.entitySoloUserId} IS NULL AND ${t.entityManagedPartnershipId} IS NOT NULL)`
     ),
     positionPositive: check("ck_queue_entries_position_positive", sql`${t.position} >= 1`),
   })
@@ -258,6 +335,10 @@ export const runs = pgTable(
     divisionName: text("division_name").notNull(),
     entityPairId: text("entity_pair_id").references(() => pairs.id, { onDelete: "restrict" }),
     entitySoloUserId: text("entity_solo_user_id").references(() => users.id, { onDelete: "restrict" }),
+    entityManagedPartnershipId: text("entity_managed_partnership_id").references(
+      () => managedPartnerships.id,
+      { onDelete: "restrict" }
+    ),
     songId: text("song_id")
       .notNull()
       .references(() => songs.id, { onDelete: "restrict" }),
@@ -271,10 +352,15 @@ export const runs = pgTable(
     eventIdx: index("idx_runs_event_id").on(t.eventId),
     pairDivIdx: index("idx_runs_pair_division").on(t.entityPairId, t.divisionName),
     soloDivIdx: index("idx_runs_solo_division").on(t.entitySoloUserId, t.divisionName),
+    managedDivIdx: index("idx_runs_managed_division").on(
+      t.entityManagedPartnershipId,
+      t.divisionName
+    ),
     entityXor: check(
       "ck_runs_entity_xor",
-      sql`(${t.entityPairId} IS NOT NULL AND ${t.entitySoloUserId} IS NULL)
-           OR (${t.entityPairId} IS NULL AND ${t.entitySoloUserId} IS NOT NULL)`
+      sql`(${t.entityPairId} IS NOT NULL AND ${t.entitySoloUserId} IS NULL AND ${t.entityManagedPartnershipId} IS NULL)
+           OR (${t.entityPairId} IS NULL AND ${t.entitySoloUserId} IS NOT NULL AND ${t.entityManagedPartnershipId} IS NULL)
+           OR (${t.entityPairId} IS NULL AND ${t.entitySoloUserId} IS NULL AND ${t.entityManagedPartnershipId} IS NOT NULL)`
     ),
   })
 );
@@ -293,7 +379,6 @@ export const queueEvents = pgTable(
     toQueue: queueTypeEnum("to_queue"),
     toPosition: integer("to_position"),
     actorUserId: text("actor_user_id")
-      .notNull()
       .references(() => users.id),
     reason: text("reason"),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),

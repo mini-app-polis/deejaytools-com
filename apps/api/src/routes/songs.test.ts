@@ -7,12 +7,13 @@ import {
   assertSuccessListEnvelope,
   assertSuccessEnvelope,
   assertValidation400,
+  adminHeaders,
   authHeaders,
   type ErrorEnvelope,
   readJson,
   type SuccessEnvelope,
 } from "../test/helpers.js";
-import { enqueueSelectResult, mockDb, resetSelectQueue } from "../test/mocks.js";
+import { enqueueSelectResult, mockDb, resetSelectQueue, skipNextSelectResult } from "../test/mocks.js";
 
 /** Minimal bytes that pass server-side detectAudioFormat (ID3v2 header). */
 const MOCK_MP3_CHUNK_BYTES = Buffer.concat([Buffer.from("ID3"), Buffer.alloc(20)]);
@@ -83,6 +84,7 @@ function makeFinalSongRow(overrides: Record<string, unknown> = {}) {
       id: "song_new",
       userId: "user_test123",
       partnerId: null as string | null,
+      managedPartnershipId: null as string | null,
       displayName: "My Routine",
       originalFilename: "track.mp3",
       processedFilename: "kaianolevine_classic_2026_myroutine_v01.mp3",
@@ -108,6 +110,40 @@ function enqueueHappyPath(existingFilenames: (string | null)[] = []) {
   enqueueSelectResult([mockUserRow]); // user lookup
   enqueueSelectResult(existingFilenames.map((f) => ({ processedFilename: f }))); // existing rows for version
   enqueueSelectResult([finalRow]); // final select with partner join
+}
+
+const mockPartnerRow = {
+  id: "p1",
+  userId: "user_test123",
+  firstName: "Alex",
+  lastName: "Partner",
+  partnerRole: "leader" as const,
+  kind: "partner",
+  email: null as string | null,
+  linkedUserId: null as string | null,
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
+};
+
+/** Enqueue DB results for a single-chunk upload with a validated partner_id. */
+function enqueuePartnerHappyPath(
+  partnerId: string,
+  partnerRow: typeof mockPartnerRow,
+  existingFilenames: (string | null)[] = []
+) {
+  enqueueSelectResult([{ id: partnerId }]); // assertPartnerOwned
+  const finalRow = makeFinalSongRow({ partnerId });
+  enqueueSelectResult([{ ...finalRow.song, partnerId }]); // post-insert song select
+  enqueueSelectResult([mockUserRow]); // user lookup
+  enqueueSelectResult([partnerRow]); // partner lookup
+  enqueueSelectResult(existingFilenames.map((f) => ({ processedFilename: f }))); // existing rows for version
+  enqueueSelectResult([
+    {
+      ...finalRow,
+      partner_first_name: partnerRow.firstName,
+      partner_last_name: partnerRow.lastName,
+    },
+  ]); // final select with partner join
 }
 
 /** Build a valid single-chunk FormData. Override any field via the map. */
@@ -268,6 +304,25 @@ describe("DELETE /v1/songs/:id", () => {
       headers: authHeaders(),
     });
     expect(res.status).toBe(204);
+  });
+
+  it("removes event song submissions and soft-deletes the song", async () => {
+    const existing = songSelectRow({ id: "s1" }).song;
+    enqueueSelectResult([existing]);
+    enqueueSelectResult([]);
+    vi.mocked(mockDb.delete).mockClear();
+    vi.mocked(mockDb.update).mockClear();
+    vi.mocked(mockDb.transaction).mockClear();
+
+    const res = await app.request(`${BASE}/s1`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+
+    expect(res.status).toBe(204);
+    expect(mockDb.transaction).toHaveBeenCalledTimes(1);
+    expect(mockDb.delete).toHaveBeenCalledTimes(1);
+    expect(mockDb.update).toHaveBeenCalledTimes(1);
   });
 
   it("calls softDeleteOnDrive when drive IDs are present", async () => {
@@ -431,6 +486,24 @@ describe("POST /v1/songs/upload/chunk", () => {
     );
   });
 
+  it("preserves division casing in processed filename (ProAm LeaderAm → ProAmLeaderAm)", async () => {
+    mockFs.readdir.mockResolvedValue(["chunk_000000"]);
+    const finalRow = makeFinalSongRow({ division: "ProAm LeaderAm" });
+    enqueueSelectResult([finalRow.song]);
+    enqueueSelectResult([mockUserRow]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([finalRow]);
+    await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: makeChunkForm({ division: "ProAm LeaderAm" }),
+    });
+    expect(vi.mocked(drive.uploadSongToDrive)).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      expect.objectContaining({ filename: expect.stringContaining("_ProAmLeaderAm_") })
+    );
+  });
+
   it("increments from max version in existing filenames (v03 → v04)", async () => {
     enqueueHappyPath(["leader_classic_2026_routine_v03.mp3"]);
     await app.request(CHUNK_BASE, {
@@ -485,6 +558,113 @@ describe("POST /v1/songs/upload/chunk", () => {
       expect.any(Buffer),
       expect.objectContaining({ filename: expect.stringContaining("_v01") })
     );
+  });
+
+  it("assigns v01 independently per partner when division/routine/year match", async () => {
+    type VersionRow = {
+      partnerId: string;
+      processedFilename: string;
+    };
+
+    const versionStore: VersionRow[] = [];
+    let versionQueryActive = false;
+    let versionWhereArg: unknown = null;
+
+    const collectSqlLiterals = (node: unknown, out: string[] = [], seen = new Set<object>()): string[] => {
+      if (typeof node === "string") {
+        if (node === "p_a" || node === "p_b") out.push(node);
+        return out;
+      }
+      if (!node || typeof node !== "object") return out;
+      if (seen.has(node)) return out;
+      seen.add(node);
+      const n = node as { queryChunks?: unknown[] };
+      if (Array.isArray(n.queryChunks)) {
+        for (const chunk of n.queryChunks) collectSqlLiterals(chunk, out, seen);
+      }
+      return out;
+    };
+
+    const sqlHasPartnerScope = (node: unknown, seen = new Set<object>()): boolean => {
+      if (!node || typeof node !== "object") return false;
+      if (seen.has(node)) return false;
+      seen.add(node);
+      const n = node as { name?: string; queryChunks?: unknown[] };
+      if (n.name === "partner_id") return true;
+      if (Array.isArray(n.queryChunks)) return n.queryChunks.some((chunk) => sqlHasPartnerScope(chunk, seen));
+      return false;
+    };
+
+    const origSelect = mockDb.select.getMockImplementation()!;
+    const origWhere = mockDb.where.getMockImplementation()!;
+    const origThen = mockDb.then.getMockImplementation()!;
+
+    vi.mocked(mockDb.select).mockImplementation(function (this: typeof mockDb, arg?: unknown) {
+      versionQueryActive =
+        !!arg &&
+        typeof arg === "object" &&
+        "processedFilename" in (arg as Record<string, unknown>);
+      return origSelect.call(this, arg);
+    });
+
+    vi.mocked(mockDb.where).mockImplementation(function (this: typeof mockDb, ...args: unknown[]) {
+      if (versionQueryActive) versionWhereArg = args[0];
+      return origWhere.apply(this, args);
+    });
+
+    vi.mocked(mockDb.then).mockImplementation(function (
+      this: typeof mockDb,
+      onfulfilled?: ((value: unknown[]) => unknown) | null,
+      onrejected?: ((reason: unknown) => unknown) | null
+    ) {
+      if (versionQueryActive && versionWhereArg) {
+        versionQueryActive = false;
+        const hasPartnerScope = sqlHasPartnerScope(versionWhereArg);
+        const partnerId = collectSqlLiterals(versionWhereArg)[0] ?? "";
+        versionWhereArg = null;
+        skipNextSelectResult();
+        const rows = (hasPartnerScope
+          ? versionStore.filter((row) => row.partnerId === partnerId)
+          : versionStore
+        ).map((row) => ({ processedFilename: row.processedFilename }));
+        return Promise.resolve(rows).then(onfulfilled, onrejected);
+      }
+      return origThen.call(this, onfulfilled, onrejected);
+    });
+
+    mockFs.readdir.mockResolvedValue(["chunk_000000"]);
+
+    const partnerA = { ...mockPartnerRow, id: "p_a", firstName: "Alice", lastName: "Alpha" };
+    const partnerB = { ...mockPartnerRow, id: "p_b", firstName: "Bob", lastName: "Beta" };
+
+    resetSelectQueue();
+    vi.mocked(drive.uploadSongToDrive).mockClear();
+    enqueuePartnerHappyPath("p_a", partnerA, []);
+    const resA = await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: makeChunkForm({ partner_id: "p_a" }),
+    });
+    expect(resA.status).toBe(200);
+    const uploadA = vi.mocked(drive.uploadSongToDrive).mock.calls.at(-1)?.[1] as { filename: string };
+    expect(uploadA.filename).toMatch(/_v01\.mp3$/);
+    versionStore.push({ partnerId: "p_a", processedFilename: uploadA.filename });
+
+    resetSelectQueue();
+    vi.mocked(drive.uploadSongToDrive).mockClear();
+    enqueuePartnerHappyPath("p_b", partnerB, []);
+    const resB = await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: makeChunkForm({ partner_id: "p_b" }),
+    });
+    expect(resB.status).toBe(200);
+    const uploadB = vi.mocked(drive.uploadSongToDrive).mock.calls.at(-1)?.[1] as { filename: string };
+    expect(uploadB.filename).toMatch(/_v01\.mp3$/);
+
+    vi.mocked(mockDb.select).mockImplementation(origSelect);
+    vi.mocked(mockDb.where).mockImplementation(origWhere);
+    vi.mocked(mockDb.then).mockImplementation(origThen);
   });
 
   // --- partner validation ---
@@ -588,286 +768,293 @@ describe("POST /v1/songs/upload/chunk", () => {
     expect(body1.data.complete).toBe(true);
     expect(vi.mocked(drive.uploadSongToDrive)).toHaveBeenCalledOnce();
   });
-});
 
-// ---------------------------------------------------------------------------
-// POST /v1/songs/claim-legacy
-//
-// "Claim" copies a legacy_songs row into a real songs row owned by the user,
-// preserving division/routineName/descriptor and coalescing routine ← version
-// when the legacy row's routine name is empty.
-// ---------------------------------------------------------------------------
-
-describe("POST /v1/songs/claim-legacy", () => {
-  const ENDPOINT = `${BASE}/claim-legacy`;
-
-  beforeEach(() => {
-    resetSelectQueue();
-    vi.clearAllMocks();
-  });
-
-  it("returns 401 without auth", async () => {
-    const res = await app.request(ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ legacy_song_id: "L1" }),
-    });
-    expect(res.status).toBe(401);
-    assertErrorEnvelope(await readJson<ErrorEnvelope>(res));
-  });
-
-  it("returns 400 when legacy_song_id is missing", async () => {
-    const res = await app.request(ENDPOINT, {
-      method: "POST",
-      headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    expect(res.status).toBe(400);
-    assertValidation400(await readJson<ErrorEnvelope>(res));
-  });
-
-  it("returns 400 when partner_id is provided but not owned by the user", async () => {
-    // First select: partner ownership check → empty (not owned).
-    enqueueSelectResult([]);
-
-    const res = await app.request(ENDPOINT, {
-      method: "POST",
-      headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({
-        legacy_song_id: "L1",
-        partner_id: "stranger-partner",
-      }),
-    });
-    expect(res.status).toBe(400);
-    const body = await readJson<ErrorEnvelope>(res);
-    expect(body.error.message).toMatch(/Partner/i);
-  });
-
-  it("returns 404 when the legacy song id is unknown", async () => {
-    // Skipping partner_id (no partner ownership check needed).
-    // Legacy lookup → empty.
-    enqueueSelectResult([]);
-
-    const res = await app.request(ENDPOINT, {
-      method: "POST",
-      headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ legacy_song_id: "missing-legacy-id" }),
-    });
-    expect(res.status).toBe(404);
-  });
-
-  it("creates a song from a legacy entry that has a routine name", async () => {
-    // 1. Legacy lookup → returns the row.
+  it("creates a song with managed_partnership_id when managed_partnership_id is set", async () => {
+    vi.mocked(mockDb.insert).mockClear();
+    const managedPartnershipRow = {
+      id: "mp_1",
+      userId: "user_test123",
+      leaderFirstName: "Wendal",
+      leaderLastName: "Smith",
+      followerFirstName: "Lara",
+      followerLastName: "Jones",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    enqueueSelectResult([{ id: "mp_1" }]);
     enqueueSelectResult([
       {
-        id: "L1",
-        partnership: "Alice & Bob",
+        id: "song_new",
+        userId: "user_test123",
+        partnerId: null,
+        managedPartnershipId: "mp_1",
+        displayName: "My Routine",
+        originalFilename: "track.mp3",
+        processedFilename: null,
         division: "Classic",
-        routineName: "Sky High",
-        descriptor: null,
-        version: "The Open 2025",
-        submittedAt: "2025-01-01",
-        createdAt: 1,
+        routineName: "My Routine",
+        personalDescriptor: null,
+        seasonYear: null,
+        driveFileId: null,
+        driveFolderId: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       },
     ]);
-    // 2. Final select after insert — processedFilename mirrors what the handler computed.
-    enqueueSelectResult([
-      {
-        song: {
-          id: "song-new",
-          userId: "user_test123",
-          partnerId: null,
-          displayName: "Sky High",
-          originalFilename: null,
-          processedFilename: "[Legacy] Alice & Bob · Classic · The Open 2025",
-          driveFileId: null,
-          driveFolderId: null,
-          division: "Classic",
-          routineName: "Sky High",
-          personalDescriptor: null,
-          seasonYear: null,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-        partner_first_name: null,
-        partner_last_name: null,
-      },
-    ]);
+    enqueueSelectResult([mockUserRow]);
+    enqueueSelectResult([managedPartnershipRow]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([makeFinalSongRow({ managedPartnershipId: "mp_1" })]);
 
-    const res = await app.request(ENDPOINT, {
+    mockFs.readdir.mockResolvedValue(["chunk_000000"]);
+
+    const res = await app.request(CHUNK_BASE, {
       method: "POST",
-      headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ legacy_song_id: "L1" }),
+      headers: authHeaders(),
+      body: makeChunkForm({ managed_partnership_id: "mp_1", partner_id: "" }),
     });
-    expect(res.status).toBe(201);
-    const body = await readJson<SuccessEnvelope<Record<string, unknown>>>(res);
-    assertSuccessEnvelope(body);
-    expect(body.data.routine_name).toBe("Sky High");
-    expect(body.data.division).toBe("Classic");
-    expect(body.data.processed_filename).toBe("[Legacy] Alice & Bob · Classic · The Open 2025");
-    // No audio uploaded yet — Drive ids stay null.
-    expect(body.data.drive_file_id).toBeNull();
-  });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<{ complete: boolean }>>(res);
+    expect(body.data.complete).toBe(true);
 
-  it("coalesces routine_name to legacy.version when the legacy row has no routine name", async () => {
-    // 1. Legacy lookup → routine empty, version = "The Open 2025".
-    enqueueSelectResult([
-      {
-        id: "L2",
-        partnership: "Carol & Dave",
-        division: "Rising Star Classic",
-        routineName: null,
-        descriptor: null,
-        version: "The Open 2025",
-        submittedAt: null,
-        createdAt: 1,
-      },
-    ]);
-    // 2. Final select after insert — processedFilename mirrors what the handler computed.
-    enqueueSelectResult([
-      {
-        song: {
-          id: "song-new-2",
-          userId: "user_test123",
-          partnerId: null,
-          displayName: "The Open 2025",
-          originalFilename: null,
-          processedFilename: "[Legacy] Carol & Dave · Rising Star Classic · The Open 2025",
-          driveFileId: null,
-          driveFolderId: null,
-          division: "Rising Star Classic",
-          routineName: "The Open 2025",
-          personalDescriptor: null,
-          seasonYear: null,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-        partner_first_name: null,
-        partner_last_name: null,
-      },
-    ]);
-
-    const res = await app.request(ENDPOINT, {
-      method: "POST",
-      headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ legacy_song_id: "L2" }),
-    });
-    expect(res.status).toBe(201);
-    const body = await readJson<SuccessEnvelope<Record<string, unknown>>>(res);
-    // The coalesce: stored routine_name should be the legacy version string.
-    expect(body.data.routine_name).toBe("The Open 2025");
-    expect(body.data.division).toBe("Rising Star Classic");
-    expect(body.data.processed_filename).toBe("[Legacy] Carol & Dave · Rising Star Classic · The Open 2025");
-  });
-
-  it("inserts with processedFilename built from partnership · division · version", async () => {
-    // version = null → only partnership + division in the filename.
-    enqueueSelectResult([
-      {
-        id: "L3",
-        partnership: "Eve & Frank",
-        division: "Masters",
-        routineName: "Routine",
-        descriptor: null,
-        version: null,
-        submittedAt: null,
-        createdAt: 1,
-      },
-    ]);
-    enqueueSelectResult([
-      {
-        song: {
-          id: "song-new-3",
-          userId: "user_test123",
-          partnerId: null,
-          displayName: "Routine",
-          originalFilename: null,
-          processedFilename: "[Legacy] Eve & Frank · Masters",
-          driveFileId: null,
-          driveFolderId: null,
-          division: "Masters",
-          routineName: "Routine",
-          personalDescriptor: null,
-          seasonYear: null,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-        partner_first_name: null,
-        partner_last_name: null,
-      },
-    ]);
-
-    const res = await app.request(ENDPOINT, {
-      method: "POST",
-      headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ legacy_song_id: "L3" }),
-    });
-    expect(res.status).toBe(201);
-
-    // Verify the INSERT was called with the correct processedFilename.
-    const insertMock = mockDb.insert as ReturnType<typeof vi.fn>;
-    const valuesMock = insertMock.mock.results[0].value.values as ReturnType<typeof vi.fn>;
-    expect(valuesMock).toHaveBeenCalledWith(
-      expect.objectContaining({ processedFilename: "[Legacy] Eve & Frank · Masters" })
-    );
-
-    const body = await readJson<SuccessEnvelope<Record<string, unknown>>>(res);
-    expect(body.data.processed_filename).toBe("[Legacy] Eve & Frank · Masters");
-  });
-
-  it("inserts with all three segments when partnership, division, and version are all present", async () => {
-    enqueueSelectResult([
-      {
-        id: "L4",
-        partnership: "Grace & Hank",
-        division: "Showcase",
-        routineName: null,
-        descriptor: null,
-        version: "The Open 2025",
-        submittedAt: null,
-        createdAt: 1,
-      },
-    ]);
-    enqueueSelectResult([
-      {
-        song: {
-          id: "song-new-4",
-          userId: "user_test123",
-          partnerId: null,
-          displayName: "The Open 2025",
-          originalFilename: null,
-          processedFilename: "[Legacy] Grace & Hank · Showcase · The Open 2025",
-          driveFileId: null,
-          driveFolderId: null,
-          division: "Showcase",
-          routineName: "The Open 2025",
-          personalDescriptor: null,
-          seasonYear: null,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-        partner_first_name: null,
-        partner_last_name: null,
-      },
-    ]);
-
-    const res = await app.request(ENDPOINT, {
-      method: "POST",
-      headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ legacy_song_id: "L4" }),
-    });
-    expect(res.status).toBe(201);
-
+    expect(vi.mocked(mockDb.insert)).toHaveBeenCalledOnce();
     const insertMock = mockDb.insert as ReturnType<typeof vi.fn>;
     const valuesMock = insertMock.mock.results[0].value.values as ReturnType<typeof vi.fn>;
     expect(valuesMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        processedFilename: "[Legacy] Grace & Hank · Showcase · The Open 2025",
+        managedPartnershipId: "mp_1",
+        partnerId: null,
       })
     );
 
-    const body = await readJson<SuccessEnvelope<Record<string, unknown>>>(res);
-    expect(body.data.processed_filename).toBe("[Legacy] Grace & Hank · Showcase · The Open 2025");
+    expect(vi.mocked(drive.uploadSongToDrive)).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      expect.objectContaining({
+        filename: expect.stringMatching(/WendalSmith_LaraJones_Classic_/),
+      })
+    );
+  });
+
+  it("returns 400 when managed_partnership_id is not owned", async () => {
+    vi.mocked(mockDb.insert).mockClear();
+    mockFs.readdir.mockResolvedValue(["chunk_000000"]);
+    enqueueSelectResult([]);
+
+    const res = await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: makeChunkForm({ managed_partnership_id: "mp_bad", partner_id: "" }),
+    });
+    expect(res.status).toBe(400);
+    assertErrorEnvelope(await readJson<ErrorEnvelope>(res));
+    expect(vi.mocked(mockDb.insert)).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when a non-admin sends on_behalf_of_user_id", async () => {
+    vi.mocked(mockDb.insert).mockClear();
+    const res = await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: makeChunkForm({ on_behalf_of_user_id: "user_target456" }),
+    });
+    expect(res.status).toBe(403);
+    expect(vi.mocked(mockDb.insert)).not.toHaveBeenCalled();
+  });
+
+  it("creates a song owned by the target user when admin sends on_behalf_of_user_id", async () => {
+    vi.mocked(mockDb.insert).mockClear();
+    const targetUserId = "user_target456";
+    enqueueSelectResult([{ id: targetUserId }]);
+    const finalRow = makeFinalSongRow({ userId: targetUserId });
+    enqueueSelectResult([finalRow.song]);
+    enqueueSelectResult([{ ...mockUserRow, id: targetUserId }]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([finalRow]);
+
+    const res = await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: adminHeaders(),
+      body: makeChunkForm({ on_behalf_of_user_id: targetUserId }),
+    });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<{ complete: boolean; song: Record<string, unknown> }>>(res);
+    expect(body.data.complete).toBe(true);
+    expect(body.data.song).toMatchObject({ user_id: targetUserId });
+
+    const valuesFn = vi.mocked(mockDb.insert).mock.results[0]?.value?.values;
+    expect(valuesFn).toHaveBeenCalledWith(expect.objectContaining({ userId: targetUserId }));
+  });
+
+  it("creates a kind:team placeholder partner and links the song on portal upload", async () => {
+    vi.mocked(mockDb.insert).mockClear();
+    mockFs.readdir.mockResolvedValue(["chunk_000000"]);
+    const placeholderPartnerId = "11111111-1111-1111-1111-111111111111";
+    vi.spyOn(crypto, "randomUUID").mockReturnValue(placeholderPartnerId);
+
+    enqueueSelectResult([{ identifier: "Team Alpha" }]);
+    enqueueSelectResult([]);
+
+    const insertedSong = {
+      id: "song_portal",
+      userId: "user_test123",
+      partnerId: placeholderPartnerId,
+      managedPartnershipId: null,
+      displayName: "Team Routine",
+      originalFilename: "track.mp3",
+      processedFilename: null,
+      division: "Teams",
+      routineName: "Team Routine",
+      personalDescriptor: null,
+      seasonYear: null,
+      driveFileId: null,
+      driveFolderId: null,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    enqueueSelectResult([insertedSong]);
+    enqueueSelectResult([mockUserRow]);
+    enqueueSelectResult([
+      {
+        id: placeholderPartnerId,
+        userId: "user_test123",
+        firstName: "Team Alpha",
+        lastName: "",
+        partnerRole: "follower",
+        kind: "team",
+        email: null,
+        linkedUserId: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    ]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([
+      {
+        song: { ...insertedSong, processedFilename: "teamalpha_teams_2026_teamroutine_v01.mp3", seasonYear: "2026", driveFileId: "drive_file_1", driveFolderId: "drive_folder_1" },
+        partner_first_name: "Team Alpha",
+        partner_last_name: "",
+      },
+    ]);
+
+    const res = await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: makeChunkForm({
+        division: "Teams",
+        partner_id: "",
+        entity_type: "team",
+        team_id: "team_1",
+        routine_name: "Team Routine",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<{ complete: boolean; song: Record<string, unknown> }>>(res);
+    expect(body.data.complete).toBe(true);
+    expect(body.data.song).toMatchObject({ division: "Teams", partner_id: placeholderPartnerId });
+
+    expect(vi.mocked(mockDb.insert)).toHaveBeenCalledTimes(2);
+    const valuesFn = vi.mocked(mockDb.insert).mock.results[0]?.value?.values as ReturnType<
+      typeof vi.fn
+    >;
+    expect(valuesFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        firstName: "Team Alpha",
+        lastName: "",
+        partnerRole: "follower",
+        kind: "team",
+      })
+    );
+    const songInsert = vi.mocked(mockDb.insert).mock.results[1]?.value?.values as ReturnType<typeof vi.fn>;
+    expect(songInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        partnerId: placeholderPartnerId,
+        managedPartnershipId: null,
+        division: "Teams",
+      })
+    );
+
+    expect(vi.mocked(drive.uploadSongToDrive)).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      expect.objectContaining({
+        filename: expect.stringMatching(/^TeamAlpha_/),
+      })
+    );
+
+    vi.mocked(crypto.randomUUID).mockRestore();
+  });
+
+  it("reuses an existing placeholder partner for repeat portal uploads of the same entity", async () => {
+    vi.mocked(mockDb.insert).mockClear();
+    mockFs.readdir.mockResolvedValue(["chunk_000000"]);
+    const existingPartnerId = "22222222-2222-2222-2222-222222222222";
+
+    enqueueSelectResult([{ identifier: "Team Alpha" }]);
+    enqueueSelectResult([{ id: existingPartnerId }]);
+
+    const insertedSong = {
+      id: "song_portal_2",
+      userId: "user_test123",
+      partnerId: existingPartnerId,
+      managedPartnershipId: null,
+      displayName: "Team Routine v2",
+      originalFilename: "track.mp3",
+      processedFilename: null,
+      division: "Teams",
+      routineName: "Team Routine v2",
+      personalDescriptor: null,
+      seasonYear: null,
+      driveFileId: null,
+      driveFolderId: null,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    enqueueSelectResult([insertedSong]);
+    enqueueSelectResult([mockUserRow]);
+    enqueueSelectResult([
+      {
+        id: existingPartnerId,
+        userId: "user_test123",
+        firstName: "Team Alpha",
+        lastName: "",
+        partnerRole: "follower",
+        kind: "team",
+        email: null,
+        linkedUserId: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    ]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([
+      {
+        song: { ...insertedSong, processedFilename: "teamalpha_teams_2026_teamroutinev2_v01.mp3", seasonYear: "2026", driveFileId: "drive_file_1", driveFolderId: "drive_folder_1" },
+        partner_first_name: "Team Alpha",
+        partner_last_name: "",
+      },
+    ]);
+
+    const res = await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: makeChunkForm({
+        division: "Teams",
+        partner_id: "",
+        entity_type: "team",
+        team_id: "team_1",
+        routine_name: "Team Routine v2",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<{ complete: boolean; song: Record<string, unknown> }>>(res);
+    expect(body.data.song).toMatchObject({ partner_id: existingPartnerId });
+
+    expect(vi.mocked(mockDb.insert)).toHaveBeenCalledTimes(1);
+    const songInsert = vi.mocked(mockDb.insert).mock.results[0]?.value?.values as ReturnType<typeof vi.fn>;
+    expect(songInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        partnerId: existingPartnerId,
+      })
+    );
   });
 });
 

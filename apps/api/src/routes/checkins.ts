@@ -1,14 +1,31 @@
 import { CommonErrors, createLogger, error, success } from "common-typescript-utils";
-import { and, count, desc, eq, inArray, or } from "drizzle-orm";
+import { createCheckinBodySchema } from "@deejaytools/schemas";
+import { and, count, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
-import { z } from "zod";
 import { db } from "../db/index.js";
-import { checkins, events, pairs, partners, queueEntries, queueEvents, runs, sessions, songs, users } from "../db/schema.js";
+import {
+  checkins,
+  events,
+  eventSongSubmissions,
+  managedPartnerships,
+  pairs,
+  partners,
+  queueEntries,
+  queueEvents,
+  runs,
+  sessions,
+  songs,
+  users,
+} from "../db/schema.js";
+import { partnershipDisplay } from "../lib/entityLabel.js";
 import { zValidator } from "../lib/validate.js";
 import { determineInitialQueue, loadAdmissionContext } from "../lib/queue/admission.js";
+import type { EntityRef } from "../lib/queue/runCounts.js";
 import { entityHasLiveEntry } from "../lib/queue/singleEntry.js";
 import { nextBottomPosition, compactAfterRemoval } from "../lib/queue/compaction.js";
+import { fillActiveQueue, lockSessionForFill } from "../lib/queue/fill.js";
+import { invalidateQueueCache } from "../lib/cache.js";
 import { requireAuth } from "../middleware/auth.js";
 import { invalidateSessionCache } from "./sessions.js";
 
@@ -16,30 +33,30 @@ const logger = createLogger("deejaytools-api");
 
 export const checkinRoutes = new Hono();
 
-const createCheckinBody = z
-  .object({
-    sessionId: z.string().min(1),
-    divisionName: z.string().min(1),
-    entityPairId: z.string().nullish(),
-    entitySoloUserId: z.string().nullish(),
-    songId: z.string().min(1),
-    notes: z.string().nullish(),
-  })
-  .refine(
-    (b) =>
-      (Boolean(b.entityPairId) && !b.entitySoloUserId) ||
-      (!b.entityPairId && Boolean(b.entitySoloUserId)),
-    { message: "Exactly one of entityPairId / entitySoloUserId must be provided" }
-  );
-
 /** POST /v1/checkins — create a new check-in for an entity in an open session. */
 checkinRoutes.post(
   "/",
   requireAuth,
-  zValidator("json", createCheckinBody),
+  zValidator("json", createCheckinBodySchema),
   async (c) => {
-    const userId = c.get("user").userId;
     const body = c.req.valid("json");
+    const caller = c.get("user");
+    const onBehalfUserId =
+      typeof body.on_behalf_of_user_id === "string" && body.on_behalf_of_user_id.trim()
+        ? body.on_behalf_of_user_id.trim()
+        : null;
+    if (onBehalfUserId && caller.role !== "admin") {
+      return c.json(CommonErrors.forbidden(), 403);
+    }
+    const effectiveUserId = onBehalfUserId ?? caller.userId;
+    if (onBehalfUserId) {
+      const [target] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.id, onBehalfUserId))
+        .limit(1);
+      if (!target) return c.json(CommonErrors.badRequest("Target user not found"), 400);
+    }
     const now = Date.now();
 
     const [session] = await db
@@ -57,28 +74,138 @@ checkinRoutes.post(
     if (now > session.floorTrialEndsAt)
       return c.json(CommonErrors.badRequest("Check-in is closed for this session"), 400);
 
-    if (body.entityPairId) {
+    const [song] = await db
+      .select({
+        id: songs.id,
+        managedPartnershipId: songs.managedPartnershipId,
+        partnerId: songs.partnerId,
+      })
+      .from(songs)
+      .where(
+        and(eq(songs.id, body.songId), eq(songs.userId, effectiveUserId), isNull(songs.deletedAt))
+      )
+      .limit(1);
+    if (!song) return c.json(CommonErrors.notFound("Song"), 404);
+
+    let entityPairId: string | null = null;
+    let entitySoloUserId: string | null = null;
+    let entityManagedPartnershipId: string | null = null;
+    let entity: EntityRef;
+
+    if (onBehalfUserId) {
+      if (song.managedPartnershipId) {
+        const [managed] = await db
+          .select({ id: managedPartnerships.id, userId: managedPartnerships.userId })
+          .from(managedPartnerships)
+          .where(
+            and(
+              eq(managedPartnerships.id, song.managedPartnershipId),
+              isNull(managedPartnerships.deletedAt)
+            )
+          )
+          .limit(1);
+        if (!managed || managed.userId !== effectiveUserId) {
+          return c.json(CommonErrors.badRequest("Managed partnership not found"), 400);
+        }
+        entityManagedPartnershipId = song.managedPartnershipId;
+        entity = { managedPartnershipId: song.managedPartnershipId };
+      } else if (song.partnerId) {
+        let [pair] = await db
+          .select({ id: pairs.id })
+          .from(pairs)
+          .where(and(eq(pairs.userAId, effectiveUserId), eq(pairs.partnerBId, song.partnerId)))
+          .limit(1);
+        if (!pair) {
+          const pairId = crypto.randomUUID();
+          await db.insert(pairs).values({
+            id: pairId,
+            userAId: effectiveUserId,
+            partnerBId: song.partnerId,
+            createdAt: now,
+          });
+          pair = { id: pairId };
+        }
+        entityPairId = pair.id;
+        entity = { pairId: pair.id };
+      } else {
+        entitySoloUserId = effectiveUserId;
+        entity = { soloUserId: effectiveUserId };
+      }
+    } else if (song.managedPartnershipId) {
+      const [managed] = await db
+        .select({ id: managedPartnerships.id, userId: managedPartnerships.userId })
+        .from(managedPartnerships)
+        .where(
+          and(
+            eq(managedPartnerships.id, song.managedPartnershipId),
+            isNull(managedPartnerships.deletedAt)
+          )
+        )
+        .limit(1);
+      if (!managed || managed.userId !== effectiveUserId) {
+        return c.json(CommonErrors.badRequest("Managed partnership not found"), 400);
+      }
+      entityManagedPartnershipId = song.managedPartnershipId;
+      entity = { managedPartnershipId: song.managedPartnershipId };
+    } else if (body.entityPairId) {
       const [pair] = await db
         .select({ userAId: pairs.userAId, partnerBId: pairs.partnerBId })
         .from(pairs)
         .where(eq(pairs.id, body.entityPairId));
       if (!pair) return c.json(CommonErrors.badRequest("Pair not found"), 400);
-      if (pair.userAId !== userId)
+      if (pair.userAId !== effectiveUserId)
         return c.json(CommonErrors.badRequest("You are not a member of this pair"), 400);
+      entityPairId = body.entityPairId;
+      entity = { pairId: body.entityPairId };
+    } else if (body.entityManagedPartnershipId) {
+      return c.json(
+        CommonErrors.badRequest("This song is not associated with a managed partnership"),
+        400
+      );
     } else {
-      if (body.entitySoloUserId !== userId)
+      if (body.entitySoloUserId !== effectiveUserId)
         return c.json(CommonErrors.badRequest("You may only submit a solo check-in for yourself"), 400);
+      entitySoloUserId = body.entitySoloUserId ?? null;
+      entity = { soloUserId: body.entitySoloUserId! };
     }
 
-    const entity = {
-      pairId: body.entityPairId ?? undefined,
-      soloUserId: body.entitySoloUserId ?? undefined,
-    };
     if (await entityHasLiveEntry(entity, body.sessionId))
       return c.json(
         error("conflict", "This entity already has a live queue entry in this session"),
         409
       );
+
+    if (session.eventId != null) {
+      const [submission] = await db
+        .select({ id: eventSongSubmissions.id })
+        .from(eventSongSubmissions)
+        .where(
+          and(
+            eq(eventSongSubmissions.eventId, session.eventId),
+            eq(eventSongSubmissions.songId, body.songId)
+          )
+        )
+        .limit(1);
+
+      if (!submission) {
+        logger.error({
+          event: "checkin_song_not_submitted",
+          category: "api",
+          context: {
+            sessionId: body.sessionId,
+            eventId: session.eventId,
+            songId: body.songId,
+            userId: effectiveUserId,
+          },
+        });
+        return c.json(
+          CommonErrors.badRequest(
+            "This song hasn't been submitted to this event. Add it to the event on My Content before checking in."
+          ),
+          400
+        );
+      }
+    }
 
     let initialQueue: "priority" | "non_priority";
     try {
@@ -95,14 +222,16 @@ checkinRoutes.post(
 
     try {
       await db.transaction(async (tx) => {
+        const lockedSession = await lockSessionForFill(tx, body.sessionId);
         await tx.insert(checkins).values({
           id: checkinId,
           sessionId: body.sessionId,
           divisionName: body.divisionName,
-          entityPairId: body.entityPairId ?? null,
-          entitySoloUserId: body.entitySoloUserId ?? null,
+          entityPairId,
+          entitySoloUserId,
+          entityManagedPartnershipId,
           songId: body.songId,
-          submittedByUserId: userId,
+          submittedByUserId: effectiveUserId,
           initialQueue,
           notes: body.notes ?? null,
           createdAt: now,
@@ -114,8 +243,9 @@ checkinRoutes.post(
           id: queueEntryId,
           checkinId,
           sessionId: body.sessionId,
-          entityPairId: body.entityPairId ?? null,
-          entitySoloUserId: body.entitySoloUserId ?? null,
+          entityPairId,
+          entitySoloUserId,
+          entityManagedPartnershipId,
           queueType: initialQueue,
           position,
           enteredQueueAt: now,
@@ -130,10 +260,12 @@ checkinRoutes.post(
           fromPosition: null,
           toQueue: initialQueue,
           toPosition: position,
-          actorUserId: userId,
+          actorUserId: caller.userId,
           reason: null,
           createdAt: now,
         });
+
+        if (lockedSession) await fillActiveQueue(tx, lockedSession, caller.userId, now);
       });
     } catch (err) {
       logger.error({
@@ -142,9 +274,10 @@ checkinRoutes.post(
         context: {
           sessionId: body.sessionId,
           divisionName: body.divisionName,
-          userId,
-          entityPairId: body.entityPairId ?? null,
-          entitySoloUserId: body.entitySoloUserId ?? null,
+          userId: effectiveUserId,
+          entityPairId,
+          entitySoloUserId,
+          entityManagedPartnershipId,
         },
         error: err,
       });
@@ -154,6 +287,7 @@ checkinRoutes.post(
       );
     }
 
+    invalidateQueueCache(body.sessionId);
     return c.json(
       success({
         id: checkinId,
@@ -183,15 +317,20 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
     .where(eq(pairs.userAId, userId));
   const pairIds = userPairs.map((p) => p.id);
 
+  const userManagedPartnerships = await db
+    .select({ id: managedPartnerships.id })
+    .from(managedPartnerships)
+    .where(eq(managedPartnerships.userId, userId));
+  const managedPartnershipIds = userManagedPartnerships.map((p) => p.id);
+
   // Filter on queueEntries.* so the ownership check uses the same authoritative
   // source as the has_active_checkin queries in sessions.ts.
-  const whereClause =
-    pairIds.length > 0
-      ? or(
-          eq(queueEntries.entitySoloUserId, userId),
-          inArray(queueEntries.entityPairId, pairIds)
-        )
-      : eq(queueEntries.entitySoloUserId, userId);
+  const whereParts = [eq(queueEntries.entitySoloUserId, userId)];
+  if (pairIds.length > 0) whereParts.push(inArray(queueEntries.entityPairId, pairIds));
+  if (managedPartnershipIds.length > 0) {
+    whereParts.push(inArray(queueEntries.entityManagedPartnershipId, managedPartnershipIds));
+  }
+  const whereClause = whereParts.length > 1 ? or(...whereParts) : whereParts[0]!;
 
   const rows = await db
     .select({
@@ -207,6 +346,7 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
       // can be stale on legacy rows that pre-date the entity-column alignment fix.
       entityPairId: queueEntries.entityPairId,
       entitySoloUserId: queueEntries.entitySoloUserId,
+      entityManagedPartnershipId: queueEntries.entityManagedPartnershipId,
       notes: checkins.notes,
       checkedInAt: checkins.createdAt,
       songDisplayName: songs.displayName,
@@ -220,6 +360,11 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
       pairUserLast: pairUser.lastName,
       pairPartnerFirst: partners.firstName,
       pairPartnerLast: partners.lastName,
+      pairPartnerKind: partners.kind,
+      managedLeaderFirst: managedPartnerships.leaderFirstName,
+      managedLeaderLast: managedPartnerships.leaderLastName,
+      managedFollowerFirst: managedPartnerships.followerFirstName,
+      managedFollowerLast: managedPartnerships.followerLastName,
     })
     .from(checkins)
     .innerJoin(queueEntries, eq(queueEntries.checkinId, checkins.id))
@@ -229,6 +374,10 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
     .leftJoin(pairs, eq(pairs.id, queueEntries.entityPairId))
     .leftJoin(pairUser, eq(pairUser.id, pairs.userAId))
     .leftJoin(partners, eq(partners.id, pairs.partnerBId))
+    .leftJoin(
+      managedPartnerships,
+      eq(managedPartnerships.id, queueEntries.entityManagedPartnershipId)
+    )
     .where(whereClause)
     .orderBy(desc(checkins.createdAt));
 
@@ -266,20 +415,30 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
   if (sessionIds.length > 0) {
     const runCountParts = [eq(runs.entitySoloUserId, userId)];
     if (pairIds.length > 0) runCountParts.push(inArray(runs.entityPairId, pairIds));
+    if (managedPartnershipIds.length > 0) {
+      runCountParts.push(inArray(runs.entityManagedPartnershipId, managedPartnershipIds));
+    }
 
     const runCounts = await db
       .select({
         sessionId: runs.sessionId,
         entityPairId: runs.entityPairId,
         entitySoloUserId: runs.entitySoloUserId,
+        entityManagedPartnershipId: runs.entityManagedPartnershipId,
         n: count(),
       })
       .from(runs)
       .where(and(inArray(runs.sessionId, sessionIds), or(...runCountParts)))
-      .groupBy(runs.sessionId, runs.entityPairId, runs.entitySoloUserId);
+      .groupBy(
+        runs.sessionId,
+        runs.entityPairId,
+        runs.entitySoloUserId,
+        runs.entityManagedPartnershipId
+      );
 
     for (const rc of runCounts) {
-      const entityKey = rc.entityPairId ?? rc.entitySoloUserId;
+      const entityKey =
+        rc.entityPairId ?? rc.entitySoloUserId ?? rc.entityManagedPartnershipId;
       if (entityKey) runCountMap.set(`${rc.sessionId}:${entityKey}`, Number(rc.n));
     }
   }
@@ -293,15 +452,27 @@ checkinRoutes.get("/mine", requireAuth, async (c) => {
 
   const data = rows.map((r) => {
     let entityLabel: string;
-    if (r.entityPairId && (r.pairUserFirst || r.pairUserLast)) {
+    if (r.entityManagedPartnershipId && r.managedLeaderFirst != null) {
+      const leader = [r.managedLeaderFirst, r.managedLeaderLast].filter(Boolean).join(" ").trim();
+      const follower = [r.managedFollowerFirst, r.managedFollowerLast]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      entityLabel = follower ? `${leader} & ${follower}` : leader;
+    } else if (r.entityPairId && (r.pairUserFirst || r.pairUserLast)) {
       const a = [r.pairUserFirst, r.pairUserLast].filter(Boolean).join(" ").trim();
       const b = [r.pairPartnerFirst, r.pairPartnerLast].filter(Boolean).join(" ").trim();
-      entityLabel = b ? `${a} & ${b}` : a;
+      entityLabel = partnershipDisplay({
+        ownerName: a,
+        partnerName: b,
+        partnerKind: r.pairPartnerKind,
+      });
     } else {
       entityLabel = "Solo";
     }
 
-    const entityKey = r.entityPairId ?? r.entitySoloUserId;
+    const entityKey =
+      r.entityPairId ?? r.entitySoloUserId ?? r.entityManagedPartnershipId;
     const runCount = entityKey ? (runCountMap.get(`${r.sessionId}:${entityKey}`) ?? 0) : 0;
 
     return {
@@ -352,6 +523,7 @@ checkinRoutes.delete("/:id", requireAuth, async (c) => {
       sessionId: checkins.sessionId,
       entityPairId: queueEntries.entityPairId,
       entitySoloUserId: queueEntries.entitySoloUserId,
+      entityManagedPartnershipId: queueEntries.entityManagedPartnershipId,
       queueEntryId: queueEntries.id,
       queueType: queueEntries.queueType,
       position: queueEntries.position,
@@ -373,11 +545,20 @@ checkinRoutes.delete("/:id", requireAuth, async (c) => {
       .limit(1);
     owned = pair?.userAId === userId;
   }
+  if (!owned && row.entityManagedPartnershipId) {
+    const [managed] = await db
+      .select({ userId: managedPartnerships.userId })
+      .from(managedPartnerships)
+      .where(eq(managedPartnerships.id, row.entityManagedPartnershipId))
+      .limit(1);
+    owned = managed?.userId === userId;
+  }
 
   if (!owned) return c.json(CommonErrors.forbidden(), 403);
 
   try {
     await db.transaction(async (tx) => {
+      const lockedSession = await lockSessionForFill(tx, row.sessionId);
       await tx.delete(queueEntries).where(eq(queueEntries.id, row.queueEntryId));
       await compactAfterRemoval(tx, row.sessionId, row.queueType, row.position);
 
@@ -394,6 +575,8 @@ checkinRoutes.delete("/:id", requireAuth, async (c) => {
         reason: "self_withdrew",
         createdAt: now,
       });
+
+      if (lockedSession) await fillActiveQueue(tx, lockedSession, userId, now);
     });
   } catch (err) {
     logger.error({
@@ -406,5 +589,6 @@ checkinRoutes.delete("/:id", requireAuth, async (c) => {
   }
 
   invalidateSessionCache(row.sessionId);
+  invalidateQueueCache(row.sessionId);
   return c.json(success({ withdrawn: true }));
 });

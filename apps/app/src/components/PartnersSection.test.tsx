@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { apiGet, apiPost, apiPatch, apiDel, apiClient } = vi.hoisted(() => {
@@ -44,7 +45,11 @@ beforeEach(() => {
 });
 
 function renderSection() {
-  return render(<PartnersSection />);
+  return render(
+    <MemoryRouter>
+      <PartnersSection />
+    </MemoryRouter>
+  );
 }
 
 const mockPartners = [

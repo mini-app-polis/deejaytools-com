@@ -69,7 +69,7 @@ describe("useApiClient.get", () => {
     getToken.mockResolvedValueOnce(null);
     fetchMock.mockResolvedValue(jsonResponse({ data: [], meta: { version: "v1", count: 0 } }));
     const { result } = renderHook(() => useApiClient());
-    await result.current.get("/v1/legacy-songs");
+    await result.current.get("/v1/foo");
 
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     const headers = init.headers as Headers;

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -27,14 +28,18 @@ vi.mock("@clerk/clerk-react", () => ({
   UserButton: () => <div data-testid="user-button" />,
 }));
 
-// Drive useAuthMe via another mutable flag.
+// Drive useAuthMe via mutable flags.
 let isAdmin = false;
+let isManager = false;
 vi.mock("@/hooks/useAuthMe", () => ({
   useAuthMe: () => ({
-    me: signedIn ? { id: "u1", role: isAdmin ? "admin" : "user" } : null,
+    me: signedIn
+      ? { id: "u1", role: isAdmin ? "admin" : isManager ? "manager" : "user" }
+      : null,
     loading: false,
     reload: vi.fn(),
     isAdmin,
+    isManager,
   }),
 }));
 
@@ -49,14 +54,14 @@ function renderNav() {
 }
 
 describe("NavBar — signed out", () => {
-  it("shows the Floor Trials link and the Sign in button, nothing else", () => {
+  it("shows public nav links and the Sign in button", () => {
     signedIn = false;
     isAdmin = false;
+    isManager = false;
     renderNav();
 
-    // Floor Trials is the only public nav item — it appears in the desktop nav
-    // AND the mobile menu (when closed, mobile menu isn't rendered, so just one).
     expect(screen.getAllByRole("link", { name: /floor trials/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /^help$/i }).length).toBeGreaterThan(0);
     // Sign in CTA renders.
     expect(screen.getByTestId("sign-in-button")).toBeInTheDocument();
     // Authenticated-only items must not appear.
@@ -68,36 +73,90 @@ describe("NavBar — signed out", () => {
 });
 
 describe("NavBar — signed in (regular user)", () => {
-  it("shows Floor Trials, My Content, My Profile and the UserButton; no Admin link", () => {
+  it("shows Floor Trials, Help, My Content, My Profile and the UserButton; no admin bars", () => {
     signedIn = true;
     isAdmin = false;
+    isManager = false;
     renderNav();
 
     expect(screen.getAllByRole("link", { name: /floor trials/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /^help$/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /^my content$/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /^my profile$/i }).length).toBeGreaterThan(0);
     expect(screen.getByTestId("user-button")).toBeInTheDocument();
 
-    expect(screen.queryByRole("link", { name: /^admin$/i })).toBeNull();
+    expect(screen.queryByText("Superuser")).toBeNull();
+    expect(screen.queryByText("Manager")).toBeNull();
     expect(screen.queryByTestId("sign-in-button")).toBeNull();
   });
 });
 
 describe("NavBar — signed in (admin)", () => {
-  it("shows the Admin dropdown trigger in addition to the regular signed-in items", () => {
+  it("shows Superuser and Manager sub-bars with their section links", () => {
     signedIn = true;
     isAdmin = true;
+    isManager = false;
     renderNav();
 
-    // Admin is now a dropdown (button) on desktop instead of a single link
-    // to /admin. The individual /admin/<section> links live inside the
-    // dropdown popover and only render when it's opened, so we just verify
-    // the trigger button exists here.
-    expect(screen.getByRole("button", { name: /^admin/i })).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: /floor trials/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /^my content$/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /^my profile$/i }).length).toBeGreaterThan(0);
     expect(screen.getByTestId("user-button")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^admin$/i })).toBeNull();
+    expect(screen.getByText("Superuser")).toBeInTheDocument();
+    expect(screen.getByText("Manager")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^events$/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^test checkin$/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^active sessions$/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^checkin for$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^live queue$/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^test inject$/i })).toBeNull();
+  });
+});
+
+describe("NavBar — signed in (manager only)", () => {
+  it("shows the Manager sub-bar but not Superuser", () => {
+    signedIn = true;
+    isAdmin = false;
+    isManager = true;
+    renderNav();
+
+    expect(screen.getByText("Manager")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^active sessions$/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^upload for$/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^checkin for$/i })).toBeInTheDocument();
+    expect(screen.queryByText("Superuser")).toBeNull();
+    expect(screen.queryByRole("link", { name: /^events$/i })).toBeNull();
+  });
+});
+
+describe("NavBar — mobile menu", () => {
+  it("shows Help in the mobile nav for signed-out users", async () => {
+    signedIn = false;
+    isAdmin = false;
+    isManager = false;
+    const user = userEvent.setup();
+    renderNav();
+
+    await user.click(screen.getByRole("button", { name: /toggle menu/i }));
+
+    const helpLinks = screen.getAllByRole("link", { name: /^help$/i });
+    expect(helpLinks.length).toBeGreaterThan(0);
+    expect(helpLinks.some((link) => link.getAttribute("href") === "/how-it-works")).toBe(true);
+  });
+
+  it("shows Help in the mobile nav for signed-in users", async () => {
+    signedIn = true;
+    isAdmin = false;
+    isManager = false;
+    const user = userEvent.setup();
+    renderNav();
+
+    await user.click(screen.getByRole("button", { name: /toggle menu/i }));
+
+    const helpLinks = screen.getAllByRole("link", { name: /^help$/i });
+    expect(helpLinks.length).toBeGreaterThan(0);
+    expect(helpLinks.some((link) => link.getAttribute("href") === "/how-it-works")).toBe(true);
   });
 });
 
@@ -105,11 +164,47 @@ describe("NavBar — wordmark", () => {
   it("renders the DJT icon, DeejayTools.com wordmark and version label", () => {
     signedIn = false;
     isAdmin = false;
+    isManager = false;
     renderNav();
     // The new layout uses a square DJT icon (alt="DeejayTools") next to a
     // visible "DeejayTools.com" text wordmark, with a small version label.
     expect(screen.getByAltText("DeejayTools")).toBeInTheDocument();
     expect(screen.getByText("DeejayTools.com")).toBeInTheDocument();
     expect(screen.getByText(/^v\d/)).toBeInTheDocument();
+  });
+});
+
+describe("NavBar — environment badge", () => {
+  const originalLocation = window.location;
+
+  afterEach(() => {
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: originalLocation,
+    });
+  });
+
+  function setHostname(hostname: string) {
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { ...originalLocation, hostname },
+    });
+  }
+
+  it("shows a DEV badge on non-production hosts (e.g. localhost)", () => {
+    signedIn = false;
+    isAdmin = false;
+    isManager = false;
+    renderNav();
+    expect(screen.getByText("DEV")).toBeInTheDocument();
+  });
+
+  it("hides the DEV badge on the production host", () => {
+    signedIn = false;
+    isAdmin = false;
+    isManager = false;
+    setHostname("deejaytools.com");
+    renderNav();
+    expect(screen.queryByText("DEV")).toBeNull();
   });
 });

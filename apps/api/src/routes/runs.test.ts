@@ -36,6 +36,7 @@ type RunRow = {
   song_id: string;
   song_label: string;
   entity_label: string;
+  entity_key: string;
   completed_by_label: string;
 };
 
@@ -87,6 +88,9 @@ describe("GET /v1/runs", () => {
         pairUserLast: "Smith",
         pairPartnerFirst: "Bob",
         pairPartnerLast: "Jones",
+        entityPairId: "pair-1",
+        entitySoloUserId: null,
+        entityManagedPartnershipId: null,
         soloUserFirst: null,
         soloUserLast: null,
         completedByFirst: "Admin",
@@ -101,9 +105,63 @@ describe("GET /v1/runs", () => {
     const r = body.data[0];
     expect(r.id).toBe("run-1");
     expect(r.entity_label).toBe("Alice Smith & Bob Jones");
+    expect(r.entity_key).toBe("pair:pair-1");
     expect(r.song_label).toBe("Alice Smith & Bob Jones Classic 2026 Sky High v03");
     expect(r.event_name).toBe("GNDC");
     expect(r.completed_by_label).toBe("Admin Person");
+  });
+
+  it("uses a single entity name for placeholder team partner song and pair labels", async () => {
+    enqueueSelectResult([
+      {
+        id: "run-team",
+        completedAt: 1700000000000,
+        divisionName: "Teams",
+        sessionId: "s1",
+        sessionFloorTrialStartsAt: 1699990000000,
+        eventId: "e1",
+        eventName: "GNDC",
+        songId: "song-team",
+        songDisplayName: "Team Routine",
+        songProcessedFilename: "teamalpha_teams_2026_teamroutine_v01.mp3",
+        songDivision: "Teams",
+        songSeasonYear: "2026",
+        songRoutineName: "Team Routine",
+        songOwnerFirst: "Alice",
+        songOwnerLast: "Smith",
+        songPartnerFirst: "Team Alpha",
+        songPartnerLast: "",
+        songPartnerKind: "team",
+        songManagedLeaderFirst: null,
+        songManagedLeaderLast: null,
+        songManagedFollowerFirst: null,
+        songManagedFollowerLast: null,
+        pairUserFirst: "Alice",
+        pairUserLast: "Smith",
+        pairPartnerFirst: "Team Alpha",
+        pairPartnerLast: "",
+        pairPartnerKind: "team",
+        entityPairId: "pair-team",
+        entitySoloUserId: null,
+        entityManagedPartnershipId: null,
+        soloUserFirst: null,
+        soloUserLast: null,
+        managedLeaderFirst: null,
+        managedLeaderLast: null,
+        managedFollowerFirst: null,
+        managedFollowerLast: null,
+        completedByFirst: "Admin",
+        completedByLast: "Person",
+      },
+    ]);
+
+    const res = await app.request(ENDPOINT, { headers: adminHeaders() });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<RunRow[]>>(res);
+    expect(body.data[0].entity_label).toBe("Team Alpha");
+    expect(body.data[0].song_label).toBe("Team Alpha Teams 2026 Team Routine v01");
+    expect(body.data[0].entity_label).not.toContain("Alice Smith & Team Alpha");
+    expect(body.data[0].song_label).not.toContain("Alice Smith & Team Alpha");
   });
 
   it("returns runs with a solo entity label when soloUser fields are populated", async () => {
@@ -130,8 +188,19 @@ describe("GET /v1/runs", () => {
         pairUserLast: null,
         pairPartnerFirst: null,
         pairPartnerLast: null,
+        entityPairId: null,
+        entitySoloUserId: "user-solo",
+        entityManagedPartnershipId: null,
         soloUserFirst: "Solo",
         soloUserLast: "Dancer",
+        managedLeaderFirst: null,
+        managedLeaderLast: null,
+        managedFollowerFirst: null,
+        managedFollowerLast: null,
+        songManagedLeaderFirst: null,
+        songManagedLeaderLast: null,
+        songManagedFollowerFirst: null,
+        songManagedFollowerLast: null,
         completedByFirst: null,
         completedByLast: null,
       },
@@ -140,6 +209,7 @@ describe("GET /v1/runs", () => {
     const res = await app.request(ENDPOINT, { headers: adminHeaders() });
     const body = await readJson<SuccessEnvelope<RunRow[]>>(res);
     expect(body.data[0].entity_label).toBe("Solo Dancer");
+    expect(body.data[0].entity_key).toBe("solo:user-solo");
     // No structured fields and no displayName/processedFilename → falls back
     // through to the partnership string (built from the song's owner name).
     expect(body.data[0].song_label).toBe("Solo Dancer");
@@ -171,6 +241,9 @@ describe("GET /v1/runs", () => {
         pairUserLast: null,
         pairPartnerFirst: null,
         pairPartnerLast: null,
+        entityPairId: null,
+        entitySoloUserId: null,
+        entityManagedPartnershipId: null,
         soloUserFirst: null,
         soloUserLast: null,
         completedByFirst: "Admin",
@@ -181,7 +254,60 @@ describe("GET /v1/runs", () => {
     const res = await app.request(ENDPOINT, { headers: adminHeaders() });
     const body = await readJson<SuccessEnvelope<RunRow[]>>(res);
     expect(body.data[0].entity_label).toBe("—");
+    expect(body.data[0].entity_key).toBe("unknown");
     expect(body.data[0].song_label).toBe("[Admin Test Placeholder]");
+  });
+
+  it("uses the song managed partnership for song_label when the song is managed", async () => {
+    enqueueSelectResult([
+      {
+        id: "run-managed",
+        completedAt: 1700000000000,
+        divisionName: "Classic",
+        sessionId: "s1",
+        sessionFloorTrialStartsAt: 1699990000000,
+        eventId: "e1",
+        eventName: "GNDC",
+        songId: "song-managed",
+        songDisplayName: "Sky High",
+        songProcessedFilename: "wendal_lara_classic_2026_v03.mp3",
+        songDivision: "Classic",
+        songSeasonYear: "2026",
+        songRoutineName: "Sky High",
+        songOwnerFirst: "Manager",
+        songOwnerLast: "User",
+        songPartnerFirst: null,
+        songPartnerLast: null,
+        songManagedLeaderFirst: "Wendal",
+        songManagedLeaderLast: "Smith",
+        songManagedFollowerFirst: "Lara",
+        songManagedFollowerLast: "Jones",
+        pairUserFirst: null,
+        pairUserLast: null,
+        pairPartnerFirst: null,
+        pairPartnerLast: null,
+        soloUserFirst: null,
+        soloUserLast: null,
+        managedLeaderFirst: "Wendal",
+        managedLeaderLast: "Smith",
+        managedFollowerFirst: "Lara",
+        managedFollowerLast: "Jones",
+        entityPairId: null,
+        entitySoloUserId: null,
+        entityManagedPartnershipId: "mp-1",
+        completedByFirst: "Admin",
+        completedByLast: "Person",
+      },
+    ]);
+
+    const res = await app.request(ENDPOINT, { headers: adminHeaders() });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<RunRow[]>>(res);
+    expect(body.data[0].entity_label).toBe("Wendal Smith & Lara Jones");
+    expect(body.data[0].entity_key).toBe("managed:mp-1");
+    expect(body.data[0].song_label).toMatch(/^Wendal Smith & Lara Jones /);
+    expect(body.data[0].song_label).not.toMatch(/^Manager User/);
+    expect(body.data[0].song_label).toBe("Wendal Smith & Lara Jones Classic 2026 Sky High v03");
   });
 
   it("accepts session_id and event_id query params without erroring", async () => {

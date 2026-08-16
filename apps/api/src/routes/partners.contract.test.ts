@@ -55,9 +55,9 @@ describe("GET /v1/partners — contract", () => {
 
 describe("GET /v1/partners/leading-pairs — contract", () => {
   it("body.data is an array of ApiLeadingPair (no partner_b_id)", async () => {
-    // leading-pairs: one select for pairs then per-pair partner lookup
-    // Pair with partnerBId = null → no secondary lookup
-    enqueueSelectResult([{ id: "pair-1", partnerBId: null }]);
+    enqueueSelectResult([
+      { id: "pair-1", partnerBId: null, partnerFirst: null, partnerLast: null },
+    ]);
     const res = await app.request(`${BASE}/leading-pairs`, { headers: authHeaders() });
     expect(res.status).toBe(200);
     const { data } = await readJson<{ data: unknown }>(res);
@@ -66,9 +66,14 @@ describe("GET /v1/partners/leading-pairs — contract", () => {
   });
 
   it("pair with partner_b_id set passes schema", async () => {
-    // Pair with partnerBId set → secondary partner select
-    enqueueSelectResult([{ id: "pair-2", partnerBId: "partner-1" }]);
-    enqueueSelectResult([dbPartner]); // partner lookup
+    enqueueSelectResult([
+      {
+        id: "pair-2",
+        partnerBId: "partner-1",
+        partnerFirst: "Bob",
+        partnerLast: "Jones",
+      },
+    ]);
     const res = await app.request(`${BASE}/leading-pairs`, { headers: authHeaders() });
     const { data } = await readJson<{ data: unknown }>(res);
     const result = z.array(ApiLeadingPairSchema).safeParse(data);

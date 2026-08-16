@@ -2,13 +2,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { SignedIn, SignedOut, SignInButton, useAuth, useUser } from "@clerk/clerk-react";
-import type { ApiSession, ApiQueueEntry, ApiLeadingPair, ApiSong } from "@deejaytools/schemas";
+import type { ApiSession, ApiQueueEntry, ApiLeadingPair, ApiSong, ApiEventSongSubmission } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
-import { Badge } from "@/components/ui/badge";
+import { SessionInfoHeader } from "@/components/SessionInfoHeader";
 import { Button } from "@/components/ui/button";
+import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr, formatDateTimeShort } from "@/lib/sessionFormat";
+import { formatDateTimeShort } from "@/lib/sessionFormat";
+import { songPartnershipLabel } from "@/lib/entityLabel";
 
 /**
  * Best human-readable label for a song, never falling back to the raw
@@ -20,29 +22,6 @@ function songLabel(s: ApiSong): string {
   if (s.routine_name?.trim()) return s.routine_name.trim();
   if (s.division?.trim()) return `${s.division.trim()} song`;
   return "Untitled song";
-}
-
-function derivedStatus(s: ApiSession, now: number): string {
-  if (now < s.checkin_opens_at) return "scheduled";
-  if (now <= s.floor_trial_ends_at) return "open";
-  return "ended";
-}
-
-function derivedStatusBadge(status: string) {
-  switch (status) {
-    case "scheduled":
-      return <Badge variant="secondary">{status}</Badge>;
-    case "open":
-      return (
-        <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 border-transparent">
-          {status}
-        </Badge>
-      );
-    case "ended":
-      return <Badge variant="outline">{status}</Badge>;
-    default:
-      return <Badge variant="outline">{status}</Badge>;
-  }
 }
 
 const FIELD_INPUT_CLASS =
@@ -60,6 +39,7 @@ export default function ApiSessionPage() {
   const [waiting, setWaiting] = useState<ApiQueueEntry[]>([]);
   const [pairs, setPairs] = useState<ApiLeadingPair[]>([]);
   const [songs, setSongs] = useState<ApiSong[]>([]);
+  const [eventSubmissions, setEventSubmissions] = useState<ApiEventSongSubmission[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkinOpen, setCheckinOpen] = useState(false);
 
@@ -72,8 +52,11 @@ export default function ApiSessionPage() {
   const [now, setNow] = useState(Date.now());
 
   const loadSession = useCallback(() => {
-    if (!id) return;
-    return api.get<ApiSession>(`/v1/sessions/${id}`).then(setSession);
+    if (!id) return Promise.resolve(undefined);
+    return api.get<ApiSession>(`/v1/sessions/${id}`).then((s) => {
+      setSession(s);
+      return s;
+    });
   }, [api, id]);
 
   const loadQueue = useCallback(async () => {
@@ -86,26 +69,45 @@ export default function ApiSessionPage() {
     setWaiting(w);
   }, [api, id]);
 
-  const loadExtras = useCallback(async () => {
-    // /v1/partners/leading-pairs and /v1/songs both require auth — skip when
-    // viewing as a signed-out visitor. The session info and queues stay visible.
-    if (!isSignedIn) {
-      setPairs([]);
-      setSongs([]);
-      return;
-    }
-    const [p, s] = await Promise.all([
-      api.get<ApiLeadingPair[]>("/v1/partners/leading-pairs"),
-      api.get<ApiSong[]>("/v1/songs"),
-    ]);
-    setPairs(p);
-    setSongs(s);
-  }, [api, isSignedIn]);
+  const loadExtras = useCallback(
+    async (eventId?: string | null) => {
+      // /v1/partners/leading-pairs and /v1/songs both require auth — skip when
+      // viewing as a signed-out visitor. The session info and queues stay visible.
+      if (!isSignedIn) {
+        setPairs([]);
+        setSongs([]);
+        setEventSubmissions(null);
+        return;
+      }
+
+      const submissionsPromise =
+        eventId != null
+          ? api
+              .get<ApiEventSongSubmission[]>(
+                `/v1/event-song-submissions?event_id=${encodeURIComponent(eventId)}`
+              )
+              .catch(() => null)
+          : Promise.resolve(null);
+
+      const [p, s, subs] = await Promise.all([
+        api.get<ApiLeadingPair[]>("/v1/partners/leading-pairs"),
+        api.get<ApiSong[]>("/v1/songs"),
+        submissionsPromise,
+      ]);
+      setPairs(p);
+      setSongs(s);
+      setEventSubmissions(subs);
+    },
+    [api, isSignedIn]
+  );
 
   const refresh = useCallback(() => {
     if (!id) return;
     setLoading(true);
-    Promise.all([loadSession(), loadQueue(), loadExtras()])
+    loadSession()
+      .then((loadedSession) =>
+        Promise.all([loadQueue(), loadExtras(loadedSession?.event_id ?? null)])
+      )
       .catch((e: Error) => toast.error(e.message))
       .finally(() => setLoading(false));
   }, [id, loadExtras, loadQueue, loadSession]);
@@ -138,10 +140,22 @@ export default function ApiSessionPage() {
     return m;
   }, [pairs]);
 
+  // Songs eligible for check-in — filtered to event submissions when known.
+  const checkinSongs = useMemo(() => {
+    if (!session?.event_id || eventSubmissions === null) {
+      return songs;
+    }
+    const submittedSongIds = new Set(eventSubmissions.map((s) => s.song_id));
+    return songs.filter((s) => submittedSongIds.has(s.id));
+  }, [songs, session?.event_id, eventSubmissions]);
+
+  const noEventSongs =
+    !!session?.event_id && eventSubmissions !== null && checkinSongs.length === 0;
+
   // Derived check-in context from the selected song
   const selectedSong = useMemo(
-    () => songs.find((s) => s.id === fSongId) ?? null,
-    [songs, fSongId]
+    () => checkinSongs.find((s) => s.id === fSongId) ?? null,
+    [checkinSongs, fSongId]
   );
 
   const derivedPair = useMemo(() => {
@@ -149,7 +163,8 @@ export default function ApiSessionPage() {
     return pairByPartnerId.get(selectedSong.partner_id) ?? null;
   }, [selectedSong, pairByPartnerId]);
 
-  const isSolo = !selectedSong?.partner_id;
+  const isManaged = !!selectedSong?.managed_partnership_id;
+  const isSolo = !selectedSong?.partner_id && !isManaged;
 
   const divisionInSession = fDivision ? sessionDivisions.includes(fDivision) : false;
 
@@ -191,24 +206,34 @@ export default function ApiSessionPage() {
   const priorityWaiting = waiting.filter((r) => r.subQueue === "priority");
   const standardWaiting = waiting.filter((r) => r.subQueue !== "priority");
 
+  const userManagedPartnershipIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const song of songs) {
+      if (song.managed_partnership_id) ids.add(song.managed_partnership_id);
+    }
+    return ids;
+  }, [songs]);
+
   // Find ALL of the current user's active queue entries — one per entity
-  // (pair or solo). A user with multiple partnerships can have several.
+  // (pair, solo, or managed partnership). A user with multiple partnerships can have several.
   const userQueueEntries = useMemo(() => {
     if (!user?.id) return [];
     const userPairIds = new Set(pairs.map((p) => p.id));
     return [...active, ...waiting].filter(
       (r) =>
         r.entitySoloUserId === user.id ||
-        (r.entityPairId !== null && userPairIds.has(r.entityPairId))
+        (r.entityPairId !== null && userPairIds.has(r.entityPairId)) ||
+        (r.entityManagedPartnershipId != null &&
+          userManagedPartnershipIds.has(r.entityManagedPartnershipId))
     );
-  }, [active, waiting, pairs, user?.id]);
+  }, [active, waiting, pairs, user?.id, userManagedPartnershipIds]);
 
-  // Set of entity IDs (pair IDs or the solo user ID) already in the queue.
   const inQueueEntityIds = useMemo(() => {
     const s = new Set<string>();
     for (const r of userQueueEntries) {
       if (r.entityPairId) s.add(r.entityPairId);
       if (r.entitySoloUserId) s.add(r.entitySoloUserId);
+      if (r.entityManagedPartnershipId) s.add(r.entityManagedPartnershipId);
     }
     return s;
   }, [userQueueEntries]);
@@ -217,11 +242,21 @@ export default function ApiSessionPage() {
   // used to warn the user and block submission.
   const selectedEntityInQueue = useMemo(() => {
     if (!fSongId || !selectedSong) return false;
+    if (selectedSong.managed_partnership_id) {
+      return inQueueEntityIds.has(selectedSong.managed_partnership_id);
+    }
     if (isSolo) return inQueueEntityIds.has(user?.id ?? "");
     const pid = derivedPair?.id;
     // If the pair hasn't been created yet (pid is null), it can't be in queue.
     return pid ? inQueueEntityIds.has(pid) : false;
-  }, [fSongId, selectedSong, isSolo, derivedPair?.id, inQueueEntityIds, user?.id]);
+  }, [
+    fSongId,
+    selectedSong,
+    isSolo,
+    derivedPair?.id,
+    inQueueEntityIds,
+    user?.id,
+  ]);
 
 
   const checkinWindowOpen =
@@ -232,7 +267,7 @@ export default function ApiSessionPage() {
   const canCheckIn =
     !!session &&
     checkinWindowOpen &&
-    songs.length > 0;
+    checkinSongs.length > 0;
 
   const openCheckin = () => {
     setFSongId("");
@@ -351,6 +386,14 @@ export default function ApiSessionPage() {
                 ? `Check-in opens ${formatDateTimeShort(session.checkin_opens_at, session.event_timezone)}`
                 : "Check-in closed"}
             </p>
+          ) : !canCheckIn && checkinWindowOpen && noEventSongs ? (
+            <p className="text-sm text-muted-foreground">
+              You haven&apos;t added any songs to this event yet.{" "}
+              <Link to="/event-submissions" className="underline">
+                Submit songs to this event
+              </Link>
+              .
+            </p>
           ) : !canCheckIn && checkinWindowOpen && songs.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               You have no songs uploaded —{" "}
@@ -384,128 +427,17 @@ export default function ApiSessionPage() {
           </Link>
         </Button>
 
-        {/* Event name — rendered with the same size/font as the session title
-            so it reads as a co-title rather than a small label. */}
-        {session.event_name && (
-          <h2 className="page-title text-2xl">{session.event_name}</h2>
-        )}
-
-        {/* Status badge on the LEFT of the title. */}
-        <div className="flex items-center gap-3 flex-wrap">
-          {derivedStatusBadge(derivedStatus(session, now))}
-          <h1 className="page-title text-2xl">{formatSessionTitle(session, session.event_timezone)}</h1>
-          {session.event_timezone && (
-            <Badge variant="outline" className="text-xs font-normal text-muted-foreground self-center">
-              {formatTimezoneAbbr(session.event_timezone, session.floor_trial_starts_at)}
-            </Badge>
-          )}
-        </div>
-
-        {/* Open / Start / End times as color-coded badges:
-            yellow = check-in opens, green = floor trial starts, red = ends.
-            Text stays foreground/white; only the background and border carry
-            the semantic color so the time itself is easy to read. */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge
-            variant="outline"
-            className="border-yellow-500/40 bg-yellow-500/15 text-foreground font-normal"
-          >
-            <span className="opacity-70 mr-1">Open:</span>
-            {formatTimeOnly(session.checkin_opens_at, session.event_timezone)}
-          </Badge>
-          <Badge
-            variant="outline"
-            className="border-emerald-500/40 bg-emerald-500/15 text-foreground font-normal"
-          >
-            <span className="opacity-70 mr-1">Start:</span>
-            {formatTimeOnly(session.floor_trial_starts_at, session.event_timezone)}
-          </Badge>
-          <Badge
-            variant="outline"
-            className="border-red-500/40 bg-red-500/15 text-foreground font-normal"
-          >
-            <span className="opacity-70 mr-1">End:</span>
-            {formatTimeOnly(session.floor_trial_ends_at, session.event_timezone)}
-          </Badge>
-        </div>
-
-        {/* Priority and standard divisions for this session. */}
-        {session.divisions && session.divisions.length > 0 && (
-          <div className="space-y-1.5 pt-1">
-            {(() => {
-              const priorityDivs = session.divisions
-                .filter((d) => d.is_priority)
-                .map((d) => d.division_name);
-              const standardDivs = session.divisions
-                .filter((d) => !d.is_priority)
-                .map((d) => d.division_name);
-              return (
-                <>
-                  {priorityDivs.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                      <span className="text-amber-500 dark:text-amber-400 font-medium uppercase tracking-wide mr-1">
-                        Priority:
-                      </span>
-                      {priorityDivs.map((d) => (
-                        <Badge
-                          key={d}
-                          variant="outline"
-                          className="border-amber-500/30 text-amber-600 dark:text-amber-300 font-normal"
-                        >
-                          {d}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                  {standardDivs.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                      <span className="text-sky-500 dark:text-sky-400 font-medium uppercase tracking-wide mr-1">
-                        Standard:
-                      </span>
-                      {standardDivs.map((d) => (
-                        <Badge
-                          key={d}
-                          variant="outline"
-                          className="border-sky-500/30 text-sky-600 dark:text-sky-300 font-normal"
-                        >
-                          {d}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </>
-              );
-            })()}
-          </div>
-        )}
-
-        {/* Active cap + priority run limits */}
-        <div className="text-xs text-muted-foreground space-y-0.5 pt-0.5">
-          {(() => {
-            const limit = (session.divisions ?? []).find(
-              (d) => d.priority_run_limit != null && d.priority_run_limit > 0
-            )?.priority_run_limit ?? null;
-            return limit != null ? (
-              <p>
-                Priority runs:{" "}
-                <span className="text-foreground">{limit}</span>
-              </p>
-            ) : null;
-          })()}
-          {(session.active_priority_max != null || session.active_non_priority_max != null) && (
-            <p>
-              Active cap:{" "}
-              <span className="text-foreground">{session.active_priority_max ?? "—"}</span>{" "}
-              priority ·{" "}
-              <span className="text-foreground">{session.active_non_priority_max ?? "—"}</span>{" "}
-              standard
-            </p>
-          )}
-        </div>
+        <SessionInfoHeader session={session} />
       </div>
 
       {/* ── Check-in action (top) ── */}
       {checkInBlock}
+
+      <p className="text-xs text-muted-foreground -mt-2">
+        <Link to="/how-it-works/the-queue" className="hover:underline">
+          Learn more about the queue →
+        </Link>
+      </p>
 
       {/* ── Active queue ── */}
       <Card className="border-primary/30">
@@ -612,8 +544,16 @@ export default function ApiSessionPage() {
               <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
             </div>
 
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Check in</h2>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <h2 className="text-lg font-semibold">Check in</h2>
+                <Link
+                  to="/how-it-works/checking-in"
+                  className="text-xs text-muted-foreground hover:underline shrink-0"
+                >
+                  Why? →
+                </Link>
+              </div>
               <Button type="button" variant="ghost" size="sm" onClick={closeCheckin}>
                 ✕
               </Button>
@@ -621,22 +561,34 @@ export default function ApiSessionPage() {
 
             <form onSubmit={submitCheckin} className="space-y-4">
               {/* Song — drives everything else */}
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Song</label>
-                <select
-                  className={FIELD_INPUT_CLASS}
-                  value={fSongId}
-                  onChange={(e) => setFSongId(e.target.value)}
-                  autoFocus
-                >
-                  <option value="">Select a song…</option>
-                  {songs.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {songLabel(s)}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {noEventSongs ? (
+                <p className="text-sm text-muted-foreground">
+                  You haven&apos;t added any songs to this event yet.{" "}
+                  <Link to="/event-submissions" className="underline">
+                    Submit songs to this event
+                  </Link>
+                  .{" "}
+                  <Link
+                    to="/how-it-works/troubleshooting"
+                    className="text-xs text-muted-foreground hover:underline"
+                  >
+                    Why? →
+                  </Link>
+                </p>
+              ) : (
+                <div>
+                  <label className={FIELD_LABEL_CLASS}>Song</label>
+                  <ChoiceGroup
+                    ariaLabel="Song"
+                    options={checkinSongs.map((s) => ({
+                      value: s.id,
+                      label: songLabel(s),
+                    }))}
+                    value={fSongId}
+                    onChange={setFSongId}
+                  />
+                </div>
+              )}
 
               {/* Confirmation card — shown once a song is selected */}
               {fSongId && selectedSong && (
@@ -650,11 +602,9 @@ export default function ApiSessionPage() {
                   <div className="flex items-start gap-2">
                     <span className="text-muted-foreground w-16 shrink-0 pt-px">Partner</span>
                     <span className="font-medium">
-                      {isSolo
-                        ? <span className="text-muted-foreground italic">Solo</span>
-                        : selectedSong.partner_first_name
-                        ? `${selectedSong.partner_first_name} ${selectedSong.partner_last_name ?? ""}`.trimEnd()
-                        : "—"}
+                      {isManaged || !isSolo
+                        ? songPartnershipLabel(selectedSong, user?.fullName ?? undefined) ?? "—"
+                        : <span className="text-muted-foreground italic">Solo</span>}
                     </span>
                   </div>
                   <div className="flex items-start gap-2">
@@ -665,7 +615,13 @@ export default function ApiSessionPage() {
                   </div>
                   {selectedEntityInQueue && (
                     <p className="text-xs text-destructive pt-0.5">
-                      This partnership is already in the queue. Pick a different song or withdraw your current entry first.
+                      This partnership is already in the queue. Pick a different song or withdraw your current entry first.{" "}
+                      <Link
+                        to="/how-it-works/troubleshooting"
+                        className="underline font-normal text-destructive/90"
+                      >
+                        Why? →
+                      </Link>
                     </p>
                   )}
                 </div>
@@ -674,19 +630,12 @@ export default function ApiSessionPage() {
               {/* Division — auto-filled from song; user can override if needed */}
               <div>
                 <label className={FIELD_LABEL_CLASS}>Division</label>
-                <select
-                  className={FIELD_INPUT_CLASS}
+                <ChoiceGroup
+                  ariaLabel="Division"
+                  options={sessionDivisions.map((d) => ({ value: d, label: d }))}
                   value={fDivision}
-                  onChange={(e) => setFDivision(e.target.value)}
-                >
-                  <option value="">Select division…</option>
-                  {sessionDivisions.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                      {selectedSong?.division === d ? " ✓" : ""}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setFDivision}
+                />
                 {selectedSong?.division && !divisionInSession && (
                   <p className="text-xs text-amber-600 mt-1">
                     Your song's division ({selectedSong.division}) isn't offered in this session.
@@ -707,7 +656,12 @@ export default function ApiSessionPage() {
                 />
               </div>
 
-              <Button type="submit" disabled={submitting || selectedEntityInQueue} size="lg" className="w-full">
+              <Button
+                type="submit"
+                disabled={submitting || selectedEntityInQueue || noEventSongs}
+                size="lg"
+                className="w-full"
+              >
                 {submitting ? "Submitting…" : "Check in"}
               </Button>
             </form>

@@ -36,6 +36,12 @@ describe("runsForEntityInSession", () => {
     const n = await runsForEntityInSession({ pairId: "p1" }, "s1", "Classic");
     expect(n).toBe(0);
   });
+
+  it("returns the count for a managed partnership entity", async () => {
+    enqueueSelectResult([{ n: 2 }]);
+    const n = await runsForEntityInSession({ managedPartnershipId: "mp1" }, "s1", "Classic");
+    expect(n).toBe(2);
+  });
 });
 
 describe("runsForEntityInEvent", () => {
@@ -59,5 +65,11 @@ describe("runsForEntityInEvent", () => {
     enqueueSelectResult([]);
     const n = await runsForEntityInEvent({ pairId: "p1" }, "event-1", "Classic");
     expect(n).toBe(0);
+  });
+
+  it("returns the count for a managed partnership entity in an event", async () => {
+    enqueueSelectResult([{ n: 5 }]);
+    const n = await runsForEntityInEvent({ managedPartnershipId: "mp1" }, "event-1", "Classic");
+    expect(n).toBe(5);
   });
 });
