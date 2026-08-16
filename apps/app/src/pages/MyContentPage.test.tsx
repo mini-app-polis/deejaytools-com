@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
 const apiGet = vi.fn();
 const apiClient = {
@@ -65,6 +65,40 @@ function renderPage() {
     </MemoryRouter>
   );
 }
+
+describe("MyContentPage — hash deep links", () => {
+  beforeEach(() => {
+    apiGet.mockReset();
+    apiGet.mockImplementation(defaultApiGet);
+    vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("scrolls to the Songs section for /my-content#songs", async () => {
+    render(
+      <MemoryRouter initialEntries={["/my-content#songs"]}>
+        <MyContentPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(document.getElementById("songs")).toBeTruthy();
+    });
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+  });
+
+  it("does not scroll when there is no hash", async () => {
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /^songs$/i })).toBeInTheDocument();
+    });
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+});
 
 describe("MyContentPage — Events section", () => {
   beforeEach(() => {
