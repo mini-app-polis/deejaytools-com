@@ -233,8 +233,8 @@ export default function ManagerGuideSection() {
         <ul>
           <li>
             <Link to="/admin/runs">Run History</Link> — Completed runs filterable by event and
-            session, grouped by division. <strong>by &lt;name&gt;</strong> is whoever pressed Run
-            complete, not necessarily the dancer.
+            session (card pickers), with division summary chips. <strong>by &lt;name&gt;</strong> is
+            whoever pressed Run complete, not necessarily the dancer.
           </li>
           <li>
             <Link to="/admin/songs">Songs</Link> — Search plus year/division filters.{" "}

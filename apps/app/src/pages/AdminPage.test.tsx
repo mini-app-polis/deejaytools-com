@@ -254,13 +254,15 @@ describe("AdminPage", () => {
     });
   });
 
-  it("renders Run History with All events selected and fetches with limit=500", async () => {
+  it("renders Run History with All events and All sessions card pickers", async () => {
     apiGet.mockResolvedValue([]);
     renderPage("/admin/runs");
 
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /^all events$/i })).toBeInTheDocument()
     );
+    expect(screen.getByRole("button", { name: /^all sessions$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
 
     await waitFor(() => {
       expect(apiGet).toHaveBeenCalledWith(

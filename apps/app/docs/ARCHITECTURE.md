@@ -241,7 +241,7 @@ export const MANAGER_SECTIONS = [
 
 Each page reads `:section` from `useParams`, validates against its `*_SECTIONS` array, and falls back to a default (`events` / `active-sessions`) when the slug is missing or unknown — so `/admin/foo` shows the default section instead of a blank screen.
 
-**Run History** (`/admin/runs`): event button grid (defaults to **All events**), optional session filter, division summary chips, and collapsible division groups — same interaction patterns as Manager → Event Songs.
+**Run History** (`/admin/runs`): event and session card-button grids (defaults to **All events** / **All sessions**), **Show future events** toggle (off by default), division summary chips with client-side filter, and a flat newest-first run list.
 
 Radix `<Tabs value={section}>` wraps the content panes; the **tab strip was removed** from the page body. Navigation is the **NavBar sub-bars** (`SUPERUSER_ITEMS` / `MANAGER_ITEMS`), whose `to` paths match the section slugs exactly (`/admin/events`, `/manager/active-sessions`, etc.).
 

@@ -248,21 +248,12 @@ export default function AdminPage() {
   // ── Run history tab ─────────────────────────────────────────────────────────
   const RUNS_FETCH_LIMIT = 500;
   const [runsEventId, setRunsEventId] = useState("");
-  const [runsShowPast, setRunsShowPast] = useState(false);
+  const [runsShowFuture, setRunsShowFuture] = useState(false);
   const [runsSessionFilter, setRunsSessionFilter] = useState("");
   const [runs, setRuns] = useState<ApiRun[] | null>(null);
   const [runsLoading, setRunsLoading] = useState(false);
   const [runsHitLimit, setRunsHitLimit] = useState(false);
   const [runsDivisionFilter, setRunsDivisionFilter] = useState<string | null>(null);
-  const [runsCollapsedDivisions, setRunsCollapsedDivisions] = useState<Set<string>>(new Set());
-
-  const toggleRunsDivision = (division: string) =>
-    setRunsCollapsedDivisions((prev) => {
-      const next = new Set(prev);
-      if (next.has(division)) next.delete(division);
-      else next.add(division);
-      return next;
-    });
 
   // ── Users tab ───────────────────────────────────────────────────────────────
   // `usersQuery` updates on every keystroke; `usersDebouncedQuery` is what
@@ -405,12 +396,10 @@ export default function AdminPage() {
   const runsVisibleEvents = useMemo(
     () =>
       (events ?? [])
-        .filter(
-          (ev) => runsShowPast || (ev.status !== "completed" && ev.status !== "cancelled")
-        )
+        .filter((ev) => runsShowFuture || ev.status !== "upcoming")
         .slice()
-        .sort((a, b) => a.start_date.localeCompare(b.start_date)),
-    [events, runsShowPast]
+        .sort((a, b) => b.start_date.localeCompare(a.start_date)),
+    [events, runsShowFuture]
   );
 
   const runsFilteredSessions = useMemo(() => {
@@ -438,23 +427,6 @@ export default function AdminPage() {
       (row) => (row.division_name?.trim() || "Unspecified") === runsDivisionFilter
     );
   }, [runs, runsDivisionFilter]);
-
-  const runsByDivision = useMemo(() => {
-    const rows = runsDisplayRows ?? [];
-    const map = new Map<string, ApiRun[]>();
-    for (const row of rows) {
-      const key = row.division_name?.trim() || "Unspecified";
-      const list = map.get(key) ?? [];
-      list.push(row);
-      map.set(key, list);
-    }
-    const keys = [...map.keys()].sort((a, b) => {
-      if (a === "Unspecified") return 1;
-      if (b === "Unspecified") return -1;
-      return a.localeCompare(b);
-    });
-    return keys.map((division) => ({ division, rows: map.get(division)! }));
-  }, [runsDisplayRows]);
 
   // Debounce keystrokes in the Users tab search box → only the trailing value
   // wins, so typing "alic" hits the API once with q=alic instead of four
@@ -1139,20 +1111,20 @@ export default function AdminPage() {
                     <input
                       type="checkbox"
                       className="h-4 w-4"
-                      checked={runsShowPast}
+                      checked={runsShowFuture}
                       onChange={(e) => {
                         const next = e.target.checked;
-                        setRunsShowPast(next);
+                        setRunsShowFuture(next);
                         if (!next) {
                           const sel = events?.find((ev) => ev.id === runsEventId);
-                          if (sel && (sel.status === "completed" || sel.status === "cancelled")) {
+                          if (sel?.status === "upcoming") {
                             setRunsEventId("");
                             setRunsSessionFilter("");
                           }
                         }
                       }}
                     />
-                    Show past events
+                    Show future events
                   </label>
                 </div>
                 {loadingEvents ? (
@@ -1200,30 +1172,52 @@ export default function AdminPage() {
                 )}
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center flex-wrap">
-                <div className="w-full sm:w-72 space-y-1">
-                  <Label htmlFor="runs-session-filter">Session</Label>
-                  <select
-                    id="runs-session-filter"
-                    className={FIELD_INPUT_CLASS}
-                    value={runsSessionFilter}
-                    onChange={(e) => setRunsSessionFilter(e.target.value)}
+              <div className="space-y-2">
+                <Label>Session</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRunsSessionFilter("")}
+                    className={cn(
+                      "w-full h-full rounded-lg border px-4 py-2 text-left transition-colors",
+                      runsSessionFilter === ""
+                        ? "border-primary bg-primary/5 ring-1 ring-primary"
+                        : "hover:bg-muted/50"
+                    )}
                   >
-                    <option value="">All sessions</option>
-                    {runsFilteredSessions
+                    <p className="font-medium text-sm">All sessions</p>
+                  </button>
+                  {runsEventId &&
+                    runsFilteredSessions
                       .slice()
                       .sort(compareSessionChrono)
-                      .map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {formatSessionTitle(s, s.event_timezone)}
-                        </option>
-                      ))}
-                  </select>
+                      .map((s) => {
+                        const active = s.id === runsSessionFilter;
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => setRunsSessionFilter(active ? "" : s.id)}
+                            className={cn(
+                              "w-full h-full rounded-lg border px-4 py-2 text-left transition-colors",
+                              active
+                                ? "border-primary bg-primary/5 ring-1 ring-primary"
+                                : "hover:bg-muted/50"
+                            )}
+                          >
+                            <p className="font-medium text-sm line-clamp-2">
+                              {formatSessionTitle(s, s.event_timezone)}
+                            </p>
+                          </button>
+                        );
+                      })}
                 </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center flex-wrap">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="sm:mt-6"
                   onClick={() =>
                     void loadRuns({ eventId: runsEventId, sessionId: runsSessionFilter })
                   }
@@ -1231,7 +1225,7 @@ export default function AdminPage() {
                 >
                   {runsLoading ? "Refreshing…" : "Refresh"}
                 </Button>
-                <span className="text-xs text-muted-foreground sm:mt-6">
+                <span className="text-xs text-muted-foreground">
                   {runs === null ? "" : `${runs.length} run${runs.length === 1 ? "" : "s"}`}
                 </span>
               </div>
@@ -1303,78 +1297,49 @@ export default function AdminPage() {
                   {runs.length === 1 ? "" : "s"}.
                 </p>
               ) : (
-                <div className={`space-y-6${runsLoading ? " opacity-60" : ""}`}>
-                  {runsByDivision.map(({ division, rows }) => {
-                    const collapsed = runsCollapsedDivisions.has(division);
+                <div className={`space-y-2${runsLoading ? " opacity-60" : ""}`}>
+                  {runsDisplayRows!.map((row) => {
+                    const sessionRow = sessions?.find((s) => s.id === row.session_id);
+                    const runEventTz = row.event_id
+                      ? (events?.find((e) => e.id === row.event_id)?.timezone ?? null)
+                      : null;
+                    const sessionLabel = sessionRow
+                      ? formatSessionTitle(sessionRow, sessionRow.event_timezone)
+                      : row.session_floor_trial_starts_at
+                        ? formatSessionTitle(
+                            { floor_trial_starts_at: row.session_floor_trial_starts_at },
+                            runEventTz
+                          )
+                        : "Unknown session";
                     return (
-                      <section key={division} className="space-y-2">
-                        <button
-                          type="button"
-                          onClick={() => toggleRunsDivision(division)}
-                          aria-expanded={!collapsed}
-                          className="flex w-full items-center gap-2 text-left"
-                        >
-                          <span
-                            className={cn(
-                              "text-[10px] text-muted-foreground transition-transform",
-                              collapsed ? "" : "rotate-90"
-                            )}
-                          >
-                            ▶
-                          </span>
-                          <span className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
-                            {division}
-                          </span>
-                          <span className="text-xs font-normal text-muted-foreground/70">
-                            {rows.length}
-                          </span>
-                        </button>
-                        {!collapsed && (
-                          <div className="space-y-2">
-                            {rows.map((row) => {
-                              const sessionRow = sessions?.find((s) => s.id === row.session_id);
-                              const runEventTz = row.event_id
-                                ? (events?.find((e) => e.id === row.event_id)?.timezone ?? null)
-                                : null;
-                              const sessionLabel = sessionRow
-                                ? formatSessionTitle(sessionRow, sessionRow.event_timezone)
-                                : row.session_floor_trial_starts_at
-                                  ? formatSessionTitle(
-                                      { floor_trial_starts_at: row.session_floor_trial_starts_at },
-                                      runEventTz
-                                    )
-                                  : "Unknown session";
-                              return (
-                                <div
-                                  key={row.id}
-                                  className="rounded-lg border px-3 py-3 text-sm space-y-1"
-                                >
-                                  <div className="flex items-start justify-between gap-2 flex-wrap">
-                                    <div className="min-w-0 space-y-0.5">
-                                      <p className="font-medium">{row.entity_label}</p>
-                                      <p className="text-xs text-muted-foreground truncate">
-                                        {row.song_label}
-                                      </p>
-                                      <p className="text-xs text-muted-foreground">
-                                        {sessionLabel}
-                                        {row.event_name ? ` · ${row.event_name}` : ""}
-                                      </p>
-                                    </div>
-                                    <div className="text-right shrink-0">
-                                      <p className="text-xs text-muted-foreground">
-                                        {formatTime(row.completed_at)}
-                                      </p>
-                                      <p className="text-xs text-muted-foreground">
-                                        by {row.completed_by_label}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
+                      <div
+                        key={row.id}
+                        className="rounded-lg border px-3 py-3 text-sm space-y-1"
+                      >
+                        <div className="flex items-start justify-between gap-2 flex-wrap">
+                          <div className="min-w-0 space-y-0.5">
+                            <p className="font-medium">
+                              {row.entity_label}
+                              <span className="text-muted-foreground"> · {row.division_name}</span>
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {row.song_label}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {sessionLabel}
+                              {row.event_name ? ` · ${row.event_name}` : ""}
+                            </p>
                           </div>
-                        )}
-                      </section>
+                          <div className="text-right shrink-0">
+                            <p className="text-xs text-muted-foreground">
+                              {formatTime(row.completed_at)}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              by {row.completed_by_label}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
