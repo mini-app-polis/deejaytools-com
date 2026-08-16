@@ -5,7 +5,7 @@ import { CommonErrors, createLogger, error, success, successList } from "common-
 import { zValidator } from "../lib/validate.js";
 import { Hono } from "hono";
 import { z } from "zod";
-import { and, desc, eq, isNull, ne, notInArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, notInArray, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { checkins, eventSongSubmissions, managedPartnerships, partners, queueEntries, sessions, songs, teams, users } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
@@ -300,11 +300,7 @@ async function buildAndUploadSong(
   // can't see it from their own Drive UI until we explicitly grant them
   // read access. We collect two potential recipients:
   //   1. The uploader's user account email (always present, always shared).
-  //   2. The partner's known email, which can come from two places — the
-  //      partner row's own `email` column (free text the user typed in) and,
-  //      if the partner is linked to an actual user account, that linked
-  //      user's email. Both can differ, so we collect both candidates and
-  //      let shareDriveFileWithUsers dedupe by lowercased email.
+  //   2. The partner row's `email` column (free text the owner typed in).
   //
   // Sharing is best-effort: a per-email failure (e.g. a malformed address
   // or a non-Google account that Drive refuses) must not break the upload,
@@ -313,14 +309,6 @@ async function buildAndUploadSong(
   const shareTargets: (string | null | undefined)[] = [userRow.email];
   if (partnerRow) {
     shareTargets.push(partnerRow.email);
-    if (partnerRow.linkedUserId) {
-      const [linkedUser] = await db
-        .select({ email: users.email })
-        .from(users)
-        .where(eq(users.id, partnerRow.linkedUserId))
-        .limit(1);
-      if (linkedUser?.email) shareTargets.push(linkedUser.email);
-    }
   }
   try {
     const result = await shareDriveFileWithUsers(uploadResult.fileId, shareTargets);
@@ -410,7 +398,7 @@ songRoutes.get("/", requireAuth, zValidator("query", listQuery), async (c) => {
   const userId = c.get("user").userId;
   const { partner_id } = c.req.valid("query");
 
-  const visibility = or(eq(songs.userId, userId), eq(partners.linkedUserId, userId));
+  const visibility = eq(songs.userId, userId);
   const partnerFilter =
     partner_id !== undefined && partner_id !== ""
       ? and(visibility, eq(songs.partnerId, partner_id), isNull(songs.deletedAt))
@@ -495,7 +483,7 @@ songRoutes.get("/:id", requireAuth, async (c) => {
     })
     .from(songs)
     .leftJoin(partners, eq(partners.id, songs.partnerId))
-    .where(and(eq(songs.id, id), or(eq(songs.userId, userId), eq(partners.linkedUserId, userId)), isNull(songs.deletedAt)))
+    .where(and(eq(songs.id, id), eq(songs.userId, userId), isNull(songs.deletedAt)))
     .limit(1);
   if (!r) {
     return c.json(CommonErrors.notFound("Song"), 404);
