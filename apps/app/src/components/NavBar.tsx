@@ -10,7 +10,10 @@ import pkg from "../../../../package.json";
 
 type NavItem = { to: string; label: string };
 
-const PUBLIC_ITEMS: NavItem[] = [{ to: "/floor-trials", label: "Floor Trials" }];
+const PUBLIC_ITEMS: NavItem[] = [
+  { to: "/floor-trials", label: "Floor Trials" },
+  { to: "/how-it-works", label: "Help" },
+];
 
 const SIGNED_IN_ITEMS: NavItem[] = [
   { to: "/my-content", label: "My Content" },
@@ -29,6 +32,7 @@ const SUPERUSER_ITEMS: NavItem[] = [
 
 // Manager sections. Visible to managers and admins.
 const MANAGER_ITEMS: NavItem[] = [
+  { to: "/manager/guide", label: "Guide" },
   { to: "/manager/active-sessions", label: "Active Sessions" },
   { to: "/manager/event-songs", label: "Event Songs" },
   { to: "/manager/upload-for", label: "Upload For" },

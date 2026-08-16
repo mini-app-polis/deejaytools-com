@@ -45,7 +45,7 @@ export default function AddSongPage() {
     <div className="space-y-6">
       <div>
         <Button variant="ghost" size="sm" className="px-0 mb-2" asChild>
-          <Link to="/my-content?tab=songs">← Back to My Content</Link>
+          <Link to="/my-content#songs">← Back to My Content</Link>
         </Button>
         <h1 className="page-title text-2xl">Add Song</h1>
       </div>
@@ -79,7 +79,7 @@ export default function AddSongPage() {
               Select your audio file, fill in the details below, and hit Upload.
               The file should contain only your routine — no bow music or intro
               buffer; the DJ starts playback at 0:00.{" "}
-              <Link to="/how-it-works#submitting-music" className="text-primary hover:underline">
+              <Link to="/how-it-works/submitting-music" className="text-primary hover:underline">
                 File requirements →
               </Link>
             </CardDescription>
@@ -98,7 +98,7 @@ export default function AddSongPage() {
               Upload a song on behalf of a partnership you manage. The file should
               contain only the routine — no bow music or intro buffer; the DJ starts
               playback at 0:00.{" "}
-              <Link to="/how-it-works#submitting-music" className="text-primary hover:underline">
+              <Link to="/how-it-works/submitting-music" className="text-primary hover:underline">
                 File requirements →
               </Link>
             </CardDescription>
@@ -116,7 +116,7 @@ export default function AddSongPage() {
             <CardDescription>
               For Teams, Cabaret, Exhibition, and other special divisions. The file
               should contain only your routine — no bow music or intro buffer.{" "}
-              <Link to="/how-it-works#submitting-music" className="text-primary hover:underline">
+              <Link to="/how-it-works/submitting-music" className="text-primary hover:underline">
                 File requirements →
               </Link>
             </CardDescription>

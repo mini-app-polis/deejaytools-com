@@ -2,6 +2,7 @@ import { PartnerRoleSchema, type PartnerRole } from "@deejaytools/schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useApiClient } from "@/api/client";
@@ -169,7 +170,15 @@ export default function PartnersSection() {
     <>
       <div className="rounded-lg border bg-card">
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
-          <h2 className="font-semibold">Partners</h2>
+          <div className="flex items-center gap-2 min-w-0">
+            <h2 className="font-semibold">Partners</h2>
+            <Link
+              to="/how-it-works/partners"
+              className="text-xs text-muted-foreground hover:underline shrink-0"
+            >
+              Learn more →
+            </Link>
+          </div>
           <Button size="sm" onClick={openCreate}>Add partner</Button>
         </div>
         <div className="p-4 space-y-4">

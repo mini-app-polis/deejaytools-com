@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -53,15 +54,14 @@ function renderNav() {
 }
 
 describe("NavBar — signed out", () => {
-  it("shows the Floor Trials link and the Sign in button, nothing else", () => {
+  it("shows public nav links and the Sign in button", () => {
     signedIn = false;
     isAdmin = false;
     isManager = false;
     renderNav();
 
-    // Floor Trials is the only public nav item — it appears in the desktop nav
-    // AND the mobile menu (when closed, mobile menu isn't rendered, so just one).
     expect(screen.getAllByRole("link", { name: /floor trials/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /^help$/i }).length).toBeGreaterThan(0);
     // Sign in CTA renders.
     expect(screen.getByTestId("sign-in-button")).toBeInTheDocument();
     // Authenticated-only items must not appear.
@@ -73,13 +73,14 @@ describe("NavBar — signed out", () => {
 });
 
 describe("NavBar — signed in (regular user)", () => {
-  it("shows Floor Trials, My Content, My Profile and the UserButton; no admin bars", () => {
+  it("shows Floor Trials, Help, My Content, My Profile and the UserButton; no admin bars", () => {
     signedIn = true;
     isAdmin = false;
     isManager = false;
     renderNav();
 
     expect(screen.getAllByRole("link", { name: /floor trials/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /^help$/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /^my content$/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /^my profile$/i }).length).toBeGreaterThan(0);
     expect(screen.getByTestId("user-button")).toBeInTheDocument();
@@ -126,6 +127,36 @@ describe("NavBar — signed in (manager only)", () => {
     expect(screen.getByRole("link", { name: /^checkin for$/i })).toBeInTheDocument();
     expect(screen.queryByText("Superuser")).toBeNull();
     expect(screen.queryByRole("link", { name: /^events$/i })).toBeNull();
+  });
+});
+
+describe("NavBar — mobile menu", () => {
+  it("shows Help in the mobile nav for signed-out users", async () => {
+    signedIn = false;
+    isAdmin = false;
+    isManager = false;
+    const user = userEvent.setup();
+    renderNav();
+
+    await user.click(screen.getByRole("button", { name: /toggle menu/i }));
+
+    const helpLinks = screen.getAllByRole("link", { name: /^help$/i });
+    expect(helpLinks.length).toBeGreaterThan(0);
+    expect(helpLinks.some((link) => link.getAttribute("href") === "/how-it-works")).toBe(true);
+  });
+
+  it("shows Help in the mobile nav for signed-in users", async () => {
+    signedIn = true;
+    isAdmin = false;
+    isManager = false;
+    const user = userEvent.setup();
+    renderNav();
+
+    await user.click(screen.getByRole("button", { name: /toggle menu/i }));
+
+    const helpLinks = screen.getAllByRole("link", { name: /^help$/i });
+    expect(helpLinks.length).toBeGreaterThan(0);
+    expect(helpLinks.some((link) => link.getAttribute("href") === "/how-it-works")).toBe(true);
   });
 });
 

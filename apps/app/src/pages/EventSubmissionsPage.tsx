@@ -152,7 +152,13 @@ export default function EventSubmissionsPage() {
         <CardHeader>
           <CardTitle>Submit songs to an event</CardTitle>
           <CardDescription>
-            Choose an upcoming event, then add songs from your library.
+            Choose an upcoming event, then add songs from your library.{" "}
+            <Link
+              to="/how-it-works/submitting-music#event-submission-required"
+              className="text-primary hover:underline"
+            >
+              About event submissions →
+            </Link>
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

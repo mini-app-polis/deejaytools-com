@@ -5,6 +5,7 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useApiClient } from "@/api/client";
@@ -136,6 +137,12 @@ export default function ManagedPartnershipsSection() {
           <div className="min-w-0 space-y-1">
             <div className="flex items-center gap-3 min-w-0 flex-wrap">
               <h2 className="font-semibold">Managed Partnerships</h2>
+              <Link
+                to="/how-it-works/partners"
+                className="text-xs text-muted-foreground hover:underline shrink-0"
+              >
+                Learn more →
+              </Link>
             </div>
             <p className="text-sm text-muted-foreground">
               Partnerships you upload and check in on behalf of — a leader and a follower. Private to you.

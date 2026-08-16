@@ -100,7 +100,13 @@ export default function SongsPage() {
 
       <div className={`space-y-3${loading ? " opacity-60" : ""}`}>
         {songs.length === 0 && (
-          <p className="text-sm text-muted-foreground py-4 text-center">No songs yet.</p>
+          <p className="text-sm text-muted-foreground py-4 text-center">
+            No songs yet.{" "}
+            <Link to="/songs/add" className="underline">
+              Add a song
+            </Link>
+            .
+          </p>
         )}
         {songs.map((s) => {
           const partnerName = songPartnershipLabel(s);

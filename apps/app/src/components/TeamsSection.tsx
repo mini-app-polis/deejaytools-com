@@ -2,6 +2,7 @@ import { createTeamBodySchema, type ApiTeam } from "@deejaytools/schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useApiClient } from "@/api/client";
@@ -114,6 +115,12 @@ export default function TeamsSection() {
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
           <div className="flex items-center gap-3 min-w-0 flex-wrap">
             <h2 className="font-semibold">Teams</h2>
+            <Link
+              to="/how-it-works/partners"
+              className="text-xs text-muted-foreground hover:underline shrink-0"
+            >
+              Learn more →
+            </Link>
           </div>
           <Button size="sm" onClick={openCreate}>Add team</Button>
         </div>

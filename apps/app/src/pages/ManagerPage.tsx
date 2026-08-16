@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   type ApiAdminUser,
@@ -22,11 +22,12 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { formatSessionTitle } from "@/lib/sessionFormat";
+import ManagerGuideSection from "@/components/manager/ManagerGuideSection";
 import { cn } from "@/lib/utils";
 
 const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
 
-export const MANAGER_SECTIONS = ["active-sessions", "event-songs", "upload-for", "checkin-for"] as const;
+export const MANAGER_SECTIONS = ["guide", "active-sessions", "event-songs", "upload-for", "checkin-for"] as const;
 export type ManagerSection = (typeof MANAGER_SECTIONS)[number];
 const DEFAULT_MANAGER_SECTION: ManagerSection = "active-sessions";
 
@@ -401,8 +402,27 @@ export default function ManagerPage() {
       <h1 className="page-title text-2xl">Manager</h1>
 
       <Tabs value={section}>
+        {/* ── Operations guide ── */}
+        <TabsContent value="guide" className="mt-4">
+          <ManagerGuideSection />
+        </TabsContent>
+
         {/* ── Active Sessions (moved from admin Live Queue tab) ── */}
         <TabsContent value="active-sessions" className="mt-4 space-y-5">
+          <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <p className="text-sm">
+              <span className="font-medium text-foreground">New to the booth?</span>{" "}
+              <span className="text-muted-foreground">
+                Read the operations guide for button meanings and session setup.
+              </span>
+            </p>
+            <Link
+              to="/manager/guide"
+              className="text-sm font-medium text-primary hover:underline shrink-0"
+            >
+              Open guide →
+            </Link>
+          </div>
           {/* Session selector */}
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
             <div className="w-full sm:w-72">

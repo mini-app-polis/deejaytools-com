@@ -46,7 +46,7 @@ const CARDS: CardDef[] = [
     to: "/how-it-works",
     eyebrow: "Answers to all questions",
     title: "How Floor Trials Work",
-    body: "What a floor trial is, how to submit music, what happens at the event, and how the queue is ordered.",
+    body: "Help hub covering floor trials, submitting music, checking in, the queue, partners, and troubleshooting.",
   },
   {
     kind: "public",

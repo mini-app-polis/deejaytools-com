@@ -6,7 +6,7 @@ import type {
   ApiSong,
 } from "@deejaytools/schemas";
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { useApiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
@@ -79,6 +79,17 @@ function queueStatusBadge(checkin: ApiMyCheckin) {
 
 export default function MyContentPage() {
   const api = useApiClient();
+  const { hash } = useLocation();
+
+  // Deep links such as /my-content#checkins arrive from the help pages. This page is
+  // one scrolling document (no tabs), so scroll the matching section into view.
+  useEffect(() => {
+    if (!hash) return;
+    const el = document.getElementById(hash.slice(1));
+    if (!el) return;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  }, [hash]);
 
   // ── Songs state ──────────────────────────────────────────────────────────────
   const [songs, setSongs] = useState<ApiSong[]>([]);
@@ -221,7 +232,9 @@ export default function MyContentPage() {
       {sortedActiveSessions.length > 0 && (
         <div className="rounded-lg border bg-card">
           <div className="px-4 py-3 border-b">
-            <h2 className="font-semibold">Active Floor Trials</h2>
+            <h2 id="active-floor-trials" className="font-semibold scroll-mt-24">
+              Active Floor Trials
+            </h2>
           </div>
           <div className="p-4 space-y-3">
             {sortedActiveSessions.map((s) => {
@@ -264,8 +277,16 @@ export default function MyContentPage() {
       {/* ── Check-ins section (only when checked in somewhere) ── */}
       {checkins && checkins.length > 0 && (
       <div className="rounded-lg border bg-card">
-        <div className="px-4 py-3 border-b">
-          <h2 className="font-semibold">Check-ins</h2>
+        <div className="px-4 py-3 border-b flex items-center justify-between gap-3">
+          <h2 id="checkins" className="font-semibold scroll-mt-24">
+            Check-ins
+          </h2>
+          <Link
+            to="/how-it-works/the-queue"
+            className="text-xs text-muted-foreground hover:underline shrink-0"
+          >
+            Learn more →
+          </Link>
         </div>
         <div className="p-4 space-y-3">
             <div className="space-y-3">
@@ -351,7 +372,9 @@ export default function MyContentPage() {
       {/* ── Events section ── */}
       <div className="rounded-lg border bg-card">
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
-          <h2 className="font-semibold">Events</h2>
+          <h2 id="events" className="font-semibold scroll-mt-24">
+            Events
+          </h2>
           <Button size="sm" asChild>
             <Link to="/event-submissions">Submit songs</Link>
           </Button>
@@ -361,7 +384,11 @@ export default function MyContentPage() {
             <Skeleton className="h-24 w-full" />
           ) : eventsWithSongs.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              You haven&apos;t added songs to any events yet.
+              You haven&apos;t added songs to any events yet.{" "}
+              <Link to="/event-submissions" className="underline">
+                Submit songs to an event
+              </Link>
+              .
             </p>
           ) : (
             <div className="space-y-3">
@@ -404,7 +431,9 @@ export default function MyContentPage() {
       {/* ── Songs section ── */}
       <div className="rounded-lg border bg-card">
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
-          <h2 className="font-semibold">Songs</h2>
+          <h2 id="songs" className="font-semibold scroll-mt-24">
+            Songs
+          </h2>
           <Button size="sm" asChild>
             <Link to="/songs/add">Add song</Link>
           </Button>
@@ -413,7 +442,13 @@ export default function MyContentPage() {
           <div className={`space-y-3${songsLoading ? " opacity-60" : ""}`}>
             {songsLoading && songs.length === 0 && <Skeleton className="h-40 w-full" />}
             {songs.length === 0 && !songsLoading && (
-              <p className="text-sm text-muted-foreground py-4 text-center">No songs yet.</p>
+              <p className="text-sm text-muted-foreground py-4 text-center">
+                No songs yet.{" "}
+                <Link to="/songs/add" className="underline">
+                  Add a song
+                </Link>
+                .
+              </p>
             )}
             {songs.map((s) => {
               const partnerName = songPartnershipLabel(s);
