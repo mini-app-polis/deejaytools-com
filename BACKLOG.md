@@ -29,6 +29,16 @@ left out of the initial build and need to come back.
 - **Public-readable session detail.** Visitors can browse Floor Trials
   and individual session pages without signing in; the check-in form
   is replaced with a "Sign in to check in" CTA when unauthenticated.
+- **In-process session scheduler.** `startScheduler()` in
+  `apps/api/src/index.ts` runs `tickSessionStatuses()` and
+  `fillRunningSessions()` on a repeating timer (default 30 s via
+  `TICK_INTERVAL_MS`). `GET /internal/tick` is a manual operator
+  override, not a Railway cron job — see `apps/api/src/app.ts` and
+  `services/scheduler.ts`.
+- **Sentry release tagging.** API reads `RAILWAY_DEPLOYMENT_ID` or
+  `npm_package_version` in `instrument.ts`; the app injects
+  `VITE_APP_VERSION` via `vite.config.ts` and passes it to
+  `Sentry.init` in `apps/app/src/lib/instrument.ts`.
 
 ---
 
@@ -41,8 +51,6 @@ there is real usage to react to. This includes:
 - Session creation and management UI
 - Check-in flow from the user's perspective
 - Queue display and slot management for admins
-- Railway cron for automatic session status transitions
-  (`GET /internal/tick` — `TICK_SECRET` is already configured)
 
 Priority: when floor trial work resumes.
 
@@ -64,8 +72,8 @@ The previously-listed gaps (queue mutation edge cases, check-in
 admission branches, middleware JWT verification path) are now closed.
 The auth middleware has its own test file; queue endpoints
 (`/promote`, `/complete`, `/incomplete`, `/withdraw`) cover auth +
-sad paths; admin endpoints (`/v1/admin/checkins`, `/v1/runs`) and the
-song claim-legacy flow each have dedicated tests; queue helpers
+sad paths; admin endpoints (`/v1/admin/checkins`, `/v1/runs`) each have
+dedicated tests; queue helpers
 (`admission`, `compaction`, `runCounts`, `singleEntry`, `songLabel`)
 have unit-level coverage.
 
@@ -108,7 +116,7 @@ rationale and a revisit trigger.
 | API-011 | apps/api | Drizzle migrations run at Railway deploy time, not in CI. | See [apps/api ADR-001](./apps/api/docs/decisions/ADR-001-drizzle-migrations-at-deploy.md). |
 | API-001 | apps/api | Railway config lives at the monorepo root rather than per-app. | Evaluator-cog API-001 check learns to look at the monorepo root. |
 | XSTACK-002 | apps/api | Test fixture `src/test/mocks.ts` mirrors handler shape with raw `c.json`. | Evaluator-cog excludes `src/test/` from XSTACK-002. |
-| API-004 | apps/api | `/internal/tick` is unversioned by design (Railway cron hook). | Never — intentional. Recorded inline in `src/app.ts`. |
+| API-004 | apps/api | `/internal/tick` is unversioned by design (manual operator override; primary driver is the in-process scheduler in `index.ts`). | Never — intentional. Rationale inline in `src/app.ts`. |
 | CD-010, PRIN-005 | apps/api | Python-pattern observability checker false-positives against TypeScript. | Evaluator-cog adds `@sentry/node` + `common-typescript-utils` patterns. |
 | CD-012 | apps/api | JWT-only verification; no machine callers exist. | See [apps/api ADR-003](./apps/api/docs/decisions/ADR-003-jwt-only-clerk-verification.md). |
 | TEST-013 | apps/app | UI timing `setTimeout` calls flagged as production timeouts. | Evaluator-cog scopes the check to retry/HTTP/Prefect contexts. |
@@ -161,17 +169,6 @@ unlimited seats).
 events for the rest of the billing cycle. No surprise bill. The
 per-project rate limit above is designed to make a quota burn
 granular (lose visibility for a day, not the month).
-
-### Optional next polish
-
-- **Release tagging.** Pass `release` to both `Sentry.init` calls so
-  errors link to the deployed version. API: `release:
-  process.env.RAILWAY_DEPLOYMENT_ID ?? process.env.npm_package_version`.
-  App: inject the version at build time via `vite.config.ts` and read
-  from `import.meta.env.VITE_APP_VERSION`. Without this, every error is
-  associated with `unknown@*` and you can't tell which deploy
-  introduced a bug — matters more once releases ship multiple times
-  per week.
 
 ---
 
