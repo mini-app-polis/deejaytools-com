@@ -563,7 +563,7 @@ describe("SessionDetailPage — check-in song selector", () => {
       ).toBeGreaterThan(0);
     });
 
-    expect(screen.getAllByRole("link", { name: /add them on my content/i }).length).toBeGreaterThan(
+    expect(screen.getAllByRole("link", { name: /submit songs to this event/i }).length).toBeGreaterThan(
       0
     );
     expect(screen.queryByRole("radiogroup", { name: /^song$/i })).not.toBeInTheDocument();

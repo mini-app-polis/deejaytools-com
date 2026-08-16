@@ -129,6 +129,7 @@ export const ApiQueueEntrySchema = z.object({
   enteredQueueAt: z.number(),
   entityPairId: z.string().nullable(),
   entitySoloUserId: z.string().nullable(),
+  entityManagedPartnershipId: z.string().nullable().optional(),
   entityLabel: z.string(),
   divisionName: z.string(),
   songId: z.string().nullable(),
@@ -190,6 +191,11 @@ export const ApiSongSchema = z.object({
   partner_last_name: z.string().nullable().optional(),
   /** 'partner' for real partners; 'solo' | 'team' | 'other' for portal placeholders. */
   partner_kind: z.string().nullable().optional(),
+  managed_partnership_id: z.string().nullable().optional(),
+  managed_leader_first_name: z.string().nullable().optional(),
+  managed_leader_last_name: z.string().nullable().optional(),
+  managed_follower_first_name: z.string().nullable().optional(),
+  managed_follower_last_name: z.string().nullable().optional(),
 });
 export type ApiSong = z.infer<typeof ApiSongSchema>;
 

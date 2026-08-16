@@ -144,6 +144,10 @@ function mapSong(
     partner_first_name?: string | null;
     partner_last_name?: string | null;
     partner_kind?: string | null;
+    managed_leader_first_name?: string | null;
+    managed_leader_last_name?: string | null;
+    managed_follower_first_name?: string | null;
+    managed_follower_last_name?: string | null;
   }
 ) {
   return {
@@ -165,6 +169,11 @@ function mapSong(
     partner_first_name: row.partner_first_name ?? null,
     partner_last_name: row.partner_last_name ?? null,
     partner_kind: row.partner_kind ?? null,
+    managed_partnership_id: row.managedPartnershipId ?? null,
+    managed_leader_first_name: row.managed_leader_first_name ?? null,
+    managed_leader_last_name: row.managed_leader_last_name ?? null,
+    managed_follower_first_name: row.managed_follower_first_name ?? null,
+    managed_follower_last_name: row.managed_follower_last_name ?? null,
   };
 }
 
@@ -410,9 +419,14 @@ songRoutes.get("/", requireAuth, zValidator("query", listQuery), async (c) => {
       partner_first_name: partners.firstName,
       partner_last_name: partners.lastName,
       partner_kind: partners.kind,
+      managed_leader_first_name: managedPartnerships.leaderFirstName,
+      managed_leader_last_name: managedPartnerships.leaderLastName,
+      managed_follower_first_name: managedPartnerships.followerFirstName,
+      managed_follower_last_name: managedPartnerships.followerLastName,
     })
     .from(songs)
     .leftJoin(partners, eq(partners.id, songs.partnerId))
+    .leftJoin(managedPartnerships, eq(managedPartnerships.id, songs.managedPartnershipId))
     .where(partnerFilter)
     .orderBy(desc(songs.createdAt));
 
@@ -424,6 +438,10 @@ songRoutes.get("/", requireAuth, zValidator("query", listQuery), async (c) => {
           partner_first_name: r.partner_first_name,
           partner_last_name: r.partner_last_name,
           partner_kind: r.partner_kind,
+          managed_leader_first_name: r.managed_leader_first_name,
+          managed_leader_last_name: r.managed_leader_last_name,
+          managed_follower_first_name: r.managed_follower_first_name,
+          managed_follower_last_name: r.managed_follower_last_name,
         })
       )
     )

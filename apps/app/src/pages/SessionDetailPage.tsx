@@ -163,7 +163,8 @@ export default function ApiSessionPage() {
     return pairByPartnerId.get(selectedSong.partner_id) ?? null;
   }, [selectedSong, pairByPartnerId]);
 
-  const isSolo = !selectedSong?.partner_id;
+  const isManaged = !!selectedSong?.managed_partnership_id;
+  const isSolo = !selectedSong?.partner_id && !isManaged;
 
   const divisionInSession = fDivision ? sessionDivisions.includes(fDivision) : false;
 
@@ -205,24 +206,34 @@ export default function ApiSessionPage() {
   const priorityWaiting = waiting.filter((r) => r.subQueue === "priority");
   const standardWaiting = waiting.filter((r) => r.subQueue !== "priority");
 
+  const userManagedPartnershipIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const song of songs) {
+      if (song.managed_partnership_id) ids.add(song.managed_partnership_id);
+    }
+    return ids;
+  }, [songs]);
+
   // Find ALL of the current user's active queue entries — one per entity
-  // (pair or solo). A user with multiple partnerships can have several.
+  // (pair, solo, or managed partnership). A user with multiple partnerships can have several.
   const userQueueEntries = useMemo(() => {
     if (!user?.id) return [];
     const userPairIds = new Set(pairs.map((p) => p.id));
     return [...active, ...waiting].filter(
       (r) =>
         r.entitySoloUserId === user.id ||
-        (r.entityPairId !== null && userPairIds.has(r.entityPairId))
+        (r.entityPairId !== null && userPairIds.has(r.entityPairId)) ||
+        (r.entityManagedPartnershipId != null &&
+          userManagedPartnershipIds.has(r.entityManagedPartnershipId))
     );
-  }, [active, waiting, pairs, user?.id]);
+  }, [active, waiting, pairs, user?.id, userManagedPartnershipIds]);
 
-  // Set of entity IDs (pair IDs or the solo user ID) already in the queue.
   const inQueueEntityIds = useMemo(() => {
     const s = new Set<string>();
     for (const r of userQueueEntries) {
       if (r.entityPairId) s.add(r.entityPairId);
       if (r.entitySoloUserId) s.add(r.entitySoloUserId);
+      if (r.entityManagedPartnershipId) s.add(r.entityManagedPartnershipId);
     }
     return s;
   }, [userQueueEntries]);
@@ -231,11 +242,21 @@ export default function ApiSessionPage() {
   // used to warn the user and block submission.
   const selectedEntityInQueue = useMemo(() => {
     if (!fSongId || !selectedSong) return false;
+    if (selectedSong.managed_partnership_id) {
+      return inQueueEntityIds.has(selectedSong.managed_partnership_id);
+    }
     if (isSolo) return inQueueEntityIds.has(user?.id ?? "");
     const pid = derivedPair?.id;
     // If the pair hasn't been created yet (pid is null), it can't be in queue.
     return pid ? inQueueEntityIds.has(pid) : false;
-  }, [fSongId, selectedSong, isSolo, derivedPair?.id, inQueueEntityIds, user?.id]);
+  }, [
+    fSongId,
+    selectedSong,
+    isSolo,
+    derivedPair?.id,
+    inQueueEntityIds,
+    user?.id,
+  ]);
 
 
   const checkinWindowOpen =
@@ -368,8 +389,8 @@ export default function ApiSessionPage() {
           ) : !canCheckIn && checkinWindowOpen && noEventSongs ? (
             <p className="text-sm text-muted-foreground">
               You haven&apos;t added any songs to this event yet.{" "}
-              <Link to="/my-content" className="underline">
-                Add them on My Content
+              <Link to="/event-submissions" className="underline">
+                Submit songs to this event
               </Link>
               .
             </p>
@@ -411,6 +432,12 @@ export default function ApiSessionPage() {
 
       {/* ── Check-in action (top) ── */}
       {checkInBlock}
+
+      <p className="text-xs text-muted-foreground -mt-2">
+        <Link to="/how-it-works/the-queue" className="hover:underline">
+          Learn more about the queue →
+        </Link>
+      </p>
 
       {/* ── Active queue ── */}
       <Card className="border-primary/30">
@@ -517,8 +544,16 @@ export default function ApiSessionPage() {
               <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
             </div>
 
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Check in</h2>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <h2 className="text-lg font-semibold">Check in</h2>
+                <Link
+                  to="/how-it-works/checking-in"
+                  className="text-xs text-muted-foreground hover:underline shrink-0"
+                >
+                  Why? →
+                </Link>
+              </div>
               <Button type="button" variant="ghost" size="sm" onClick={closeCheckin}>
                 ✕
               </Button>
@@ -529,10 +564,16 @@ export default function ApiSessionPage() {
               {noEventSongs ? (
                 <p className="text-sm text-muted-foreground">
                   You haven&apos;t added any songs to this event yet.{" "}
-                  <Link to="/my-content" className="underline">
-                    Add them on My Content
+                  <Link to="/event-submissions" className="underline">
+                    Submit songs to this event
                   </Link>
-                  .
+                  .{" "}
+                  <Link
+                    to="/how-it-works/troubleshooting"
+                    className="text-xs text-muted-foreground hover:underline"
+                  >
+                    Why? →
+                  </Link>
                 </p>
               ) : (
                 <div>
@@ -561,9 +602,9 @@ export default function ApiSessionPage() {
                   <div className="flex items-start gap-2">
                     <span className="text-muted-foreground w-16 shrink-0 pt-px">Partner</span>
                     <span className="font-medium">
-                      {isSolo
-                        ? <span className="text-muted-foreground italic">Solo</span>
-                        : songPartnershipLabel(selectedSong) ?? "—"}
+                      {isManaged || !isSolo
+                        ? songPartnershipLabel(selectedSong, user?.fullName ?? undefined) ?? "—"
+                        : <span className="text-muted-foreground italic">Solo</span>}
                     </span>
                   </div>
                   <div className="flex items-start gap-2">
@@ -574,7 +615,13 @@ export default function ApiSessionPage() {
                   </div>
                   {selectedEntityInQueue && (
                     <p className="text-xs text-destructive pt-0.5">
-                      This partnership is already in the queue. Pick a different song or withdraw your current entry first.
+                      This partnership is already in the queue. Pick a different song or withdraw your current entry first.{" "}
+                      <Link
+                        to="/how-it-works/troubleshooting"
+                        className="underline font-normal text-destructive/90"
+                      >
+                        Why? →
+                      </Link>
                     </p>
                   )}
                 </div>

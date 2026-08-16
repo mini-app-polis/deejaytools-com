@@ -20,9 +20,32 @@ export function partnershipDisplay(opts: {
 
 /** Who-label for a song row when owner and partner names may be composed. */
 export function songPartnershipLabel(
-  song: Pick<ApiSong, "partner_id" | "partner_first_name" | "partner_last_name" | "partner_kind">,
+  song: Pick<
+    ApiSong,
+    | "partner_id"
+    | "partner_first_name"
+    | "partner_last_name"
+    | "partner_kind"
+    | "managed_partnership_id"
+    | "managed_leader_first_name"
+    | "managed_leader_last_name"
+    | "managed_follower_first_name"
+    | "managed_follower_last_name"
+  >,
   ownerName?: string | null
 ): string | null {
+  if (song.managed_partnership_id) {
+    const leader = [song.managed_leader_first_name, song.managed_leader_last_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    const follower = [song.managed_follower_first_name, song.managed_follower_last_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    if (leader && follower) return `${leader} & ${follower}`;
+    return leader || follower || null;
+  }
   if (!song.partner_id) return null;
   const partnerName =
     [song.partner_first_name, song.partner_last_name].filter(Boolean).join(" ").trim() || null;

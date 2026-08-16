@@ -507,6 +507,34 @@ describe("POST /v1/checkins", () => {
       expect(res.status).toBe(409);
     });
 
+    it("persists the managed partnership entity even when the client sends entitySoloUserId", async () => {
+      vi.mocked(mockDb.insert).mockClear();
+      enqueueSelectResult([openSession]);
+      enqueueSelectResult([managedSong("song_mp1", "mp1")]);
+      enqueueSelectResult([{ id: "mp1", userId: "user_test123" }]);
+      enqueueSelectResult([]);
+      enqueueManagedAdmission(0);
+
+      const res = await app.request(BASE, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(managedBody("song_mp1")),
+      });
+      expect(res.status).toBe(201);
+
+      const checkinInsert = vi.mocked(mockDb.insert).mock.results[0]?.value?.values as ReturnType<
+        typeof vi.fn
+      >;
+      expect(checkinInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entityManagedPartnershipId: "mp1",
+          entityPairId: null,
+          entitySoloUserId: null,
+          songId: "song_mp1",
+        })
+      );
+    });
+
     it("computes admission run counts per managed partnership", async () => {
       enqueueSelectResult([openSession]);
       enqueueSelectResult([managedSong("song_mp1", "mp1")]);
