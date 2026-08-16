@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import HelpLayout from "@/components/help/HelpLayout";
 import { HelpActionLink, HelpSection } from "@/components/help/HelpSection";
 
@@ -68,21 +69,23 @@ export default function HelpOnTheFloorPage() {
             </li>
             <li>
               <strong className="text-foreground">
-                More than halfway through, or you'd rather skip the restart:
+                More than halfway through, or you&apos;d rather skip the restart:
               </strong>{" "}
-              you'll automatically be moved to the end of the upcoming queue. Stop by the deejay booth
-              to confirm whether you want to actually go again or be removed.
+              the deejay can mark your run{" "}
+              <strong className="text-foreground">Run incomplete</strong>, which moves you to the bottom
+              of the <strong className="text-foreground">Active</strong> queue. Stop by the deejay booth
+              to confirm whether you want to go again or be removed.
             </li>
           </ul>
           <p>If your partner isn't ready when your turn comes up:</p>
           <ul className="list-disc pl-5 space-y-2">
             <li>
-              <strong className="text-foreground">Some members missing:</strong> you're moved to the
-              end of the upcoming queue.
+              <strong className="text-foreground">Some members missing:</strong> the deejay may mark
+              your run incomplete (bottom of Active) or withdraw you from the queue.
             </li>
             <li>
-              <strong className="text-foreground">All members missing:</strong> you're removed from
-              the queue entirely. To get another run, check in again.
+              <strong className="text-foreground">All members missing:</strong> the deejay may
+              withdraw you from the queue. To get another run, check in again.
             </li>
           </ul>
         </HelpSection>
@@ -95,9 +98,11 @@ export default function HelpOnTheFloorPage() {
             division, standard if you've exceeded it.
           </p>
           <p>
-            A note on order of operations: don't submit the check-in form again until your previous
-            run is complete. Submissions sent in while you're already on the queue (or actively
-            running) are rejected automatically.
+            A note on order of operations: don&apos;t check in again for the same partnership while
+            that entry is still in this session&apos;s queue. The form blocks it: &ldquo;This
+            partnership is already in the queue. Pick a different song or withdraw your current entry
+            first.&rdquo; Different partnerships in the same session are fine — solo plus couple, or
+            two different partners.
           </p>
           <HelpActionLink to="/floor-trials">Back to Floor Trials →</HelpActionLink>
         </HelpSection>
@@ -128,8 +133,12 @@ export default function HelpOnTheFloorPage() {
             </li>
             <li>
               <strong className="text-foreground">Patience:</strong> a lot of things happen during a
-              floor trial block. The check-in order is the order people checked in — it's not a
-              guarantee of when you'll run. Routines from same-day divisions get priority.
+              floor trial block. The check-in order is the order people checked in — it&apos;s not a
+              guarantee of when you&apos;ll run. See{" "}
+              <Link to="/how-it-works/the-queue" className="text-primary hover:underline">
+                Watching the queue
+              </Link>{" "}
+              for how priority is decided.
             </li>
           </ul>
         </HelpSection>

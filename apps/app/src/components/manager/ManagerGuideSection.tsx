@@ -268,8 +268,8 @@ export default function ManagerGuideSection() {
             set directly in the database may be why.
           </li>
           <li>
-            <strong>No rollback for Run complete.</strong> Withdrawing afterwards does not remove
-            the recorded run or restore priority allowance.
+            <strong>No rollback for Run complete.</strong> Once the deejay records a completed run, it
+            is permanent — it counts toward priority limits and cannot be undone.
           </li>
         </ul>
         <p className="mt-2">

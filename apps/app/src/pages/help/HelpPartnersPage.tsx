@@ -41,15 +41,15 @@ export default function HelpPartnersPage() {
             A <strong className="text-foreground">partner</strong> is a person on your roster — first
             name, last name, their role as <strong className="text-foreground">leader</strong> or{" "}
             <strong className="text-foreground">follower</strong>, and an optional email. When you upload
-            a song, you link it to one partner. The form says{" "}
+            a song, you link it to one partner. On My Profile, the add-partner form says{" "}
             <strong className="text-foreground">Your role will be the opposite</strong> of the role you
             set for them: if they are a follower, you are treated as the leader for that song, and vice
             versa.
           </p>
           <p>
-            Partners do not need their own DeejayTools account, but if they sign up later the same
-            roster row still works. Either dancer can check in with a linked song when both have
-            accounts.
+            Partners do not need their own DeejayTools account for you to upload on their behalf.
+            Each dancer checks in with their own uploaded song — if both partners need to check in,
+            each must upload their own copy.
           </p>
           <HelpSubheading>Removing a partner</HelpSubheading>
           <p>On My Profile, deleting a partner may show:</p>
@@ -74,7 +74,8 @@ export default function HelpPartnersPage() {
             A <strong className="text-foreground">team</strong> is a named group you create on My
             Profile. Teams are used when you upload through{" "}
             <Link to="/songs/add" className="text-primary hover:underline">Add a song → Teams, Cabaret, Other</Link>{" "}
-            for the Teams division (and similar special divisions).
+            for the <strong className="text-foreground">Teams</strong> division only. Cabaret and Other
+            use a free-text group name instead of a team picker.
           </p>
         </HelpSection>
 

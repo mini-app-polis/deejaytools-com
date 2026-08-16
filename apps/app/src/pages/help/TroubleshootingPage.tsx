@@ -187,8 +187,8 @@ const ENTRIES: TroubleEntry[] = [
     heading: "File exceeds 100 MB limit",
     meaning: (
       <>
-        The assembled upload is larger than 100 MB. Before upload starts, the form may instead show:{" "}
-        &ldquo;That file is too large. Please choose an audio file under 100 MB.&rdquo;
+        Your file is over the 100 MB limit enforced in the browser before upload starts. The form
+        shows: &ldquo;That file is too large. Please choose an audio file under 100 MB.&rdquo;
       </>
     ),
     steps: (
@@ -251,8 +251,8 @@ const ENTRIES: TroubleEntry[] = [
     meaning: (
       <>
         A chunk failed to reach the server (connection drop, timeout, or offline). The parentheses
-        contain technical detail from the browser. The upload retries each chunk up to three times
-        before showing this.
+        contain technical detail from the browser. Each chunk is tried up to three times before
+        showing this.
       </>
     ),
     steps: (

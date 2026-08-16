@@ -127,9 +127,10 @@ export default function HelpCheckingInPage() {
             unclear.
           </li>
           <li>
-            <strong className="text-foreground">Linking partners on upload:</strong> if your partner
-            also has a DeejayTools account, linking them to the song during upload means either of you
-            can check in with it.
+            <strong className="text-foreground">Your own song:</strong> each dancer checks in with a
+            song they uploaded themselves. If both partners need to check in, each must upload their
+            own copy — you cannot check in using your partner&apos;s file even if you linked them on
+            the upload form.
           </li>
         </ul>
       </HelpSection>

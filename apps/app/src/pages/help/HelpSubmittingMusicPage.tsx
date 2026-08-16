@@ -64,9 +64,11 @@ export default function HelpSubmittingMusicPage() {
             </li>
             <li>
               <strong className="text-foreground">Teams, Cabaret, Other</strong> — for Teams, Cabaret,
-              Exhibition, and other special divisions. These divisions are{" "}
-              <strong className="text-foreground">deliberately absent</strong> from the standard division
-              picker on &ldquo;Upload for myself&rdquo; — they live on this special tab instead.
+              Exhibition, and other special divisions. <strong className="text-foreground">Teams</strong>,{" "}
+              <strong className="text-foreground">Cabaret</strong>, and{" "}
+              <strong className="text-foreground">My Division Is Not Listed</strong> are absent from the
+              standard division picker on &ldquo;Upload for myself&rdquo; (they live on this tab only).{" "}
+              <strong className="text-foreground">Exhibition</strong> appears on both pickers.
             </li>
           </ul>
 
