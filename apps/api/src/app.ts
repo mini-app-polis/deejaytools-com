@@ -8,20 +8,23 @@ import { ZodError } from "zod";
 import { sql } from "drizzle-orm";
 import { db } from "./db/index.js";
 import { adminCheckinRoutes } from "./routes/admin-checkins.js";
+import { adminEventSubmissionRoutes } from "./routes/admin-event-submissions.js";
 import { adminSongRoutes } from "./routes/admin-songs.js";
 import { adminUserRoutes } from "./routes/admin-users.js";
 import { authRoutes } from "./routes/auth.js";
 import { checkinRoutes } from "./routes/checkins.js";
 import { eventRoutes } from "./routes/events.js";
-import { legacySongRoutes } from "./routes/legacy-songs.js";
 import { pairRoutes } from "./routes/pairs.js";
 import { partnerRoutes } from "./routes/partners.js";
 import { sessionRoutes } from "./routes/sessions.js";
 import { queueRoutes } from "./routes/queue.js";
 import { runRoutes } from "./routes/runs.js";
 import { songRoutes } from "./routes/songs.js";
+import { teamsRoutes } from "./routes/teams.js";
+import { managedPartnershipsRoutes } from "./routes/managed-partnerships.js";
+import { eventSongSubmissionRoutes } from "./routes/event-song-submissions.js";
 import { feedbackRoutes } from "./routes/feedback.js";
-import { tickSessionStatuses } from "./services/cron.js";
+import { runTick } from "./services/scheduler.js";
 import { rateLimitMiddleware } from "./middleware/rate-limit.js";
 import { timeoutMiddleware } from "./middleware/timeout.js";
 
@@ -47,7 +50,7 @@ app.use(
 );
 app.use("*", honoLogger());
 
-// Global request body cap — 11 MB covers the maximum song-chunk upload (10 MB
+// Global request body cap — 11 MB covers the maximum song-chunk upload (5 MB
 // of binary data + multipart envelope overhead) while rejecting truly oversized
 // requests before any handler allocates memory for them.
 app.use(
@@ -91,8 +94,10 @@ app.get("/health", async (c) => {
   }
 });
 
-// Intentionally unversioned — Railway cron hits this at a stable path.
-// Not public: gated by TICK_SECRET header when TICK_SECRET is set.
+// Manual/optional trigger for the tick (status advance + queue auto-fill).
+// The in-process scheduler in index.ts is the primary driver; this endpoint
+// lets an operator (or an external monitor) force a pass. Gated by TICK_SECRET.
+// Intentionally unversioned so the path stays stable across API versions.
 app.get("/internal/tick", async (c) => {
   // Guard against an empty-string TICK_SECRET: `secret && ...` would be falsy
   // for an empty string, bypassing the check entirely. Use `!== undefined`
@@ -101,7 +106,7 @@ app.get("/internal/tick", async (c) => {
   if (secret !== undefined && c.req.header("x-tick-secret") !== secret) {
     return c.json(CommonErrors.forbidden(), 403);
   }
-  await tickSessionStatuses(db);
+  await runTick(db);
   return c.json(success({ ticked: true }));
 });
 
@@ -112,15 +117,17 @@ app.route("/v1/events", eventRoutes);
 app.route("/v1/sessions", sessionRoutes);
 app.route("/v1/checkins", checkinRoutes);
 app.route("/v1/admin/checkins", adminCheckinRoutes);
-app.route("/v1/admin/songs", adminSongRoutes);
-app.route("/v1/admin/users", adminUserRoutes);
+  app.route("/v1/admin/songs", adminSongRoutes);
+  app.route("/v1/admin/event-song-submissions", adminEventSubmissionRoutes);
+  app.route("/v1/admin/users", adminUserRoutes);
 app.route("/v1/queue", queueRoutes);
 app.route("/v1/runs", runRoutes);
 app.route("/v1/pairs", pairRoutes);
 app.route("/v1/partners", partnerRoutes);
+app.route("/v1/teams", teamsRoutes);
+app.route("/v1/managed-partnerships", managedPartnershipsRoutes);
+app.route("/v1/event-song-submissions", eventSongSubmissionRoutes);
 app.route("/v1/songs", songRoutes);
-// Intentionally public — read-only historical catalog, no user data.
-app.route("/v1/legacy-songs", legacySongRoutes);
 // Intentionally public — unauthenticated feedback submissions.
 app.route("/v1/feedback", feedbackRoutes);
 
@@ -134,7 +141,14 @@ app.onError((err, c) => {
   logger.error({
     event: "unhandled_error",
     category: "api",
+    context: { path: c.req.path, method: c.req.method },
     error: err,
   });
-  return c.json(CommonErrors.internalError(), 500);
+  const message =
+    process.env.NODE_ENV === "production"
+      ? "Internal server error"
+      : err instanceof Error
+        ? err.message
+        : String(err);
+  return c.json(CommonErrors.internalError(message), 500);
 });

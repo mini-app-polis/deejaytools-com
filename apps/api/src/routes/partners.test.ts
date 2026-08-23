@@ -72,6 +72,59 @@ describe("GET /v1/partners", () => {
       partner_role: "follower",
     });
   });
+
+  it("returns only real partners — placeholder rows are filtered at query time", async () => {
+    const realPartner = {
+      id: "p1",
+      userId: "user_test123",
+      firstName: "Jane",
+      lastName: "Doe",
+      email: null,
+      linkedUserId: null,
+      partnerRole: "follower",
+      kind: "partner",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    enqueueSelectResult([realPartner]);
+    const res = await app.request(BASE, { headers: authHeaders() });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<unknown[]>>(res);
+    assertSuccessListEnvelope(body);
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0]).toMatchObject({ id: "p1" });
+  });
+});
+
+describe("GET /v1/partners/leading-pairs", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+  });
+
+  it("returns real partner pairs and open slots but omits placeholder partner pairs", async () => {
+    enqueueSelectResult([
+      {
+        id: "pair_real",
+        partnerBId: "p_real",
+        partnerFirst: "Jane",
+        partnerLast: "Doe",
+      },
+      {
+        id: "pair_open",
+        partnerBId: null,
+        partnerFirst: null,
+        partnerLast: null,
+      },
+    ]);
+    const res = await app.request(`${BASE}/leading-pairs`, { headers: authHeaders() });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<{ id: string; display_name: string }[]>>(res);
+    assertSuccessListEnvelope(body);
+    expect(body.data).toHaveLength(2);
+    expect(body.data.map((p) => p.id)).toEqual(["pair_real", "pair_open"]);
+    expect(body.data[0]?.display_name).toBe("Jane Doe");
+    expect(body.data[1]?.display_name).toBe("Open slot");
+  });
 });
 
 describe("POST /v1/partners", () => {

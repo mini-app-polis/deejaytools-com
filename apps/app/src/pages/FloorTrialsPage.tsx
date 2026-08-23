@@ -100,7 +100,10 @@ export default function FloorTrialsPage() {
 
       {todaySessions.length === 0 ? (
         <p className="text-sm text-muted-foreground py-8 text-center">
-          No upcoming sessions right now.
+          No upcoming sessions right now.{" "}
+          <Link to="/how-it-works/floor-trials" className="text-primary hover:underline">
+            Learn when sessions appear →
+          </Link>
         </p>
       ) : (
         <div className={`space-y-3${loading ? " opacity-60" : ""}`}>

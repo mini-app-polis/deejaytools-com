@@ -50,5 +50,6 @@ export function useAuthMe() {
     loading,
     reload,
     isAdmin: me?.role === "admin",
+    isManager: me?.role === "manager",
   };
 }

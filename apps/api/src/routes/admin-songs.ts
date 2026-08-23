@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "../db/index.js";
 import { partners, songs, users } from "../db/schema.js";
 import { buildStructuredSongLabel } from "../lib/songLabel.js";
+import { partnershipDisplay } from "../lib/entityLabel.js";
 import { zValidator } from "../lib/validate.js";
 import { requireAdmin } from "../middleware/auth.js";
 import { isLegacySong } from "./songs.js";
@@ -97,6 +98,7 @@ adminSongRoutes.get(
         partnerId: partners.id,
         partnerFirst: partners.firstName,
         partnerLast: partners.lastName,
+        partnerKind: partners.kind,
         partnerLinkedUserEmail: partnerLinkedUser.email,
       })
       .from(songs)
@@ -121,9 +123,11 @@ adminSongRoutes.get(
           // Partnership label fed into buildStructuredSongLabel — same shape
           // the runs endpoint uses so labels are visually consistent across
           // the admin UI.
-          const partnership = partnerName
-            ? `${ownerName} & ${partnerName}`
-            : ownerName;
+          const partnership = partnershipDisplay({
+            ownerName,
+            partnerName,
+            partnerKind: r.partnerKind,
+          });
 
           const songLabel = buildStructuredSongLabel({
             partnership,

@@ -4,8 +4,9 @@ import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
 import { z } from "zod";
 import { db } from "../db/index.js";
-import { events, pairs, partners, runs, sessions, songs, users } from "../db/schema.js";
+import { events, managedPartnerships, pairs, partners, runs, sessions, songs, users } from "../db/schema.js";
 import { buildStructuredSongLabel } from "../lib/songLabel.js";
+import { partnershipDisplay } from "../lib/entityLabel.js";
 import { zValidator } from "../lib/validate.js";
 import { requireAdmin } from "../middleware/auth.js";
 
@@ -16,6 +17,18 @@ const listQuery = z.object({
   event_id: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(500).optional(),
 });
+
+/** Stable grouping key — branch order matches entityLabel (managed → pair → solo). */
+function entityKeyFromRun(r: {
+  entityManagedPartnershipId: string | null;
+  entityPairId: string | null;
+  entitySoloUserId: string | null;
+}): string {
+  if (r.entityManagedPartnershipId) return `managed:${r.entityManagedPartnershipId}`;
+  if (r.entityPairId) return `pair:${r.entityPairId}`;
+  if (r.entitySoloUserId) return `solo:${r.entitySoloUserId}`;
+  return "unknown";
+}
 
 /**
  * GET /v1/runs
@@ -43,6 +56,7 @@ runRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c) => {
   const completedBy = alias(users, "completed_by");
   const songOwner = alias(users, "song_owner");
   const songPartnerAlias = alias(partners, "song_partner");
+  const songManagedPartnership = alias(managedPartnerships, "song_managed_partnership");
 
   const filters = [];
   if (session_id) filters.push(eq(runs.sessionId, session_id));
@@ -53,6 +67,9 @@ runRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c) => {
       id: runs.id,
       completedAt: runs.completedAt,
       divisionName: runs.divisionName,
+      entityPairId: runs.entityPairId,
+      entitySoloUserId: runs.entitySoloUserId,
+      entityManagedPartnershipId: runs.entityManagedPartnershipId,
       sessionId: runs.sessionId,
       sessionFloorTrialStartsAt: sessions.floorTrialStartsAt,
       eventId: runs.eventId,
@@ -68,14 +85,24 @@ runRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c) => {
       songOwnerLast: songOwner.lastName,
       songPartnerFirst: songPartnerAlias.firstName,
       songPartnerLast: songPartnerAlias.lastName,
+      songPartnerKind: songPartnerAlias.kind,
+      songManagedLeaderFirst: songManagedPartnership.leaderFirstName,
+      songManagedLeaderLast: songManagedPartnership.leaderLastName,
+      songManagedFollowerFirst: songManagedPartnership.followerFirstName,
+      songManagedFollowerLast: songManagedPartnership.followerLastName,
       // The run's entity (which may equal the song's owner/partner, but for solo
       // runs comes from a different column entirely).
       pairUserFirst: pairUser.firstName,
       pairUserLast: pairUser.lastName,
       pairPartnerFirst: partners.firstName,
       pairPartnerLast: partners.lastName,
+      pairPartnerKind: partners.kind,
       soloUserFirst: soloUser.firstName,
       soloUserLast: soloUser.lastName,
+      managedLeaderFirst: managedPartnerships.leaderFirstName,
+      managedLeaderLast: managedPartnerships.leaderLastName,
+      managedFollowerFirst: managedPartnerships.followerFirstName,
+      managedFollowerLast: managedPartnerships.followerLastName,
       completedByFirst: completedBy.firstName,
       completedByLast: completedBy.lastName,
     })
@@ -85,10 +112,15 @@ runRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c) => {
     .leftJoin(songs, eq(songs.id, runs.songId))
     .leftJoin(songOwner, eq(songOwner.id, songs.userId))
     .leftJoin(songPartnerAlias, eq(songPartnerAlias.id, songs.partnerId))
+    .leftJoin(songManagedPartnership, eq(songManagedPartnership.id, songs.managedPartnershipId))
     .leftJoin(pairs, eq(pairs.id, runs.entityPairId))
     .leftJoin(pairUser, eq(pairUser.id, pairs.userAId))
     .leftJoin(partners, eq(partners.id, pairs.partnerBId))
     .leftJoin(soloUser, eq(soloUser.id, runs.entitySoloUserId))
+    .leftJoin(
+      managedPartnerships,
+      eq(managedPartnerships.id, runs.entityManagedPartnershipId)
+    )
     .leftJoin(completedBy, eq(completedBy.id, runs.completedByUserId))
     .where(filters.length > 0 ? and(...filters) : undefined)
     .orderBy(desc(runs.completedAt))
@@ -97,12 +129,21 @@ runRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c) => {
   return c.json(
     successList(
       rows.map((r) => {
-        // Entity (who ran): "Leader & Follower" for pairs, full name for solo.
+        // Entity (who ran): "Leader & Follower" for pairs/managed, full name for solo.
         let entityLabel: string;
-        if (r.pairUserFirst || r.pairUserLast) {
+        if (r.managedLeaderFirst != null) {
+          const leader = [r.managedLeaderFirst, r.managedLeaderLast].filter(Boolean).join(" ").trim();
+          const follower = [r.managedFollowerFirst, r.managedFollowerLast]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+          entityLabel = follower ? `${leader} & ${follower}` : leader;
+        } else if (r.pairUserFirst || r.pairUserLast) {
           const a = [r.pairUserFirst, r.pairUserLast].filter(Boolean).join(" ").trim();
           const b = [r.pairPartnerFirst, r.pairPartnerLast].filter(Boolean).join(" ").trim();
-          entityLabel = b ? `${a} & ${b}` : a || "Pair";
+          entityLabel =
+            partnershipDisplay({ ownerName: a, partnerName: b, partnerKind: r.pairPartnerKind }) ||
+            "Pair";
         } else if (r.soloUserFirst || r.soloUserLast) {
           entityLabel = [r.soloUserFirst, r.soloUserLast].filter(Boolean).join(" ").trim();
         } else {
@@ -110,17 +151,32 @@ runRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c) => {
         }
 
         // Song's own partnership (independent of the run's entity).
-        const songOwnerName = [r.songOwnerFirst, r.songOwnerLast]
-          .filter(Boolean)
-          .join(" ")
-          .trim();
-        const songPartnerName = [r.songPartnerFirst, r.songPartnerLast]
-          .filter(Boolean)
-          .join(" ")
-          .trim();
-        const songPartnership = songPartnerName
-          ? `${songOwnerName} & ${songPartnerName}`
-          : songOwnerName;
+        let songPartnership: string;
+        if (r.songManagedLeaderFirst != null) {
+          const leader = [r.songManagedLeaderFirst, r.songManagedLeaderLast]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+          const follower = [r.songManagedFollowerFirst, r.songManagedFollowerLast]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+          songPartnership = follower ? `${leader} & ${follower}` : leader;
+        } else {
+          const songOwnerName = [r.songOwnerFirst, r.songOwnerLast]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+          const songPartnerName = [r.songPartnerFirst, r.songPartnerLast]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+          songPartnership = partnershipDisplay({
+            ownerName: songOwnerName,
+            partnerName: songPartnerName,
+            partnerKind: r.songPartnerKind,
+          });
+        }
 
         const songLabel = buildStructuredSongLabel({
           partnership: songPartnership,
@@ -146,6 +202,7 @@ runRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c) => {
           song_id: r.songId,
           song_label: songLabel,
           entity_label: entityLabel,
+          entity_key: entityKeyFromRun(r),
           completed_by_label: completedByLabel,
         };
       })

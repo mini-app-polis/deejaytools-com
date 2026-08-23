@@ -12,7 +12,12 @@ import type { EntityRef } from "./runCounts.js";
 export async function entityHasLiveEntry(entity: EntityRef, sessionId: string): Promise<boolean> {
   const filter = entity.pairId
     ? and(eq(queueEntries.sessionId, sessionId), eq(queueEntries.entityPairId, entity.pairId))
-    : and(eq(queueEntries.sessionId, sessionId), eq(queueEntries.entitySoloUserId, entity.soloUserId!));
+    : entity.managedPartnershipId
+      ? and(
+          eq(queueEntries.sessionId, sessionId),
+          eq(queueEntries.entityManagedPartnershipId, entity.managedPartnershipId)
+        )
+      : and(eq(queueEntries.sessionId, sessionId), eq(queueEntries.entitySoloUserId, entity.soloUserId!));
 
   const [row] = await db.select({ id: queueEntries.id }).from(queueEntries).where(filter).limit(1);
   return Boolean(row);

@@ -46,12 +46,21 @@ export const createCheckinBodySchema = z
     divisionName: z.string().min(1),
     entityPairId: z.string().nullish(),
     entitySoloUserId: z.string().nullish(),
+    entityManagedPartnershipId: z.string().nullish(),
+    on_behalf_of_user_id: z.string().trim().nullish(),
     songId: z.string().min(1),
     notes: z.string().nullish(),
   })
   .refine(
-    (b) => Boolean(b.entityPairId) !== Boolean(b.entitySoloUserId),
-    { message: "Exactly one of entityPairId / entitySoloUserId" }
+    (b) => {
+      const entityCount = [b.entityPairId, b.entitySoloUserId, b.entityManagedPartnershipId].filter(
+        Boolean
+      ).length;
+      // On-behalf check-ins let the server derive the entity from the song.
+      if (b.on_behalf_of_user_id) return entityCount === 0;
+      return entityCount === 1;
+    },
+    { message: "Exactly one entity must be provided (or none when checking in on behalf)" }
   );
 
 export const PartnerRoleSchema = z.enum(["leader", "follower"]);
@@ -120,6 +129,7 @@ export const ApiQueueEntrySchema = z.object({
   enteredQueueAt: z.number(),
   entityPairId: z.string().nullable(),
   entitySoloUserId: z.string().nullable(),
+  entityManagedPartnershipId: z.string().nullable().optional(),
   entityLabel: z.string(),
   divisionName: z.string(),
   songId: z.string().nullable(),
@@ -179,6 +189,13 @@ export const ApiSongSchema = z.object({
   updated_at: z.number(),
   partner_first_name: z.string().nullable().optional(),
   partner_last_name: z.string().nullable().optional(),
+  /** 'partner' for real partners; 'solo' | 'team' | 'other' for portal placeholders. */
+  partner_kind: z.string().nullable().optional(),
+  managed_partnership_id: z.string().nullable().optional(),
+  managed_leader_first_name: z.string().nullable().optional(),
+  managed_leader_last_name: z.string().nullable().optional(),
+  managed_follower_first_name: z.string().nullable().optional(),
+  managed_follower_last_name: z.string().nullable().optional(),
 });
 export type ApiSong = z.infer<typeof ApiSongSchema>;
 
@@ -214,6 +231,7 @@ export const ApiRunSchema = z.object({
   song_id: z.string(),
   song_label: z.string(),
   entity_label: z.string(),
+  entity_key: z.string(),
   completed_by_label: z.string(),
 });
 export type ApiRun = z.infer<typeof ApiRunSchema>;
@@ -298,13 +316,76 @@ export const ApiAuthMeSchema = z.object({
 });
 export type ApiAuthMe = z.infer<typeof ApiAuthMeSchema>;
 
-export const ApiLegacySongSchema = z.object({
+export const ApiTeamSchema = z.object({
   id: z.string(),
-  partnership: z.string(),
-  division: z.string().nullable(),
-  routine_name: z.string().nullable(),
-  descriptor: z.string().nullable(),
-  version: z.string().nullable(),
-  submitted_at: z.string().nullable(),
+  user_id: z.string(),
+  identifier: z.string(),
+  created_at: z.number(),
+  updated_at: z.number(),
 });
-export type ApiLegacySong = z.infer<typeof ApiLegacySongSchema>;
+export type ApiTeam = z.infer<typeof ApiTeamSchema>;
+
+export const teamIdentifierSchema = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z0-9 ]+$/, "Team name may only contain letters, numbers, and spaces")
+  .min(1)
+  .max(100);
+
+export const createTeamBodySchema = z.object({
+  identifier: teamIdentifierSchema,
+});
+
+export const ApiManagedPartnershipSchema = z.object({
+  id: z.string(),
+  user_id: z.string(),
+  leader_first_name: z.string(),
+  leader_last_name: z.string(),
+  follower_first_name: z.string(),
+  follower_last_name: z.string(),
+  created_at: z.number(),
+  updated_at: z.number(),
+});
+export type ApiManagedPartnership = z.infer<typeof ApiManagedPartnershipSchema>;
+
+export const createManagedPartnershipBodySchema = z.object({
+  leader_first_name: z.string().trim().min(1).max(100),
+  leader_last_name: z.string().trim().min(1).max(100),
+  follower_first_name: z.string().trim().min(1).max(100),
+  follower_last_name: z.string().trim().min(1).max(100),
+});
+
+export const ApiEventSongSubmissionSchema = z.object({
+  id: z.string(),
+  event_id: z.string(),
+  event_name: z.string(),
+  event_start_date: z.string(),
+  event_status: z.string(),
+  song_id: z.string(),
+  song_label: z.string(),
+  division: z.string().nullable(),
+  created_at: z.number(),
+});
+export type ApiEventSongSubmission = z.infer<typeof ApiEventSongSubmissionSchema>;
+
+export const createEventSongSubmissionBodySchema = z.object({
+  event_id: z.string().min(1),
+  song_id: z.string().min(1),
+});
+
+/**
+ * Admin-facing joined row for event song submissions (cross-user).
+ * Future query: event_song_submissions → songs (division + partnership) → events.
+ */
+export const ApiAdminEventSongSubmissionSchema = z.object({
+  id: z.string(),
+  event_id: z.string(),
+  event_name: z.string(),
+  division: z.string().nullable(),
+  song_id: z.string(),
+  song_label: z.string(),
+  partnership_label: z.string(),
+  submitter_email: z.string(),
+  created_at: z.number(),
+});
+export type ApiAdminEventSongSubmission = z.infer<typeof ApiAdminEventSongSubmissionSchema>;

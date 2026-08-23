@@ -1,59 +1,54 @@
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/clerk-react";
-import { ChevronDown } from "lucide-react";
 import { useState } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink } from "react-router-dom";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { isProdHost } from "@/lib/env";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import pkg from "../../../../package.json";
 
 type NavItem = { to: string; label: string };
 
-// Public: always shown (left side).
-const PUBLIC_ITEMS: NavItem[] = [{ to: "/floor-trials", label: "Floor Trials" }];
+const PUBLIC_ITEMS: NavItem[] = [
+  { to: "/floor-trials", label: "Floor Trials" },
+];
 
-// Signed-in only.
 const SIGNED_IN_ITEMS: NavItem[] = [
   { to: "/my-content", label: "My Content" },
   { to: "/my-profile", label: "My Profile" },
 ];
 
-// Admin sections, in display order. Each one is its own URL — the
-// dropdown trigger replaces what used to be a single "Admin" link.
-const ADMIN_ITEMS: NavItem[] = [
+// Superuser (admin-only) sections. Test Inject moved to the Manager bar.
+const SUPERUSER_ITEMS: NavItem[] = [
   { to: "/admin/events", label: "Events" },
   { to: "/admin/sessions", label: "Sessions" },
-  { to: "/admin/queue", label: "Live Queue" },
-  { to: "/admin/runs", label: "Run History" },
-  { to: "/admin/inject", label: "Test Inject" },
   { to: "/admin/songs", label: "Songs" },
   { to: "/admin/users", label: "Users" },
+  { to: "/admin/runs", label: "Run History" },
+  { to: "/admin/test-checkin", label: "Test Checkin" },
 ];
 
-/**
- * Shared top navigation. Used by both the public LandingPage and the
- * authenticated-app Layout so the bar looks identical regardless of route.
- *
- * Auth-state visibility:
- *   - Floor Trials → always
- *   - Partners, Songs → when signed in
- *   - Admin → when signed in AND role === "admin"
- *   - Right side: UserButton (signed in) / Sign in button (signed out)
- */
+// Manager sections. Visible to managers and admins.
+const MANAGER_ITEMS: NavItem[] = [
+  { to: "/manager/active-sessions", label: "Active Sessions" },
+  { to: "/manager/event-songs", label: "Event Songs" },
+  { to: "/manager/upload-for", label: "Upload For" },
+  { to: "/manager/checkin-for", label: "CheckIn For" },
+  { to: "/manager/guide", label: "Guide" },
+];
+
+// Stamped at build time by vite.config.ts. Empty when the sha could not be
+// resolved (no git, no CF_PAGES_COMMIT_SHA), in which case we show the version.
+const buildSha = import.meta.env.VITE_COMMIT_SHA ?? "";
+
 export default function NavBar() {
-  const { isAdmin } = useAuthMe();
+  const { isAdmin, isManager } = useAuthMe();
+  // Dev and preview hosts show the commit instead of the semver version: the
+  // version only moves on release, so it cannot identify a dev build.
+  const showSha = !isProdHost() && buildSha !== "";
   const [menuOpen, setMenuOpen] = useState(false);
-  const location = useLocation();
-  // The dropdown trigger should look "active" whenever we're on any
-  // admin page, since none of the individual admin URLs are the trigger
-  // itself. NavLink's isActive is per-link, so we compute this manually.
-  const isAdminRoute = location.pathname.startsWith("/admin");
+  const showManagerBar = isAdmin || isManager;
 
   const desktopLinkClass = ({ isActive }: { isActive: boolean }) =>
     cn(
@@ -69,23 +64,15 @@ export default function NavBar() {
         : "text-muted-foreground hover:text-foreground hover:bg-white/5"
     );
 
-  const adminDropdownTriggerClass = cn(
-    "inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-    isAdminRoute ? "text-primary" : "text-muted-foreground hover:text-foreground"
-  );
-
-  const adminDropdownItemClass = ({ isActive }: { isActive: boolean }) =>
+  const subBarLinkClass = ({ isActive }: { isActive: boolean }) =>
     cn(
-      "block w-full rounded-sm px-2 py-1.5 text-sm transition-colors",
-      isActive
-        ? "bg-accent text-accent-foreground"
-        : "text-foreground hover:bg-accent hover:text-accent-foreground"
+      "rounded-full px-3 py-1 text-sm whitespace-nowrap transition-colors",
+      isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
     );
 
   return (
     <nav className="border-b border-white/[0.07] bg-black/50 backdrop-blur-md sticky top-0 z-40">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
-        {/* Logo — links to root. The square DJT icon plus a wordmark. */}
         <a href="/" className="flex items-center gap-2 shrink-0 group">
           <picture>
             <source srcSet="/assets/icons/icon-192x192.webp" type="image/webp" />
@@ -102,12 +89,20 @@ export default function NavBar() {
             >
               DeejayTools.com
             </span>
-            <span
-              className="text-[10px] text-muted-foreground"
-              style={{ fontFamily: "'DM Mono', monospace" }}
-            >
-              v{pkg.version}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span
+                className="text-[10px] text-muted-foreground"
+                style={{ fontFamily: "'DM Mono', monospace" }}
+                title={buildSha ? `v${pkg.version} · ${buildSha}` : `v${pkg.version}`}
+              >
+                {showSha ? `#${buildSha}` : `v${pkg.version}`}
+              </span>
+              {!isProdHost() && (
+                <span className="rounded bg-amber-500/20 text-amber-500 text-[10px] px-1.5 py-0.5 font-medium">
+                  DEV
+                </span>
+              )}
+            </div>
           </div>
         </a>
 
@@ -127,31 +122,14 @@ export default function NavBar() {
           </SignedIn>
         </div>
 
-        {/* Right cluster: Contact, Admin (if admin), user menu / sign-in, hamburger */}
         <div className="flex items-center gap-3">
           <div className="hidden sm:flex items-center gap-1">
+            <NavLink to="/how-it-works" className={desktopLinkClass}>
+              Help
+            </NavLink>
             <NavLink to="/feedback" className={desktopLinkClass}>
               Contact
             </NavLink>
-            <SignedIn>
-              {isAdmin && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger className={adminDropdownTriggerClass}>
-                    Admin
-                    <ChevronDown className="h-3.5 w-3.5 opacity-70" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="min-w-[12rem]">
-                    {ADMIN_ITEMS.map((item) => (
-                      <DropdownMenuItem key={item.to} asChild>
-                        <NavLink to={item.to} className={adminDropdownItemClass}>
-                          {item.label}
-                        </NavLink>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-            </SignedIn>
           </div>
           <SignedIn>
             <UserButton />
@@ -170,76 +148,95 @@ export default function NavBar() {
           >
             {menuOpen ? (
               <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5">
-                <path
-                  d="M5 5l10 10M15 5L5 15"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                />
+                <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             ) : (
               <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5">
-                <path
-                  d="M3 5h14M3 10h14M3 15h14"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                />
+                <path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             )}
           </button>
         </div>
       </div>
 
+      {/* Superuser sub-bar — desktop, admins only */}
+      <SignedIn>
+        {isAdmin && (
+          <div className="hidden sm:block border-t border-white/[0.07] bg-black/30">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 h-11 flex items-center gap-1 overflow-x-auto">
+              <Badge variant="outline" className="mr-2 shrink-0 border-primary/40 text-primary">
+                Superuser
+              </Badge>
+              {SUPERUSER_ITEMS.map((item) => (
+                <NavLink key={item.to} to={item.to} className={subBarLinkClass}>
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        )}
+      </SignedIn>
+
+      {/* Manager sub-bar — desktop, managers or admins */}
+      <SignedIn>
+        {showManagerBar && (
+          <div className="hidden sm:block border-t border-white/[0.07] bg-black/20">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 h-11 flex items-center gap-1 overflow-x-auto">
+              <Badge variant="secondary" className="mr-2 shrink-0">
+                Manager
+              </Badge>
+              {MANAGER_ITEMS.map((item) => (
+                <NavLink key={item.to} to={item.to} className={subBarLinkClass}>
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        )}
+      </SignedIn>
+
       {/* Mobile menu */}
       {menuOpen && (
         <div className="sm:hidden border-t border-white/[0.07] bg-background">
           <div className="max-w-6xl mx-auto px-4 py-3 flex flex-col gap-1">
             {PUBLIC_ITEMS.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                onClick={() => setMenuOpen(false)}
-                className={mobileLinkClass}
-              >
+              <NavLink key={item.to} to={item.to} onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
                 {item.label}
               </NavLink>
             ))}
             <SignedIn>
               {SIGNED_IN_ITEMS.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  onClick={() => setMenuOpen(false)}
-                  className={mobileLinkClass}
-                >
+                <NavLink key={item.to} to={item.to} onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
                   {item.label}
                 </NavLink>
               ))}
             </SignedIn>
-            <NavLink
-              to="/feedback"
-              onClick={() => setMenuOpen(false)}
-              className={mobileLinkClass}
-            >
+            <NavLink to="/how-it-works" onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
+              Help
+            </NavLink>
+            <NavLink to="/feedback" onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
               Contact
             </NavLink>
             <SignedIn>
+              {showManagerBar && (
+                <>
+                  <div className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/80">
+                    Manager
+                  </div>
+                  {MANAGER_ITEMS.map((item) => (
+                    <NavLink key={item.to} to={item.to} onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </>
+              )}
               {isAdmin && (
                 <>
-                  {/* No dropdown on mobile — admin pages get a flat list
-                      under an "Admin" header so they're all reachable
-                      without a nested popover. */}
                   <div className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/80">
-                    Admin
+                    Superuser
                   </div>
-                  {ADMIN_ITEMS.map((item) => (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      onClick={() => setMenuOpen(false)}
-                      className={mobileLinkClass}
-                    >
+                  {SUPERUSER_ITEMS.map((item) => (
+                    <NavLink key={item.to} to={item.to} onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
                       {item.label}
                     </NavLink>
                   ))}

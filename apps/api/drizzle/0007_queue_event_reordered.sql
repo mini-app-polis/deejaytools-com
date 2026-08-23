@@ -1,2 +1,0 @@
--- Intentionally empty. The "reordered" enum value is no longer used.
--- move-down does not write to queue_events.

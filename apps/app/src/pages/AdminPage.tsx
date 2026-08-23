@@ -1,22 +1,21 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   DIVISIONS,
   type ApiEvent,
   type ApiSession,
-  type ApiQueueEntry,
-  type ApiLeadingPair,
-  type ApiSong,
-  type ApiTestInjection,
   type ApiRun,
   type ApiAdminSong,
   type ApiAdminUser,
+  type ApiTestInjection,
 } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import { CLICKABLE_ROW_CLASS } from "@/lib/clickable";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -28,6 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -44,6 +44,13 @@ import { compareEventChrono, compareSessionChrono } from "@/lib/chronoSort";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const DIVISION_OPTIONS = DIVISIONS;
+
+function randomFourDigitTag(): string {
+  return Math.floor(Math.random() * 10000).toString().padStart(4, "0");
+}
+function randomDivision(): string {
+  return DIVISION_OPTIONS[Math.floor(Math.random() * DIVISION_OPTIONS.length)];
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -151,20 +158,10 @@ const FIELD_INPUT_CLASS =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
 const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
 
-function randomFourDigitTag(): string {
-  return Math.floor(Math.random() * 10000)
-    .toString()
-    .padStart(4, "0");
-}
-
-function randomDivision(): string {
-  return DIVISION_OPTIONS[Math.floor(Math.random() * DIVISION_OPTIONS.length)];
-}
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 /**
- * The seven admin sections, in display order. The order also drives the
+ * The admin sections, in display order. The order also drives the
  * navbar dropdown and any future iteration over admin pages.
  *
  * Each admin section is now its own route (`/admin/<section>`); the value
@@ -175,10 +172,9 @@ function randomDivision(): string {
 export const ADMIN_SECTIONS = [
   "events",
   "sessions",
-  "queue",
   "runs",
-  "inject",
   "songs",
+  "test-checkin",
   "users",
 ] as const;
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
@@ -217,6 +213,8 @@ export default function AdminPage() {
    * this id instead of POST. Cleared when the dialog closes.
    */
   const [evEditId, setEvEditId] = useState<string | null>(null);
+  const [showEventsCompleted, setShowEventsCompleted] = useState(false);
+  const [showEventsCancelled, setShowEventsCancelled] = useState(false);
 
   // ── Sessions tab ────────────────────────────────────────────────────────────
   const [sessions, setSessions] = useState<ApiSession[] | null>(null);
@@ -233,7 +231,6 @@ export default function AdminPage() {
   /** Delete-confirmation dialog state — one per destructive action type. */
   const [pendingDeleteEventId, setPendingDeleteEventId] = useState<string | null>(null);
   const [pendingDeleteSession, setPendingDeleteSession] = useState<ApiSession | null>(null);
-  const [pendingDeleteAllTestData, setPendingDeleteAllTestData] = useState(false);
   /** Minutes before start that check-in opens. 0 = same moment as start. */
   const [sessCheckinOffsetMins, setSessCheckinOffsetMins] = useState("30");
   /** Floor trial duration in minutes. */
@@ -245,35 +242,21 @@ export default function AdminPage() {
   const [sessDivisionPriority, setSessDivisionPriority] = useState<Record<string, boolean>>(
     Object.fromEntries(DIVISION_OPTIONS.map((d) => [d, false]))
   );
-
-  // ── Live queue tab ──────────────────────────────────────────────────────────
-  const [lqSessionId, setLqSessionId] = useState("");
-  const [lqActive, setLqActive] = useState<ApiQueueEntry[]>([]);
-  const [lqPriority, setLqPriority] = useState<ApiQueueEntry[]>([]);
-  const [lqNonPriority, setLqNonPriority] = useState<ApiQueueEntry[]>([]);
-  const [lqPairs, setLqPairs] = useState<ApiLeadingPair[]>([]);
-  const [lqSongs, setLqSongs] = useState<ApiSong[]>([]);
-  const [lqLoading, setLqLoading] = useState(false);
-  const lqSessionRef = useRef(lqSessionId);
-  lqSessionRef.current = lqSessionId;
-
-  // ── Test injection tab ──────────────────────────────────────────────────────
-  // Defaults are randomized on mount and after every successful injection.
-  // Users can override any field before submitting.
-  const [tiSessionId, setTiSessionId] = useState("");
-  const [tiDivision, setTiDivision] = useState<string>(() => randomDivision());
-  const [tiLeaderFirst, setTiLeaderFirst] = useState("Leader");
-  const [tiLeaderLast, setTiLeaderLast] = useState(() => randomFourDigitTag());
-  const [tiFollowerFirst, setTiFollowerFirst] = useState("Follower");
-  const [tiFollowerLast, setTiFollowerLast] = useState(() => randomFourDigitTag());
-  const [tiSubmitting, setTiSubmitting] = useState(false);
-  const [tiData, setTiData] = useState<ApiTestInjection[] | null>(null);
-  const [tiDeleting, setTiDeleting] = useState(false);
+  const [showSessionsCompleted, setShowSessionsCompleted] = useState(false);
+  const [showSessionsCancelled, setShowSessionsCancelled] = useState(false);
 
   // ── Run history tab ─────────────────────────────────────────────────────────
+  const RUNS_FETCH_LIMIT = 500;
+  const RUNS_PARTNERSHIP_CHIP_LIMIT = 10;
+  const [runsEventId, setRunsEventId] = useState("");
+  const [runsShowFuture, setRunsShowFuture] = useState(false);
   const [runsSessionFilter, setRunsSessionFilter] = useState("");
   const [runs, setRuns] = useState<ApiRun[] | null>(null);
   const [runsLoading, setRunsLoading] = useState(false);
+  const [runsHitLimit, setRunsHitLimit] = useState(false);
+  const [runsDivisionFilter, setRunsDivisionFilter] = useState<string | null>(null);
+  const [runsPartnershipFilter, setRunsPartnershipFilter] = useState<string | null>(null);
+  const [runsShowAllPartnerships, setRunsShowAllPartnerships] = useState(false);
 
   // ── Users tab ───────────────────────────────────────────────────────────────
   // `usersQuery` updates on every keystroke; `usersDebouncedQuery` is what
@@ -294,6 +277,20 @@ export default function AdminPage() {
   const [adminSongsQuery, setAdminSongsQuery] = useState("");
   const [adminSongsDebouncedQuery, setAdminSongsDebouncedQuery] = useState("");
   const [adminSongsIncludeDeleted, setAdminSongsIncludeDeleted] = useState(false);
+  const [adminSongsYear, setAdminSongsYear] = useState<string>("all");
+  const [adminSongsDivision, setAdminSongsDivision] = useState<string>("all");
+
+  // ── Test Checkin tab ──────────────────────────────────────────────────────
+  const [tcSessionId, setTcSessionId] = useState("");
+  const [tcDivision, setTcDivision] = useState<string>(() => randomDivision());
+  const [tcLeaderFirst, setTcLeaderFirst] = useState("Leader");
+  const [tcLeaderLast, setTcLeaderLast] = useState(() => randomFourDigitTag());
+  const [tcFollowerFirst, setTcFollowerFirst] = useState("Follower");
+  const [tcFollowerLast, setTcFollowerLast] = useState(() => randomFourDigitTag());
+  const [tcSubmitting, setTcSubmitting] = useState(false);
+  const [tcData, setTcData] = useState<ApiTestInjection[] | null>(null);
+  const [tcDeleting, setTcDeleting] = useState(false);
+  const [pendingDeleteAllTestCheckins, setPendingDeleteAllTestCheckins] = useState(false);
 
   // ── Data loaders ────────────────────────────────────────────────────────────
 
@@ -315,55 +312,23 @@ export default function AdminPage() {
       .finally(() => setLoadingSessions(false));
   }, [api]);
 
-  const loadLiveQueues = useCallback(
-    async (sessionId: string) => {
-      if (!sessionId) return;
-      setLqLoading(true);
-      try {
-        const [active, priority, nonPriority] = await Promise.all([
-          api.get<ApiQueueEntry[]>(`/v1/queue/${sessionId}/active`),
-          api.get<ApiQueueEntry[]>(`/v1/queue/${sessionId}/priority`),
-          api.get<ApiQueueEntry[]>(`/v1/queue/${sessionId}/non-priority`),
-        ]);
-        setLqActive(active);
-        setLqPriority(priority);
-        setLqNonPriority(nonPriority);
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Failed to load queues");
-      } finally {
-        setLqLoading(false);
-      }
-    },
-    [api]
-  );
-
-  const loadLqExtras = useCallback(async () => {
-    const [pairs, songs] = await Promise.all([
-      api.get<ApiLeadingPair[]>("/v1/partners/leading-pairs"),
-      api.get<ApiSong[]>("/v1/songs"),
-    ]);
-    setLqPairs(pairs);
-    setLqSongs(songs);
-  }, [api]);
-
-  const loadApiTestInjections = useCallback(async () => {
-    try {
-      const data = await api.get<ApiTestInjection[]>("/v1/admin/checkins/test");
-      setTiData(data);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to load test data");
-    }
-  }, [api]);
-
   const loadRuns = useCallback(
-    async (sessionId: string) => {
+    async ({ eventId, sessionId }: { eventId: string; sessionId: string }) => {
       setRunsLoading(true);
       try {
-        const path = sessionId
-          ? `/v1/runs?session_id=${encodeURIComponent(sessionId)}`
-          : "/v1/runs";
-        const data = await api.get<ApiRun[]>(path);
+        const params = new URLSearchParams();
+        params.set("limit", String(RUNS_FETCH_LIMIT));
+        if (sessionId) {
+          params.set("session_id", sessionId);
+        } else if (eventId) {
+          params.set("event_id", eventId);
+        }
+        const data = await api.get<ApiRun[]>(`/v1/runs?${params.toString()}`);
         setRuns(data);
+        setRunsHitLimit(data.length === RUNS_FETCH_LIMIT);
+        setRunsDivisionFilter(null);
+        setRunsPartnershipFilter(null);
+        setRunsShowAllPartnerships(false);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to load run history");
       } finally {
@@ -411,19 +376,110 @@ export default function AdminPage() {
     [api]
   );
 
+  const loadTestCheckins = useCallback(async () => {
+    try {
+      const data = await api.get<ApiTestInjection[]>("/v1/admin/checkins/test");
+      setTcData(data);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load test check-ins");
+    }
+  }, [api]);
+
   useEffect(() => {
     loadEvents();
     loadSessions();
-    void loadLqExtras().catch(() => {});
-    void loadApiTestInjections().catch(() => {});
     void loadUsers("").catch(() => {});
     void loadAdminSongs("", false).catch(() => {});
-  }, [loadEvents, loadSessions, loadLqExtras, loadApiTestInjections, loadUsers, loadAdminSongs]);
+    void loadTestCheckins().catch(() => {});
+  }, [loadEvents, loadSessions, loadUsers, loadAdminSongs, loadTestCheckins]);
 
-  // Refetch run history whenever the session filter changes.
+  // Refetch run history whenever the event or session filter changes.
   useEffect(() => {
-    void loadRuns(runsSessionFilter).catch(() => {});
-  }, [runsSessionFilter, loadRuns]);
+    void loadRuns({ eventId: runsEventId, sessionId: runsSessionFilter }).catch(() => {});
+  }, [runsEventId, runsSessionFilter, loadRuns]);
+
+  const runsVisibleEvents = useMemo(
+    () =>
+      (events ?? [])
+        .filter((ev) => runsShowFuture || ev.status !== "upcoming")
+        .slice()
+        .sort((a, b) => b.start_date.localeCompare(a.start_date)),
+    [events, runsShowFuture]
+  );
+
+  const runsFilteredSessions = useMemo(() => {
+    const list = sessions ?? [];
+    if (!runsEventId) return list;
+    return list.filter((s) => s.event_id === runsEventId);
+  }, [sessions, runsEventId]);
+
+  // Summary chip counts always reflect the full fetched result set — not the
+  // active division/partnership filter — so numbers stay stable while filtering.
+  const runsDivisionSummary = useMemo(() => {
+    if (!runs?.length) return [];
+    const map = new Map<string, number>();
+    for (const row of runs) {
+      const key = row.division_name?.trim() || "Unspecified";
+      map.set(key, (map.get(key) ?? 0) + 1);
+    }
+    return [...map.entries()]
+      .map(([division, count]) => ({ division, count }))
+      .sort((a, b) => b.count - a.count || a.division.localeCompare(b.division));
+  }, [runs]);
+
+  const runsPartnershipSummary = useMemo(() => {
+    if (!runs?.length) return [];
+    const map = new Map<string, { label: string; count: number }>();
+    for (const row of runs) {
+      const key = row.entity_key;
+      const existing = map.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        // Rows arrive newest-first; first label wins for this key.
+        map.set(key, { label: row.entity_label, count: 1 });
+      }
+    }
+    return [...map.entries()]
+      .map(([key, { label, count }]) => ({ key, label, count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  }, [runs]);
+
+  const runsPartnershipHiddenCount = Math.max(
+    0,
+    runsPartnershipSummary.length - RUNS_PARTNERSHIP_CHIP_LIMIT
+  );
+
+  const runsPartnershipVisible = useMemo(() => {
+    if (runsShowAllPartnerships) return runsPartnershipSummary;
+    return runsPartnershipSummary.slice(0, RUNS_PARTNERSHIP_CHIP_LIMIT);
+  }, [runsPartnershipSummary, runsShowAllPartnerships]);
+
+  const runsActivePartnershipLabel = useMemo(() => {
+    if (!runsPartnershipFilter || !runs) return null;
+    return (
+      runsPartnershipSummary.find((p) => p.key === runsPartnershipFilter)?.label ??
+      runs.find((r) => r.entity_key === runsPartnershipFilter)?.entity_label ??
+      runsPartnershipFilter
+    );
+  }, [runs, runsPartnershipFilter, runsPartnershipSummary]);
+
+  const runsDisplayRows = useMemo(() => {
+    if (!runs) return null;
+    return runs.filter((row) => {
+      const division = row.division_name?.trim() || "Unspecified";
+      if (runsDivisionFilter && division !== runsDivisionFilter) return false;
+      if (runsPartnershipFilter && row.entity_key !== runsPartnershipFilter) return false;
+      return true;
+    });
+  }, [runs, runsDivisionFilter, runsPartnershipFilter]);
+
+  const runsHasActiveFilters = runsDivisionFilter !== null || runsPartnershipFilter !== null;
+
+  const clearRunsFilters = () => {
+    setRunsDivisionFilter(null);
+    setRunsPartnershipFilter(null);
+  };
 
   // Debounce keystrokes in the Users tab search box → only the trailing value
   // wins, so typing "alic" hits the API once with q=alic instead of four
@@ -448,61 +504,31 @@ export default function AdminPage() {
     void loadAdminSongs(adminSongsDebouncedQuery, adminSongsIncludeDeleted).catch(() => {});
   }, [adminSongsDebouncedQuery, adminSongsIncludeDeleted, loadAdminSongs]);
 
-  // Auto-select the single active session when sessions load / change.
-  // "Active" means checkin_open or in_progress; completed/cancelled sessions
-  // are accessible via the dropdown but not auto-selected.
-  useEffect(() => {
-    if (!sessions) return;
-    const active = sessions.filter(
-      (s) => s.status === "checkin_open" || s.status === "in_progress"
-    );
-    if (active.length === 1 && !lqSessionId) {
-      setLqSessionId(active[0]!.id);
-    }
-  }, [sessions]); // intentionally omit lqSessionId — only auto-select on initial session load
+  const adminSongYears = useMemo(() => {
+    const set = new Set<string>();
+    (adminSongs ?? []).forEach((s) => {
+      if (s.season_year) set.add(s.season_year);
+    });
+    return Array.from(set).sort((a, b) => b.localeCompare(a));
+  }, [adminSongs]);
 
-  // Load queue when a session is selected; subsequent refreshes happen after
-  // each action or via the manual Refresh button.
-  useEffect(() => {
-    if (!lqSessionId) return;
-    void loadLiveQueues(lqSessionId);
-  }, [lqSessionId, loadLiveQueues]);
+  const adminSongDivisions = useMemo(() => {
+    const set = new Set<string>();
+    (adminSongs ?? []).forEach((s) => {
+      if (s.division) set.add(s.division);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [adminSongs]);
 
-  // ── Derived maps ────────────────────────────────────────────────────────────
-
-  const pairMap = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const p of lqPairs) m.set(p.id, p.display_name);
-    return m;
-  }, [lqPairs]);
-
-  const songMap = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const s of lqSongs) {
-      m.set(s.id, s.processed_filename?.trim() || s.routine_name?.trim() || s.division?.trim() || s.id);
-    }
-    return m;
-  }, [lqSongs]);
-
-  const songFilenameMap = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const s of lqSongs) {
-      if (s.processed_filename) m.set(s.id, s.processed_filename);
-    }
-    return m;
-  }, [lqSongs]);
-
-  const renderEntityLabel = (row: ApiQueueEntry) => {
-    // Prefer server-provided partnership label; fall back to local pair map
-    // (only useful for the current admin's own pairs / freshly-injected test
-    // pairs that we appended client-side).
-    if (row.entityLabel && row.entityLabel !== "—") return row.entityLabel;
-    if (row.entityPairId) return pairMap.get(row.entityPairId) ?? row.entityLabel;
-    return row.entityLabel;
-  };
-
-  const renderSongLabel = (row: ApiQueueEntry) =>
-    row.songDisplayName ?? (row.songId ? (songMap.get(row.songId) ?? row.songId) : "—");
+  const visibleAdminSongs = useMemo(
+    () =>
+      (adminSongs ?? [])
+        .filter((s) => adminSongsYear === "all" || s.season_year === adminSongsYear)
+        .filter((s) => adminSongsDivision === "all" || s.division === adminSongsDivision)
+        .slice()
+        .sort((a, b) => b.created_at - a.created_at),
+    [adminSongs, adminSongsYear, adminSongsDivision]
+  );
 
   // ── Event CRUD ──────────────────────────────────────────────────────────────
 
@@ -666,13 +692,6 @@ export default function AdminPage() {
       await api.del(`/v1/sessions/${s.id}`);
       toast.success("Session deleted");
       setSessions((prev) => prev?.filter((x) => x.id !== s.id) ?? null);
-      // If the live-queue tab was viewing this session, clear that selection.
-      if (lqSessionRef.current === s.id) {
-        setLqSessionId("");
-        setLqActive([]);
-        setLqPriority([]);
-        setLqNonPriority([]);
-      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to delete session");
     } finally {
@@ -794,60 +813,19 @@ export default function AdminPage() {
     }
   };
 
-  // ── Queue actions ────────────────────────────────────────────────────────────
-
-  const queueAction = async (path: string, body: Record<string, unknown>) => {
-    try {
-      await api.post(path, body);
-      await loadLiveQueues(lqSessionRef.current);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Action failed");
-    }
-  };
-
-  const handleComplete = (queueEntryId: string) =>
-    queueAction("/v1/queue/complete", { queueEntryId });
-
-  const handleIncomplete = (queueEntryId: string) =>
-    queueAction("/v1/queue/incomplete", { queueEntryId });
-
-  const handleMoveDown = (queueEntryId: string) =>
-    queueAction("/v1/queue/move-down", { queueEntryId });
-
-  const handleWithdraw = (queueEntryId: string) =>
-    queueAction("/v1/queue/withdraw", { queueEntryId });
-
-  const handlePromote = (queueEntryId: string) =>
-    queueAction("/v1/queue/promote", { queueEntryId });
-
-  // Promotes the next entry from whichever waiting queue should go next:
-  // priority first (if it has entries), then non-priority.
-  const handlePromoteNext = () => {
-    const prioritySorted = [...lqPriority].sort((a, b) => a.position - b.position);
-    const nonPrioritySorted = [...lqNonPriority].sort((a, b) => a.position - b.position);
-    const next = prioritySorted[0] ?? nonPrioritySorted[0];
-    if (!next) return;
-    return handlePromote(next.queueEntryId);
-  };
-
-  const canPromoteNext = lqPriority.length > 0 || lqNonPriority.length > 0;
-
-  // ── Test injection ──────────────────────────────────────────────────────────
-
-  const submitApiTestInjection = async (e: React.FormEvent) => {
+  const submitTestCheckin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!tiSessionId) { toast.error("Select a session"); return; }
-    if (!tiDivision) { toast.error("Select a division"); return; }
-    if (!tiLeaderFirst.trim() || !tiLeaderLast.trim()) {
+    if (!tcSessionId) { toast.error("Select a session"); return; }
+    if (!tcDivision) { toast.error("Select a division"); return; }
+    if (!tcLeaderFirst.trim() || !tcLeaderLast.trim()) {
       toast.error("Leader first and last name are required");
       return;
     }
-    if (!tiFollowerFirst.trim() || !tiFollowerLast.trim()) {
+    if (!tcFollowerFirst.trim() || !tcFollowerLast.trim()) {
       toast.error("Follower first and last name are required");
       return;
     }
-
-    setTiSubmitting(true);
+    setTcSubmitting(true);
     try {
       const result = await api.post<{
         id: string;
@@ -856,40 +834,42 @@ export default function AdminPage() {
         initialQueue: "priority" | "non_priority";
         pair: { id: string; partner_b_id: string | null; display_name: string };
       }>("/v1/admin/checkins", {
-        sessionId: tiSessionId,
-        divisionName: tiDivision,
-        leaderFirstName: tiLeaderFirst.trim(),
-        leaderLastName: tiLeaderLast.trim(),
-        followerFirstName: tiFollowerFirst.trim(),
-        followerLastName: tiFollowerLast.trim(),
+        sessionId: tcSessionId,
+        divisionName: tcDivision,
+        leaderFirstName: tcLeaderFirst.trim(),
+        leaderLastName: tcLeaderLast.trim(),
+        followerFirstName: tcFollowerFirst.trim(),
+        followerLastName: tcFollowerLast.trim(),
       });
-
-      // Append the synthetic pair to the local map so the queue tab renders
-      // the leader/follower name correctly when the same session is viewed.
-      setLqPairs((prev) => [...prev, result.pair]);
-
       toast.success(
-        `Injected into ${result.initialQueue === "priority" ? "priority" : "non-priority"} queue`
+        `Checked in to ${result.initialQueue === "priority" ? "priority" : "non-priority"} queue`
       );
-
-      // If the user is currently viewing this session's live queue, refresh it.
-      if (lqSessionRef.current === tiSessionId) {
-        void loadLiveQueues(tiSessionId).catch(() => {});
-      }
-
-      // Regenerate randomized defaults so the next injection gets fresh names + division.
-      // Session stays selected for repeat injects against the same session.
-      setTiLeaderFirst("Leader");
-      setTiLeaderLast(randomFourDigitTag());
-      setTiFollowerFirst("Follower");
-      setTiFollowerLast(randomFourDigitTag());
-      setTiDivision(randomDivision());
-
-      void loadApiTestInjections().catch(() => {});
+      setTcLeaderFirst("Leader");
+      setTcLeaderLast(randomFourDigitTag());
+      setTcFollowerFirst("Follower");
+      setTcFollowerLast(randomFourDigitTag());
+      setTcDivision(randomDivision());
+      void loadTestCheckins().catch(() => {});
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Injection failed");
+      toast.error(err instanceof Error ? err.message : "Check-in failed");
     } finally {
-      setTiSubmitting(false);
+      setTcSubmitting(false);
+    }
+  };
+
+  const confirmDeleteAllTestCheckins = async () => {
+    setPendingDeleteAllTestCheckins(false);
+    if (!tcData) return;
+    setTcDeleting(true);
+    const expectedCount = tcData.length;
+    try {
+      await api.del("/v1/admin/checkins/test");
+      toast.success(`Deleted ${expectedCount} check-in${expectedCount === 1 ? "" : "s"}`);
+      setTcData([]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setTcDeleting(false);
     }
   };
 
@@ -927,32 +907,167 @@ export default function AdminPage() {
     }
   };
 
-  const deleteAllTestData = () => {
-    if (!tiData || tiData.length === 0) return;
-    setPendingDeleteAllTestData(true);
-  };
-
-  const confirmDeleteAllTestData = async () => {
-    setPendingDeleteAllTestData(false);
-    if (!tiData) return;
-    setTiDeleting(true);
-    const expectedCount = tiData.length;
-    try {
-      await api.del("/v1/admin/checkins/test");
-      toast.success(`Deleted ${expectedCount} test injection${expectedCount === 1 ? "" : "s"}`);
-      setTiData([]);
-      // Refresh queue display if a session is currently being viewed.
-      if (lqSessionRef.current) {
-        void loadLiveQueues(lqSessionRef.current).catch(() => {});
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Delete failed");
-    } finally {
-      setTiDeleting(false);
-    }
-  };
-
   // ── Render ────────────────────────────────────────────────────────────────────
+
+  const eventBuckets = useMemo(() => {
+    const list = (events ?? []).slice().sort(compareEventChrono);
+    return {
+      active: list.filter((e) => e.status === "active"),
+      upcoming: list.filter((e) => e.status === "upcoming"),
+      completed: list.filter((e) => e.status === "completed"),
+      cancelled: list.filter((e) => e.status === "cancelled"),
+    };
+  }, [events]);
+
+  const sessionBuckets = useMemo(() => {
+    const list = (sessions ?? []).slice().sort(compareSessionChrono);
+    return {
+      active: list.filter((s) => s.status === "checkin_open" || s.status === "in_progress"),
+      upcoming: list.filter((s) => s.status === "scheduled"),
+      completed: list.filter((s) => s.status === "completed"),
+      cancelled: list.filter((s) => s.status === "cancelled"),
+    };
+  }, [sessions]);
+
+  const renderEventRow = (ev: ApiEvent) => (
+    <TableRow
+      key={ev.id}
+      className={CLICKABLE_ROW_CLASS}
+      onClick={() => navigate(`/events/${ev.id}`)}
+    >
+      <TableCell className="font-medium">{ev.name}</TableCell>
+      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+        {ev.start_date}
+      </TableCell>
+      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+        {ev.end_date}
+      </TableCell>
+      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+        <Badge variant="outline" className="text-xs font-normal">
+          {formatTimezoneAbbr(ev.timezone)}
+        </Badge>
+        <span className="ml-1.5 text-xs">{ev.timezone}</span>
+      </TableCell>
+      <TableCell>{eventStatusBadge(ev.status)}</TableCell>
+      <TableCell onClick={(e) => e.stopPropagation()}>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => openEvEditDialog(ev)}>
+            Edit
+          </Button>
+          <Button variant="destructive" size="sm" onClick={() => deleteEvent(ev.id)}>
+            Delete
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+
+  const renderSessionRow = (s: ApiSession) => {
+    const eventName = events?.find((ev) => ev.id === s.event_id)?.name ?? "—";
+    return (
+      <TableRow
+        key={s.id}
+        className={CLICKABLE_ROW_CLASS}
+        onClick={() => navigate(`/sessions/${s.id}`)}
+      >
+        <TableCell className="font-medium">{formatSessionTitle(s, s.event_timezone)}</TableCell>
+        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+          {eventName}
+        </TableCell>
+        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+          {s.event_timezone && (
+            <Badge variant="outline" className="text-xs font-normal">
+              {formatTimezoneAbbr(s.event_timezone, s.floor_trial_starts_at)}
+            </Badge>
+          )}
+        </TableCell>
+        <TableCell>{sessionStatusBadge(s.status)}</TableCell>
+        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+          {formatTimeOnly(s.checkin_opens_at, s.event_timezone)}
+        </TableCell>
+        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+          {formatTimeOnly(s.floor_trial_starts_at, s.event_timezone)}
+        </TableCell>
+        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+          {formatTimeOnly(s.floor_trial_ends_at, s.event_timezone)}
+        </TableCell>
+        <TableCell onClick={(e) => e.stopPropagation()}>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openSessEditDialog(s)}
+              disabled={sessDeletingId === s.id}
+            >
+              Edit
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => deleteSession(s)}
+              disabled={sessDeletingId === s.id}
+            >
+              {sessDeletingId === s.id ? "Deleting…" : "Delete"}
+            </Button>
+          </div>
+        </TableCell>
+      </TableRow>
+    );
+  };
+
+  const renderEventBox = (title: string, rows: ApiEvent[]) => (
+    <section className="rounded-lg border bg-card overflow-hidden">
+      <div className="px-4 py-3 border-b flex items-center gap-2">
+        <h2 className="font-semibold">{title}</h2>
+        <span className="text-sm text-muted-foreground">({rows.length})</span>
+      </div>
+      {rows.length === 0 ? (
+        <p className="px-4 py-3 text-sm text-muted-foreground">None.</p>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Start date</TableHead>
+              <TableHead>End date</TableHead>
+              <TableHead>Timezone</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="w-[160px]">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>{rows.map((ev) => renderEventRow(ev))}</TableBody>
+        </Table>
+      )}
+    </section>
+  );
+
+  const renderSessionBox = (title: string, rows: ApiSession[]) => (
+    <section className="rounded-lg border bg-card overflow-hidden">
+      <div className="px-4 py-3 border-b flex items-center gap-2">
+        <h2 className="font-semibold">{title}</h2>
+        <span className="text-sm text-muted-foreground">({rows.length})</span>
+      </div>
+      {rows.length === 0 ? (
+        <p className="px-4 py-3 text-sm text-muted-foreground">None.</p>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Session</TableHead>
+              <TableHead>Event</TableHead>
+              <TableHead>TZ</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Open</TableHead>
+              <TableHead>Start</TableHead>
+              <TableHead>End</TableHead>
+              <TableHead className="w-[160px]">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>{rows.map((s) => renderSessionRow(s))}</TableBody>
+        </Table>
+      )}
+    </section>
+  );
 
   return (
     <div className="space-y-6">
@@ -967,535 +1082,541 @@ export default function AdminPage() {
 
         {/* ── Events tab ── */}
         <TabsContent value="events" className="mt-4 space-y-3">
-          <Button onClick={openEvDialog} className="w-full sm:w-auto">
-            New Event
-          </Button>
+          <div className="flex flex-wrap items-center gap-4">
+            <Button onClick={openEvDialog} className="w-full sm:w-auto">
+              New Event
+            </Button>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={showEventsCompleted}
+                onChange={(e) => setShowEventsCompleted(e.target.checked)}
+              />
+              Show completed
+            </label>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={showEventsCancelled}
+                onChange={(e) => setShowEventsCancelled(e.target.checked)}
+              />
+              Show cancelled
+            </label>
+          </div>
           {loadingEvents && !events ? (
             <Skeleton className="h-40 w-full" />
           ) : (
-            <div className={loadingEvents ? "opacity-60" : ""}>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Start date</TableHead>
-                    <TableHead>End date</TableHead>
-                    <TableHead>Timezone</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-[160px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {events?.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-muted-foreground">
-                        No events yet.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {events
-                    ?.slice()
-                    .sort(compareEventChrono)
-                    .map((ev) => (
-                    <TableRow
-                      key={ev.id}
-                      className={CLICKABLE_ROW_CLASS}
-                      onClick={() => navigate(`/events/${ev.id}`)}
-                    >
-                      <TableCell className="font-medium">{ev.name}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {ev.start_date}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {ev.end_date}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        <Badge variant="outline" className="text-xs font-normal">
-                          {formatTimezoneAbbr(ev.timezone)}
-                        </Badge>
-                        <span className="ml-1.5 text-xs">{ev.timezone}</span>
-                      </TableCell>
-                      <TableCell>{eventStatusBadge(ev.status)}</TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        {/* stopPropagation lets these buttons coexist with
-                            the row-level navigate(/events/:id) handler. */}
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openEvEditDialog(ev)}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => deleteEvent(ev.id)}
-                          >
-                            Delete
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <div className={`space-y-4${loadingEvents ? " opacity-60" : ""}`}>
+              {renderEventBox("Active", eventBuckets.active)}
+              {renderEventBox("Upcoming", eventBuckets.upcoming)}
+              {showEventsCompleted && renderEventBox("Completed", eventBuckets.completed)}
+              {showEventsCancelled && renderEventBox("Cancelled", eventBuckets.cancelled)}
             </div>
           )}
         </TabsContent>
 
         {/* ── Sessions tab ── */}
         <TabsContent value="sessions" className="mt-4 space-y-3">
-          <Button onClick={openSessDialog} className="w-full sm:w-auto">
-            New Session
-          </Button>
+          <div className="flex flex-wrap items-center gap-4">
+            <Button onClick={openSessDialog} className="w-full sm:w-auto">
+              New Session
+            </Button>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={showSessionsCompleted}
+                onChange={(e) => setShowSessionsCompleted(e.target.checked)}
+              />
+              Show completed
+            </label>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={showSessionsCancelled}
+                onChange={(e) => setShowSessionsCancelled(e.target.checked)}
+              />
+              Show cancelled
+            </label>
+          </div>
           {loadingSessions && !sessions ? (
             <Skeleton className="h-40 w-full" />
           ) : (
-            <div className={loadingSessions ? "opacity-60" : ""}>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Session</TableHead>
-                    <TableHead>Event</TableHead>
-                    <TableHead>TZ</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Open</TableHead>
-                    <TableHead>Start</TableHead>
-                    <TableHead>End</TableHead>
-                    <TableHead className="w-[160px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sessions?.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-muted-foreground">
-                        No sessions yet.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {sessions
-                    ?.slice()
-                    .sort(compareSessionChrono)
-                    .map((s) => {
-                    const eventName =
-                      events?.find((ev) => ev.id === s.event_id)?.name ?? "—";
-                    return (
-                      <TableRow
-                        key={s.id}
-                        className={CLICKABLE_ROW_CLASS}
-                        onClick={() => navigate(`/sessions/${s.id}`)}
-                      >
-                        <TableCell className="font-medium">{formatSessionTitle(s, s.event_timezone)}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                          {eventName}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                          {s.event_timezone && (
-                            <Badge variant="outline" className="text-xs font-normal">
-                              {formatTimezoneAbbr(s.event_timezone, s.floor_trial_starts_at)}
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>{sessionStatusBadge(s.status)}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                          {formatTimeOnly(s.checkin_opens_at, s.event_timezone)}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                          {formatTimeOnly(s.floor_trial_starts_at, s.event_timezone)}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                          {formatTimeOnly(s.floor_trial_ends_at, s.event_timezone)}
-                        </TableCell>
-                        <TableCell onClick={(e) => e.stopPropagation()}>
-                          {/* stopPropagation on the cell: row-level onClick
-                              navigates to the session detail page; the
-                              admin actions inside need to fire without
-                              triggering that. */}
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => openSessEditDialog(s)}
-                              disabled={sessDeletingId === s.id}
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => deleteSession(s)}
-                              disabled={sessDeletingId === s.id}
-                            >
-                              {sessDeletingId === s.id ? "Deleting…" : "Delete"}
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </TabsContent>
-
-        {/* ── Live Queue tab ── */}
-        <TabsContent value="queue" className="mt-4 space-y-5">
-          {/* Session selector */}
-          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-            <div className="w-full sm:w-72">
-              {(() => {
-                if (!sessions) return null;
-                // Show all of today's sessions so admins can manage queues
-                // even after a session ends. Active sessions appear first.
-                const now = new Date();
-                const todaySessions = sessions
-                  .filter((s) => {
-                    const d = new Date(s.floor_trial_starts_at);
-                    return (
-                      d.getFullYear() === now.getFullYear() &&
-                      d.getMonth() === now.getMonth() &&
-                      d.getDate() === now.getDate()
-                    );
-                  })
-                  .sort((a, b) => {
-                    const isLive = (s: typeof a) =>
-                      s.status === "checkin_open" || s.status === "in_progress";
-                    if (isLive(a) && !isLive(b)) return -1;
-                    if (!isLive(a) && isLive(b)) return 1;
-                    return a.floor_trial_starts_at - b.floor_trial_starts_at;
-                  });
-                if (todaySessions.length === 0) {
-                  return (
-                    <p className="text-sm text-muted-foreground">No sessions today.</p>
-                  );
-                }
-                return (
-                  <select
-                    className={FIELD_INPUT_CLASS}
-                    value={lqSessionId}
-                    onChange={(e) => setLqSessionId(e.target.value)}
-                  >
-                    <option value="">Select a session…</option>
-                    {todaySessions.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {formatSessionTitle(s, s.event_timezone)}
-                        {s.status === "completed" || s.status === "cancelled"
-                          ? ` (${s.status})`
-                          : ""}
-                      </option>
-                    ))}
-                  </select>
-                );
-              })()}
-            </div>
-            {lqSessionId && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void loadLiveQueues(lqSessionId)}
-                disabled={lqLoading}
-              >
-                {lqLoading ? "Refreshing…" : "Refresh"}
-              </Button>
-            )}
-          </div>
-
-          {!lqSessionId && (
-            <p className="text-sm text-muted-foreground">Choose a session above to manage its queue.</p>
-          )}
-
-          {lqSessionId && (
-            <div className={`space-y-4 ${lqLoading ? "opacity-60" : ""}`}>
-
-              {/* Active queue */}
-              <Card className="border-primary/30">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-primary">Active</CardTitle>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-muted-foreground">
-                        {lqActive.length} slot{lqActive.length !== 1 ? "s" : ""}
-                      </span>
-                      <Button
-                        size="sm"
-                        onClick={handlePromoteNext}
-                        disabled={!canPromoteNext || lqLoading}
-                      >
-                        Promote next
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {lqActive.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No one on deck.</p>
-                  ) : (
-                    lqActive
-                      .slice()
-                      .sort((a, b) => a.position - b.position)
-                      .map((row) => {
-                        const isSlotOne = row.position === 1;
-                        const isLast = row.position === lqActive.length;
-                        const filename = row.songProcessedFilename ?? undefined;
-                        return (
-                          <div key={row.queueEntryId} className="flex items-start gap-3">
-                            <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
-                              {isSlotOne && <span className="text-primary mr-0.5">▶</span>}
-                              #{row.position}
-                            </span>
-                            <div
-                              className={
-                                isSlotOne
-                                  ? "border border-primary/50 bg-primary/10 rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5"
-                                  : "border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5"
-                              }
-                            >
-                              <p className="font-medium">{renderEntityLabel(row)}</p>
-                              <p className="text-muted-foreground truncate">
-                                {row.divisionName} · {renderSongLabel(row)}
-                              </p>
-                              {filename && (
-                                <p className="text-xs text-muted-foreground/70 break-all font-mono">
-                                  {filename}
-                                </p>
-                              )}
-                              {row.notes && (
-                                <p className="text-xs text-muted-foreground italic">
-                                  Note: {row.notes}
-                                </p>
-                              )}
-                              <div className="flex gap-2 flex-wrap pt-2 border-t border-border/40 mt-1.5">
-                                <Button size="sm" onClick={() => handleComplete(row.queueEntryId)}>
-                                  Run complete
-                                </Button>
-                                <Button size="sm" variant="outline" onClick={() => handleIncomplete(row.queueEntryId)}>
-                                  Run incomplete
-                                </Button>
-                                {!isLast && (
-                                  <Button size="sm" variant="outline" onClick={() => handleMoveDown(row.queueEntryId)}>
-                                    Move down
-                                  </Button>
-                                )}
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-destructive hover:text-destructive"
-                                  onClick={() => handleWithdraw(row.queueEntryId)}
-                                >
-                                  Withdraw
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Priority + Non-priority queues — side by side when there's room */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Card className="border-amber-500/30">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-amber-500 dark:text-amber-400">Priority</CardTitle>
-                      <span className="text-xs text-muted-foreground">{lqPriority.length} waiting</span>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {lqPriority.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">Priority queue is empty.</p>
-                    ) : (
-                      lqPriority
-                        .slice()
-                        .sort((a, b) => a.position - b.position)
-                        .map((row) => {
-                          const isLast = row.position === lqPriority.length;
-                          const filename = row.songProcessedFilename ?? undefined;
-                          return (
-                            <div key={row.queueEntryId} className="flex items-start gap-3">
-                              <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
-                                #{row.position}
-                              </span>
-                              <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
-                                <p className="font-medium">{renderEntityLabel(row)}</p>
-                                <p className="text-muted-foreground truncate">
-                                  {row.divisionName} · {renderSongLabel(row)}
-                                </p>
-                                {filename && (
-                                  <p className="text-xs text-muted-foreground/70 break-all font-mono">
-                                    {filename}
-                                  </p>
-                                )}
-                                {row.notes && (
-                                  <p className="text-xs text-muted-foreground italic">Note: {row.notes}</p>
-                                )}
-                                <div className="flex gap-2 pt-2 border-t border-border/40 mt-1.5">
-                                  {!isLast && (
-                                    <Button size="sm" variant="outline" onClick={() => handleMoveDown(row.queueEntryId)}>
-                                      Move down
-                                    </Button>
-                                  )}
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="text-destructive hover:text-destructive"
-                                    onClick={() => handleWithdraw(row.queueEntryId)}
-                                  >
-                                    Withdraw
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card className="border-sky-500/30">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-sky-500 dark:text-sky-400">Standard</CardTitle>
-                      <span className="text-xs text-muted-foreground">{lqNonPriority.length} waiting</span>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {lqNonPriority.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">Standard queue is empty.</p>
-                    ) : (
-                      lqNonPriority
-                        .slice()
-                        .sort((a, b) => a.position - b.position)
-                        .map((row) => {
-                          const isLast = row.position === lqNonPriority.length;
-                          const filename = row.songProcessedFilename ?? undefined;
-                          return (
-                            <div key={row.queueEntryId} className="flex items-start gap-3">
-                              <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
-                                #{row.position}
-                              </span>
-                              <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
-                                <p className="font-medium">{renderEntityLabel(row)}</p>
-                                <p className="text-muted-foreground truncate">
-                                  {row.divisionName} · {renderSongLabel(row)}
-                                </p>
-                                {filename && (
-                                  <p className="text-xs text-muted-foreground/70 break-all font-mono">
-                                    {filename}
-                                  </p>
-                                )}
-                                {row.notes && (
-                                  <p className="text-xs text-muted-foreground italic">Note: {row.notes}</p>
-                                )}
-                                <div className="flex gap-2 pt-2 border-t border-border/40 mt-1.5">
-                                  {!isLast && (
-                                    <Button size="sm" variant="outline" onClick={() => handleMoveDown(row.queueEntryId)}>
-                                      Move down
-                                    </Button>
-                                  )}
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="text-destructive hover:text-destructive"
-                                    onClick={() => handleWithdraw(row.queueEntryId)}
-                                  >
-                                    Withdraw
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-
+            <div className={`space-y-4${loadingSessions ? " opacity-60" : ""}`}>
+              {renderSessionBox("Active", sessionBuckets.active)}
+              {renderSessionBox("Upcoming", sessionBuckets.upcoming)}
+              {showSessionsCompleted && renderSessionBox("Completed", sessionBuckets.completed)}
+              {showSessionsCancelled && renderSessionBox("Cancelled", sessionBuckets.cancelled)}
             </div>
           )}
         </TabsContent>
 
         {/* ── Run History tab ── */}
         <TabsContent value="runs" className="mt-4 space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-            <div className="w-full sm:w-72">
-              <select
-                className={FIELD_INPUT_CLASS}
-                value={runsSessionFilter}
-                onChange={(e) => setRunsSessionFilter(e.target.value)}
+          <Card>
+            <CardHeader>
+              <CardTitle>Run History</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <Label>Event</Label>
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={runsShowFuture}
+                      onChange={(e) => {
+                        const next = e.target.checked;
+                        setRunsShowFuture(next);
+                        if (!next) {
+                          const sel = events?.find((ev) => ev.id === runsEventId);
+                          if (sel?.status === "upcoming") {
+                            setRunsEventId("");
+                            setRunsSessionFilter("");
+                          }
+                        }
+                      }}
+                    />
+                    Show future events
+                  </label>
+                </div>
+                {loadingEvents ? (
+                  <Skeleton className="h-24 w-full" />
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRunsEventId("");
+                        setRunsSessionFilter("");
+                      }}
+                      className={cn(
+                        "w-full h-full rounded-lg border px-4 py-2 text-left transition-colors",
+                        runsEventId === ""
+                          ? "border-primary bg-primary/5 ring-1 ring-primary"
+                          : "hover:bg-muted/50"
+                      )}
+                    >
+                      <p className="font-medium text-sm">All events</p>
+                    </button>
+                    {runsVisibleEvents.map((ev) => {
+                      const active = ev.id === runsEventId;
+                      return (
+                        <button
+                          key={ev.id}
+                          type="button"
+                          onClick={() => {
+                            setRunsEventId(active ? "" : ev.id);
+                            setRunsSessionFilter("");
+                          }}
+                          className={cn(
+                            "w-full h-full rounded-lg border px-4 py-2 text-left transition-colors",
+                            active
+                              ? "border-primary bg-primary/5 ring-1 ring-primary"
+                              : "hover:bg-muted/50"
+                          )}
+                        >
+                          <p className="font-medium text-sm line-clamp-2">{ev.name}</p>
+                          <p className="text-xs text-muted-foreground">{ev.start_date}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Session</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRunsSessionFilter("")}
+                    className={cn(
+                      "w-full h-full rounded-lg border px-4 py-2 text-left transition-colors",
+                      runsSessionFilter === ""
+                        ? "border-primary bg-primary/5 ring-1 ring-primary"
+                        : "hover:bg-muted/50"
+                    )}
+                  >
+                    <p className="font-medium text-sm">All sessions</p>
+                  </button>
+                  {runsEventId &&
+                    runsFilteredSessions
+                      .slice()
+                      .sort(compareSessionChrono)
+                      .map((s) => {
+                        const active = s.id === runsSessionFilter;
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => setRunsSessionFilter(active ? "" : s.id)}
+                            className={cn(
+                              "w-full h-full rounded-lg border px-4 py-2 text-left transition-colors",
+                              active
+                                ? "border-primary bg-primary/5 ring-1 ring-primary"
+                                : "hover:bg-muted/50"
+                            )}
+                          >
+                            <p className="font-medium text-sm line-clamp-2">
+                              {formatSessionTitle(s, s.event_timezone)}
+                            </p>
+                          </button>
+                        );
+                      })}
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center flex-wrap">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    void loadRuns({ eventId: runsEventId, sessionId: runsSessionFilter })
+                  }
+                  disabled={runsLoading}
+                >
+                  {runsLoading ? "Refreshing…" : "Refresh"}
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  {runs === null ? "" : `${runs.length} run${runs.length === 1 ? "" : "s"}`}
+                </span>
+              </div>
+
+              {runsHitLimit && (
+                <p className="text-sm text-amber-600 dark:text-amber-400">
+                  Showing the first {RUNS_FETCH_LIMIT} runs only — narrow by event or session to
+                  see more.
+                </p>
+              )}
+
+              {runs && runs.length > 0 && (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRunsDivisionFilter(null)}
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs transition-colors",
+                        runsDivisionFilter === null
+                          ? "border-primary bg-primary/10 text-foreground"
+                          : "border-border text-muted-foreground hover:bg-muted/50"
+                      )}
+                    >
+                      All divisions ({runs.length})
+                    </button>
+                    {runsDivisionSummary.map(({ division, count }) => (
+                      <button
+                        key={division}
+                        type="button"
+                        onClick={() =>
+                          setRunsDivisionFilter((prev) => (prev === division ? null : division))
+                        }
+                        className={cn(
+                          "rounded-full border px-3 py-1 text-xs transition-colors",
+                          runsDivisionFilter === division
+                            ? "border-primary bg-primary/10 text-foreground"
+                            : "border-border text-muted-foreground hover:bg-muted/50"
+                        )}
+                      >
+                        {division} ({count})
+                      </button>
+                    ))}
+                  </div>
+
+                  {runsPartnershipSummary.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setRunsPartnershipFilter(null)}
+                        className={cn(
+                          "rounded-full border px-3 py-1 text-xs transition-colors",
+                          runsPartnershipFilter === null
+                            ? "border-primary bg-primary/10 text-foreground"
+                            : "border-border text-muted-foreground hover:bg-muted/50"
+                        )}
+                      >
+                        All partnerships ({runsPartnershipSummary.length})
+                      </button>
+                      {runsPartnershipVisible.map(({ key, label, count }) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() =>
+                            setRunsPartnershipFilter((prev) => (prev === key ? null : key))
+                          }
+                          className={cn(
+                            "rounded-full border px-3 py-1 text-xs transition-colors max-w-full truncate",
+                            runsPartnershipFilter === key
+                              ? "border-primary bg-primary/10 text-foreground"
+                              : "border-border text-muted-foreground hover:bg-muted/50"
+                          )}
+                          title={label}
+                        >
+                          {label} ({count})
+                        </button>
+                      ))}
+                      {!runsShowAllPartnerships && runsPartnershipHiddenCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setRunsShowAllPartnerships(true)}
+                          className="rounded-full border border-dashed px-3 py-1 text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
+                        >
+                          Show all ({runsPartnershipHiddenCount})
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {runsHasActiveFilters && (
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                      <span className="text-muted-foreground">Filters:</span>
+                      {runsDivisionFilter && (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                          Division: {runsDivisionFilter}
+                        </span>
+                      )}
+                      {runsPartnershipFilter && runsActivePartnershipLabel && (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                          Partnership: {runsActivePartnershipLabel}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={clearRunsFilters}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Clear all filters
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {runs === null ? (
+                <Skeleton className="h-32 w-full" />
+              ) : runs.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {runsSessionFilter
+                    ? `No runs recorded for ${
+                        (() => {
+                          const session = sessions?.find((s) => s.id === runsSessionFilter);
+                          return session
+                            ? formatSessionTitle(session, session.event_timezone)
+                            : "this session";
+                        })()
+                      } yet.`
+                    : runsEventId
+                      ? `No runs recorded for ${
+                          events?.find((ev) => ev.id === runsEventId)?.name ?? "this event"
+                        } yet.`
+                      : "No runs recorded yet."}
+                </p>
+              ) : runsDisplayRows!.length === 0 ? (
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <p>
+                    No runs match the active filter{runsHasActiveFilters ? "s" : ""}.
+                    {runsDivisionFilter && runsPartnershipFilter
+                      ? ` Showing runs in ${runsDivisionFilter} for ${runsActivePartnershipLabel}.`
+                      : runsDivisionFilter
+                        ? ` Showing runs in ${runsDivisionFilter} only.`
+                        : runsPartnershipFilter
+                          ? ` Showing runs for ${runsActivePartnershipLabel} only.`
+                          : ""}
+                  </p>
+                  {runsHasActiveFilters && (
+                    <button
+                      type="button"
+                      onClick={clearRunsFilters}
+                      className="text-primary hover:underline text-xs"
+                    >
+                      Clear all filters
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className={`space-y-2${runsLoading ? " opacity-60" : ""}`}>
+                  {runsDisplayRows!.map((row) => {
+                    const sessionRow = sessions?.find((s) => s.id === row.session_id);
+                    const runEventTz = row.event_id
+                      ? (events?.find((e) => e.id === row.event_id)?.timezone ?? null)
+                      : null;
+                    const sessionLabel = sessionRow
+                      ? formatSessionTitle(sessionRow, sessionRow.event_timezone)
+                      : row.session_floor_trial_starts_at
+                        ? formatSessionTitle(
+                            { floor_trial_starts_at: row.session_floor_trial_starts_at },
+                            runEventTz
+                          )
+                        : "Unknown session";
+                    return (
+                      <div
+                        key={row.id}
+                        className="rounded-lg border px-3 py-3 text-sm space-y-1"
+                      >
+                        <div className="flex items-start justify-between gap-2 flex-wrap">
+                          <div className="min-w-0 space-y-0.5">
+                            <p className="font-medium">
+                              {row.entity_label}
+                              <span className="text-muted-foreground"> · {row.division_name}</span>
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {row.song_label}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {sessionLabel}
+                              {row.event_name ? ` · ${row.event_name}` : ""}
+                            </p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-xs text-muted-foreground">
+                              {formatTime(row.completed_at)}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              by {row.completed_by_label}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── Songs tab ── */}
+        <TabsContent value="songs" className="mt-4 space-y-4">
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center flex-wrap">
+              <div className="w-full sm:w-80">
+                <Input
+                  placeholder="Search by song, owner, or partner…"
+                  value={adminSongsQuery}
+                  onChange={(e) => setAdminSongsQuery(e.target.value)}
+                />
+              </div>
+              <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={adminSongsIncludeDeleted}
+                  onChange={(e) => setAdminSongsIncludeDeleted(e.target.checked)}
+                />
+                Show deleted
+              </label>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void loadAdminSongs(adminSongsDebouncedQuery, adminSongsIncludeDeleted)
+                }
+                disabled={adminSongsLoading}
               >
-                <option value="">All sessions</option>
-                {sessions
-                  ?.slice()
-                  .sort(compareSessionChrono)
-                  .map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {formatSessionTitle(s, s.event_timezone)}
-                    </option>
-                  ))}
-              </select>
+                {adminSongsLoading ? "Refreshing…" : "Refresh"}
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                {adminSongs === null
+                  ? ""
+                  : `${visibleAdminSongs.length} song${visibleAdminSongs.length === 1 ? "" : "s"}`}
+              </span>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void loadRuns(runsSessionFilter)}
-              disabled={runsLoading}
-            >
-              {runsLoading ? "Refreshing…" : "Refresh"}
-            </Button>
-            <span className="text-xs text-muted-foreground">
-              {runs === null ? "" : `${runs.length} run${runs.length === 1 ? "" : "s"}`}
-            </span>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Year</span>
+                <ChoiceGroup
+                  ariaLabel="Filter by year"
+                  options={[
+                    { value: "all", label: "All" },
+                    ...adminSongYears.map((y) => ({ value: y, label: y })),
+                  ]}
+                  value={adminSongsYear}
+                  onChange={setAdminSongsYear}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Division</span>
+                <ChoiceGroup
+                  ariaLabel="Filter by division"
+                  options={[
+                    { value: "all", label: "All" },
+                    ...adminSongDivisions.map((d) => ({ value: d, label: d })),
+                  ]}
+                  value={adminSongsDivision}
+                  onChange={setAdminSongsDivision}
+                />
+              </div>
+            </div>
           </div>
 
-          {runs === null ? (
+          {adminSongs === null ? (
             <Skeleton className="h-32 w-full" />
-          ) : runs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No runs recorded yet.</p>
+          ) : adminSongs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {adminSongsDebouncedQuery
+                ? `No songs match "${adminSongsDebouncedQuery}".`
+                : "No songs yet."}
+            </p>
+          ) : visibleAdminSongs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No songs match the selected filters.</p>
           ) : (
-            <div className={`space-y-2${runsLoading ? " opacity-60" : ""}`}>
-              {runs.map((row) => {
-                const sessionRow = sessions?.find((s) => s.id === row.session_id);
-                const runEventTz = row.event_id
-                  ? (events?.find((e) => e.id === row.event_id)?.timezone ?? null)
-                  : null;
-                const sessionLabel = sessionRow
-                  ? formatSessionTitle(sessionRow, sessionRow.event_timezone)
-                  : row.session_floor_trial_starts_at
-                  ? formatSessionTitle(
-                      { floor_trial_starts_at: row.session_floor_trial_starts_at },
-                      runEventTz
-                    )
-                  : "Unknown session";
+            <div className={cn("space-y-3", adminSongsLoading && "opacity-60")}>
+              {visibleAdminSongs.map((s) => {
+                const ownerLabel = s.owner.full_name?.trim() || s.owner.email || "—";
+                const partnerLabel = s.partner?.full_name?.trim() || "—";
                 return (
                   <div
-                    key={row.id}
-                    className="rounded-lg border px-3 py-3 text-sm space-y-1"
+                    key={s.id}
+                    className={cn("rounded-lg border px-4 py-3 space-y-3", s.deleted_at && "opacity-60")}
                   >
-                    <div className="flex items-start justify-between gap-2 flex-wrap">
-                      <div className="min-w-0 space-y-0.5">
-                        <p className="font-medium">
-                          {row.entity_label}
-                          <span className="text-muted-foreground"> · {row.division_name}</span>
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {row.song_label}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {sessionLabel}
-                          {row.event_name ? ` · ${row.event_name}` : ""}
-                        </p>
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        <span className="font-medium">{s.song_label}</span>
+                        {s.is_legacy && (
+                          <Badge
+                            variant="secondary"
+                            className="text-xs font-normal bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30"
+                            title="Imported from the legacy catalog — no Drive file"
+                          >
+                            Legacy
+                          </Badge>
+                        )}
+                        {s.deleted_at && (
+                          <Badge variant="destructive" className="text-xs font-normal">deleted</Badge>
+                        )}
                       </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-xs text-muted-foreground">
-                          {formatTime(row.completed_at)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          by {row.completed_by_label}
-                        </p>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap tabular-nums shrink-0">
+                        {formatTime(s.created_at)}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2 text-sm">
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted-foreground">Owner</p>
+                        <p className="truncate">{ownerLabel}</p>
+                        {s.owner.email && s.owner.full_name && (
+                          <p className="text-xs text-muted-foreground truncate">{s.owner.email}</p>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted-foreground">Partner</p>
+                        <p className="truncate">{partnerLabel}</p>
+                        {s.partner?.linked_user_email && (
+                          <p className="text-xs text-muted-foreground truncate">linked: {s.partner.linked_user_email}</p>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted-foreground">Division</p>
+                        <p className="truncate">{s.division ?? "—"}</p>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted-foreground">Routine</p>
+                        <p className="truncate">{s.routine_name ?? "—"}</p>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted-foreground">Descriptor</p>
+                        <p className="truncate">{s.personal_descriptor ?? "—"}</p>
                       </div>
                     </div>
                   </div>
@@ -1505,139 +1626,108 @@ export default function AdminPage() {
           )}
         </TabsContent>
 
-        {/* ── Test Inject tab ── */}
-        <TabsContent value="inject" className="mt-4 space-y-4">
+        {/* ── Test Checkin tab ── */}
+        <TabsContent value="test-checkin" className="mt-4 space-y-4">
           <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-            Testing-only bypass. Creates throwaway user/partner/pair rows and uses a placeholder song.
+            Creates throwaway user/partner/pair rows and uses a placeholder song.
             Skips the check-in time window. Each submission adds one entry to the selected session's queue.
           </div>
-          <form onSubmit={submitApiTestInjection} className="space-y-4 max-w-lg">
+          <form onSubmit={submitTestCheckin} className="space-y-4 max-w-lg">
             <div>
               <label className={FIELD_LABEL_CLASS}>Session</label>
-              <select
-                className={FIELD_INPUT_CLASS}
-                value={tiSessionId}
-                onChange={(e) => setTiSessionId(e.target.value)}
-              >
-                <option value="">Select a session…</option>
-                {sessions
-                  ?.slice()
+              <ChoiceGroup
+                ariaLabel="Session"
+                options={(sessions ?? [])
+                  .slice()
                   .sort(compareSessionChrono)
-                  .map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {formatSessionTitle(s, s.event_timezone)}
-                  </option>
-                ))}
-              </select>
+                  .map((s) => ({
+                    value: s.id,
+                    label: formatSessionTitle(s, s.event_timezone),
+                  }))}
+                value={tcSessionId}
+                onChange={setTcSessionId}
+              />
             </div>
             <div>
               <label className={FIELD_LABEL_CLASS}>Division</label>
-              <select
-                className={FIELD_INPUT_CLASS}
-                value={tiDivision}
-                onChange={(e) => setTiDivision(e.target.value)}
-              >
-                {DIVISION_OPTIONS.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
+              <ChoiceGroup
+                ariaLabel="Division"
+                options={DIVISION_OPTIONS.map((d) => ({ value: d, label: d }))}
+                value={tcDivision}
+                onChange={setTcDivision}
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={FIELD_LABEL_CLASS}>Leader first name</label>
-                <input
-                  className={FIELD_INPUT_CLASS}
-                  value={tiLeaderFirst}
-                  onChange={(e) => setTiLeaderFirst(e.target.value)}
-                />
+                <input className={FIELD_INPUT_CLASS} value={tcLeaderFirst}
+                  onChange={(e) => setTcLeaderFirst(e.target.value)} />
               </div>
               <div>
                 <label className={FIELD_LABEL_CLASS}>Leader last name</label>
-                <input
-                  className={FIELD_INPUT_CLASS}
-                  value={tiLeaderLast}
-                  onChange={(e) => setTiLeaderLast(e.target.value)}
-                />
+                <input className={FIELD_INPUT_CLASS} value={tcLeaderLast}
+                  onChange={(e) => setTcLeaderLast(e.target.value)} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={FIELD_LABEL_CLASS}>Follower first name</label>
-                <input
-                  className={FIELD_INPUT_CLASS}
-                  value={tiFollowerFirst}
-                  onChange={(e) => setTiFollowerFirst(e.target.value)}
-                />
+                <input className={FIELD_INPUT_CLASS} value={tcFollowerFirst}
+                  onChange={(e) => setTcFollowerFirst(e.target.value)} />
               </div>
               <div>
                 <label className={FIELD_LABEL_CLASS}>Follower last name</label>
-                <input
-                  className={FIELD_INPUT_CLASS}
-                  value={tiFollowerLast}
-                  onChange={(e) => setTiFollowerLast(e.target.value)}
-                />
+                <input className={FIELD_INPUT_CLASS} value={tcFollowerLast}
+                  onChange={(e) => setTcFollowerLast(e.target.value)} />
               </div>
             </div>
-            <Button type="submit" disabled={tiSubmitting} size="lg" className="w-full sm:w-auto">
-              {tiSubmitting ? "Injecting…" : "Inject check-in"}
+            <Button type="submit" disabled={tcSubmitting} size="lg" className="w-full sm:w-auto">
+              {tcSubmitting ? "Checking in…" : "Test check-in"}
             </Button>
           </form>
 
-          {/* Existing test data */}
           <section className="space-y-3 pt-2">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <h2 className="text-base font-semibold">
-                Existing test data
-                {tiData !== null && (
+                Existing test check-ins
+                {tcData !== null && (
                   <span className="ml-2 text-sm text-muted-foreground font-normal">
-                    ({tiData.length})
+                    ({tcData.length})
                   </span>
                 )}
               </h2>
               <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void loadApiTestInjections()}
-                  disabled={tiDeleting}
-                >
+                <Button variant="outline" size="sm"
+                  onClick={() => void loadTestCheckins()} disabled={tcDeleting}>
                   Refresh
                 </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => void deleteAllTestData()}
-                  disabled={tiDeleting || !tiData || tiData.length === 0}
-                >
-                  {tiDeleting ? "Deleting…" : "Delete all test data"}
+                <Button variant="destructive" size="sm"
+                  onClick={() => { if (tcData && tcData.length > 0) setPendingDeleteAllTestCheckins(true); }}
+                  disabled={tcDeleting || !tcData || tcData.length === 0}>
+                  {tcDeleting ? "Deleting…" : "Delete all"}
                 </Button>
               </div>
             </div>
 
-            {tiData === null ? (
+            {tcData === null ? (
               <Skeleton className="h-24 w-full" />
-            ) : tiData.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No test data in the system.</p>
+            ) : tcData.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No test check-ins yet.</p>
             ) : (
               <div className="space-y-2">
-                {tiData.map((row) => {
+                {tcData.map((row) => {
                   const queueLabel =
-                    row.queue_status === "active"
-                      ? `Active #${row.position ?? "?"}`
-                      : row.queue_status === "priority"
-                      ? `Priority #${row.position ?? "?"}`
-                      : row.queue_status === "non_priority"
-                      ? `Non-priority #${row.position ?? "?"}`
-                      : "Off queue";
+                    row.queue_status === "active" ? `Active #${row.position ?? "?"}`
+                    : row.queue_status === "priority" ? `Priority #${row.position ?? "?"}`
+                    : row.queue_status === "non_priority" ? `Non-priority #${row.position ?? "?"}`
+                    : "Off queue";
                   const sessionRow = sessions?.find((s) => s.id === row.session_id);
-                  const sessionLabel = sessionRow ? formatSessionTitle(sessionRow, sessionRow.event_timezone) : "No session";
+                  const sessionLabel = sessionRow
+                    ? formatSessionTitle(sessionRow, sessionRow.event_timezone)
+                    : "No session";
                   return (
-                    <div
-                      key={row.pair_id}
-                      className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm"
-                    >
+                    <div key={row.pair_id}
+                      className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm">
                       <div className="flex items-start justify-between gap-2 flex-wrap">
                         <div className="min-w-0 space-y-0.5">
                           <p className="font-medium">
@@ -1649,13 +1739,11 @@ export default function AdminPage() {
                             {row.division_name ? ` · ${row.division_name}` : ""}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Injected {formatTime(row.created_at)}
+                            Checked in {formatTime(row.created_at)}
                           </p>
                         </div>
-                        <Badge
-                          variant={row.queue_status === "off_queue" ? "outline" : "default"}
-                          className="shrink-0"
-                        >
+                        <Badge variant={row.queue_status === "off_queue" ? "outline" : "default"}
+                          className="shrink-0">
                           {queueLabel}
                         </Badge>
                       </div>
@@ -1665,141 +1753,6 @@ export default function AdminPage() {
               </div>
             )}
           </section>
-        </TabsContent>
-
-        {/* ── Songs tab ── */}
-        <TabsContent value="songs" className="mt-4 space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center flex-wrap">
-            <div className="w-full sm:w-80">
-              <Input
-                placeholder="Search by song, owner, or partner…"
-                value={adminSongsQuery}
-                onChange={(e) => setAdminSongsQuery(e.target.value)}
-              />
-            </div>
-            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
-              <input
-                type="checkbox"
-                className="h-4 w-4"
-                checked={adminSongsIncludeDeleted}
-                onChange={(e) => setAdminSongsIncludeDeleted(e.target.checked)}
-              />
-              Show deleted
-            </label>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void loadAdminSongs(adminSongsDebouncedQuery, adminSongsIncludeDeleted)
-              }
-              disabled={adminSongsLoading}
-            >
-              {adminSongsLoading ? "Refreshing…" : "Refresh"}
-            </Button>
-            <span className="text-xs text-muted-foreground">
-              {adminSongs === null
-                ? ""
-                : `${adminSongs.length} song${adminSongs.length === 1 ? "" : "s"}`}
-            </span>
-          </div>
-
-          {adminSongs === null ? (
-            <Skeleton className="h-32 w-full" />
-          ) : adminSongs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {adminSongsDebouncedQuery
-                ? `No songs match "${adminSongsDebouncedQuery}".`
-                : "No songs yet."}
-            </p>
-          ) : (
-            <div className={adminSongsLoading ? "opacity-60" : ""}>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Song</TableHead>
-                    {/* "Owner" is the uploader; "Partner" is the second
-                        member of the partnership. Up to two owners total. */}
-                    <TableHead>Owner</TableHead>
-                    <TableHead>Partner</TableHead>
-                    <TableHead>Division</TableHead>
-                    <TableHead>Routine</TableHead>
-                    <TableHead>Descriptor</TableHead>
-                    <TableHead className="text-right whitespace-nowrap">Created</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {adminSongs.map((s) => {
-                    const ownerLabel =
-                      s.owner.full_name?.trim() || s.owner.email || "—";
-                    const partnerLabel = s.partner?.full_name?.trim() || "—";
-                    return (
-                      <TableRow
-                        key={s.id}
-                        className={s.deleted_at ? "opacity-60" : ""}
-                      >
-                        <TableCell className="font-medium">
-                          <div className="flex flex-col gap-0.5">
-                            <span>{s.song_label}</span>
-                            <div className="flex gap-1 flex-wrap">
-                              {s.is_legacy && (
-                                <Badge
-                                  variant="secondary"
-                                  className="text-xs font-normal w-fit bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30"
-                                  title="Imported from the legacy catalog — no Drive file"
-                                >
-                                  Legacy
-                                </Badge>
-                              )}
-                              {s.deleted_at && (
-                                <Badge
-                                  variant="destructive"
-                                  className="text-xs font-normal w-fit"
-                                >
-                                  deleted
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          <div className="flex flex-col gap-0.5">
-                            <span>{ownerLabel}</span>
-                            {s.owner.email && s.owner.full_name && (
-                              <span className="text-xs text-muted-foreground">
-                                {s.owner.email}
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          <div className="flex flex-col gap-0.5">
-                            <span>{partnerLabel}</span>
-                            {s.partner?.linked_user_email && (
-                              <span className="text-xs text-muted-foreground">
-                                linked: {s.partner.linked_user_email}
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                          {s.division ?? "—"}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {s.routine_name ?? "—"}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {s.personal_descriptor ?? "—"}
-                        </TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground whitespace-nowrap tabular-nums">
-                          {formatTime(s.created_at)}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
         </TabsContent>
 
         {/* ── Users tab ── */}
@@ -1908,6 +1861,24 @@ export default function AdminPage() {
         </TabsContent>
       </Tabs>
 
+      {/* ── Delete all test check-ins confirmation dialog ── */}
+      <Dialog open={pendingDeleteAllTestCheckins}
+        onOpenChange={(open: boolean) => { if (!open) setPendingDeleteAllTestCheckins(false); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete all test check-ins?</DialogTitle>
+            <DialogDescription>
+              This will remove {tcData?.length ?? 0} check-in{(tcData?.length ?? 0) === 1 ? "" : "s"} —
+              synthetic users, partners, pairs, check-ins, and queue entries. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingDeleteAllTestCheckins(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => void confirmDeleteAllTestCheckins()}>Delete all</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ── Delete Event confirmation dialog ── */}
       <Dialog open={!!pendingDeleteEventId} onOpenChange={(open: boolean) => { if (!open) setPendingDeleteEventId(null); }}>
         <DialogContent>
@@ -1949,24 +1920,6 @@ export default function AdminPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setPendingDeleteSession(null)}>Cancel</Button>
             <Button variant="destructive" onClick={() => void confirmDeleteSession()}>Delete</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Delete all test data confirmation dialog ── */}
-      <Dialog open={pendingDeleteAllTestData} onOpenChange={(open: boolean) => { if (!open) setPendingDeleteAllTestData(false); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete all test data?</DialogTitle>
-            <DialogDescription>
-              This will remove{" "}
-              {tiData?.length ?? 0} test injection{(tiData?.length ?? 0) === 1 ? "" : "s"} —
-              synthetic users, partners, pairs, check-ins, and queue entries. This cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPendingDeleteAllTestData(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => void confirmDeleteAllTestData()}>Delete all</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

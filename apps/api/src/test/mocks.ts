@@ -16,6 +16,10 @@ function drainSelect(): unknown[] {
   return (selectResultQueue.shift() ?? []) as unknown[];
 }
 
+export function skipNextSelectResult(): void {
+  drainSelect();
+}
+
 type DbChain = {
   select: ReturnType<typeof vi.fn>;
   from: ReturnType<typeof vi.fn>;
@@ -33,10 +37,7 @@ type DbChain = {
   /** Raw SQL execution (e.g. `SELECT 1` health probe). */
   execute: ReturnType<typeof vi.fn>;
   transaction: ReturnType<typeof vi.fn>;
-  then: (
-    onfulfilled?: ((value: unknown[]) => unknown) | null,
-    onrejected?: ((reason: unknown) => unknown) | null
-  ) => Promise<unknown>;
+  then: ReturnType<typeof vi.fn>;
 };
 
 function createMockDb(): DbChain {
@@ -54,6 +55,7 @@ function createMockDb(): DbChain {
   chain.insert = vi.fn(() => ({
     values: vi.fn(() => {
       const afterValues = {
+        onConflictDoNothing: vi.fn(() => Promise.resolve(undefined)),
         onConflictDoUpdate: vi.fn(() => Promise.resolve(undefined)),
         then(
           onfulfilled?: ((v: unknown) => unknown) | null,
@@ -76,8 +78,12 @@ function createMockDb(): DbChain {
   // Raw SQL execution used by the /health DB probe.
   chain.execute = vi.fn(() => Promise.resolve([{ "?column?": 1 }]));
   chain.transaction = vi.fn((fn: (tx: DbChain) => unknown) => fn(chain));
-  chain.then = (onfulfilled, onrejected) =>
-    Promise.resolve(drainSelect()).then(onfulfilled, onrejected);
+  chain.then = vi.fn(
+    (
+      onfulfilled?: ((value: unknown[]) => unknown) | null,
+      onrejected?: ((reason: unknown) => unknown) | null
+    ) => Promise.resolve(drainSelect()).then(onfulfilled, onrejected)
+  );
   return chain;
 }
 
@@ -89,18 +95,20 @@ type MockUser = {
   role?: "user" | "admin";
 };
 
-export function mockRequireAuth(userId = "user_test123", role: "user" | "admin" = "user") {
+export function mockRequireAuth(defaultUserId = "user_test123", defaultRole: "user" | "admin" = "user") {
   return vi.fn(async (c: Context, next: () => Promise<void>) => {
     const h = c.req.header("Authorization") ?? "";
     if (!h.startsWith("Bearer ")) {
       return c.json(CommonErrors.unauthorized(), 401);
     }
-    const u: MockUser = { userId, email: "test@example.com", role };
+    const tokenUid = h.slice("Bearer mock-token-".length).trim();
+    const userId = tokenUid || defaultUserId;
+    const role = userId === ADMIN_USER_ID ? "admin" : defaultRole;
     c.set("user", {
-      userId: u.userId,
-      email: u.email,
-      role: u.role ?? "user",
-      clerk: { sub: u.userId },
+      userId,
+      email: userId === ADMIN_USER_ID ? "admin@example.com" : "test@example.com",
+      role,
+      clerk: { sub: userId },
     });
     await next();
   }) as unknown as MiddlewareHandler;

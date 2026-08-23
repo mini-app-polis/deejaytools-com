@@ -1,19 +1,29 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import AdminGuard from "@/components/AdminGuard";
+import ManagerGuard from "@/components/ManagerGuard";
 import Layout from "@/components/Layout";
 import RequireAuth from "@/components/RequireAuth";
 import LandingPage from "./LandingPage";
 import AdminPage from "./AdminPage";
+import ManagerPage from "./ManagerPage";
 import FloorTrialsPage from "./FloorTrialsPage";
 import EventDetailPage from "./EventDetailPage";
 import EventsPage from "./EventsPage";
 import HowItWorksPage from "./HowItWorksPage";
+import HelpCheckingInPage from "./help/HelpCheckingInPage";
+import HelpFloorTrialsPage from "./help/HelpFloorTrialsPage";
+import HelpOnTheFloorPage from "./help/HelpOnTheFloorPage";
+import HelpPartnersPage from "./help/HelpPartnersPage";
+import HelpSubmittingMusicPage from "./help/HelpSubmittingMusicPage";
+import HelpTheQueuePage from "./help/HelpTheQueuePage";
+import TroubleshootingPage from "./help/TroubleshootingPage";
 import MyContentPage from "./MyContentPage";
 import MyProfilePage from "./MyProfilePage";
 import SessionDetailPage from "./SessionDetailPage";
 import SessionsPage from "./SessionsPage";
 import AddSongPage from "./AddSongPage";
+import EventSubmissionsPage from "./EventSubmissionsPage";
 import SongsPage from "./SongsPage";
 import FeedbackPage from "./FeedbackPage";
 
@@ -31,14 +41,18 @@ export default function App() {
           <Route path="floor-trials" element={<FloorTrialsPage />} />
           {/* Back-compat for the old /check-in URL — re-render Floor Trials. */}
           <Route path="check-in" element={<FloorTrialsPage />} />
-          {/* Long-form floor-trial process guide. Linked from the homepage
-              card grid and from contextual tips on FloorTrialsPage /
-              AddSongPage. The legacy-songs catalog used to live at
-              /music-history; that page was removed because the same search
-              already exists as the "Claim from history" dialog inside
-              AddSongPage and a separate top-level entry just confused
-              first-time visitors. */}
+          {/* Help section. Hub at /how-it-works; topic pages below. Legacy
+              anchor links on /how-it-works#… redirect in HowItWorksPage.
+              Linked from the homepage card grid, NavBar, FloorTrialsPage,
+              and AddSongPage. */}
           <Route path="how-it-works" element={<HowItWorksPage />} />
+          <Route path="how-it-works/floor-trials" element={<HelpFloorTrialsPage />} />
+          <Route path="how-it-works/submitting-music" element={<HelpSubmittingMusicPage />} />
+          <Route path="how-it-works/checking-in" element={<HelpCheckingInPage />} />
+          <Route path="how-it-works/the-queue" element={<HelpTheQueuePage />} />
+          <Route path="how-it-works/partners" element={<HelpPartnersPage />} />
+          <Route path="how-it-works/on-the-floor" element={<HelpOnTheFloorPage />} />
+          <Route path="how-it-works/troubleshooting" element={<TroubleshootingPage />} />
           <Route path="feedback" element={<FeedbackPage />} />
 
           {/* Auth-required routes */}
@@ -72,6 +86,14 @@ export default function App() {
             element={
               <RequireAuth>
                 <AddSongPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="event-submissions"
+            element={
+              <RequireAuth>
+                <EventSubmissionsPage />
               </RequireAuth>
             }
           />
@@ -115,6 +137,15 @@ export default function App() {
               <AdminGuard>
                 <AdminPage />
               </AdminGuard>
+            }
+          />
+          <Route path="manager" element={<Navigate to="/manager/active-sessions" replace />} />
+          <Route
+            path="manager/:section"
+            element={
+              <ManagerGuard>
+                <ManagerPage />
+              </ManagerGuard>
             }
           />
         </Route>

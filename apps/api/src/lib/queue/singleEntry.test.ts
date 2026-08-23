@@ -36,4 +36,16 @@ describe("entityHasLiveEntry", () => {
     const has = await entityHasLiveEntry({ soloUserId: "u1" }, "s1");
     expect(has).toBe(false);
   });
+
+  it("returns true when a row matches the managed partnership entity", async () => {
+    enqueueSelectResult([{ id: "qe3" }]);
+    const has = await entityHasLiveEntry({ managedPartnershipId: "mp1" }, "s1");
+    expect(has).toBe(true);
+  });
+
+  it("returns false for a managed partnership with no live entry", async () => {
+    enqueueSelectResult([]);
+    const has = await entityHasLiveEntry({ managedPartnershipId: "mp1" }, "s1");
+    expect(has).toBe(false);
+  });
 });

@@ -1,6 +1,12 @@
-import type { ApiMyCheckin, ApiSong } from "@deejaytools/schemas";
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import type {
+  ApiEvent,
+  ApiEventSongSubmission,
+  ApiMyCheckin,
+  ApiSession,
+  ApiSong,
+} from "@deejaytools/schemas";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { useApiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +20,37 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatSessionTitle } from "@/lib/sessionFormat";
+import { compareEventChrono } from "@/lib/chronoSort";
+import { songPartnershipLabel } from "@/lib/entityLabel";
+import { formatSessionTitle, formatTimeOnly } from "@/lib/sessionFormat";
+
+function eventStatusBadge(status: string) {
+  switch (status) {
+    case "upcoming":
+      return <Badge variant="default">{status}</Badge>;
+    case "active":
+      return (
+        <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 border-transparent">
+          {status}
+        </Badge>
+      );
+    case "completed":
+      return <Badge variant="secondary">{status}</Badge>;
+    case "cancelled":
+      return <Badge variant="destructive">{status}</Badge>;
+    default:
+      return <Badge variant="outline">{status}</Badge>;
+  }
+}
+
+function sessionStatusBadge(status: string) {
+  if (status === "checkin_open") return <Badge variant="default">check-in open</Badge>;
+  if (status === "in_progress")
+    return (
+      <Badge className="bg-primary text-primary-foreground border-transparent">in progress</Badge>
+    );
+  return <Badge variant="outline">{status}</Badge>;
+}
 
 function queueStatusBadge(checkin: ApiMyCheckin) {
   if (checkin.queueType === "active") {
@@ -43,6 +79,17 @@ function queueStatusBadge(checkin: ApiMyCheckin) {
 
 export default function MyContentPage() {
   const api = useApiClient();
+  const { hash } = useLocation();
+
+  // Deep links such as /my-content#checkins arrive from the help pages. This page is
+  // one scrolling document (no tabs), so scroll the matching section into view.
+  useEffect(() => {
+    if (!hash) return;
+    const el = document.getElementById(hash.slice(1));
+    if (!el) return;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  }, [hash]);
 
   // ── Songs state ──────────────────────────────────────────────────────────────
   const [songs, setSongs] = useState<ApiSong[]>([]);
@@ -52,9 +99,15 @@ export default function MyContentPage() {
 
   // ── Check-ins state ──────────────────────────────────────────────────────────
   const [checkins, setCheckins] = useState<ApiMyCheckin[] | null>(null);
-  const [checkinsLoading, setCheckinsLoading] = useState(true);
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
   const [pendingWithdrawId, setPendingWithdrawId] = useState<string | null>(null);
+
+  // ── Events / submissions state ────────────────────────────────────────────────
+  const [availableEvents, setAvailableEvents] = useState<ApiEvent[]>([]);
+  const [eventSubmissions, setEventSubmissions] = useState<ApiEventSongSubmission[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+
+  const [activeSessions, setActiveSessions] = useState<ApiSession[] | null>(null);
 
   // ── Data loaders ─────────────────────────────────────────────────────────────
 
@@ -68,12 +121,36 @@ export default function MyContentPage() {
   };
 
   const loadCheckins = () => {
-    setCheckinsLoading(true);
     api
       .get<ApiMyCheckin[]>("/v1/checkins/mine")
       .then(setCheckins)
-      .catch((e: Error) => toast.error(e.message))
-      .finally(() => setCheckinsLoading(false));
+      .catch((e: Error) => toast.error(e.message));
+  };
+
+  const loadEventsSection = () => {
+    setEventsLoading(true);
+    Promise.all([
+      api.get<ApiEvent[]>("/v1/events").catch(() => [] as ApiEvent[]),
+      api
+        .get<ApiEventSongSubmission[]>("/v1/event-song-submissions")
+        .catch(() => [] as ApiEventSongSubmission[]),
+    ])
+      .then(([evs, subs]) => {
+        setAvailableEvents(evs.filter((e) => e.status !== "completed"));
+        setEventSubmissions(subs);
+      })
+      .finally(() => setEventsLoading(false));
+  };
+
+  const loadActiveSessions = () => {
+    api
+      .get<ApiSession[]>("/v1/sessions")
+      .then((all) =>
+        setActiveSessions(
+          all.filter((s) => s.status === "checkin_open" || s.status === "in_progress")
+        )
+      )
+      .catch(() => setActiveSessions([]));
   };
 
   const handleWithdraw = async (checkinId: string) => {
@@ -94,7 +171,42 @@ export default function MyContentPage() {
   useEffect(() => {
     loadSongs();
     loadCheckins();
+    loadEventsSection();
+    loadActiveSessions();
   }, [api]);
+
+  const submissionsByEventId = useMemo(() => {
+    const map = new Map<string, ApiEventSongSubmission[]>();
+    for (const s of eventSubmissions) {
+      const list = map.get(s.event_id) ?? [];
+      list.push(s);
+      map.set(s.event_id, list);
+    }
+    return map;
+  }, [eventSubmissions]);
+
+  const sortedAvailableEvents = useMemo(
+    () => availableEvents.slice().sort(compareEventChrono),
+    [availableEvents]
+  );
+
+  const eventsWithSongs = useMemo(
+    () => sortedAvailableEvents.filter((e) => (submissionsByEventId.get(e.id)?.length ?? 0) > 0),
+    [sortedAvailableEvents, submissionsByEventId]
+  );
+
+  const eventNameById = useMemo(
+    () => new Map(availableEvents.map((e) => [e.id, e.name])),
+    [availableEvents]
+  );
+
+  const sortedActiveSessions = useMemo(
+    () =>
+      (activeSessions ?? [])
+        .slice()
+        .sort((a, b) => a.floor_trial_starts_at - b.floor_trial_starts_at),
+    [activeSessions]
+  );
 
   // ── Songs actions ─────────────────────────────────────────────────────────────
 
@@ -117,19 +229,68 @@ export default function MyContentPage() {
     <div className="space-y-6">
       <h1 className="page-title text-2xl">My Content</h1>
 
-      {/* ── Check-ins section ── */}
+      {sortedActiveSessions.length > 0 && (
+        <div className="rounded-lg border bg-card">
+          <div className="px-4 py-3 border-b">
+            <h2 id="active-floor-trials" className="font-semibold scroll-mt-24">
+              Active Floor Trials
+            </h2>
+          </div>
+          <div className="p-4 space-y-3">
+            {sortedActiveSessions.map((s) => {
+              const eventName = s.event_id ? eventNameById.get(s.event_id) ?? null : null;
+              return (
+                <div
+                  key={s.id}
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border px-4 py-3"
+                >
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {eventName && (
+                        <Badge
+                          variant="outline"
+                          className="border-primary/40 bg-primary/10 text-primary font-medium"
+                        >
+                          {eventName}
+                        </Badge>
+                      )}
+                      {sessionStatusBadge(s.status)}
+                    </div>
+                    <p className="font-medium text-sm">
+                      {formatSessionTitle(s, s.event_timezone)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Floor trial: {formatTimeOnly(s.floor_trial_starts_at, s.event_timezone)} –{" "}
+                      {formatTimeOnly(s.floor_trial_ends_at, s.event_timezone)}
+                    </p>
+                  </div>
+                  <Button asChild size="sm" className="shrink-0 w-full sm:w-auto">
+                    <Link to={`/sessions/${s.id}`}>Go To Session</Link>
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Check-ins section (only when checked in somewhere) ── */}
+      {checkins && checkins.length > 0 && (
       <div className="rounded-lg border bg-card">
-        <div className="px-4 py-3 border-b">
-          <h2 className="font-semibold">Check-ins</h2>
+        <div className="px-4 py-3 border-b flex items-center justify-between gap-3">
+          <h2 id="checkins" className="font-semibold scroll-mt-24">
+            Check-ins
+          </h2>
+          <Link
+            to="/how-it-works/the-queue"
+            className="text-xs text-muted-foreground hover:underline shrink-0"
+          >
+            Learn more →
+          </Link>
         </div>
         <div className="p-4 space-y-3">
-          {checkinsLoading && !checkins ? (
-            <Skeleton className="h-40 w-full" />
-          ) : checkins?.length === 0 ? (
-            <p className="text-sm text-muted-foreground">You are not currently checked in anywhere.</p>
-          ) : (
-            <div className={`space-y-3${checkinsLoading ? " opacity-60" : ""}`}>
-              {checkins?.map((ci) => (
+            <div className="space-y-3">
+              {checkins.map((ci) => (
                 <div key={ci.id} className="flex items-start gap-3">
                   {/* Entry card */}
                   <div className="flex-1 min-w-0 rounded-lg border px-4 py-3 text-sm space-y-2">
@@ -204,6 +365,65 @@ export default function MyContentPage() {
                 </div>
               ))}
             </div>
+        </div>
+      </div>
+      )}
+
+      {/* ── Events section ── */}
+      <div className="rounded-lg border bg-card">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
+          <h2 id="events" className="font-semibold scroll-mt-24">
+            Events
+          </h2>
+          <Button size="sm" asChild>
+            <Link to="/event-submissions">Submit songs</Link>
+          </Button>
+        </div>
+        <div className="p-4 space-y-3">
+          {eventsLoading ? (
+            <Skeleton className="h-24 w-full" />
+          ) : eventsWithSongs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              You haven&apos;t added songs to any events yet.{" "}
+              <Link to="/event-submissions" className="underline">
+                Submit songs to an event
+              </Link>
+              .
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {eventsWithSongs.map((event) => {
+                const subs = submissionsByEventId.get(event.id) ?? [];
+                return (
+                  <div key={event.id} className="rounded-lg border px-4 py-3 text-sm space-y-2">
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <div className="min-w-0">
+                        <p className="font-medium">{event.name}</p>
+                        <p className="text-xs text-muted-foreground">{event.start_date}</p>
+                      </div>
+                      {eventStatusBadge(event.status)}
+                    </div>
+                    <ul className="space-y-1 border-t border-border/40 pt-2">
+                      {subs.map((s) => (
+                        <li key={s.id} className="text-sm">
+                          <span className="font-medium">{s.song_label}</span>
+                          {s.division && (
+                            <span className="text-muted-foreground"> · {s.division}</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                    {event.status === "active" && (
+                      <div className="pt-1">
+                        <Button asChild size="sm" className="w-full sm:w-auto">
+                          <Link to={`/events/${event.id}`}>Go to event</Link>
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       </div>
@@ -211,7 +431,9 @@ export default function MyContentPage() {
       {/* ── Songs section ── */}
       <div className="rounded-lg border bg-card">
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
-          <h2 className="font-semibold">Songs</h2>
+          <h2 id="songs" className="font-semibold scroll-mt-24">
+            Songs
+          </h2>
           <Button size="sm" asChild>
             <Link to="/songs/add">Add song</Link>
           </Button>
@@ -220,12 +442,16 @@ export default function MyContentPage() {
           <div className={`space-y-3${songsLoading ? " opacity-60" : ""}`}>
             {songsLoading && songs.length === 0 && <Skeleton className="h-40 w-full" />}
             {songs.length === 0 && !songsLoading && (
-              <p className="text-sm text-muted-foreground py-4 text-center">No songs yet.</p>
+              <p className="text-sm text-muted-foreground py-4 text-center">
+                No songs yet.{" "}
+                <Link to="/songs/add" className="underline">
+                  Add a song
+                </Link>
+                .
+              </p>
             )}
             {songs.map((s) => {
-              const partnerName = !s.partner_id
-                ? null
-                : [s.partner_first_name, s.partner_last_name].filter(Boolean).join(" ").trim() || null;
+              const partnerName = songPartnershipLabel(s);
               const driveUrl = s.drive_file_id
                 ? `https://drive.google.com/file/d/${s.drive_file_id}/view`
                 : null;
@@ -258,7 +484,9 @@ export default function MyContentPage() {
                     )}
                     {partnerName && (
                       <span>
-                        <span className="text-muted-foreground text-xs">Partner </span>
+                        <span className="text-muted-foreground text-xs">
+                          {s.partner_kind && s.partner_kind !== "partner" ? "Entity " : "Partner "}
+                        </span>
                         {partnerName}
                       </span>
                     )}

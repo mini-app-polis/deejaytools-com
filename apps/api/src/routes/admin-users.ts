@@ -6,6 +6,7 @@ import { db } from "../db/index.js";
 import { partners, songs, users } from "../db/schema.js";
 import { zValidator } from "../lib/validate.js";
 import { requireAdmin } from "../middleware/auth.js";
+import { fetchUserSubmissionRows, mapSubmissionRow } from "./event-song-submissions.js";
 
 const logger = createLogger("deejaytools-api");
 
@@ -71,7 +72,7 @@ adminUserRoutes.get("/", requireAdmin, zValidator("query", listQuery), async (c)
       role: users.role,
       createdAt: users.createdAt,
       songCount: sql<number>`(SELECT COUNT(*)::int FROM songs WHERE songs.user_id = users.id AND songs.deleted_at IS NULL)`,
-      partnerCount: sql<number>`(SELECT COUNT(*)::int FROM partners WHERE partners.user_id = users.id)`,
+      partnerCount: sql<number>`(SELECT COUNT(*)::int FROM partners WHERE partners.user_id = users.id AND partners.kind = 'partner')`,
     })
     .from(users)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
@@ -161,8 +162,8 @@ adminUserRoutes.patch(
         lastName: users.lastName,
         role: users.role,
         createdAt: users.createdAt,
-        songCount: sql<number>`(SELECT COUNT(*)::int FROM ${songs} WHERE ${songs.userId} = ${users.id})`,
-        partnerCount: sql<number>`(SELECT COUNT(*)::int FROM ${partners} WHERE ${partners.userId} = ${users.id})`,
+        songCount: sql<number>`(SELECT COUNT(*)::int FROM ${songs} WHERE ${songs.userId} = ${users.id} AND ${songs.deletedAt} IS NULL)`,
+        partnerCount: sql<number>`(SELECT COUNT(*)::int FROM ${partners} WHERE ${partners.userId} = ${users.id} AND ${partners.kind} = 'partner')`,
       })
       .from(users)
       .where(eq(users.id, id))
@@ -180,5 +181,54 @@ adminUserRoutes.patch(
         partner_count: Number(updated!.partnerCount ?? 0),
       })
     );
+  }
+);
+
+function mapPartner(row: typeof partners.$inferSelect) {
+  return {
+    id: row.id,
+    user_id: row.userId,
+    first_name: row.firstName,
+    last_name: row.lastName,
+    partner_role: row.partnerRole,
+    email: row.email,
+    linked_user_id: row.linkedUserId,
+    created_at: row.createdAt,
+    updated_at: row.updatedAt,
+    display_name: `${row.firstName} ${row.lastName}`.trim(),
+  };
+}
+
+// GET /v1/admin/users/:id/partners — the target user's partner roster,
+// for the superuser "Upload For" flow.
+adminUserRoutes.get("/:id/partners", requireAdmin, async (c) => {
+  const id = c.req.param("id");
+  const [u] = await db.select({ id: users.id }).from(users).where(eq(users.id, id)).limit(1);
+  if (!u) return c.json(CommonErrors.notFound("User"), 404);
+  const rows = await db
+    .select()
+    .from(partners)
+    .where(and(eq(partners.userId, id), eq(partners.kind, "partner")))
+    .orderBy(asc(partners.lastName), asc(partners.firstName));
+  return c.json(successList(rows.map(mapPartner)));
+});
+
+const submissionsParam = z.object({ id: z.string().min(1) });
+const submissionsQuery = z.object({ event_id: z.string().min(1) });
+
+adminUserRoutes.get(
+  "/:id/event-song-submissions",
+  requireAdmin,
+  zValidator("param", submissionsParam),
+  zValidator("query", submissionsQuery),
+  async (c) => {
+    const { id } = c.req.valid("param");
+    const { event_id: eventId } = c.req.valid("query");
+
+    const [target] = await db.select({ id: users.id }).from(users).where(eq(users.id, id)).limit(1);
+    if (!target) return c.json(CommonErrors.notFound("User"), 404);
+
+    const rows = await fetchUserSubmissionRows(id, { eventId });
+    return c.json(successList(rows.map(mapSubmissionRow)));
   }
 );

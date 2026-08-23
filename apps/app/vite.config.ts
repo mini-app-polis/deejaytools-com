@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, URL } from "node:url";
@@ -15,6 +16,26 @@ const rootPkg = JSON.parse(
   readFileSync(resolve(rootDir, "../../package.json"), "utf8")
 ) as { version: string };
 
+// Short commit sha for the build, shown in the nav on non-production hosts so a
+// dev/preview build can be traced back to an exact commit (the semver version is
+// only bumped on release, so it is useless for that). Cloudflare Pages injects
+// CF_PAGES_COMMIT_SHA; locally we ask git. Falls back to an empty string, which
+// makes the nav fall back to the version.
+function commitSha(): string {
+  const fromPages = process.env.CF_PAGES_COMMIT_SHA;
+  if (fromPages) return fromPages.slice(0, 7);
+  try {
+    return execSync("git rev-parse --short=7 HEAD", {
+      cwd: rootDir,
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+      .toString()
+      .trim();
+  } catch {
+    return "";
+  }
+}
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -24,6 +45,7 @@ export default defineConfig({
   },
   define: {
     "import.meta.env.VITE_APP_VERSION": JSON.stringify(rootPkg.version),
+    "import.meta.env.VITE_COMMIT_SHA": JSON.stringify(commitSha()),
   },
   server: {
     port: 5173,

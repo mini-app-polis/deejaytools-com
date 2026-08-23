@@ -2,6 +2,7 @@ import { PartnerRoleSchema, type PartnerRole } from "@deejaytools/schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useApiClient } from "@/api/client";
@@ -10,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -24,13 +26,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Skeleton } from "@/components/ui/skeleton";
 
 type PartnerRow = {
@@ -174,34 +170,50 @@ export default function PartnersSection() {
     <>
       <div className="rounded-lg border bg-card">
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
-          <h2 className="font-semibold">Partners</h2>
+          <div className="flex items-center gap-2 min-w-0">
+            <h2 className="font-semibold">Partners</h2>
+            <Link
+              to="/how-it-works/partners"
+              className="text-xs text-muted-foreground hover:underline shrink-0"
+            >
+              Learn more →
+            </Link>
+          </div>
           <Button size="sm" onClick={openCreate}>Add partner</Button>
         </div>
         <div className="p-4 space-y-4">
-          <div className={`space-y-3${partnersLoading ? " opacity-60" : ""}`}>
+          <div className={`space-y-2${partnersLoading ? " opacity-60" : ""}`}>
             {partnersLoading && !partners && <Skeleton className="h-40 w-full" />}
             {partners?.length === 0 && (
               <p className="text-sm text-muted-foreground py-4 text-center">No partners yet.</p>
             )}
             {partners?.map((p) => (
-              <div key={p.id} className="rounded-lg border-2 border-primary/40 bg-card p-4 space-y-3 shadow-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="font-medium text-base">{p.first_name} {p.last_name}</p>
+              <div
+                key={p.id}
+                className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="font-medium truncate">
+                    {p.first_name} {p.last_name}
+                  </span>
                   {p.partner_role === "leader" ? (
-                    <Badge variant="default">Leader</Badge>
+                    <Badge variant="default" className="shrink-0">Leader</Badge>
                   ) : (
-                    <Badge variant="secondary">Follower</Badge>
+                    <Badge variant="secondary" className="shrink-0">Follower</Badge>
+                  )}
+                  {p.email && (
+                    <span className="hidden sm:inline text-sm text-muted-foreground truncate">
+                      {p.email}
+                    </span>
                   )}
                 </div>
-                {p.email && <p className="text-sm text-muted-foreground">{p.email}</p>}
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(p)}>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button variant="outline" size="sm" onClick={() => openEdit(p)}>
                     Edit
                   </Button>
                   <Button
                     variant="destructive"
                     size="sm"
-                    className="flex-1"
                     onClick={() => void handleDeletePartnerClick(p)}
                   >
                     Delete
@@ -217,6 +229,7 @@ export default function PartnersSection() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editing ? "Edit partner" : "Add partner"}</DialogTitle>
+            <DialogDescription>Add or edit one of your dance partners.</DialogDescription>
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={onSubmit} className="space-y-4">
@@ -248,17 +261,15 @@ export default function PartnersSection() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Their role</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select their role" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="leader">Leader</SelectItem>
-                        <SelectItem value="follower">Follower</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <ChoiceGroup
+                      ariaLabel="Their role"
+                      options={[
+                        { value: "leader", label: "Leader" },
+                        { value: "follower", label: "Follower" },
+                      ]}
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
                     <FormDescription>Your role will be the opposite.</FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -289,6 +300,7 @@ export default function PartnersSection() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Remove partner?</DialogTitle>
+            <DialogDescription>Remove this partner from your list.</DialogDescription>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             {deleteTarget?.first_name} {deleteTarget?.last_name} will be removed from your list.

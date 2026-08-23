@@ -4,6 +4,8 @@ import { createServer as httpCreateServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createLogger } from "common-typescript-utils";
 import { app } from "./app.js";
+import { db } from "./db/index.js";
+import { startScheduler } from "./services/scheduler.js";
 
 const logger = createLogger("deejaytools-api");
 const port = Number(process.env.PORT ?? "3001");
@@ -48,12 +50,17 @@ server.listen(port, "0.0.0.0", () => {
   logger.start("api_starting", { port });
 });
 
+const tickIntervalMs = Number(process.env.TICK_INTERVAL_MS ?? "30000");
+const scheduler =
+  process.env.DISABLE_SCHEDULER === "1" ? null : startScheduler(db, tickIntervalMs);
+
 // Graceful shutdown for Railway / container orchestrators.
 // On SIGTERM we stop accepting new connections and wait for in-flight requests
 // to drain.  A hard-kill timer fires after 10 s so the process never hangs
 // indefinitely — Railway (and most orchestrators) send SIGKILL after their own
 // grace period anyway, but this ensures a clean exit code and final log flush.
 process.on("SIGTERM", () => {
+  scheduler?.stop();
   logger.info({ event: "sigterm_received", category: "api" });
 
   const hardKill = setTimeout(() => {

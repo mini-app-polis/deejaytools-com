@@ -1,0 +1,1 @@
+ALTER TABLE "partners" ADD COLUMN "kind" text DEFAULT 'partner' NOT NULL;
