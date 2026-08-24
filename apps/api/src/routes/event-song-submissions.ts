@@ -373,9 +373,27 @@ eventSongSubmissionRoutes.delete("/:id", requireAuth, async (c) => {
     return c.json(CommonErrors.notFound("Event song submission"), 404);
   }
 
-  // Enqueue BEFORE the delete: once the row is gone the file id is unrecoverable.
-  // A stray job for an already-deleted file is harmless; an orphaned Drive copy
-  // in a DJ's event folder is not.
+  // Enqueued AFTER the delete commits, matching the song, partnership and event
+  // delete paths. The file id was captured above, so nothing is lost by waiting
+  // — whereas enqueuing first means a failed delete deprecates the copy of a
+  // submission that still exists.
+
+  try {
+    await db
+      .delete(eventSongSubmissions)
+      .where(
+        and(eq(eventSongSubmissions.id, id), eq(eventSongSubmissions.submittedByUserId, userId))
+      );
+  } catch (err) {
+    logger.error({
+      event: "event_song_submission_delete_failed",
+      category: "api",
+      context: { userId, submissionId: id },
+      error: err,
+    });
+    return c.json(CommonErrors.internalError(), 500);
+  }
+
   if (existing.driveCopyFileId) {
     try {
       await enqueueDriveJob(db, { kind: "trash", fileId: existing.driveCopyFileId });
@@ -402,22 +420,6 @@ eventSongSubmissionRoutes.delete("/:id", requireAuth, async (c) => {
         Sentry.captureException(err instanceof Error ? err : new Error(String(err)));
       });
     }
-  }
-
-  try {
-    await db
-      .delete(eventSongSubmissions)
-      .where(
-        and(eq(eventSongSubmissions.id, id), eq(eventSongSubmissions.submittedByUserId, userId))
-      );
-  } catch (err) {
-    logger.error({
-      event: "event_song_submission_delete_failed",
-      category: "api",
-      context: { userId, submissionId: id },
-      error: err,
-    });
-    return c.json(CommonErrors.internalError(), 500);
   }
 
   return c.body(null, 204);

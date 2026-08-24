@@ -281,6 +281,65 @@ describe("POST /v1/event-song-submissions", () => {
     expect(body.error.code).toBe("ENTITY_SLOT_TAKEN");
   });
 
+  it("returns 409 when a Classic override conflicts with an existing Classic submission", async () => {
+    enqueueCreatePath(
+      { ...classicPartnerSong, id: "song_2", division: "Showcase" },
+      [{ ...classicPartnerSong, id: "song_1", submissionId: "sub_1" }]
+    );
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ event_id: "evt_1", song_id: "song_2", division: "Classic" }),
+    });
+    expect(res.status).toBe(409);
+    const body = await readJson<ErrorEnvelope>(res);
+    assertErrorEnvelope(body);
+    expect(body.error.code).toBe("ENTITY_SLOT_TAKEN");
+  });
+
+  it("returns 409 when the existing song division has trailing whitespace", async () => {
+    enqueueCreatePath(
+      { ...classicPartnerSong, id: "song_2" },
+      [
+        {
+          ...classicPartnerSong,
+          id: "song_1",
+          division: "Classic ",
+          submissionId: "sub_1",
+        },
+      ]
+    );
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ event_id: "evt_1", song_id: "song_2" }),
+    });
+    expect(res.status).toBe(409);
+    const body = await readJson<ErrorEnvelope>(res);
+    assertErrorEnvelope(body);
+    expect(body.error.code).toBe("ENTITY_SLOT_TAKEN");
+  });
+
+  it("returns 400 when the division override is not in DIVISIONS", async () => {
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ ...validBody, division: "classic" }),
+    });
+    expect(res.status).toBe(400);
+    assertValidation400(await readJson<ErrorEnvelope>(res));
+  });
+
+  it("returns 400 for an arbitrary division string", async () => {
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ ...validBody, division: "Not A Real Division" }),
+    });
+    expect(res.status).toBe(400);
+    assertValidation400(await readJson<ErrorEnvelope>(res));
+  });
+
   it("allows the same partner in a different division", async () => {
     enqueueCreatePath(
       { ...classicPartnerSong, id: "song_2", division: "Showcase" },
@@ -670,7 +729,7 @@ describe("DELETE /v1/event-song-submissions/:id", () => {
     assertErrorEnvelope(await readJson<ErrorEnvelope>(res));
   });
 
-  it("enqueues a trash job before deleting when drive_copy_file_id is set", async () => {
+  it("enqueues a trash job after deleting when drive_copy_file_id is set", async () => {
     enqueueSelectResult([{ id: "sub_1", driveCopyFileId: "drive_copy_1" }]);
     const deleteWhere = vi.fn().mockResolvedValue(undefined);
     const deleteMock = mockDb.delete as ReturnType<typeof vi.fn>;
@@ -687,11 +746,27 @@ describe("DELETE /v1/event-song-submissions/:id", () => {
       kind: "trash",
       fileId: "drive_copy_1",
     });
-    expect(enqueueDriveJob.mock.invocationCallOrder[0]).toBeLessThan(
-      deleteWhere.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER
+    expect(deleteWhere.mock.invocationCallOrder[0]).toBeLessThan(
+      enqueueDriveJob.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER
     );
     expect(deleteWhere).toHaveBeenCalled();
     expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
+  it("does not enqueue a trash job when the delete fails", async () => {
+    enqueueSelectResult([{ id: "sub_1", driveCopyFileId: "drive_copy_1" }]);
+    const deleteMock = mockDb.delete as ReturnType<typeof vi.fn>;
+    deleteMock.mockImplementationOnce(() => ({
+      where: vi.fn().mockRejectedValue(new Error("delete failed")),
+    }));
+
+    const res = await app.request(`${BASE}/sub_1`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+
+    expect(res.status).toBe(500);
+    expect(enqueueDriveJob).not.toHaveBeenCalled();
   });
 
   it("returns 204 and reports to Sentry when the trash enqueue rejects", async () => {
