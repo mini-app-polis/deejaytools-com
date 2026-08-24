@@ -428,6 +428,25 @@ describe("copySongToEventFolder folder cache", () => {
     expect(mockFilesList).toHaveBeenCalledTimes(8);
   });
 
+  it("clears the cache and rethrows when folder resolution fails", async () => {
+    mockFilesList
+      .mockResolvedValueOnce({ data: { files: [{ id: "year_1" }] } })
+      .mockResolvedValueOnce({ data: { files: [{ id: "events_1" }] } })
+      .mockRejectedValueOnce(new Error("folder list failed"));
+
+    await expect(copySongToEventFolder("source_1", DEFAULT_COPY_OPTIONS)).rejects.toThrow(
+      "folder list failed"
+    );
+    expect(mockFilesCopy).not.toHaveBeenCalled();
+
+    mockEventCopyFolders();
+    mockFilesCopy.mockResolvedValueOnce({ data: { id: "copy_2" } });
+    await copySongToEventFolder("source_2", DEFAULT_COPY_OPTIONS);
+    // Cache was cleared on the list failure, so the successful retry re-lists.
+    // 3 lists before the failure + 4 on the successful retry.
+    expect(mockFilesList).toHaveBeenCalledTimes(7);
+  });
+
   it("nests the copy under a subfolder inside the division folder", async () => {
     const ids = mockEventCopyFolders();
     mockFilesList.mockResolvedValueOnce({ data: { files: [{ id: "finals_folder" }] } });

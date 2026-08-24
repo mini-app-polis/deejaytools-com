@@ -184,29 +184,29 @@ export async function copySongToEventFolder(
   const rootFolderId = getParentFolderId();
   const drive = google.drive({ version: "v3", auth });
 
-  const yearFolderId = await findOrCreateFolder(
-    drive,
-    sanitizeFolderName(options.seasonYear),
-    rootFolderId
-  );
-  const eventsFolderId = await findOrCreateFolder(drive, "Events", yearFolderId);
-  const eventFolderId = await findOrCreateFolder(
-    drive,
-    sanitizeFolderName(options.eventName),
-    eventsFolderId
-  );
-  const divisionFolderId = await findOrCreateFolder(
-    drive,
-    sanitizeFolderName(options.division),
-    eventFolderId
-  );
-
-  const destinationFolderId = options.subfolder
-    ? await findOrCreateFolder(drive, sanitizeFolderName(options.subfolder), divisionFolderId)
-    : divisionFolderId;
-
+  let destinationFolderId: string;
   let copyRes;
   try {
+    const yearFolderId = await findOrCreateFolder(
+      drive,
+      sanitizeFolderName(options.seasonYear),
+      rootFolderId
+    );
+    const eventsFolderId = await findOrCreateFolder(drive, "Events", yearFolderId);
+    const eventFolderId = await findOrCreateFolder(
+      drive,
+      sanitizeFolderName(options.eventName),
+      eventsFolderId
+    );
+    const divisionFolderId = await findOrCreateFolder(
+      drive,
+      sanitizeFolderName(options.division),
+      eventFolderId
+    );
+    destinationFolderId = options.subfolder
+      ? await findOrCreateFolder(drive, sanitizeFolderName(options.subfolder), divisionFolderId)
+      : divisionFolderId;
+
     copyRes = await drive.files.copy({
       fileId: sourceFileId,
       requestBody: {
@@ -217,9 +217,11 @@ export async function copySongToEventFolder(
       supportsAllDrives: true,
     });
   } catch (err) {
-    // The destination parent may be a cached id for a folder that has since
-    // been trashed, which would fail identically on every retry for the whole
-    // TTL. Cheap to rebuild, so drop the cache and let the retry re-resolve.
+    // Any cached folder id in this chain may be for a folder that has since
+    // been trashed or deleted, which fails identically on every retry for the
+    // whole TTL. Folder resolution must be inside this try, not just the copy:
+    // a stale parent fails at files.list/files.create, before the copy is ever
+    // reached. Cheap to rebuild, so drop the cache and let the retry re-resolve.
     clearDriveFolderCache();
     throw err;
   }
