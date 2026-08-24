@@ -74,6 +74,37 @@ export type PartnerRole = z.infer<typeof PartnerRoleSchema>;
 // validation in contract tests.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// "The Open" — dedicated submission path
+// ---------------------------------------------------------------------------
+
+/** Display name used in copy that points people at the dedicated Open page. */
+export const OPEN_EVENT_LABEL = "The Open";
+
+/**
+ * Does this event name refer to "The Open"?
+ *
+ * The Open never accepts songs through the generic event-submissions page —
+ * it routes to its own dedicated submission page instead. Every consumer that
+ * needs to make that distinction goes through this one predicate, so the rule
+ * lives in exactly one place.
+ *
+ * Matching is deliberately forgiving so admins do not have to type the name
+ * exactly: the name is lowercased and stripped of everything that is not a
+ * letter or digit, then matched when it either contains "theopen" (covers
+ * "The Open", "theopen", "THE OPEN 2026", "The-Open") or starts with "open"
+ * (covers "Open Swing Dance Championships").
+ *
+ * Trade-off: an unrelated event whose name starts with "Open" — say "Open
+ * Practice Night" — also matches. Tighten this predicate if that becomes a
+ * real problem.
+ */
+export function isOpenEvent(eventName: string | null | undefined): boolean {
+  if (!eventName) return false;
+  const normalized = eventName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return normalized.includes("theopen") || normalized.startsWith("open");
+}
+
 export const ApiEventSchema = z.object({
   id: z.string(),
   name: z.string(),

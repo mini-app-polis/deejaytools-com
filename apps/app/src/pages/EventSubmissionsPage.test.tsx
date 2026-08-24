@@ -130,6 +130,26 @@ describe("EventSubmissionsPage", () => {
     expect(toast.error).toHaveBeenCalledWith("DB stub pending — not yet implemented");
   });
 
+  it("hides The Open from the picker and links to its dedicated page", async () => {
+    const openEvent = { ...EVENT, id: "open1", name: "The Open 2026" };
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events") return Promise.resolve([EVENT, openEvent]);
+      if (path === "/v1/songs") return Promise.resolve([SONG]);
+      if (path.startsWith("/v1/event-song-submissions")) return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+
+    const user = userEvent.setup();
+    renderPage();
+
+    const link = await screen.findByRole("link", { name: /go to the open submissions/i });
+    expect(link).toHaveAttribute("href", "/open-submissions");
+
+    await user.click(screen.getByRole("combobox", { name: /event/i }));
+    expect(await screen.findByRole("option", { name: /spring classic/i })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /the open/i })).not.toBeInTheDocument();
+  });
+
   it("still renders events and songs when event-song-submissions rejects", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events") return Promise.resolve([EVENT]);

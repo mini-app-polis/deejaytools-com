@@ -35,10 +35,22 @@ function eventOptionLabel(e: ApiEvent): string {
   return `${e.name} · ${e.start_date}`;
 }
 
-export default function EventSubmissionsPage() {
+/**
+ * Dedicated submission page for The Open.
+ *
+ * Mirrors EventSubmissionsPage, but the event set is filtered down to events
+ * that `isOpenEvent()` recognises — the generic page filters those same events
+ * out, so the two pages partition the event list between them. When there is
+ * exactly one Open event (the normal case) it is selected automatically and no
+ * picker is shown.
+ *
+ * This is where The Open's extra submission protections will live; today it is
+ * feature-equivalent to the generic page apart from the event scoping.
+ */
+export default function OpenSubmissionsPage() {
   const api = useApiClient();
 
-  const [events, setEvents] = useState<ApiEvent[]>([]);
+  const [openEvents, setOpenEvents] = useState<ApiEvent[]>([]);
   const [songs, setSongs] = useState<ApiSong[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -56,10 +68,11 @@ export default function EventSubmissionsPage() {
     ])
       .then(([evs, songRows]) => {
         if (cancelled) return;
-        // The Open never accepts songs here — it has its own submission page,
-        // so it is filtered out of this list and pointed to by the banner below.
-        setEvents(evs.filter((e) => e.status !== "completed" && !isOpenEvent(e.name)));
+        const open = evs.filter((e) => e.status !== "completed" && isOpenEvent(e.name));
+        setOpenEvents(open);
         setSongs(songRows);
+        // The normal case is a single Open event — skip the picker entirely.
+        if (open.length === 1) setSelectedEventId(open[0].id);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -92,6 +105,11 @@ export default function EventSubmissionsPage() {
     };
   }, [api, selectedEventId]);
 
+  const selectedEvent = useMemo(
+    () => openEvents.find((e) => e.id === selectedEventId) ?? null,
+    [openEvents, selectedEventId]
+  );
+
   const submissionBySongId = useMemo(() => {
     const map = new Map<string, ApiEventSongSubmission>();
     for (const s of submissions) map.set(s.song_id, s);
@@ -112,7 +130,7 @@ export default function EventSubmissionsPage() {
         )
         .catch(() => [] as ApiEventSongSubmission[]);
       setSubmissions(rows);
-      toast.success("Song added to event.");
+      toast.success(`Song added to ${OPEN_EVENT_LABEL}.`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to add song.");
     } finally {
@@ -125,7 +143,7 @@ export default function EventSubmissionsPage() {
     try {
       await api.del(`/v1/event-song-submissions/${submission.id}`);
       setSubmissions((prev) => prev.filter((s) => s.id !== submission.id));
-      toast.success("Song removed from event.");
+      toast.success(`Song removed from ${OPEN_EVENT_LABEL}.`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to remove song.");
     } finally {
@@ -148,29 +166,14 @@ export default function EventSubmissionsPage() {
         <Button variant="ghost" size="sm" className="px-0 mb-2" asChild>
           <Link to="/my-content">← Back to My Content</Link>
         </Button>
-        <h1 className="page-title text-2xl">Event submissions</h1>
+        <h1 className="page-title text-2xl">{OPEN_EVENT_LABEL} submissions</h1>
       </div>
-
-      <Card className="border-primary/40 bg-primary/5">
-        <CardHeader>
-          <CardTitle className="text-base">Submitting for {OPEN_EVENT_LABEL}?</CardTitle>
-          <CardDescription>
-            {OPEN_EVENT_LABEL} doesn&apos;t accept songs through this page — it has its own
-            submission page with additional checks.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button size="sm" asChild>
-            <Link to="/open-submissions">Go to {OPEN_EVENT_LABEL} submissions →</Link>
-          </Button>
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Submit songs to an event</CardTitle>
+          <CardTitle>Submit songs to {OPEN_EVENT_LABEL}</CardTitle>
           <CardDescription>
-            Choose an upcoming event, then add songs from your library.{" "}
+            {OPEN_EVENT_LABEL} has its own submission page. Add songs from your library below.{" "}
             <Link
               to="/how-it-works/submitting-music#event-submission-required"
               className="text-primary hover:underline"
@@ -180,19 +183,23 @@ export default function EventSubmissionsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {events.length === 0 ? (
+          {openEvents.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No upcoming events are available right now.
+              {OPEN_EVENT_LABEL} isn&apos;t accepting submissions right now.{" "}
+              <Link to="/event-submissions" className="underline">
+                Submit to another event
+              </Link>
+              .
             </p>
-          ) : (
+          ) : openEvents.length > 1 ? (
             <div className="space-y-2">
-              <Label htmlFor="event-submissions-event">Event</Label>
+              <Label htmlFor="open-submissions-event">Event</Label>
               <Select value={selectedEventId || undefined} onValueChange={setSelectedEventId}>
-                <SelectTrigger id="event-submissions-event">
+                <SelectTrigger id="open-submissions-event">
                   <SelectValue placeholder="Select an event" />
                 </SelectTrigger>
                 <SelectContent>
-                  {events.map((e) => (
+                  {openEvents.map((e) => (
                     <SelectItem key={e.id} value={e.id}>
                       {eventOptionLabel(e)}
                     </SelectItem>
@@ -200,9 +207,19 @@ export default function EventSubmissionsPage() {
                 </SelectContent>
               </Select>
             </div>
+          ) : (
+            selectedEvent && (
+              <p className="text-sm text-muted-foreground">
+                Submitting to{" "}
+                <span className="font-medium text-foreground">
+                  {eventOptionLabel(selectedEvent)}
+                </span>
+                .
+              </p>
+            )
           )}
 
-          {!selectedEventId && events.length > 0 && (
+          {!selectedEventId && openEvents.length > 1 && (
             <p className="text-sm text-muted-foreground">Select an event to manage submissions.</p>
           )}
 

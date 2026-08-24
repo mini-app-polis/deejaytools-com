@@ -24,6 +24,7 @@ import SessionDetailPage from "./SessionDetailPage";
 import SessionsPage from "./SessionsPage";
 import AddSongPage from "./AddSongPage";
 import EventSubmissionsPage from "./EventSubmissionsPage";
+import OpenSubmissionsPage from "./OpenSubmissionsPage";
 import SongsPage from "./SongsPage";
 import FeedbackPage from "./FeedbackPage";
 
@@ -94,6 +95,16 @@ export default function App() {
             element={
               <RequireAuth>
                 <EventSubmissionsPage />
+              </RequireAuth>
+            }
+          />
+          {/* The Open has its own submission page. /event-submissions filters The
+              Open out of its event list and links here instead. */}
+          <Route
+            path="open-submissions"
+            element={
+              <RequireAuth>
+                <OpenSubmissionsPage />
               </RequireAuth>
             }
           />
