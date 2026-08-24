@@ -5,32 +5,28 @@ import { z } from "zod";
 // ---------------------------------------------------------------------------
 
 /**
- * Master list of competition divisions. This is the single source of truth
- * used across the admin panel, the upload form, and any future consumers.
- * "My Division Is Not Listed" is a UI-only escape hatch — it is not included
- * here so consumers that need it can append it themselves.
+ * Divisions in display order, grouped by how competitors think about them.
+ *
+ * This is the source of truth for both order and grouping — DIVISIONS is
+ * derived from it, so a division added to a group automatically appears in
+ * every list and the two can never disagree.
+ *
+ * Pills render one row per group. Dropdowns and checkbox lists use the flat
+ * DIVISIONS order and ignore the grouping.
  */
-export const DIVISIONS = [
-  "Classic",
-  "Showcase",
-  "Rising Star Classic",
-  "Rising Star Showcase",
-  "Sophisticated",
-  "Masters",
-  "Teams",
-  "ProAm LeaderAm",
-  "ProAm FollowerAm",
-  "NovInt Routines",
-  "Juniors",
-  "Young Adult",
-  "Exhibition",
-  "Superstar",
-  "Cabaret",
-  "Carolina Shag Divisions",
-  "My Division Is Not Listed",
+export const DIVISION_GROUPS = [
+  ["Classic", "Showcase", "Rising Star Classic", "Rising Star Showcase"],
+  ["ProAm LeaderAm", "ProAm FollowerAm", "NovInt Routines"],
+  ["Sophisticated", "Masters", "Juniors", "Young Adult"],
+  ["Exhibition", "Superstar"],
+  ["Carolina Shag Divisions"],
+  ["Teams", "Cabaret"],
+  ["My Division Is Not Listed"],
 ] as const;
 
-export type Division = (typeof DIVISIONS)[number];
+export type Division = (typeof DIVISION_GROUPS)[number][number];
+
+export const DIVISIONS: readonly Division[] = DIVISION_GROUPS.flat();
 
 /**
  * Divisions where the entity is ordered amateur-first rather than

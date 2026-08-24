@@ -8,7 +8,7 @@ import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DIVISIONS, type ApiManagedPartnership } from "@deejaytools/schemas";
+import { DIVISION_GROUPS, type ApiManagedPartnership } from "@deejaytools/schemas";
 import type { AuthMe as MeResponse } from "@/hooks/useAuthMe";
 import {
   MAX_FILE_BYTES,
@@ -16,10 +16,11 @@ import {
   type UploadStage,
 } from "@/lib/chunkedSongUpload";
 
-const DIVISION_OPTIONS = DIVISIONS;
 // Divisions handled only by the (future) solo/teams portal — hidden from the standard upload picker.
 const PORTAL_ONLY_DIVISIONS = new Set<string>(["Teams", "Cabaret", "My Division Is Not Listed"]);
-const UPLOAD_DIVISION_OPTIONS = DIVISION_OPTIONS.filter((d) => !PORTAL_ONLY_DIVISIONS.has(d));
+const UPLOAD_DIVISION_GROUPS = DIVISION_GROUPS.map((group) =>
+  group.filter((d) => !PORTAL_ONLY_DIVISIONS.has(d)).map((d) => ({ value: d, label: d }))
+);
 
 type Partner = { id: string; first_name: string; last_name: string; partner_role: "leader" | "follower" };
 
@@ -255,7 +256,7 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
         <ChoiceGroup
           key={formKey}
           ariaLabel="Division"
-          options={UPLOAD_DIVISION_OPTIONS.map((d) => ({ value: d, label: d }))}
+          groups={UPLOAD_DIVISION_GROUPS}
           value={division}
           onChange={setDivision}
         />
