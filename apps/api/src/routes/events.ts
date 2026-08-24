@@ -1,5 +1,6 @@
-import { CommonErrors, success, successList } from "common-typescript-utils";
+import { CommonErrors, createLogger, success, successList } from "common-typescript-utils";
 import { zValidator } from "../lib/validate.js";
+import * as Sentry from "@sentry/node";
 import { Hono } from "hono";
 import { z } from "zod";
 import { desc, eq, inArray } from "drizzle-orm";
@@ -7,6 +8,7 @@ import { db } from "../db/index.js";
 import {
   checkins,
   eventDivisionRunLimits,
+  eventSongSubmissions,
   events,
   queueEntries,
   queueEvents,
@@ -15,6 +17,9 @@ import {
   sessions,
 } from "../db/schema.js";
 import { requireAdmin, requireAuth } from "../middleware/auth.js";
+import { enqueueDriveJob } from "../services/driveJobs.js";
+
+const logger = createLogger("deejaytools-api");
 
 // YYYY-MM-DD
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD");
@@ -145,6 +150,7 @@ eventRoutes.delete("/:id", requireAdmin, async (c) => {
   const [existing] = await db.select().from(events).where(eq(events.id, id)).limit(1);
   if (!existing) return c.json(CommonErrors.notFound("Event"), 404);
 
+  let orphanedCopyIds: string[] = [];
   await db.transaction(async (tx) => {
     const eventSessions = await tx
       .select({ id: sessions.id })
@@ -161,9 +167,42 @@ eventRoutes.delete("/:id", requireAdmin, async (c) => {
       await tx.delete(sessions).where(inArray(sessions.id, sessionIds));
     }
 
+    // Song submissions cascade with the event. event_song_submissions.event_id
+    // is NOT NULL with no ON DELETE rule, so without this the final delete
+    // below fails on the foreign key for any event that has entries.
+    // Capture the Drive copies first — after the delete the file ids are gone.
+    const submissionCopies = await tx
+      .select({ driveCopyFileId: eventSongSubmissions.driveCopyFileId })
+      .from(eventSongSubmissions)
+      .where(eq(eventSongSubmissions.eventId, id));
+    orphanedCopyIds = submissionCopies
+      .map((r) => r.driveCopyFileId)
+      .filter((v): v is string => v !== null);
+
+    await tx.delete(eventSongSubmissions).where(eq(eventSongSubmissions.eventId, id));
     await tx.delete(eventDivisionRunLimits).where(eq(eventDivisionRunLimits.eventId, id));
     await tx.delete(events).where(eq(events.id, id));
   });
+
+  for (const fileId of orphanedCopyIds) {
+    try {
+      await enqueueDriveJob(db, { kind: "trash", fileId });
+    } catch (err) {
+      logger.error({
+        event: "drive_trash_enqueue_failed",
+        category: "api",
+        context: { eventId: id, driveFileId: fileId, source: "event_delete" },
+        error: err,
+      });
+      Sentry.withScope((scope) => {
+        scope.setLevel("error");
+        scope.setTag("subsystem", "drive_jobs");
+        scope.setTag("drive_job_kind", "trash");
+        scope.setContext("drive_job", { file_id: fileId, stage: "enqueue", source: "event_delete" });
+        Sentry.captureException(err instanceof Error ? err : new Error(String(err)));
+      });
+    }
+  }
 
   return c.json(success({ deleted: true }));
 });
