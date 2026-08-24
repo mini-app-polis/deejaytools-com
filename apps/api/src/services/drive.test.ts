@@ -427,6 +427,30 @@ describe("copySongToEventFolder folder cache", () => {
     await copySongToEventFolder("source_2", DEFAULT_COPY_OPTIONS);
     expect(mockFilesList).toHaveBeenCalledTimes(8);
   });
+
+  it("nests the copy under a subfolder inside the division folder", async () => {
+    const ids = mockEventCopyFolders();
+    mockFilesList.mockResolvedValueOnce({ data: { files: [{ id: "finals_folder" }] } });
+    mockFilesCopy.mockResolvedValue({ data: { id: "copy_finals" } });
+
+    const result = await copySongToEventFolder("source_1", {
+      ...DEFAULT_COPY_OPTIONS,
+      subfolder: "Finals",
+    });
+
+    expect(mockFilesList).toHaveBeenCalledTimes(5);
+    expect(mockFilesList).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        q: expect.stringContaining(`'${ids.division}' in parents`),
+      })
+    );
+    expect(mockFilesCopy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestBody: expect.objectContaining({ parents: ["finals_folder"] }),
+      })
+    );
+    expect(result.folderId).toBe("finals_folder");
+  });
 });
 
 describe("renameDriveFile", () => {

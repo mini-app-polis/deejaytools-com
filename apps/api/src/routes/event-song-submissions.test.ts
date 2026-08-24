@@ -71,19 +71,23 @@ function enqueueCreatePath(
       partnerId: string | null;
       managedPartnershipId: string | null;
       division: string | null;
+      submissionDivision?: string | null;
+      submissionRound?: string | null;
     } & { submissionId?: string }
-  > = []
+  > = [],
+  event: { id: string; name: string } = { id: "evt_1", name: "Spring Classic" }
 ) {
   enqueueSelectResult([song]);
-  enqueueSelectResult([{ id: "evt_1" }]);
+  enqueueSelectResult([event]);
   enqueueSelectResult(
-    existingRows.map((row, index) => ({
-      submissionId: row.submissionId ?? `sub_existing_${index}`,
+    existingRows.map((row) => ({
       songId: row.id,
       userId: row.userId,
       partnerId: row.partnerId,
       managedPartnershipId: row.managedPartnershipId,
-      division: row.division,
+      songDivision: row.division,
+      submissionDivision: row.submissionDivision ?? null,
+      submissionRound: row.submissionRound ?? null,
     }))
   );
 }
@@ -96,6 +100,8 @@ const joinedRow = {
   eventName: "Spring Classic",
   eventStartDate: "2026-03-01",
   eventEndDate: "2026-03-03",
+  submissionDivision: null,
+  submissionRound: null,
   songDivision: "Classic",
   songDisplayName: "Sky High",
   songProcessedFilename: "alice_bob_classic_2026_v03.mp3",
@@ -443,6 +449,199 @@ describe("POST /v1/event-song-submissions", () => {
     });
     expect(res.status).toBe(401);
     assertErrorEnvelope(await readJson<ErrorEnvelope>(res));
+  });
+
+  it("defaults: no division or round stores null and returns the song division with prelims_and_finals", async () => {
+    const valuesMock = vi.fn(() => ({
+      then(
+        onfulfilled?: ((v: unknown) => unknown) | null,
+        onrejected?: ((e: unknown) => unknown) | null
+      ) {
+        return Promise.resolve(undefined).then(onfulfilled, onrejected);
+      },
+    }));
+    (mockDb.insert as ReturnType<typeof vi.fn>).mockImplementationOnce(() => ({
+      values: valuesMock,
+    }));
+    enqueueCreatePath(classicPartnerSong);
+    enqueueSelectResult([{ ...joinedRow, id: "sub_new" }]);
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify(validBody),
+    });
+    expect(res.status).toBe(201);
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ division: null, round: null })
+    );
+    const body = await readJson<SuccessEnvelope<Record<string, unknown>>>(res);
+    expect(body.data).toMatchObject({ division: "Classic", round: "prelims_and_finals" });
+  });
+
+  it("stores a division override without changing the song row", async () => {
+    const valuesMock = vi.fn(() => ({
+      then(
+        onfulfilled?: ((v: unknown) => unknown) | null,
+        onrejected?: ((e: unknown) => unknown) | null
+      ) {
+        return Promise.resolve(undefined).then(onfulfilled, onrejected);
+      },
+    }));
+    (mockDb.insert as ReturnType<typeof vi.fn>).mockImplementationOnce(() => ({
+      values: valuesMock,
+    }));
+    enqueueCreatePath(classicPartnerSong);
+    enqueueSelectResult([
+      {
+        ...joinedRow,
+        id: "sub_new",
+        submissionDivision: "Showcase",
+        songDivision: "Classic",
+      },
+    ]);
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ ...validBody, division: "Showcase" }),
+    });
+    expect(res.status).toBe(201);
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ division: "Showcase", round: null })
+    );
+    const body = await readJson<SuccessEnvelope<Record<string, unknown>>>(res);
+    expect(body.data).toMatchObject({ division: "Showcase", round: "prelims_and_finals" });
+  });
+
+  it("allows prelims_only and finals_only for the same entity on The Open Classic", async () => {
+    const openEvent = { id: "evt_open", name: "The Open 2026" };
+    enqueueCreatePath(
+      { ...classicPartnerSong, id: "song_2" },
+      [
+        {
+          ...classicPartnerSong,
+          id: "song_1",
+          submissionRound: "prelims_only",
+        },
+      ],
+      openEvent
+    );
+    enqueueSelectResult([
+      {
+        ...joinedRow,
+        id: "sub_new",
+        eventId: "evt_open",
+        songId: "song_2",
+        submissionRound: "finals_only",
+      },
+    ]);
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event_id: "evt_open",
+        song_id: "song_2",
+        round: "finals_only",
+      }),
+    });
+    expect(res.status).toBe(201);
+  });
+
+  it("returns 409 when prelims_only is submitted twice for the same slot", async () => {
+    const openEvent = { id: "evt_open", name: "The Open 2026" };
+    enqueueCreatePath(
+      { ...classicPartnerSong, id: "song_2" },
+      [
+        {
+          ...classicPartnerSong,
+          id: "song_1",
+          submissionRound: "prelims_only",
+        },
+      ],
+      openEvent
+    );
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event_id: "evt_open",
+        song_id: "song_2",
+        round: "prelims_only",
+      }),
+    });
+    expect(res.status).toBe(409);
+    expect((await readJson<ErrorEnvelope>(res)).error.code).toBe("ENTITY_SLOT_TAKEN");
+  });
+
+  it("returns 409 when prelims_and_finals already occupies finals", async () => {
+    const openEvent = { id: "evt_open", name: "The Open 2026" };
+    enqueueCreatePath(
+      { ...classicPartnerSong, id: "song_2" },
+      [{ ...classicPartnerSong, id: "song_1", submissionRound: "prelims_and_finals" }],
+      openEvent
+    );
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event_id: "evt_open",
+        song_id: "song_2",
+        round: "finals_only",
+      }),
+    });
+    expect(res.status).toBe(409);
+    expect((await readJson<ErrorEnvelope>(res)).error.code).toBe("ENTITY_SLOT_TAKEN");
+  });
+
+  it("returns 400 for round selection on a non-Open event", async () => {
+    enqueueCreatePath(classicPartnerSong);
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ ...validBody, round: "finals_only" }),
+    });
+    expect(res.status).toBe(400);
+    expect((await readJson<ErrorEnvelope>(res)).error.message).toBe(
+      "Round selection is only available for The Open"
+    );
+  });
+
+  it("returns 400 for round selection outside Classic on The Open", async () => {
+    enqueueCreatePath(
+      { ...classicPartnerSong, division: "Showcase" },
+      [],
+      { id: "evt_open", name: "The Open 2026" }
+    );
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event_id: "evt_open",
+        song_id: "song_1",
+        division: "Showcase",
+        round: "finals_only",
+      }),
+    });
+    expect(res.status).toBe(400);
+    expect((await readJson<ErrorEnvelope>(res)).error.message).toBe(
+      "Round selection is only available for the Classic division"
+    );
+  });
+
+  it("returns the already-submitted conflict when re-submitting the identical song", async () => {
+    enqueueCreatePath(classicPartnerSong, [classicPartnerSong]);
+    const insertMock = mockDb.insert as ReturnType<typeof vi.fn>;
+    insertMock.mockImplementationOnce(() => ({
+      values: vi.fn(() => Promise.reject({ code: "23505" })),
+    }));
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify(validBody),
+    });
+    expect(res.status).toBe(409);
+    const body = await readJson<ErrorEnvelope>(res);
+    expect(body.error.code).toBe("conflict");
+    expect(body.error.message).toBe("That song is already submitted to this event.");
   });
 });
 

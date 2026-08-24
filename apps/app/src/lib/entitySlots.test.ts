@@ -33,6 +33,7 @@ function submission(songId: string): ApiEventSongSubmission {
     event_status: "upcoming",
     song_label: songId,
     division: "Classic",
+    round: "prelims_and_finals",
     created_at: 1,
   };
 }

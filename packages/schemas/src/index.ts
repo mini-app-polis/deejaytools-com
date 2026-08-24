@@ -81,6 +81,38 @@ export function entitySlotKey(entityKey: string, division: string | null | undef
   return `${entityKey}::${division?.trim() ?? ""}`;
 }
 
+export const SUBMISSION_ROUNDS = ["prelims_and_finals", "prelims_only", "finals_only"] as const;
+export type SubmissionRound = (typeof SUBMISSION_ROUNDS)[number];
+
+/** The only division where a prelims/finals split is offered. */
+export const ROUND_SPLIT_DIVISION = "Classic";
+
+/**
+ * Rounds a submission occupies. A song entered for both rounds fills both
+ * slots, so nothing else can be added for that entity and division.
+ */
+export function roundsOccupied(round: SubmissionRound): readonly ("prelims" | "finals")[] {
+  switch (round) {
+    case "prelims_only":
+      return ["prelims"];
+    case "finals_only":
+      return ["finals"];
+    case "prelims_and_finals":
+      return ["prelims", "finals"];
+  }
+}
+
+/**
+ * Can two submissions for the same entity and division coexist?
+ *
+ * Only when their occupied rounds are disjoint — in practice a
+ * prelims_only paired with a finals_only. Every other combination overlaps.
+ */
+export function roundsConflict(a: SubmissionRound, b: SubmissionRound): boolean {
+  const bOccupied = new Set(roundsOccupied(b));
+  return roundsOccupied(a).some((r) => bOccupied.has(r));
+}
+
 export const SessionStatusSchema = z.enum([
   "scheduled",
   "checkin_open",
@@ -450,7 +482,9 @@ export const ApiEventSongSubmissionSchema = z.object({
   event_status: z.string(),
   song_id: z.string(),
   song_label: z.string(),
+  /** Effective division for this submission (stored override or the song's). */
   division: z.string().nullable(),
+  round: z.enum(SUBMISSION_ROUNDS),
   created_at: z.number(),
 });
 export type ApiEventSongSubmission = z.infer<typeof ApiEventSongSubmissionSchema>;
@@ -458,6 +492,10 @@ export type ApiEventSongSubmission = z.infer<typeof ApiEventSongSubmissionSchema
 export const createEventSongSubmissionBodySchema = z.object({
   event_id: z.string().min(1),
   song_id: z.string().min(1),
+  /** Overrides the song's own division for this event only. Defaults to the song's. */
+  division: z.string().min(1).optional(),
+  /** Classic on The Open only; rejected elsewhere. Defaults to prelims_and_finals. */
+  round: z.enum(SUBMISSION_ROUNDS).optional(),
 });
 
 /**

@@ -184,6 +184,10 @@ export const eventSongSubmissions = pgTable(
     submittedByUserId: text("submitted_by_user_id")
       .notNull()
       .references(() => users.id),
+    /** Division for this submission. Null = fall back to the song's division. */
+    division: text("division"),
+    /** 'prelims_and_finals' | 'prelims_only' | 'finals_only'. Null = prelims_and_finals. */
+    round: text("round"),
     /** Drive id of the per-event copy. Null until the queued copy job runs. */
     driveCopyFileId: text("drive_copy_file_id"),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),

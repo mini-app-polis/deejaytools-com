@@ -1,5 +1,12 @@
 import { CommonErrors, createLogger, error, success, successList } from "common-typescript-utils";
-import { createEventSongSubmissionBodySchema, entitySlotKey, songEntityKey } from "@deejaytools/schemas";
+import {
+  createEventSongSubmissionBodySchema,
+  isOpenEvent,
+  ROUND_SPLIT_DIVISION,
+  roundsConflict,
+  songEntityKey,
+  type SubmissionRound,
+} from "@deejaytools/schemas";
 import * as Sentry from "@sentry/node";
 import { Hono } from "hono";
 import { and, desc, eq } from "drizzle-orm";
@@ -37,6 +44,8 @@ type JoinedSubmissionRow = {
   eventName: string;
   eventStartDate: string;
   eventEndDate: string;
+  submissionDivision: string | null;
+  submissionRound: string | null;
   songDivision: string | null;
   songDisplayName: string | null;
   songProcessedFilename: string | null;
@@ -83,6 +92,8 @@ function partnershipLabel(row: {
 
 export function mapSubmissionRow(row: JoinedSubmissionRow) {
   const partnership = partnershipLabel(row);
+  const effectiveDivision = row.submissionDivision ?? row.songDivision;
+  const round = (row.submissionRound ?? "prelims_and_finals") as SubmissionRound;
 
   return {
     id: row.id,
@@ -93,14 +104,15 @@ export function mapSubmissionRow(row: JoinedSubmissionRow) {
     song_id: row.songId,
     song_label: buildStructuredSongLabel({
       partnership,
-      division: row.songDivision,
+      division: effectiveDivision,
       seasonYear: row.songSeasonYear,
       routineName: row.songRoutineName,
       processedFilename: row.songProcessedFilename,
       displayName: row.songDisplayName,
       songId: row.songId,
     }),
-    division: row.songDivision,
+    division: effectiveDivision,
+    round,
     created_at: row.createdAt,
   };
 }
@@ -128,6 +140,8 @@ export async function fetchUserSubmissionRows(
       eventName: events.name,
       eventStartDate: events.startDate,
       eventEndDate: events.endDate,
+      submissionDivision: eventSongSubmissions.division,
+      submissionRound: eventSongSubmissions.round,
       songDivision: songs.division,
       songDisplayName: songs.displayName,
       songProcessedFilename: songs.processedFilename,
@@ -198,7 +212,7 @@ eventSongSubmissionRoutes.post(
     }
 
     const [event] = await db
-      .select({ id: events.id })
+      .select({ id: events.id, name: events.name })
       .from(events)
       .where(eq(events.id, body.event_id))
       .limit(1);
@@ -207,36 +221,60 @@ eventSongSubmissionRoutes.post(
       return c.json(CommonErrors.notFound("Event"), 404);
     }
 
-    // One song per entity per division, per event. Changing a song means
-    // removing the existing submission first — there is no implicit replace,
-    // so that withdrawing an entry is always a deliberate act.
-    //
-    // Compared in JS rather than SQL: songEntityKey owns the precedence rule
-    // and a COALESCE here would be a second copy of it, free to drift.
-    const slot = entitySlotKey(songEntityKey(song), song.division);
+    const divisionOverride = body.division?.trim();
+    const division = divisionOverride || song.division;
+    const round = body.round ?? "prelims_and_finals";
+
+    // Rounds are an Open-only affordance for Classic, which is the entire
+    // reason The Open has its own portal. Reject rather than silently coerce,
+    // so a client sending a round it isn't entitled to finds out.
+    if (round !== "prelims_and_finals") {
+      if (!isOpenEvent(event.name)) {
+        return c.json(
+          CommonErrors.badRequest("Round selection is only available for The Open"),
+          400
+        );
+      }
+      if (division !== ROUND_SPLIT_DIVISION) {
+        return c.json(
+          CommonErrors.badRequest(
+            `Round selection is only available for the ${ROUND_SPLIT_DIVISION} division`
+          ),
+          400
+        );
+      }
+    }
+
+    const slotEntity = songEntityKey(song);
 
     const existingForEvent = await db
       .select({
-        submissionId: eventSongSubmissions.id,
         songId: songs.id,
         userId: songs.userId,
         partnerId: songs.partnerId,
         managedPartnershipId: songs.managedPartnershipId,
-        division: songs.division,
+        songDivision: songs.division,
+        submissionDivision: eventSongSubmissions.division,
+        submissionRound: eventSongSubmissions.round,
       })
       .from(eventSongSubmissions)
       .innerJoin(songs, eq(songs.id, eventSongSubmissions.songId))
       .where(eq(eventSongSubmissions.eventId, body.event_id));
 
-    const conflict = existingForEvent.find(
-      (row) => row.songId !== song.id && entitySlotKey(songEntityKey(row), row.division) === slot
-    );
+    const conflict = existingForEvent.find((row) => {
+      if (row.songId === song.id) return false;
+      if (songEntityKey(row) !== slotEntity) return false;
+      const rowDivision = row.submissionDivision ?? row.songDivision;
+      if ((rowDivision ?? "") !== (division ?? "")) return false;
+      const rowRound = (row.submissionRound ?? "prelims_and_finals") as SubmissionRound;
+      return roundsConflict(round, rowRound);
+    });
 
     if (conflict) {
       return c.json(
         error(
           "ENTITY_SLOT_TAKEN",
-          `This entity already has a song submitted for ${song.division ?? "this division"}. Remove it before adding another.`
+          `This entity already has a song submitted for ${division ?? "this division"}. Remove it before adding another.`
         ),
         409
       );
@@ -251,6 +289,8 @@ eventSongSubmissionRoutes.post(
         eventId: body.event_id,
         songId: body.song_id,
         submittedByUserId: userId,
+        division: divisionOverride || null,
+        round: body.round ?? null,
         createdAt: now,
       });
     } catch (err) {

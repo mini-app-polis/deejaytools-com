@@ -72,6 +72,8 @@ function makeCopySubmissionRow(
     originalFilename: string | null;
     processedFilename: string | null;
     division: string | null;
+    submissionDivision: string | null;
+    submissionRound: string | null;
     eventName: string;
     eventSeasonYear: string | null;
     eventStartDate: string;
@@ -85,6 +87,8 @@ function makeCopySubmissionRow(
     originalFilename: "my track.mp3",
     processedFilename: "2026_Classic.mp3",
     division: "Classic",
+    submissionDivision: null,
+    submissionRound: null,
     eventName: "Spring Classic",
     eventSeasonYear: "2027",
     eventStartDate: "2026-11-25",
@@ -254,9 +258,56 @@ describe("processDriveJobs", () => {
       seasonYear: "2027",
       eventName: "Spring Classic",
       division: "Classic",
+      subfolder: undefined,
     });
     expect(submissionUpdateWhere).toHaveBeenCalled();
     expect(jobUpdates[0]?.status).toBe("done");
+  });
+
+  it("copies finals_only submissions into the Finals subfolder", async () => {
+    const { db } = makeProcessDb({
+      claimedJobs: [makeRawJob()],
+      submissionRows: [makeCopySubmissionRow({ submissionRound: "finals_only" })],
+    });
+
+    await expect(processDriveJobs(db)).resolves.toBe(1);
+    expect(drive.copySongToEventFolder).toHaveBeenCalledWith(
+      "source_file_1",
+      expect.objectContaining({ subfolder: "Finals" })
+    );
+  });
+
+  it("does not pass a subfolder for prelims_and_finals or prelims_only", async () => {
+    for (const submissionRound of ["prelims_and_finals", "prelims_only"] as const) {
+      vi.mocked(drive.copySongToEventFolder).mockClear();
+      const { db } = makeProcessDb({
+        claimedJobs: [makeRawJob({ id: `job_${submissionRound}` })],
+        submissionRows: [makeCopySubmissionRow({ submissionRound })],
+      });
+      await expect(processDriveJobs(db)).resolves.toBe(1);
+      expect(drive.copySongToEventFolder).toHaveBeenCalledWith(
+        "source_file_1",
+        expect.objectContaining({ subfolder: undefined })
+      );
+    }
+  });
+
+  it("uses the submission division for the folder when it differs from the song", async () => {
+    const { db } = makeProcessDb({
+      claimedJobs: [makeRawJob()],
+      submissionRows: [
+        makeCopySubmissionRow({
+          division: "Classic",
+          submissionDivision: "Showcase",
+        }),
+      ],
+    });
+
+    await expect(processDriveJobs(db)).resolves.toBe(1);
+    expect(drive.copySongToEventFolder).toHaveBeenCalledWith(
+      "source_file_1",
+      expect.objectContaining({ division: "Showcase" })
+    );
   });
 
   it("uses the event season year in the folder path, not the song's", async () => {

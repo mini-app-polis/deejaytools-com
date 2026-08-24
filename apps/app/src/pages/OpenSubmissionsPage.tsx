@@ -1,5 +1,11 @@
 import type { ApiEvent, ApiEventSongSubmission, ApiSong } from "@deejaytools/schemas";
-import { OPEN_EVENT_LABEL, isOpenEvent } from "@deejaytools/schemas";
+import {
+  DIVISIONS,
+  OPEN_EVENT_LABEL,
+  ROUND_SPLIT_DIVISION,
+  isOpenEvent,
+  type SubmissionRound,
+} from "@deejaytools/schemas";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -12,6 +18,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -22,7 +29,12 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { partitionSubmittableSongs } from "@/lib/submittableSongs";
-import { buildFilledSlots, slotKeyForSong } from "@/lib/entitySlots";
+
+const ROUND_OPTIONS: { value: SubmissionRound; label: string }[] = [
+  { value: "prelims_and_finals", label: "Prelims & Finals" },
+  { value: "prelims_only", label: "Prelims Only" },
+  { value: "finals_only", label: "Finals Only" },
+];
 
 function songLabel(s: ApiSong): string {
   return (
@@ -33,6 +45,17 @@ function songLabel(s: ApiSong): string {
   );
 }
 
+function roundDisplayLabel(round: SubmissionRound): string {
+  switch (round) {
+    case "prelims_only":
+      return "Prelims only";
+    case "finals_only":
+      return "Finals only";
+    default:
+      return "Prelims & finals";
+  }
+}
+
 function eventOptionLabel(e: ApiEvent): string {
   return `${e.name} · ${e.start_date}`;
 }
@@ -40,16 +63,9 @@ function eventOptionLabel(e: ApiEvent): string {
 /**
  * Dedicated submission page for The Open.
  *
- * Mirrors EventSubmissionsPage, but the event set is filtered down to events
- * that `isOpenEvent()` recognises — the generic page filters those same events
- * out, so the two pages partition the event list between them. When there is
- * exactly one Open event (the normal case) it is selected automatically and no
- * picker is shown.
- *
- * Legacy catalog rows are hidden from the song list, same as on the generic
- * page — see partitionSubmittableSongs().
- *
- * This is where The Open's remaining submission protections will live.
+ * Mirrors EventSubmissionsPage for listing and removing submissions, but uses
+ * a form for adding: pick a song, optionally override its division, and for
+ * Classic choose which round(s) the entry occupies.
  */
 export default function OpenSubmissionsPage() {
   const api = useApiClient();
@@ -63,6 +79,12 @@ export default function OpenSubmissionsPage() {
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
   const [busySongId, setBusySongId] = useState<string | null>(null);
 
+  const [selectedSongId, setSelectedSongId] = useState("");
+  const [division, setDivision] = useState("");
+  const [divisionTouched, setDivisionTouched] = useState(false);
+  const [round, setRound] = useState<SubmissionRound>("prelims_and_finals");
+  const [submitting, setSubmitting] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -75,7 +97,6 @@ export default function OpenSubmissionsPage() {
         const open = evs.filter((e) => e.status !== "completed" && isOpenEvent(e.name));
         setOpenEvents(open);
         setSongs(songRows);
-        // The normal case is a single Open event — skip the picker entirely.
         if (open.length === 1) setSelectedEventId(open[0].id);
       })
       .finally(() => {
@@ -120,23 +141,48 @@ export default function OpenSubmissionsPage() {
     return map;
   }, [submissions]);
 
-  const filledSlots = useMemo(
-    () => buildFilledSlots(submissions, songs),
-    [submissions, songs]
-  );
-
   const { submittable: eligibleSongs, hiddenLegacyCount } = useMemo(
     () => partitionSubmittableSongs(songs, (id) => submissionBySongId.has(id)),
     [songs, submissionBySongId]
   );
 
-  const handleAdd = async (songId: string) => {
-    if (!selectedEventId) return;
-    setBusySongId(songId);
+  const songsForSelect = useMemo(
+    () => eligibleSongs.filter((s) => !submissionBySongId.has(s.id)),
+    [eligibleSongs, submissionBySongId]
+  );
+
+  const showRoundField = division === ROUND_SPLIT_DIVISION;
+
+  const handleSongChange = (songId: string) => {
+    setSelectedSongId(songId);
+    const song = songs.find((s) => s.id === songId);
+    if (song && !divisionTouched) {
+      setDivision(song.division?.trim() ?? "");
+    }
+  };
+
+  const handleDivisionChange = (value: string) => {
+    setDivisionTouched(true);
+    setDivision(value);
+    setRound("prelims_and_finals");
+  };
+
+  const resetForm = () => {
+    setSelectedSongId("");
+    setDivision("");
+    setDivisionTouched(false);
+    setRound("prelims_and_finals");
+  };
+
+  const handleSubmit = async () => {
+    if (!selectedEventId || !selectedSongId || !division.trim()) return;
+    setSubmitting(true);
     try {
       await api.post<ApiEventSongSubmission>("/v1/event-song-submissions", {
         event_id: selectedEventId,
-        song_id: songId,
+        song_id: selectedSongId,
+        division,
+        ...(showRoundField ? { round } : {}),
       });
       const rows = await api
         .get<ApiEventSongSubmission[]>(
@@ -144,11 +190,12 @@ export default function OpenSubmissionsPage() {
         )
         .catch(() => [] as ApiEventSongSubmission[]);
       setSubmissions(rows);
+      resetForm();
       toast.success(`Song added to ${OPEN_EVENT_LABEL}.`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to add song.");
     } finally {
-      setBusySongId(null);
+      setSubmitting(false);
     }
   };
 
@@ -174,6 +221,9 @@ export default function OpenSubmissionsPage() {
     );
   }
 
+  const canSubmit =
+    !!selectedEventId && !!selectedSongId && !!division.trim() && !submitting && !submissionsLoading;
+
   return (
     <div className="space-y-6">
       <div>
@@ -187,7 +237,8 @@ export default function OpenSubmissionsPage() {
         <CardHeader>
           <CardTitle>Submit songs to {OPEN_EVENT_LABEL}</CardTitle>
           <CardDescription>
-            {OPEN_EVENT_LABEL} has its own submission page. Add songs from your library below.{" "}
+            {OPEN_EVENT_LABEL} has its own submission page. Choose a song, division, and round
+            below.{" "}
             <Link
               to="/how-it-works/submitting-music#event-submission-required"
               className="text-primary hover:underline"
@@ -258,56 +309,100 @@ export default function OpenSubmissionsPage() {
             </p>
           )}
 
-          {selectedEventId && eligibleSongs.length > 0 && (
-            <div className={`space-y-3${submissionsLoading ? " opacity-60" : ""}`}>
-              {eligibleSongs.map((song) => {
-                const existing = submissionBySongId.get(song.id);
-                const blockedBySongId = existing ? null : filledSlots.get(slotKeyForSong(song));
-                const blocked = !!blockedBySongId && blockedBySongId !== song.id;
-                const blockingSong = blockedBySongId
-                  ? songs.find((s) => s.id === blockedBySongId)
-                  : undefined;
-                const busy = busySongId === song.id;
+          {selectedEventId && songsForSelect.length > 0 && (
+            <div className={`space-y-4 rounded-lg border px-4 py-4${submissionsLoading ? " opacity-60" : ""}`}>
+              <div className="space-y-2">
+                <Label htmlFor="open-submissions-song">Song</Label>
+                <Select value={selectedSongId || undefined} onValueChange={handleSongChange}>
+                  <SelectTrigger id="open-submissions-song">
+                    <SelectValue placeholder="Select a song" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {songsForSelect.map((song) => (
+                      <SelectItem key={song.id} value={song.id}>
+                        {songLabel(song)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="open-submissions-division">Division</Label>
+                <Select
+                  value={division || undefined}
+                  onValueChange={handleDivisionChange}
+                  disabled={!selectedSongId}
+                >
+                  <SelectTrigger id="open-submissions-division">
+                    <SelectValue placeholder="Select a division" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DIVISIONS.map((d) => (
+                      <SelectItem key={d} value={d}>
+                        {d}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {showRoundField && (
+                <div className="space-y-2">
+                  <Label>Round</Label>
+                  <ChoiceGroup
+                    options={ROUND_OPTIONS}
+                    value={round}
+                    onChange={setRound}
+                    ariaLabel="Submission round"
+                    disabled={submitting}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Choose Prelims Only or Finals Only if you want a different song for each round.
+                    Most entrants submit one song for both.
+                  </p>
+                </div>
+              )}
+
+              <Button type="button" disabled={!canSubmit} onClick={() => void handleSubmit()}>
+                {submitting ? "Submitting…" : "Submit"}
+              </Button>
+            </div>
+          )}
+
+          {selectedEventId && submissions.length > 0 && (
+            <div className={`space-y-3 pt-2${submissionsLoading ? " opacity-60" : ""}`}>
+              <p className="text-sm font-medium">Your submissions</p>
+              {submissions.map((submission) => {
+                const song = songs.find((s) => s.id === submission.song_id);
+                const busy = busySongId === submission.song_id;
                 return (
                   <div
-                    key={song.id}
+                    key={submission.id}
                     className="flex items-start justify-between gap-3 rounded-lg border px-4 py-3"
                   >
                     <div className="min-w-0 space-y-0.5">
-                      <p className="font-medium text-sm break-all">{songLabel(song)}</p>
-                      {song.division && (
-                        <p className="text-xs text-muted-foreground">Division {song.division}</p>
-                      )}
-                      {blocked && (
+                      <p className="font-medium text-sm break-all">
+                        {submission.song_label || (song ? songLabel(song) : submission.song_id)}
+                      </p>
+                      {submission.division && (
                         <p className="text-xs text-muted-foreground">
-                          Already submitted for this division:{" "}
-                          {blockingSong ? songLabel(blockingSong) : "another song"}. Remove it first
-                          to submit this one.
+                          Division {submission.division}
+                          {submission.division === ROUND_SPLIT_DIVISION &&
+                            ` · ${roundDisplayLabel(submission.round)}`}
                         </p>
                       )}
                     </div>
-                    {existing ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="shrink-0 border-destructive/50 text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                        disabled={busy || submissionsLoading}
-                        onClick={() => void handleRemove(existing)}
-                      >
-                        {busy ? "Removing…" : "Remove"}
-                      </Button>
-                    ) : (
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="shrink-0"
-                        disabled={busy || submissionsLoading || blocked}
-                        onClick={() => void handleAdd(song.id)}
-                      >
-                        {busy ? "Adding…" : "Add"}
-                      </Button>
-                    )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0 border-destructive/50 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                      disabled={busy || submissionsLoading}
+                      onClick={() => void handleRemove(submission)}
+                    >
+                      {busy ? "Removing…" : "Remove"}
+                    </Button>
                   </div>
                 );
               })}

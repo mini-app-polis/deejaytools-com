@@ -176,6 +176,8 @@ export async function copySongToEventFolder(
     seasonYear: string;
     eventName: string;
     division: string;
+    /** Optional folder nested under the division — "Finals" for finals-only entries. */
+    subfolder?: string;
   }
 ): Promise<DriveUploadResult> {
   const auth = getAuthClient();
@@ -199,13 +201,17 @@ export async function copySongToEventFolder(
     eventFolderId
   );
 
+  const destinationFolderId = options.subfolder
+    ? await findOrCreateFolder(drive, sanitizeFolderName(options.subfolder), divisionFolderId)
+    : divisionFolderId;
+
   let copyRes;
   try {
     copyRes = await drive.files.copy({
       fileId: sourceFileId,
       requestBody: {
         name: options.filename,
-        parents: [divisionFolderId],
+        parents: [destinationFolderId],
       },
       fields: "id",
       supportsAllDrives: true,
@@ -223,7 +229,7 @@ export async function copySongToEventFolder(
     throw new Error("Drive copy did not return a file id");
   }
 
-  return { fileId, folderId: divisionFolderId };
+  return { fileId, folderId: destinationFolderId };
 }
 
 /**

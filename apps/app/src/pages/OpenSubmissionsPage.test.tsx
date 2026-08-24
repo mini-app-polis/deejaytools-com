@@ -4,6 +4,10 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const toastMocks = vi.hoisted(() => ({
+  error: vi.fn(),
+  success: vi.fn(),
+}));
 const apiGet = vi.fn();
 const apiPost = vi.fn();
 const apiDel = vi.fn();
@@ -19,7 +23,7 @@ vi.mock("@/api/client", () => ({
 }));
 
 vi.mock("sonner", () => ({
-  toast: { error: vi.fn(), success: vi.fn() },
+  toast: toastMocks,
 }));
 
 import OpenSubmissionsPage from "./OpenSubmissionsPage";
@@ -56,15 +60,7 @@ const SONG = {
   updated_at: 1,
 };
 
-const SONG_SAME_ENTITY = {
-  ...SONG,
-  id: "song2",
-  display_name: "Second Routine",
-  processed_filename: "2026_Classic_SecondRoutine.mp3",
-  routine_name: "Second Routine",
-};
-
-const SONG_OTHER_DIVISION = {
+const SONG_SHOWCASE = {
   ...SONG,
   id: "song3",
   division: "Showcase",
@@ -103,6 +99,8 @@ describe("OpenSubmissionsPage", () => {
     apiGet.mockReset();
     apiPost.mockReset();
     apiDel.mockReset();
+    toastMocks.error.mockReset();
+    toastMocks.success.mockReset();
   });
 
   it("auto-selects the single Open event and skips the picker", async () => {
@@ -116,7 +114,7 @@ describe("OpenSubmissionsPage", () => {
     });
     expect(screen.queryByRole("combobox", { name: /event/i })).not.toBeInTheDocument();
     expect(screen.getByText(/The Open 2026/)).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: /^add$/i })).toBeInTheDocument();
+    expect(await screen.findByRole("combobox", { name: /song/i })).toBeInTheDocument();
   });
 
   it("never offers a non-Open event", async () => {
@@ -132,20 +130,106 @@ describe("OpenSubmissionsPage", () => {
     expect(screen.queryByRole("option", { name: /spring classic/i })).not.toBeInTheDocument();
   });
 
-  it("posts the submission against the Open event", async () => {
+  it("selecting a song defaults the division to the song's", async () => {
+    mockApi([OPEN_EVENT], [SONG]);
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("combobox", { name: /song/i }));
+    await user.click(await screen.findByRole("option", { name: /2026_Classic_MyRoutine/ }));
+
+    await user.click(await screen.findByRole("combobox", { name: /division/i }));
+    expect(await screen.findByRole("option", { name: /^Classic$/ })).toBeInTheDocument();
+  });
+
+  it("shows the round control only for Classic and defaults to Prelims & Finals", async () => {
+    mockApi([OPEN_EVENT], [SONG]);
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("combobox", { name: /song/i }));
+    await user.click(await screen.findByRole("option", { name: /2026_Classic_MyRoutine/ }));
+
+    expect(await screen.findByRole("radio", { name: /prelims & finals/i })).toHaveAttribute(
+      "aria-checked",
+      "true"
+    );
+    expect(screen.getByRole("radio", { name: /prelims only/i })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /finals only/i })).toBeInTheDocument();
+  });
+
+  it("hides the round control for non-Classic divisions", async () => {
+    mockApi([OPEN_EVENT], [SONG_SHOWCASE]);
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("combobox", { name: /song/i }));
+    await user.click(await screen.findByRole("option", { name: /2026_Showcase_MyRoutine/ }));
+
+    await user.click(await screen.findByRole("combobox", { name: /division/i }));
+    await user.click(await screen.findByRole("option", { name: /^Showcase$/ }));
+
+    expect(screen.queryByRole("radio", { name: /prelims & finals/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps an edited division when the song changes", async () => {
+    mockApi([OPEN_EVENT], [SONG, SONG_SHOWCASE]);
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("combobox", { name: /song/i }));
+    await user.click(await screen.findByRole("option", { name: /2026_Classic_MyRoutine/ }));
+
+    await user.click(await screen.findByRole("combobox", { name: /division/i }));
+    await user.click(await screen.findByRole("option", { name: /^Showcase$/ }));
+
+    await user.click(await screen.findByRole("combobox", { name: /song/i }));
+    await user.click(await screen.findByRole("option", { name: /2026_Showcase_MyRoutine/ }));
+
+    await user.click(await screen.findByRole("combobox", { name: /division/i }));
+    expect(await screen.findByRole("option", { name: /^Showcase$/ })).toBeInTheDocument();
+  });
+
+  it("posts division and round on submit", async () => {
     mockApi([OPEN_EVENT]);
     apiPost.mockResolvedValue({});
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole("button", { name: /^add$/i }));
+    await user.click(await screen.findByRole("combobox", { name: /song/i }));
+    await user.click(await screen.findByRole("option", { name: /2026_Classic_MyRoutine/ }));
+    await user.click(await screen.findByRole("radio", { name: /prelims only/i }));
+    await user.click(await screen.findByRole("button", { name: /^submit$/i }));
 
     await waitFor(() => {
       expect(apiPost).toHaveBeenCalledWith("/v1/event-song-submissions", {
         event_id: "open1",
         song_id: "song1",
+        division: "Classic",
+        round: "prelims_only",
       });
     });
+  });
+
+  it("surfaces a 409 as an error toast and keeps the form filled", async () => {
+    mockApi([OPEN_EVENT]);
+    apiPost.mockRejectedValue(new Error("This entity already has a song submitted for Classic."));
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("combobox", { name: /song/i }));
+    await user.click(await screen.findByRole("option", { name: /2026_Classic_MyRoutine/ }));
+    await user.click(await screen.findByRole("button", { name: /^submit$/i }));
+
+    await waitFor(() => {
+      expect(toastMocks.error).toHaveBeenCalledWith(
+        "This entity already has a song submitted for Classic."
+      );
+    });
+    expect(await screen.findByRole("combobox", { name: /song/i })).toHaveTextContent(
+      /2026_Classic_MyRoutine/
+    );
+    expect(apiPost).toHaveBeenCalledTimes(1);
   });
 
   it("explains when no Open event is accepting submissions", async () => {
@@ -155,76 +239,39 @@ describe("OpenSubmissionsPage", () => {
     expect(
       await screen.findByText(/isn't accepting submissions right now/i)
     ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^add$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: /song/i })).not.toBeInTheDocument();
   });
 
   it("hides legacy songs and says how many were hidden", async () => {
     mockApi([OPEN_EVENT], [SONG, LEGACY_SONG]);
     renderPage();
 
-    expect(await screen.findByText(/2026_Classic_MyRoutine/)).toBeInTheDocument();
-    expect(screen.queryByText(/2019_Classic_OldRoutine/)).not.toBeInTheDocument();
+    await userEvent.setup().click(await screen.findByRole("combobox", { name: /song/i }));
+    expect(await screen.findByRole("option", { name: /2026_Classic_MyRoutine/ })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /2019_Classic_OldRoutine/ })).not.toBeInTheDocument();
     expect(screen.getByText(/1 legacy song is hidden/i)).toBeInTheDocument();
   });
 
-  it("keeps a legacy song visible when it is already submitted, so it can be removed", async () => {
+  it("lists an existing submission with division and round", async () => {
     mockApi(
       [OPEN_EVENT],
-      [LEGACY_SONG],
-      [{ id: "sub1", event_id: "open1", song_id: "legacy1", created_at: 1 }]
+      [SONG],
+      [
+        {
+          id: "sub1",
+          event_id: "open1",
+          song_id: "song1",
+          song_label: "2026_Classic_MyRoutine.mp3",
+          division: "Classic",
+          round: "finals_only",
+          created_at: 1,
+        },
+      ]
     );
     renderPage();
 
-    expect(await screen.findByText(/2019_Classic_OldRoutine/)).toBeInTheDocument();
+    expect(await screen.findByText(/finals only/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^remove$/i })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^add$/i })).not.toBeInTheDocument();
-    expect(screen.queryByText(/legacy song is hidden/i)).not.toBeInTheDocument();
-  });
-
-  it("shows a legacy-only empty state instead of the generic no-songs message", async () => {
-    mockApi([OPEN_EVENT], [LEGACY_SONG]);
-    renderPage();
-
-    expect(await screen.findByText(/all legacy catalog rows/i)).toBeInTheDocument();
-    expect(screen.queryByText(/you have no songs yet/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^add$/i })).not.toBeInTheDocument();
-  });
-
-  it("disables Add for a second song in the same entity and division slot", async () => {
-    mockApi(
-      [OPEN_EVENT],
-      [SONG, SONG_SAME_ENTITY],
-      [{ id: "sub1", event_id: "open1", song_id: "song1", created_at: 1 }]
-    );
-    renderPage();
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /^remove$/i })).toBeInTheDocument();
-    });
-    expect(await screen.findByText(/2026_Classic_SecondRoutine\.mp3/)).toBeInTheDocument();
-    expect(screen.getByText(/already submitted for this division/i)).toBeInTheDocument();
-    const addButtons = screen.getAllByRole("button", { name: /^add$/i });
-    expect(addButtons).toHaveLength(1);
-    expect(addButtons[0]).toBeDisabled();
-    expect(screen.getByRole("button", { name: /^remove$/i })).toBeEnabled();
-  });
-
-  it("still allows Add for the same entity in another division", async () => {
-    mockApi(
-      [OPEN_EVENT],
-      [SONG, SONG_OTHER_DIVISION],
-      [{ id: "sub1", event_id: "open1", song_id: "song1", created_at: 1 }]
-    );
-    renderPage();
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /^remove$/i })).toBeInTheDocument();
-    });
-    expect(await screen.findByText(/2026_Showcase_MyRoutine\.mp3/)).toBeInTheDocument();
-    expect(screen.queryByText(/already submitted for this division/i)).not.toBeInTheDocument();
-    const enabledAdds = screen
-      .getAllByRole("button", { name: /^add$/i })
-      .filter((button) => !(button as HTMLButtonElement).disabled);
-    expect(enabledAdds).toHaveLength(1);
+    expect(screen.queryByRole("combobox", { name: /song/i })).not.toBeInTheDocument();
   });
 });

@@ -190,6 +190,8 @@ async function fetchSubmissionCopyContext(database: Db, submissionId: string) {
       originalFilename: schema.songs.originalFilename,
       processedFilename: schema.songs.processedFilename,
       division: schema.songs.division,
+      submissionDivision: schema.eventSongSubmissions.division,
+      submissionRound: schema.eventSongSubmissions.round,
       eventName: schema.events.name,
       eventSeasonYear: schema.events.seasonYear,
       eventStartDate: schema.events.startDate,
@@ -243,11 +245,20 @@ async function runCopyJob(database: Db, job: DriveJob): Promise<void> {
   const eventSeason =
     row.eventSeasonYear?.trim() || seasonYearFromDateString(row.eventStartDate);
 
+  // The submission's division wins — it may deliberately differ from the
+  // song's, and the event folder must reflect what was entered.
+  const division = (row.submissionDivision ?? row.division)?.trim() || "unknown";
+
+  // Prelims lives in the division folder; only a finals-specific song is
+  // nested, so a DJ running prelims sees exactly the prelims set.
+  const subfolder = row.submissionRound === "finals_only" ? "Finals" : undefined;
+
   const { fileId } = await copySongToEventFolder(row.driveFileId, {
     filename,
     seasonYear: eventSeason,
     eventName: row.eventName,
-    division: row.division?.trim() || "unknown",
+    division,
+    subfolder,
   });
 
   await database
