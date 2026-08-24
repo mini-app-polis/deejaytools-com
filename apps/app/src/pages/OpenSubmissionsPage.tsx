@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { partitionSubmittableSongs } from "@/lib/submittableSongs";
 
 function songLabel(s: ApiSong): string {
   return (
@@ -44,10 +45,8 @@ function eventOptionLabel(e: ApiEvent): string {
  * exactly one Open event (the normal case) it is selected automatically and no
  * picker is shown.
  *
- * The Open additionally refuses legacy catalog rows: those were imported
- * without an audio file, so there is nothing for a DJ to play. They are hidden
- * from the song list unless one is already submitted to the selected event, in
- * which case it stays visible so the entrant can remove it.
+ * Legacy catalog rows are hidden from the song list, same as on the generic
+ * page — see partitionSubmittableSongs().
  *
  * This is where The Open's remaining submission protections will live.
  */
@@ -120,17 +119,10 @@ export default function OpenSubmissionsPage() {
     return map;
   }, [submissions]);
 
-  /**
-   * Legacy rows have no audio file, so they cannot be submitted to The Open.
-   * One already submitted stays in the list — hiding it would strand the
-   * submission with no way to remove it.
-   */
-  const eligibleSongs = useMemo(
-    () => songs.filter((s) => !s.is_legacy || submissionBySongId.has(s.id)),
+  const { submittable: eligibleSongs, hiddenLegacyCount } = useMemo(
+    () => partitionSubmittableSongs(songs, (id) => submissionBySongId.has(id)),
     [songs, submissionBySongId]
   );
-
-  const hiddenLegacyCount = songs.length - eligibleSongs.length;
 
   const handleAdd = async (songId: string) => {
     if (!selectedEventId) return;
@@ -252,7 +244,7 @@ export default function OpenSubmissionsPage() {
           {selectedEventId && songs.length > 0 && eligibleSongs.length === 0 && (
             <p className="text-sm text-muted-foreground">
               Your songs are all legacy catalog rows. They were imported without an audio file, so
-              they can&apos;t be submitted to {OPEN_EVENT_LABEL}.{" "}
+              they can&apos;t be submitted to an event.{" "}
               <Link to="/songs/add" className="underline">
                 Upload the routine as a new song
               </Link>{" "}
@@ -307,8 +299,8 @@ export default function OpenSubmissionsPage() {
           {selectedEventId && hiddenLegacyCount > 0 && (
             <p className="text-xs text-muted-foreground">
               {hiddenLegacyCount} legacy {hiddenLegacyCount === 1 ? "song is" : "songs are"} hidden.
-              Legacy catalog rows have no uploaded audio file and can&apos;t be submitted to{" "}
-              {OPEN_EVENT_LABEL}.
+              Legacy catalog rows have no uploaded audio file and can&apos;t be submitted to an
+              event.
             </p>
           )}
         </CardContent>

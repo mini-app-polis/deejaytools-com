@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { partitionSubmittableSongs } from "@/lib/submittableSongs";
 
 function songLabel(s: ApiSong): string {
   return (
@@ -97,6 +98,11 @@ export default function EventSubmissionsPage() {
     for (const s of submissions) map.set(s.song_id, s);
     return map;
   }, [submissions]);
+
+  const { submittable: eligibleSongs, hiddenLegacyCount } = useMemo(
+    () => partitionSubmittableSongs(songs, (id) => submissionBySongId.has(id)),
+    [songs, submissionBySongId]
+  );
 
   const handleAdd = async (songId: string) => {
     if (!selectedEventId) return;
@@ -216,9 +222,20 @@ export default function EventSubmissionsPage() {
             </p>
           )}
 
-          {selectedEventId && songs.length > 0 && (
+          {selectedEventId && songs.length > 0 && eligibleSongs.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              Your songs are all legacy catalog rows. They were imported without an audio file, so
+              they can&apos;t be submitted to an event.{" "}
+              <Link to="/songs/add" className="underline">
+                Upload the routine as a new song
+              </Link>{" "}
+              first.
+            </p>
+          )}
+
+          {selectedEventId && eligibleSongs.length > 0 && (
             <div className={`space-y-3${submissionsLoading ? " opacity-60" : ""}`}>
-              {songs.map((song) => {
+              {eligibleSongs.map((song) => {
                 const existing = submissionBySongId.get(song.id);
                 const busy = busySongId === song.id;
                 return (
@@ -258,6 +275,14 @@ export default function EventSubmissionsPage() {
                 );
               })}
             </div>
+          )}
+
+          {selectedEventId && hiddenLegacyCount > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {hiddenLegacyCount} legacy {hiddenLegacyCount === 1 ? "song is" : "songs are"} hidden.
+              Legacy catalog rows have no uploaded audio file and can&apos;t be submitted to an
+              event.
+            </p>
           )}
         </CardContent>
       </Card>
