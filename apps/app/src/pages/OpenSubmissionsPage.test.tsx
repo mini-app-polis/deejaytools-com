@@ -56,11 +56,20 @@ const SONG = {
   updated_at: 1,
 };
 
-function mockApi(events: unknown[], songs: unknown[] = [SONG]) {
+const LEGACY_SONG = {
+  ...SONG,
+  id: "legacy1",
+  display_name: "Old Routine",
+  processed_filename: "2019_Classic_OldRoutine.mp3",
+  routine_name: "Old Routine",
+  is_legacy: true,
+};
+
+function mockApi(events: unknown[], songs: unknown[] = [SONG], submissions: unknown[] = []) {
   apiGet.mockImplementation((path: string) => {
     if (path === "/v1/events") return Promise.resolve(events);
     if (path === "/v1/songs") return Promise.resolve(songs);
-    if (path.startsWith("/v1/event-song-submissions")) return Promise.resolve([]);
+    if (path.startsWith("/v1/event-song-submissions")) return Promise.resolve(submissions);
     return Promise.resolve([]);
   });
 }
@@ -130,6 +139,38 @@ describe("OpenSubmissionsPage", () => {
     expect(
       await screen.findByText(/isn't accepting submissions right now/i)
     ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^add$/i })).not.toBeInTheDocument();
+  });
+
+  it("hides legacy songs and says how many were hidden", async () => {
+    mockApi([OPEN_EVENT], [SONG, LEGACY_SONG]);
+    renderPage();
+
+    expect(await screen.findByText(/2026_Classic_MyRoutine/)).toBeInTheDocument();
+    expect(screen.queryByText(/2019_Classic_OldRoutine/)).not.toBeInTheDocument();
+    expect(screen.getByText(/1 legacy song is hidden/i)).toBeInTheDocument();
+  });
+
+  it("keeps a legacy song visible when it is already submitted, so it can be removed", async () => {
+    mockApi(
+      [OPEN_EVENT],
+      [LEGACY_SONG],
+      [{ id: "sub1", event_id: "open1", song_id: "legacy1", created_at: 1 }]
+    );
+    renderPage();
+
+    expect(await screen.findByText(/2019_Classic_OldRoutine/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^remove$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^add$/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/legacy song is hidden/i)).not.toBeInTheDocument();
+  });
+
+  it("shows a legacy-only empty state instead of the generic no-songs message", async () => {
+    mockApi([OPEN_EVENT], [LEGACY_SONG]);
+    renderPage();
+
+    expect(await screen.findByText(/all legacy catalog rows/i)).toBeInTheDocument();
+    expect(screen.queryByText(/you have no songs yet/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^add$/i })).not.toBeInTheDocument();
   });
 });

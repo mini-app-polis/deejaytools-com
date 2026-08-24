@@ -44,8 +44,12 @@ function eventOptionLabel(e: ApiEvent): string {
  * exactly one Open event (the normal case) it is selected automatically and no
  * picker is shown.
  *
- * This is where The Open's extra submission protections will live; today it is
- * feature-equivalent to the generic page apart from the event scoping.
+ * The Open additionally refuses legacy catalog rows: those were imported
+ * without an audio file, so there is nothing for a DJ to play. They are hidden
+ * from the song list unless one is already submitted to the selected event, in
+ * which case it stays visible so the entrant can remove it.
+ *
+ * This is where The Open's remaining submission protections will live.
  */
 export default function OpenSubmissionsPage() {
   const api = useApiClient();
@@ -115,6 +119,18 @@ export default function OpenSubmissionsPage() {
     for (const s of submissions) map.set(s.song_id, s);
     return map;
   }, [submissions]);
+
+  /**
+   * Legacy rows have no audio file, so they cannot be submitted to The Open.
+   * One already submitted stays in the list — hiding it would strand the
+   * submission with no way to remove it.
+   */
+  const eligibleSongs = useMemo(
+    () => songs.filter((s) => !s.is_legacy || submissionBySongId.has(s.id)),
+    [songs, submissionBySongId]
+  );
+
+  const hiddenLegacyCount = songs.length - eligibleSongs.length;
 
   const handleAdd = async (songId: string) => {
     if (!selectedEventId) return;
@@ -233,9 +249,20 @@ export default function OpenSubmissionsPage() {
             </p>
           )}
 
-          {selectedEventId && songs.length > 0 && (
+          {selectedEventId && songs.length > 0 && eligibleSongs.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              Your songs are all legacy catalog rows. They were imported without an audio file, so
+              they can&apos;t be submitted to {OPEN_EVENT_LABEL}.{" "}
+              <Link to="/songs/add" className="underline">
+                Upload the routine as a new song
+              </Link>{" "}
+              first.
+            </p>
+          )}
+
+          {selectedEventId && eligibleSongs.length > 0 && (
             <div className={`space-y-3${submissionsLoading ? " opacity-60" : ""}`}>
-              {songs.map((song) => {
+              {eligibleSongs.map((song) => {
                 const existing = submissionBySongId.get(song.id);
                 const busy = busySongId === song.id;
                 return (
@@ -275,6 +302,14 @@ export default function OpenSubmissionsPage() {
                 );
               })}
             </div>
+          )}
+
+          {selectedEventId && hiddenLegacyCount > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {hiddenLegacyCount} legacy {hiddenLegacyCount === 1 ? "song is" : "songs are"} hidden.
+              Legacy catalog rows have no uploaded audio file and can&apos;t be submitted to{" "}
+              {OPEN_EVENT_LABEL}.
+            </p>
           )}
         </CardContent>
       </Card>
