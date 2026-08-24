@@ -171,7 +171,7 @@ async function claimJobs(database: Db, limit: number, now: number): Promise<Driv
   `);
   // Raw execute() returns snake_case columns and string bigints — map before
   // handing these to anything that expects a DriveJob.
-  return Array.from(rows as unknown as RawDriveJobRow[]);
+  return Array.from(rows as unknown as RawDriveJobRow[]).map(mapDriveJobRow);
 }
 
 async function runCopyJob(database: Db, job: DriveJob): Promise<void> {
@@ -311,18 +311,32 @@ export async function processDriveJobs(
     } catch (err) {
       const attempts = job.attempts + 1;
       const exhausted = attempts >= MAX_ATTEMPTS;
+      const message = err instanceof Error ? err.message : String(err);
+      const nextAttemptAt = Date.now() + backoffMs(attempts);
+
       await database
         .update(schema.driveJobs)
         .set({
           status: exhausted ? "failed" : "pending",
           attempts,
-          nextAttemptAt: Date.now() + backoffMs(attempts),
-          lastError: err instanceof Error ? err.message : String(err),
+          nextAttemptAt,
+          lastError: message,
           updatedAt: Date.now(),
         })
         .where(eq(schema.driveJobs.id, job.id));
 
-      logger[exhausted ? "error" : "warn"]({
+      // First failure is reported at error level even though we will retry:
+      // a config error (missing GOOGLE_* env, wrong Drive scope) fails
+      // identically every attempt, and waiting for exhaustion to say so
+      // wastes hours. Later retries stay at warn to avoid noise.
+      const level = exhausted || attempts === 1 ? "error" : "warn";
+
+      // error_message goes in `context`, not the logger's `error` field:
+      // createLogger only merges `error` on logger.error(), so on the warn
+      // branch it would be dropped and the retry would log with no cause —
+      // which is exactly the blind spot this fixes. Do not "simplify" this
+      // back to passing `error: err` alone.
+      logger[level]({
         event: exhausted ? "drive_job_exhausted" : "drive_job_retrying",
         category: "infra",
         context: {
@@ -331,6 +345,9 @@ export async function processDriveJobs(
           submission_id: job.submissionId,
           file_id: job.fileId,
           attempts,
+          max_attempts: MAX_ATTEMPTS,
+          error_message: message,
+          next_attempt_at: exhausted ? null : new Date(nextAttemptAt).toISOString(),
         },
         error: err,
       });
@@ -347,6 +364,14 @@ export async function processDriveJobs(
         });
       }
     }
+  }
+
+  if (jobs.length > 0) {
+    logger.info({
+      event: "drive_jobs_processed",
+      category: "infra",
+      context: { claimed: jobs.length, succeeded: done, failed: jobs.length - done },
+    });
   }
 
   return done;

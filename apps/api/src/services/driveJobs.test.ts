@@ -1,4 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const loggerMocks = vi.hoisted(() => ({
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+}));
+
+vi.mock("common-typescript-utils", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("common-typescript-utils")>();
+  return {
+    ...mod,
+    createLogger: vi.fn(() => loggerMocks),
+  };
+});
+
 import * as Sentry from "@sentry/node";
 import * as drive from "./drive.js";
 import {
@@ -173,6 +188,9 @@ describe("processDriveJobs", () => {
     vi.mocked(drive.copySongToEventFolder).mockClear();
     vi.mocked(drive.softDeleteOnDrive).mockClear();
     vi.mocked(Sentry.captureException).mockClear();
+    loggerMocks.info.mockClear();
+    loggerMocks.warn.mockClear();
+    loggerMocks.error.mockClear();
     vi.mocked(drive.copySongToEventFolder).mockResolvedValue({
       fileId: "copy_file_1",
       folderId: "copy_folder_1",
@@ -356,6 +374,74 @@ describe("processDriveJobs", () => {
     expect(typeof jobUpdates[0]?.attempts).toBe("number");
     expect(jobUpdates[0]?.attempts).toBe(1);
     expect(jobUpdates[0]?.attempts).not.toBe("01");
+  });
+
+  it("includes error_message in context on retry so warn-level logs are diagnosable", async () => {
+    vi.mocked(drive.copySongToEventFolder).mockRejectedValueOnce(new Error("Drive down"));
+    const { db } = makeProcessDb({
+      claimedJobs: [makeRawJob({ attempts: "1" })],
+      submissionRows: [makeCopySubmissionRow()],
+    });
+
+    await processDriveJobs(db);
+
+    expect(loggerMocks.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "drive_job_retrying",
+        context: expect.objectContaining({ error_message: "Drive down", attempts: 2 }),
+      })
+    );
+  });
+
+  it("logs the first failure at error level and later retries at warn", async () => {
+    vi.mocked(drive.copySongToEventFolder).mockRejectedValue(new Error("Drive down"));
+
+    const first = makeProcessDb({
+      claimedJobs: [makeRawJob({ attempts: "0" })],
+      submissionRows: [makeCopySubmissionRow()],
+    });
+    await processDriveJobs(first.db);
+    expect(loggerMocks.error).toHaveBeenCalledWith(
+      expect.objectContaining({ event: "drive_job_retrying", context: expect.objectContaining({ attempts: 1 }) })
+    );
+    expect(loggerMocks.warn).not.toHaveBeenCalled();
+
+    loggerMocks.error.mockClear();
+    loggerMocks.warn.mockClear();
+
+    const second = makeProcessDb({
+      claimedJobs: [makeRawJob({ attempts: "1" })],
+      submissionRows: [makeCopySubmissionRow()],
+    });
+    await processDriveJobs(second.db);
+    expect(loggerMocks.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ event: "drive_job_retrying", context: expect.objectContaining({ attempts: 2 }) })
+    );
+    expect(loggerMocks.error).not.toHaveBeenCalled();
+  });
+
+  it("logs drive_jobs_processed when jobs were claimed", async () => {
+    const { db } = makeProcessDb({
+      claimedJobs: [makeRawJob()],
+      submissionRows: [makeCopySubmissionRow()],
+    });
+
+    await processDriveJobs(db);
+
+    expect(loggerMocks.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "drive_jobs_processed",
+        context: { claimed: 1, succeeded: 1, failed: 0 },
+      })
+    );
+  });
+
+  it("does not log drive_jobs_processed when nothing was claimed", async () => {
+    const { db } = makeProcessDb({ claimedJobs: [] });
+    await processDriveJobs(db);
+    expect(loggerMocks.info).not.toHaveBeenCalledWith(
+      expect.objectContaining({ event: "drive_jobs_processed" })
+    );
   });
 });
 
