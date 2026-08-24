@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as Sentry from "@sentry/node";
 import { app } from "../app.js";
 import {
@@ -100,6 +100,7 @@ const joinedRow = {
   eventName: "Spring Classic",
   eventStartDate: "2026-03-01",
   eventEndDate: "2026-03-03",
+  eventTimezone: "America/Chicago",
   submissionDivision: null,
   submissionRound: null,
   songDivision: "Classic",
@@ -120,6 +121,10 @@ const joinedRow = {
 describe("GET /v1/event-song-submissions", () => {
   beforeEach(() => {
     resetSelectQueue();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("returns the user's joined submission rows", async () => {
@@ -143,6 +148,26 @@ describe("GET /v1/event-song-submissions", () => {
     expect(body.data[0]).toMatchObject({
       song_label: "Alice Smith & Bob Jones Classic 2026 Sky High v03",
     });
+  });
+
+  it("derives event_status from the event timezone, not UTC", async () => {
+    // 2026-08-25T00:30:00Z is still 2026-08-24 evening in Chicago — the event
+    // must stay active, which also proves eventTimezone is selected through.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-25T00:30:00Z"));
+    enqueueSelectResult([
+      {
+        ...joinedRow,
+        eventStartDate: "2026-08-20",
+        eventEndDate: "2026-08-24",
+        eventTimezone: "America/Chicago",
+      },
+    ]);
+    const res = await app.request(BASE, { headers: authHeaders() });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<Array<{ event_status: string }>>>(res);
+    assertSuccessListEnvelope(body);
+    expect(body.data[0].event_status).toBe("active");
   });
 
   it("uses the managed partnership label when the song has managed_partnership_id", async () => {

@@ -62,9 +62,37 @@ const patchEvent = z.object({
 
 export const eventRoutes = new Hono();
 
-/** Derive status from start/end dates without storing it. */
-export function computeStatus(startDate: string, endDate: string): string {
-  const today = new Date().toISOString().slice(0, 10);
+/**
+ * Current calendar date in a given IANA timezone, as YYYY-MM-DD.
+ *
+ * The "en-CA" locale is used because it formats as YYYY-MM-DD, which compares
+ * correctly as a string against the start_date / end_date columns.
+ *
+ * Falls back to UTC if the zone is unusable. events.timezone is validated on
+ * write and defaults to America/Chicago, so this should be unreachable — but a
+ * bad stored value must not turn every event listing into a 500.
+ */
+function todayInZone(timeZone: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date());
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+/**
+ * Derive status from start/end dates without storing it.
+ *
+ * start_date and end_date are local calendar dates for the event, so "today"
+ * must be evaluated in the event's own timezone. Using the server's date (UTC
+ * on Railway) marked a Chicago event "completed" at 19:00 on its final day and
+ * dropped it out of the submission pages mid-event.
+ *
+ * timezone is required rather than defaulted: every caller has it, and a
+ * silent default would reintroduce exactly this bug at a new call site.
+ */
+export function computeStatus(startDate: string, endDate: string, timezone: string): string {
+  const today = todayInZone(timezone);
   if (today < startDate) return "upcoming";
   if (today > endDate) return "completed";
   return "active";
@@ -79,7 +107,7 @@ function mapEvent(row: typeof events.$inferSelect) {
     timezone: row.timezone,
     // Fall back for rows predating the column so consumers never see null.
     season_year: row.seasonYear ?? seasonYearFromDateString(row.startDate),
-    status: computeStatus(row.startDate, row.endDate),
+    status: computeStatus(row.startDate, row.endDate, row.timezone),
     created_by: row.createdBy,
     created_at: row.createdAt,
     updated_at: row.updatedAt,

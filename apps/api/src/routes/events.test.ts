@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as Sentry from "@sentry/node";
 import { app } from "../app.js";
 import {
@@ -13,6 +13,7 @@ import {
   type SuccessEnvelope,
 } from "../test/helpers.js";
 import { enqueueSelectResult, mockDb, resetSelectQueue } from "../test/mocks.js";
+import { computeStatus } from "./events.js";
 
 const { enqueueDriveJob } = vi.hoisted(() => ({
   enqueueDriveJob: vi.fn().mockResolvedValue(undefined),
@@ -516,5 +517,50 @@ describe("DELETE /v1/events/:id", () => {
     expect(res.status).toBe(200);
     expect(enqueueDriveJob).toHaveBeenCalledTimes(1);
     expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("computeStatus", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("stays active on the evening of the final day in the event timezone", () => {
+    // 2026-08-25T00:30:00Z is still 2026-08-24 19:30 in America/Chicago.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-25T00:30:00Z"));
+    expect(computeStatus("2026-08-20", "2026-08-24", "America/Chicago")).toBe("active");
+  });
+
+  it("stays upcoming on the evening before the first day in the event timezone", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-25T00:30:00Z"));
+    expect(computeStatus("2026-08-25", "2026-08-27", "America/Chicago")).toBe("upcoming");
+  });
+
+  it("marks completed once the event timezone is past the end date", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-26T12:00:00Z"));
+    expect(computeStatus("2026-08-20", "2026-08-24", "America/Chicago")).toBe("completed");
+  });
+
+  it("matches the old UTC behavior when the event timezone is UTC", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-25T00:30:00Z"));
+    expect(computeStatus("2026-08-20", "2026-08-24", "UTC")).toBe("completed");
+    expect(computeStatus("2026-08-25", "2026-08-27", "UTC")).toBe("active");
+  });
+
+  it("becomes active in an ahead-of-UTC zone while UTC is still the prior day", () => {
+    // 2026-08-24T16:00:00Z is 2026-08-25 01:00 in Asia/Tokyo.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-24T16:00:00Z"));
+    expect(computeStatus("2026-08-25", "2026-08-27", "Asia/Tokyo")).toBe("active");
+  });
+
+  it("falls back without throwing when the stored timezone is invalid", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-25T12:00:00Z"));
+    expect(computeStatus("2026-08-20", "2026-08-24", "Not/AZone")).toBe("completed");
   });
 });

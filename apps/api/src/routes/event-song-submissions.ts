@@ -58,6 +58,7 @@ type JoinedSubmissionRow = {
   eventName: string;
   eventStartDate: string;
   eventEndDate: string;
+  eventTimezone: string;
   submissionDivision: string | null;
   submissionRound: string | null;
   songDivision: string | null;
@@ -114,7 +115,7 @@ export function mapSubmissionRow(row: JoinedSubmissionRow) {
     event_id: row.eventId,
     event_name: row.eventName,
     event_start_date: row.eventStartDate,
-    event_status: computeStatus(row.eventStartDate, row.eventEndDate),
+    event_status: computeStatus(row.eventStartDate, row.eventEndDate, row.eventTimezone),
     song_id: row.songId,
     song_label: buildStructuredSongLabel({
       partnership,
@@ -154,6 +155,7 @@ export async function fetchUserSubmissionRows(
       eventName: events.name,
       eventStartDate: events.startDate,
       eventEndDate: events.endDate,
+      eventTimezone: events.timezone,
       submissionDivision: eventSongSubmissions.division,
       submissionRound: eventSongSubmissions.round,
       songDivision: songs.division,
