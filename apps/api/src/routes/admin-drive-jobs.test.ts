@@ -12,6 +12,10 @@ import {
 } from "../test/helpers.js";
 import { enqueueSelectResult, mockDb, resetSelectQueue } from "../test/mocks.js";
 
+const { enqueueDriveJob } = vi.hoisted(() => ({
+  enqueueDriveJob: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../db/index.js", async () => {
   const { mockDb: db } = await import("../test/mocks.js");
   return { db };
@@ -25,6 +29,9 @@ vi.mock("../middleware/auth.js", async (importOriginal) => {
     requireAdmin: mockRequireAdmin(),
   };
 });
+vi.mock("../services/driveJobs.js", () => ({
+  enqueueDriveJob,
+}));
 
 const BASE = "/v1/admin/drive-jobs";
 
@@ -119,6 +126,59 @@ describe("GET /v1/admin/drive-jobs", () => {
       status: "failed",
       last_error: "Google Drive environment variables are not configured",
     });
+  });
+});
+
+describe("POST /v1/admin/drive-jobs/backfill-renames", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+    enqueueDriveJob.mockClear();
+  });
+
+  it("returns 403 for non-admin users", async () => {
+    const res = await app.request(`${BASE}/backfill-renames`, {
+      method: "POST",
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("enqueues one rename per submission with a copy and returns the count", async () => {
+    enqueueSelectResult([{ id: "sub_1" }, { id: "sub_2" }]);
+
+    const res = await app.request(`${BASE}/backfill-renames`, {
+      method: "POST",
+      headers: adminHeaders(),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<{ enqueued: number }>>(res);
+    assertSuccessEnvelope(body);
+    expect(body.data).toEqual({ enqueued: 2 });
+    expect(enqueueDriveJob).toHaveBeenCalledTimes(2);
+    expect(enqueueDriveJob).toHaveBeenNthCalledWith(1, expect.anything(), {
+      kind: "rename",
+      submissionId: "sub_1",
+    });
+    expect(enqueueDriveJob).toHaveBeenNthCalledWith(2, expect.anything(), {
+      kind: "rename",
+      submissionId: "sub_2",
+    });
+  });
+
+  it("enqueues nothing when no submission has a copy", async () => {
+    enqueueSelectResult([]);
+
+    const res = await app.request(`${BASE}/backfill-renames`, {
+      method: "POST",
+      headers: adminHeaders(),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<{ enqueued: number }>>(res);
+    assertSuccessEnvelope(body);
+    expect(body.data).toEqual({ enqueued: 0 });
+    expect(enqueueDriveJob).not.toHaveBeenCalled();
   });
 });
 

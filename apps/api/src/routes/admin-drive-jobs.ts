@@ -1,11 +1,12 @@
 import { CommonErrors, createLogger, error, success, successList } from "common-typescript-utils";
 import { Hono } from "hono";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.js";
 import { driveJobs, events, eventSongSubmissions } from "../db/schema.js";
 import { zValidator } from "../lib/validate.js";
 import { requireAdmin } from "../middleware/auth.js";
+import { enqueueDriveJob } from "../services/driveJobs.js";
 
 const logger = createLogger("deejaytools-api");
 
@@ -82,6 +83,38 @@ adminDriveJobRoutes.get("/", requireAdmin, zValidator("query", listQuery), async
     return c.json(successList(rows));
   } catch (err) {
     logger.error({ event: "drive_jobs_list_failed", category: "api", error: err });
+    return c.json(CommonErrors.internalError(), 500);
+  }
+});
+
+/**
+ * POST /v1/admin/drive-jobs/backfill-renames
+ *
+ * Enqueue a rename job for every submission that has a copy, re-applying the
+ * current naming rule. Safe to run repeatedly — a rename whose name already
+ * matches issues no Drive write. Run this after any change to
+ * resolveSubmissionFilename, including when The Open's convention lands.
+ */
+adminDriveJobRoutes.post("/backfill-renames", requireAdmin, async (c) => {
+  try {
+    const rows = await db
+      .select({ id: eventSongSubmissions.id })
+      .from(eventSongSubmissions)
+      .where(isNotNull(eventSongSubmissions.driveCopyFileId));
+
+    for (const row of rows) {
+      await enqueueDriveJob(db, { kind: "rename", submissionId: row.id });
+    }
+
+    logger.info({
+      event: "drive_rename_backfill_enqueued",
+      category: "api",
+      context: { count: rows.length },
+    });
+
+    return c.json(success({ enqueued: rows.length }));
+  } catch (err) {
+    logger.error({ event: "drive_rename_backfill_failed", category: "api", error: err });
     return c.json(CommonErrors.internalError(), 500);
   }
 });

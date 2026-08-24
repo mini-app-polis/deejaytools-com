@@ -4,7 +4,7 @@ import { and, eq, lt, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "../db/schema.js";
 import { resolveSubmissionFilename } from "../lib/submissionFilename.js";
-import { copySongToEventFolder, softDeleteOnDrive } from "./drive.js";
+import { copySongToEventFolder, renameDriveFile, softDeleteOnDrive } from "./drive.js";
 
 type Db = PostgresJsDatabase<typeof schema>;
 
@@ -74,7 +74,7 @@ function reportDriveJobFailure(
 
 export async function enqueueDriveJob(
   database: Db,
-  job: { kind: "copy" | "trash"; submissionId?: string; fileId?: string }
+  job: { kind: "copy" | "trash" | "rename"; submissionId?: string; fileId?: string }
 ): Promise<void> {
   const now = Date.now();
   await database.insert(schema.driveJobs).values({
@@ -178,13 +178,8 @@ async function claimJobs(database: Db, limit: number, now: number): Promise<Driv
   return Array.from(rows as unknown as RawDriveJobRow[]).map(mapDriveJobRow);
 }
 
-async function runCopyJob(database: Db, job: DriveJob): Promise<void> {
-  if (!job.submissionId) {
-    throw new Error(
-      `copy job ${job.id} has no submission_id (row keys: ${Object.keys(job).join(",")})`
-    );
-  }
-
+/** The submission + song + event fields both copy and rename jobs need. */
+async function fetchSubmissionCopyContext(database: Db, submissionId: string) {
   const [row] = await database
     .select({
       submissionId: schema.eventSongSubmissions.id,
@@ -200,8 +195,19 @@ async function runCopyJob(database: Db, job: DriveJob): Promise<void> {
     .from(schema.eventSongSubmissions)
     .innerJoin(schema.songs, eq(schema.songs.id, schema.eventSongSubmissions.songId))
     .innerJoin(schema.events, eq(schema.events.id, schema.eventSongSubmissions.eventId))
-    .where(eq(schema.eventSongSubmissions.id, job.submissionId))
+    .where(eq(schema.eventSongSubmissions.id, submissionId))
     .limit(1);
+  return row ?? null;
+}
+
+async function runCopyJob(database: Db, job: DriveJob): Promise<void> {
+  if (!job.submissionId) {
+    throw new Error(
+      `copy job ${job.id} has no submission_id (row keys: ${Object.keys(job).join(",")})`
+    );
+  }
+
+  const row = await fetchSubmissionCopyContext(database, job.submissionId);
 
   // The submission was removed before we got to it — nothing to copy.
   if (!row) return;
@@ -245,6 +251,50 @@ async function runCopyJob(database: Db, job: DriveJob): Promise<void> {
     event: "drive_copy_succeeded",
     category: "infra",
     context: { submission_id: job.submissionId, drive_file_id: fileId },
+  });
+}
+
+/**
+ * Re-apply the current naming rule to a submission's existing copy.
+ *
+ * Unlike a copy job this is safe to enqueue repeatedly: renameDriveFile is a
+ * no-op when the name already matches. That is deliberate — it is how a
+ * naming-rule change (e.g. The Open's convention) gets applied to copies that
+ * already exist, since runCopyJob will never revisit them.
+ */
+async function runRenameJob(database: Db, job: DriveJob): Promise<void> {
+  if (!job.submissionId) {
+    throw new Error(
+      `rename job ${job.id} has no submission_id (row keys: ${Object.keys(job).join(",")})`
+    );
+  }
+
+  const row = await fetchSubmissionCopyContext(database, job.submissionId);
+
+  // Submission removed, or never successfully copied — nothing to rename.
+  // Not an error: a copy job may still be pending for it, and that job will
+  // apply the current naming rule itself.
+  if (!row || !row.alreadyCopied) return;
+
+  const filename = resolveSubmissionFilename({
+    song: {
+      id: row.songId,
+      originalFilename: row.originalFilename,
+      processedFilename: row.processedFilename,
+    },
+    event: { name: row.eventName },
+  });
+
+  const changed = await renameDriveFile(row.alreadyCopied, filename);
+
+  logger.info({
+    event: changed ? "drive_rename_succeeded" : "drive_rename_noop",
+    category: "infra",
+    context: {
+      submission_id: job.submissionId,
+      drive_file_id: row.alreadyCopied,
+      filename,
+    },
   });
 }
 
@@ -303,6 +353,8 @@ export async function processDriveJobs(
         await runCopyJob(database, job);
       } else if (job.kind === "trash") {
         await runTrashJob(job);
+      } else if (job.kind === "rename") {
+        await runRenameJob(database, job);
       } else {
         throw new Error(`unknown drive job kind: ${job.kind}`);
       }

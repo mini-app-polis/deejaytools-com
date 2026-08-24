@@ -35,6 +35,7 @@ vi.mock("./drive.js", () => ({
     fileId: "copy_file_1",
     folderId: "copy_folder_1",
   }),
+  renameDriveFile: vi.fn().mockResolvedValue(true),
   softDeleteOnDrive: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -186,6 +187,7 @@ describe("backoffMs", () => {
 describe("processDriveJobs", () => {
   beforeEach(() => {
     vi.mocked(drive.copySongToEventFolder).mockClear();
+    vi.mocked(drive.renameDriveFile).mockClear();
     vi.mocked(drive.softDeleteOnDrive).mockClear();
     vi.mocked(Sentry.captureException).mockClear();
     loggerMocks.info.mockClear();
@@ -195,6 +197,7 @@ describe("processDriveJobs", () => {
       fileId: "copy_file_1",
       folderId: "copy_folder_1",
     });
+    vi.mocked(drive.renameDriveFile).mockResolvedValue(true);
   });
 
   it("returns 0 when claiming jobs fails and reports to Sentry", async () => {
@@ -301,6 +304,51 @@ describe("processDriveJobs", () => {
     expect(drive.softDeleteOnDrive).toHaveBeenCalledWith("copy_to_trash");
     expect(drive.copySongToEventFolder).not.toHaveBeenCalled();
     expect(jobUpdates[0]?.status).toBe("done");
+  });
+
+  it("calls renameDriveFile with the copy id and resolved name for a rename job", async () => {
+    const { db, jobUpdates } = makeProcessDb({
+      claimedJobs: [makeRawJob({ kind: "rename" })],
+      submissionRows: [makeCopySubmissionRow({ alreadyCopied: "copy_file_1" })],
+    });
+
+    await expect(processDriveJobs(db)).resolves.toBe(1);
+    expect(drive.renameDriveFile).toHaveBeenCalledWith("copy_file_1", "2026_Classic.mp3");
+    expect(drive.copySongToEventFolder).not.toHaveBeenCalled();
+    expect(jobUpdates[0]?.status).toBe("done");
+  });
+
+  it("makes no Drive call and marks done when a rename job has no copy yet", async () => {
+    const { db, jobUpdates } = makeProcessDb({
+      claimedJobs: [makeRawJob({ kind: "rename" })],
+      submissionRows: [makeCopySubmissionRow({ alreadyCopied: null })],
+    });
+
+    await expect(processDriveJobs(db)).resolves.toBe(1);
+    expect(drive.renameDriveFile).not.toHaveBeenCalled();
+    expect(jobUpdates[0]?.status).toBe("done");
+  });
+
+  it("marks a rename job done when the submission row is gone", async () => {
+    const { db, jobUpdates } = makeProcessDb({
+      claimedJobs: [makeRawJob({ kind: "rename" })],
+      submissionRows: [],
+    });
+
+    await expect(processDriveJobs(db)).resolves.toBe(1);
+    expect(drive.renameDriveFile).not.toHaveBeenCalled();
+    expect(jobUpdates[0]?.status).toBe("done");
+  });
+
+  it("reschedules a rename job with no submission_id and includes row keys in the error", async () => {
+    const { db, jobUpdates } = makeProcessDb({
+      claimedJobs: [makeRawJob({ kind: "rename", submission_id: null })],
+    });
+
+    await expect(processDriveJobs(db)).resolves.toBe(0);
+    expect(drive.renameDriveFile).not.toHaveBeenCalled();
+    expect(jobUpdates[0]?.lastError).toMatch(/rename job job_1 has no submission_id/);
+    expect(jobUpdates[0]?.lastError).toMatch(/row keys:/);
   });
 
   it("reclaims stuck running jobs back to pending without incrementing attempts", async () => {

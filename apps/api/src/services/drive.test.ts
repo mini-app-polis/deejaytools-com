@@ -43,6 +43,7 @@ import { JWT } from "google-auth-library";
 import {
   clearDriveFolderCache,
   copySongToEventFolder,
+  renameDriveFile,
   softDeleteOnDrive,
   uploadSongToDrive,
 } from "./drive.js";
@@ -425,5 +426,40 @@ describe("copySongToEventFolder folder cache", () => {
     mockFilesCopy.mockResolvedValueOnce({ data: { id: "copy_2" } });
     await copySongToEventFolder("source_2", DEFAULT_COPY_OPTIONS);
     expect(mockFilesList).toHaveBeenCalledTimes(8);
+  });
+});
+
+describe("renameDriveFile", () => {
+  beforeEach(() => {
+    resetDriveTestState();
+  });
+
+  const { mockFilesGet, mockFilesUpdate } = mocks;
+
+  it("returns false and does not update when the current name already matches", async () => {
+    mockFilesGet.mockResolvedValueOnce({ data: { name: "2026_Classic.mp3" } });
+
+    await expect(renameDriveFile("file_1", "2026_Classic.mp3")).resolves.toBe(false);
+
+    expect(mockFilesGet).toHaveBeenCalledWith(
+      expect.objectContaining({ fileId: "file_1", fields: "name", supportsAllDrives: true })
+    );
+    expect(mockFilesUpdate).not.toHaveBeenCalled();
+  });
+
+  it("returns true and updates when the name differs", async () => {
+    mockFilesGet.mockResolvedValueOnce({ data: { name: "old name.mp3" } });
+    mockFilesUpdate.mockResolvedValueOnce({ data: { id: "file_1", name: "2026_Classic.mp3" } });
+
+    await expect(renameDriveFile("file_1", "2026_Classic.mp3")).resolves.toBe(true);
+
+    expect(mockFilesUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fileId: "file_1",
+        requestBody: { name: "2026_Classic.mp3" },
+        fields: "id,name",
+        supportsAllDrives: true,
+      })
+    );
   });
 });

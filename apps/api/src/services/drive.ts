@@ -227,6 +227,36 @@ export async function copySongToEventFolder(
 }
 
 /**
+ * Renames an existing Drive file, returning true if a change was made.
+ *
+ * Reads the current name first so that re-running a rename sweep over files
+ * already named correctly costs one metadata GET each and issues no writes —
+ * this is what makes the backfill safe to run repeatedly after a naming-rule
+ * change.
+ */
+export async function renameDriveFile(fileId: string, name: string): Promise<boolean> {
+  const auth = getAuthClient();
+  const drive = google.drive({ version: "v3", auth });
+
+  const current = await drive.files.get({
+    fileId,
+    fields: "name",
+    supportsAllDrives: true,
+  });
+
+  if (current.data.name === name) return false;
+
+  await drive.files.update({
+    fileId,
+    requestBody: { name },
+    fields: "id,name",
+    supportsAllDrives: true,
+  });
+
+  return true;
+}
+
+/**
  * Result of attempting to share a Drive file with one or more emails.
  * Failures are reported per-email so the caller can log them without
  * losing the successful shares.
