@@ -9,22 +9,22 @@ const song = (over: Partial<{ originalFilename: string | null; processedFilename
 });
 
 describe("resolveSubmissionFilename", () => {
-  it("prefers the original filename", () => {
+  it("prefers the processed filename", () => {
     expect(
       resolveSubmissionFilename({
         song: song({ originalFilename: "my track.mp3", processedFilename: "2026_Classic.mp3" }),
         event: { name: "Spring Classic" },
       })
-    ).toBe("my track.mp3");
+    ).toBe("2026_Classic.mp3");
   });
 
-  it("falls back to the processed filename when there is no original", () => {
+  it("falls back to the original filename when there is no processed name", () => {
     expect(
       resolveSubmissionFilename({
-        song: song({ processedFilename: "2026_Classic.mp3" }),
+        song: song({ originalFilename: "my track.mp3" }),
         event: { name: "Spring Classic" },
       })
-    ).toBe("2026_Classic.mp3");
+    ).toBe("my track.mp3");
   });
 
   it("falls back to the song id when both are missing", () => {
@@ -33,23 +33,27 @@ describe("resolveSubmissionFilename", () => {
     ).toBe("song_1");
   });
 
-  it("ignores whitespace-only filenames", () => {
+  it("ignores a whitespace-only processed filename", () => {
     expect(
       resolveSubmissionFilename({
-        song: song({ originalFilename: "   ", processedFilename: "real.mp3" }),
+        song: song({ originalFilename: "real.mp3", processedFilename: "   " }),
         event: { name: "Spring Classic" },
       })
     ).toBe("real.mp3");
   });
 
   // Pin current behavior so the Open branch changing is a deliberate, visible diff.
+  // Uses a processed name so this asserts on the real path, not the fallback.
   it("currently returns the same name for The Open as for any other event", () => {
-    const s = song({ originalFilename: "my track.mp3" });
+    const s = song({
+      originalFilename: "my track.mp3",
+      processedFilename: "2026_Classic_v01.mp3",
+    });
     expect(resolveSubmissionFilename({ song: s, event: { name: "The Open 2026" } })).toBe(
-      "my track.mp3"
+      "2026_Classic_v01.mp3"
     );
     expect(resolveSubmissionFilename({ song: s, event: { name: "theopen" } })).toBe(
-      "my track.mp3"
+      "2026_Classic_v01.mp3"
     );
   });
 });

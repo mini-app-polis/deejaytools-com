@@ -12,8 +12,16 @@ export interface SubmissionFilenameInput {
 /**
  * Filename for the per-event Drive copy of a submitted song.
  *
- * Default: the original filename the entrant uploaded. The processed filename
- * is a fallback for rows uploaded before original_filename was captured.
+ * Default: the processed filename — the normalized, versioned name built by
+ * the upload pipeline (<Partnership>_<Division>_<Season>_<Routine>_v01.mp3).
+ * This is also the name uploadSongToDrive gave the source file, so a copy and
+ * its original are identifiable as the same track, and an event folder sorts
+ * usefully for whoever is playing from it. The entrant's own filename is
+ * arbitrary and is only a fallback.
+ *
+ * In practice the fallback never fires for a real copy: songs.ts writes
+ * processed_filename and drive_file_id in the same update, and runCopyJob
+ * skips songs with no drive_file_id.
  *
  * The Open is expected to want its own naming convention (bib number, running
  * order, division prefix — not yet decided). That branch lives here so there is
@@ -22,12 +30,12 @@ export interface SubmissionFilenameInput {
  */
 export function resolveSubmissionFilename(input: SubmissionFilenameInput): string {
   const { song, event } = input;
-  const original = song.originalFilename?.trim() || song.processedFilename?.trim() || song.id;
+  const filename = song.processedFilename?.trim() || song.originalFilename?.trim() || song.id;
 
   if (isOpenEvent(event.name)) {
     // TODO(open): apply The Open's naming convention once defined.
-    return original;
+    return filename;
   }
 
-  return original;
+  return filename;
 }

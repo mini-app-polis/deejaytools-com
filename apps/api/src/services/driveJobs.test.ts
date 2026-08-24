@@ -245,7 +245,7 @@ describe("processDriveJobs", () => {
 
     await expect(processDriveJobs(db)).resolves.toBe(1);
     expect(drive.copySongToEventFolder).toHaveBeenCalledWith("source_file_1", {
-      filename: "my track.mp3",
+      filename: "2026_Classic.mp3",
       seasonYear: "2026",
       eventName: "Spring Classic",
       division: "Classic",
