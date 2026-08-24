@@ -9,6 +9,7 @@ import { z } from "zod";
 import { and, desc, eq, isNull, ne, notInArray, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { checkins, eventSongSubmissions, managedPartnerships, partners, queueEntries, sessions, songs, teams, users } from "../db/schema.js";
+import { isFollowerAmDivision } from "@deejaytools/schemas";
 import { seasonYearFromTimestamp } from "../lib/seasonYear.js";
 import { requireAuth } from "../middleware/auth.js";
 import { shareDriveFileWithUsers, softDeleteOnDrive, uploadSongToDrive } from "../services/drive.js";
@@ -265,9 +266,13 @@ async function buildAndUploadSong(
     followerName = partnerName ?? "";
   }
 
-  const partnershipSegment = followerName
-    ? `${sanitizeSegment(leaderName)}_${sanitizeSegment(followerName)}`
-    : sanitizeSegment(leaderName);
+  const swapForProAm = followerName != null && isFollowerAmDivision(song.division);
+  const entityFirst: string = swapForProAm ? followerName! : leaderName;
+  const entitySecond = swapForProAm ? leaderName : followerName;
+
+  const partnershipSegment = entitySecond
+    ? `${sanitizeSegment(entityFirst)}_${sanitizeSegment(entitySecond)}`
+    : sanitizeSegment(entityFirst);
 
   const originalParts = splitNameAndExtension(originalName);
   const pathSegments = [
@@ -285,7 +290,9 @@ async function buildAndUploadSong(
   const extSegment = originalParts.ext.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
   const processedFilename = extSegment ? `${versionedStem}.${extSegment}` : versionedStem;
 
-  const newTitle = followerName ? `${leaderName} & ${followerName}` : leaderName;
+  // Same order as the filename so a DJ reading the player and the folder
+  // listing sees one consistent entity.
+  const newTitle = entitySecond ? `${entityFirst} & ${entitySecond}` : entityFirst;
   const newArtist = [song.division, seasonYearStr, song.routineName].filter(Boolean).join(" - ");
 
   const taggedBytes = await tagSongBytes({ bytes: inputBytes, newTitle, newArtist, mimeType });

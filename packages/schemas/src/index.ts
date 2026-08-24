@@ -32,6 +32,19 @@ export const DIVISIONS = [
 
 export type Division = (typeof DIVISIONS)[number];
 
+/**
+ * Divisions where the entity is ordered amateur-first rather than
+ * leader-first, because the pairing is a pro with an amateur and the amateur
+ * is the competitor being scored.
+ *
+ * "ProAm LeaderAm" needs no reordering — the leader IS the amateur, so the
+ * default leader-first order is already amateur-first. Only "ProAm FollowerAm"
+ * inverts.
+ */
+export function isFollowerAmDivision(division: string | null | undefined): boolean {
+  return division?.trim() === "ProAm FollowerAm";
+}
+
 export const SessionStatusSchema = z.enum([
   "scheduled",
   "checkin_open",
