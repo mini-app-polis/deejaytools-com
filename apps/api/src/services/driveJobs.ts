@@ -249,9 +249,16 @@ async function runCopyJob(database: Db, job: DriveJob): Promise<void> {
   // song's, and the event folder must reflect what was entered.
   const division = (row.submissionDivision ?? row.division)?.trim() || "unknown";
 
-  // Prelims lives in the division folder; only a finals-specific song is
-  // nested, so a DJ running prelims sees exactly the prelims set.
-  const subfolder = row.submissionRound === "finals_only" ? "Finals" : undefined;
+  // A song covering both rounds sits in the division folder; a round-specific
+  // song is nested under that round. So the division folder means exactly one
+  // thing — plays in every round — and a DJ running finals takes the division
+  // folder plus Finals/.
+  const subfolder =
+    row.submissionRound === "finals_only"
+      ? "Finals"
+      : row.submissionRound === "prelims_only"
+        ? "Prelims"
+        : undefined;
 
   const { fileId } = await copySongToEventFolder(row.driveFileId, {
     filename,

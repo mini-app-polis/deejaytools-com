@@ -277,11 +277,24 @@ describe("processDriveJobs", () => {
     );
   });
 
-  it("does not pass a subfolder for prelims_and_finals or prelims_only", async () => {
-    for (const submissionRound of ["prelims_and_finals", "prelims_only"] as const) {
+  it("copies prelims_only submissions into the Prelims subfolder", async () => {
+    const { db } = makeProcessDb({
+      claimedJobs: [makeRawJob()],
+      submissionRows: [makeCopySubmissionRow({ submissionRound: "prelims_only" })],
+    });
+
+    await expect(processDriveJobs(db)).resolves.toBe(1);
+    expect(drive.copySongToEventFolder).toHaveBeenCalledWith(
+      "source_file_1",
+      expect.objectContaining({ subfolder: "Prelims" })
+    );
+  });
+
+  it("does not pass a subfolder for prelims_and_finals or a null round", async () => {
+    for (const submissionRound of ["prelims_and_finals", null] as const) {
       vi.mocked(drive.copySongToEventFolder).mockClear();
       const { db } = makeProcessDb({
-        claimedJobs: [makeRawJob({ id: `job_${submissionRound}` })],
+        claimedJobs: [makeRawJob({ id: `job_${submissionRound ?? "null"}` })],
         submissionRows: [makeCopySubmissionRow({ submissionRound })],
       });
       await expect(processDriveJobs(db)).resolves.toBe(1);
