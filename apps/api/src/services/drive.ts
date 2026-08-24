@@ -68,6 +68,16 @@ async function findOrCreateFolder(
   return created;
 }
 
+/**
+ * Drive treats "/" as a path separator in some clients, and leading/trailing
+ * whitespace produces folders that look identical but aren't. Event names are
+ * free text typed by admins, so normalize before using one as a folder name.
+ */
+function sanitizeFolderName(name: string): string {
+  const cleaned = name.replace(/[/\\]/g, "-").replace(/\s+/g, " ").trim();
+  return cleaned || "unknown";
+}
+
 export interface DriveUploadResult {
   fileId: string;
   folderId: string;
@@ -116,6 +126,65 @@ export async function uploadSongToDrive(
   const fileId = createRes.data.id;
   if (!fileId) {
     throw new Error("Drive upload did not return a file id");
+  }
+
+  return { fileId, folderId: divisionFolderId };
+}
+
+/**
+ * Copies an existing song file into its event folder:
+ *   <root>/<seasonYear>/Events/<eventName>/<division>/<filename>
+ *
+ * Year, "Events", event and division subfolders are created on demand. The
+ * source must be a file this service account created — the drive.file scope
+ * grants no access to anything else, which holds for songs uploaded through
+ * uploadSongToDrive.
+ *
+ * Returns the copy's file ID and the division folder ID.
+ */
+export async function copySongToEventFolder(
+  sourceFileId: string,
+  options: {
+    filename: string;
+    seasonYear: string;
+    eventName: string;
+    division: string;
+  }
+): Promise<DriveUploadResult> {
+  const auth = getAuthClient();
+  const rootFolderId = getParentFolderId();
+  const drive = google.drive({ version: "v3", auth });
+
+  const yearFolderId = await findOrCreateFolder(
+    drive,
+    sanitizeFolderName(options.seasonYear),
+    rootFolderId
+  );
+  const eventsFolderId = await findOrCreateFolder(drive, "Events", yearFolderId);
+  const eventFolderId = await findOrCreateFolder(
+    drive,
+    sanitizeFolderName(options.eventName),
+    eventsFolderId
+  );
+  const divisionFolderId = await findOrCreateFolder(
+    drive,
+    sanitizeFolderName(options.division),
+    eventFolderId
+  );
+
+  const copyRes = await drive.files.copy({
+    fileId: sourceFileId,
+    requestBody: {
+      name: options.filename,
+      parents: [divisionFolderId],
+    },
+    fields: "id",
+    supportsAllDrives: true,
+  });
+
+  const fileId = copyRes.data.id;
+  if (!fileId) {
+    throw new Error("Drive copy did not return a file id");
   }
 
   return { fileId, folderId: divisionFolderId };

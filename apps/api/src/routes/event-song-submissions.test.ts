@@ -12,6 +12,10 @@ import {
 } from "../test/helpers.js";
 import { enqueueSelectResult, mockDb, resetSelectQueue } from "../test/mocks.js";
 
+const { enqueueDriveJob } = vi.hoisted(() => ({
+  enqueueDriveJob: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../db/index.js", async () => {
   const { mockDb: db } = await import("../test/mocks.js");
   return { db };
@@ -23,6 +27,9 @@ vi.mock("../middleware/auth.js", async () => {
     requireAdmin: mockRequireAdmin(),
   };
 });
+vi.mock("../services/driveJobs.js", () => ({
+  enqueueDriveJob,
+}));
 
 const BASE = "/v1/event-song-submissions";
 
@@ -142,6 +149,7 @@ describe("GET /v1/event-song-submissions", () => {
 describe("POST /v1/event-song-submissions", () => {
   beforeEach(() => {
     resetSelectQueue();
+    enqueueDriveJob.mockClear();
   });
 
   it("creates and returns a joined submission row", async () => {
@@ -161,6 +169,25 @@ describe("POST /v1/event-song-submissions", () => {
       event_id: "evt_1",
       song_id: "song_1",
     });
+    expect(enqueueDriveJob).toHaveBeenCalledTimes(1);
+    expect(enqueueDriveJob).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ kind: "copy", submissionId: expect.any(String) })
+    );
+  });
+
+  it("still returns 201 when enqueueDriveJob rejects", async () => {
+    enqueueDriveJob.mockRejectedValueOnce(new Error("queue down"));
+    enqueueSelectResult([{ id: "song_1" }]);
+    enqueueSelectResult([{ id: "evt_1" }]);
+    enqueueSelectResult([{ ...joinedRow, id: "sub_new" }]);
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify(validBody),
+    });
+    expect(res.status).toBe(201);
+    expect(enqueueDriveJob).toHaveBeenCalledTimes(1);
   });
 
   it("returns 409 when the song is already submitted to the event", async () => {
@@ -216,6 +243,7 @@ describe("POST /v1/event-song-submissions", () => {
 describe("DELETE /v1/event-song-submissions/:id", () => {
   beforeEach(() => {
     resetSelectQueue();
+    enqueueDriveJob.mockClear();
   });
 
   it("returns 404 when the submission is not found", async () => {
@@ -234,5 +262,38 @@ describe("DELETE /v1/event-song-submissions/:id", () => {
     });
     expect(res.status).toBe(401);
     assertErrorEnvelope(await readJson<ErrorEnvelope>(res));
+  });
+
+  it("enqueues a trash job before deleting when drive_copy_file_id is set", async () => {
+    enqueueSelectResult([{ id: "sub_1", driveCopyFileId: "drive_copy_1" }]);
+    const deleteWhere = vi.fn().mockResolvedValue(undefined);
+    const deleteMock = mockDb.delete as ReturnType<typeof vi.fn>;
+    deleteMock.mockImplementationOnce(() => ({ where: deleteWhere }));
+
+    const res = await app.request(`${BASE}/sub_1`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+
+    expect(res.status).toBe(204);
+    expect(enqueueDriveJob).toHaveBeenCalledTimes(1);
+    expect(enqueueDriveJob).toHaveBeenCalledWith(expect.anything(), {
+      kind: "trash",
+      fileId: "drive_copy_1",
+    });
+    expect(enqueueDriveJob.mock.invocationCallOrder[0]).toBeLessThan(
+      deleteWhere.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER
+    );
+    expect(deleteWhere).toHaveBeenCalled();
+  });
+
+  it("does not enqueue a trash job when drive_copy_file_id is null", async () => {
+    enqueueSelectResult([{ id: "sub_1", driveCopyFileId: null }]);
+    const res = await app.request(`${BASE}/sub_1`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(204);
+    expect(enqueueDriveJob).not.toHaveBeenCalled();
   });
 });

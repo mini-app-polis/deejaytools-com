@@ -1,13 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { tickSessionStatuses, fillRunningSessions } = vi.hoisted(() => ({
+const { tickSessionStatuses, fillRunningSessions, processDriveJobs } = vi.hoisted(() => ({
   tickSessionStatuses: vi.fn(async () => 0),
   fillRunningSessions: vi.fn(async () => 0),
+  processDriveJobs: vi.fn(async () => 0),
 }));
 
 vi.mock("./cron.js", () => ({
   tickSessionStatuses,
   fillRunningSessions,
+}));
+vi.mock("./driveJobs.js", () => ({
+  processDriveJobs,
 }));
 
 import { runTick, startScheduler } from "./scheduler.js";
@@ -25,14 +29,17 @@ describe("runTick", () => {
   beforeEach(() => {
     tickSessionStatuses.mockClear();
     fillRunningSessions.mockClear();
+    processDriveJobs.mockClear();
     tickSessionStatuses.mockResolvedValue(0);
     fillRunningSessions.mockResolvedValue(0);
+    processDriveJobs.mockResolvedValue(0);
   });
 
-  it("calls both tickSessionStatuses and fillRunningSessions", async () => {
+  it("calls tickSessionStatuses, fillRunningSessions, and processDriveJobs", async () => {
     await runTick(fakeDb);
     expect(tickSessionStatuses).toHaveBeenCalledWith(fakeDb);
     expect(fillRunningSessions).toHaveBeenCalledWith(fakeDb);
+    expect(processDriveJobs).toHaveBeenCalledWith(fakeDb);
   });
 
   it("swallows errors so a bad pass does not throw", async () => {
@@ -46,8 +53,10 @@ describe("startScheduler", () => {
     vi.useFakeTimers();
     tickSessionStatuses.mockClear();
     fillRunningSessions.mockClear();
+    processDriveJobs.mockClear();
     tickSessionStatuses.mockResolvedValue(0);
     fillRunningSessions.mockResolvedValue(0);
+    processDriveJobs.mockResolvedValue(0);
   });
 
   afterEach(() => {

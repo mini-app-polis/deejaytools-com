@@ -10,6 +10,7 @@ import { buildStructuredSongLabel } from "../lib/songLabel.js";
 import { partnershipDisplay } from "../lib/entityLabel.js";
 import { zValidator } from "../lib/validate.js";
 import { requireAuth } from "../middleware/auth.js";
+import { enqueueDriveJob } from "../services/driveJobs.js";
 import { computeStatus } from "./events.js";
 
 const logger = createLogger("deejaytools-api");
@@ -223,6 +224,21 @@ eventSongSubmissionRoutes.post(
       return c.json(CommonErrors.internalError(), 500);
     }
 
+    // The Drive copy runs on the scheduler tick, not here: a Drive outage or a
+    // slow copy must never fail or delay a submission during the pre-event rush.
+    // A failure to enqueue is likewise non-fatal — the submission is the record
+    // of truth and the copy can be backfilled.
+    try {
+      await enqueueDriveJob(db, { kind: "copy", submissionId: id });
+    } catch (err) {
+      logger.error({
+        event: "drive_copy_enqueue_failed",
+        category: "api",
+        context: { submissionId: id, userId },
+        error: err,
+      });
+    }
+
     const [row] = await fetchUserSubmissionRows(userId, { submissionId: id });
     return c.json(success(mapSubmissionRow(row)), 201);
   }
@@ -233,7 +249,10 @@ eventSongSubmissionRoutes.delete("/:id", requireAuth, async (c) => {
   const id = c.req.param("id");
 
   const [existing] = await db
-    .select({ id: eventSongSubmissions.id })
+    .select({
+      id: eventSongSubmissions.id,
+      driveCopyFileId: eventSongSubmissions.driveCopyFileId,
+    })
     .from(eventSongSubmissions)
     .where(
       and(eq(eventSongSubmissions.id, id), eq(eventSongSubmissions.submittedByUserId, userId))
@@ -242,6 +261,22 @@ eventSongSubmissionRoutes.delete("/:id", requireAuth, async (c) => {
 
   if (!existing) {
     return c.json(CommonErrors.notFound("Event song submission"), 404);
+  }
+
+  // Enqueue BEFORE the delete: once the row is gone the file id is unrecoverable.
+  // A stray job for an already-deleted file is harmless; an orphaned Drive copy
+  // in a DJ's event folder is not.
+  if (existing.driveCopyFileId) {
+    try {
+      await enqueueDriveJob(db, { kind: "trash", fileId: existing.driveCopyFileId });
+    } catch (err) {
+      logger.error({
+        event: "drive_trash_enqueue_failed",
+        category: "api",
+        context: { submissionId: id, userId, driveFileId: existing.driveCopyFileId },
+        error: err,
+      });
+    }
   }
 
   try {
