@@ -1,4 +1,4 @@
-import { CommonErrors, createLogger, success, successList } from "common-typescript-utils";
+import { CommonErrors, createLogger, error, success, successList } from "common-typescript-utils";
 import { Hono } from "hono";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -99,10 +99,34 @@ adminDriveJobRoutes.post("/:id/retry", requireAdmin, async (c) => {
   const [existing] = await db.select().from(driveJobs).where(eq(driveJobs.id, id)).limit(1);
   if (!existing) return c.json(CommonErrors.notFound("Drive job"), 404);
 
-  await db
+  // Only an exhausted job is retryable. Anything else is either already going
+  // to run or already succeeded, and re-queueing it would double the work —
+  // a second Drive copy for a submission that has one.
+  if (existing.status !== "failed") {
+    return c.json(
+      error(
+        "conflict",
+        `Job is ${existing.status}, not failed — only exhausted jobs can be retried.`
+      ),
+      409
+    );
+  }
+
+  // Report what actually changed rather than what was asked for. The status
+  // guard is repeated in the WHERE so a concurrent tick claiming this job
+  // between the select and the update loses the race safely.
+  const updated = await db
     .update(driveJobs)
     .set({ status: "pending", attempts: 0, nextAttemptAt: Date.now(), updatedAt: Date.now() })
-    .where(and(eq(driveJobs.id, id), eq(driveJobs.status, "failed")));
+    .where(and(eq(driveJobs.id, id), eq(driveJobs.status, "failed")))
+    .returning({ id: driveJobs.id, status: driveJobs.status });
+
+  if (updated.length === 0) {
+    return c.json(
+      error("conflict", "Job changed state before it could be retried — re-check and try again."),
+      409
+    );
+  }
 
   logger.info({
     event: "drive_job_retry_requested",
@@ -110,5 +134,5 @@ adminDriveJobRoutes.post("/:id/retry", requireAdmin, async (c) => {
     context: { job_id: id, previous_status: existing.status },
   });
 
-  return c.json(success({ id, status: "pending" }));
+  return c.json(success(updated[0]));
 });

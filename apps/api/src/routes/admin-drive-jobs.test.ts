@@ -28,6 +28,28 @@ vi.mock("../middleware/auth.js", async (importOriginal) => {
 
 const BASE = "/v1/admin/drive-jobs";
 
+const failedJobRow = {
+  id: "job_1",
+  kind: "copy",
+  status: "failed",
+  attempts: 10,
+  submissionId: "sub_1",
+  fileId: null,
+  nextAttemptAt: 1,
+  lastError: "Drive down",
+  createdAt: 1,
+  updatedAt: 2,
+};
+
+function mockRetryUpdate(returning: unknown[]) {
+  const returningMock = vi.fn().mockResolvedValue(returning);
+  const whereMock = vi.fn(() => ({ returning: returningMock }));
+  const setMock = vi.fn(() => ({ where: whereMock }));
+  const updateMock = mockDb.update as ReturnType<typeof vi.fn>;
+  updateMock.mockImplementationOnce(() => ({ set: setMock }));
+  return { setMock, whereMock, returningMock };
+}
+
 describe("GET /v1/admin/drive-jobs/summary", () => {
   beforeEach(() => {
     resetSelectQueue();
@@ -123,24 +145,9 @@ describe("POST /v1/admin/drive-jobs/:id/retry", () => {
     assertErrorEnvelope(await readJson<ErrorEnvelope>(res));
   });
 
-  it("resets a failed job to pending with attempts 0", async () => {
-    enqueueSelectResult([
-      {
-        id: "job_1",
-        kind: "copy",
-        status: "failed",
-        attempts: 10,
-        submissionId: "sub_1",
-        fileId: null,
-        nextAttemptAt: 1,
-        lastError: "Drive down",
-        createdAt: 1,
-        updatedAt: 2,
-      },
-    ]);
-    const setMock = vi.fn(() => ({ where: vi.fn().mockResolvedValue(undefined) }));
-    const updateMock = mockDb.update as ReturnType<typeof vi.fn>;
-    updateMock.mockImplementationOnce(() => ({ set: setMock }));
+  it("returns the updated row from returning(), not a hardcoded literal", async () => {
+    enqueueSelectResult([failedJobRow]);
+    mockRetryUpdate([{ id: "job_1", status: "pending" }]);
 
     const res = await app.request(`${BASE}/job_1/retry`, {
       method: "POST",
@@ -151,40 +158,47 @@ describe("POST /v1/admin/drive-jobs/:id/retry", () => {
     const body = await readJson<SuccessEnvelope<{ id: string; status: string }>>(res);
     assertSuccessEnvelope(body);
     expect(body.data).toEqual({ id: "job_1", status: "pending" });
-    expect(setMock).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "pending", attempts: 0 })
-    );
   });
 
-  it("does not reset a done job", async () => {
-    enqueueSelectResult([
-      {
-        id: "job_1",
-        kind: "copy",
-        status: "done",
-        attempts: 1,
-        submissionId: "sub_1",
-        fileId: "copy_1",
-        nextAttemptAt: 1,
-        lastError: null,
-        createdAt: 1,
-        updatedAt: 2,
-      },
-    ]);
-    const setMock = vi.fn(() => ({ where: vi.fn().mockResolvedValue(undefined) }));
-    const updateMock = mockDb.update as ReturnType<typeof vi.fn>;
-    updateMock.mockImplementationOnce(() => ({ set: setMock }));
+  it("returns 409 when retrying a done job", async () => {
+    enqueueSelectResult([{ ...failedJobRow, status: "done", fileId: "copy_1" }]);
+    const res = await app.request(`${BASE}/job_1/retry`, {
+      method: "POST",
+      headers: adminHeaders(),
+    });
+    expect(res.status).toBe(409);
+    const body = await readJson<ErrorEnvelope>(res);
+    assertErrorEnvelope(body);
+    expect(body.error.code).toBe("conflict");
+    expect(body.error.message).toMatch(/done, not failed/i);
+  });
+
+  it("returns 409 when retrying a pending job", async () => {
+    enqueueSelectResult([{ ...failedJobRow, status: "pending", attempts: 0 }]);
+    const res = await app.request(`${BASE}/job_1/retry`, {
+      method: "POST",
+      headers: adminHeaders(),
+    });
+    expect(res.status).toBe(409);
+    const body = await readJson<ErrorEnvelope>(res);
+    assertErrorEnvelope(body);
+    expect(body.error.code).toBe("conflict");
+    expect(body.error.message).toMatch(/pending, not failed/i);
+  });
+
+  it("returns 409 when the job changes state before the update", async () => {
+    enqueueSelectResult([failedJobRow]);
+    mockRetryUpdate([]);
 
     const res = await app.request(`${BASE}/job_1/retry`, {
       method: "POST",
       headers: adminHeaders(),
     });
 
-    expect(res.status).toBe(200);
-    expect(setMock).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "pending", attempts: 0 })
-    );
-    const whereMock = setMock.mock.results[0]?.value.where as ReturnType<typeof vi.fn>;
-    expect(whereMock).toHaveBeenCalled();
+    expect(res.status).toBe(409);
+    const body = await readJson<ErrorEnvelope>(res);
+    assertErrorEnvelope(body);
+    expect(body.error.code).toBe("conflict");
+    expect(body.error.message).toMatch(/changed state before it could be retried/i);
   });
 });
