@@ -194,6 +194,27 @@ describe("uploadSongToDrive", () => {
     );
   });
 
+  it("sanitizes slashes and collapsed whitespace in folder names", async () => {
+    mockFilesList
+      .mockResolvedValueOnce({ data: { files: [{ id: "yr_folder" }] } })
+      .mockResolvedValueOnce({ data: { files: [{ id: "div_folder" }] } });
+    mockFilesCreate.mockResolvedValueOnce({ data: { id: "file_xyz" } });
+
+    await uploadSongToDrive(Buffer.from("audio"), {
+      filename: "test.mp3",
+      mimeType: "audio/mpeg",
+      seasonYear: "2026",
+      division: "Latin  Rhythm/Open",
+    });
+
+    expect(mockFilesList).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        q: expect.stringContaining("name='Latin Rhythm-Open'"),
+      })
+    );
+  });
+
   it("throws when Drive returns no file ID", async () => {
     mockFoldersExist();
     mockFilesCreate.mockResolvedValueOnce({ data: {} });

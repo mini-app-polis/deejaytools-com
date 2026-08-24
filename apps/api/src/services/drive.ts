@@ -130,8 +130,8 @@ export async function uploadSongToDrive(
   const rootFolderId = getParentFolderId();
   const drive = google.drive({ version: "v3", auth });
 
-  const yearLabel = options.seasonYear.trim() || "unknown";
-  const divisionLabel = options.division.trim() || "unknown";
+  const yearLabel = sanitizeFolderName(options.seasonYear);
+  const divisionLabel = sanitizeFolderName(options.division);
 
   const yearFolderId = await findOrCreateFolder(drive, yearLabel, rootFolderId);
   const divisionFolderId = await findOrCreateFolder(drive, divisionLabel, yearFolderId);
