@@ -1,4 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  FlacStream,
+  MetadataBlockHeader,
+  MetadataBlockType,
+  OtherMetadataBlock,
+  readFlacTags,
+  VorbisCommentBlock,
+} from "flac-tagger";
+import { parseBuffer } from "music-metadata";
 import NodeID3 from "node-id3";
 import { parseAtoms, serializeAtoms, tagSongBytes } from "./tagger.js";
 
@@ -20,9 +29,31 @@ vi.mock("common-typescript-utils", async (importOriginal) => {
   };
 });
 
-function minimalMp3(): Buffer {
-  const tags = NodeID3.create({ title: "Original Title", artist: "Original Artist" });
+function minimalMp3(existing: Record<string, unknown> = {}): Buffer {
+  const tags = NodeID3.create({ title: "Original Title", artist: "Original Artist", ...existing });
   return Buffer.isBuffer(tags) ? tags : Buffer.alloc(128);
+}
+
+function buildMinimalFlac(commentList: string[] = ["TITLE=Original Title", "ARTIST=Original Artist", "GENRE=Rock"]): Buffer {
+  const streamInfoData = Buffer.alloc(34);
+  streamInfoData.writeUInt16BE(4096, 0);
+  streamInfoData.writeUInt16BE(4096, 2);
+  const streamInfo = new OtherMetadataBlock({
+    header: new MetadataBlockHeader({ type: MetadataBlockType.StreamInfo, dataLength: 34 }),
+    data: streamInfoData,
+  });
+  const vorbis = new VorbisCommentBlock({ commentList });
+  const stream = new FlacStream({
+    metadataBlocks: [streamInfo, vorbis],
+    frameData: Buffer.from([0xff, 0xf8, 0x82, 0x88, 0x00, 0x00, 0x00, 0x02]),
+  });
+  return stream.toBuffer();
+}
+
+function readMp3Genre(buf: Buffer): string | undefined {
+  const tags = NodeID3.read(buf);
+  if (typeof tags !== "object" || tags === null) return undefined;
+  return tags.genre != null ? String(tags.genre) : undefined;
 }
 
 describe("tagSongBytes", () => {
@@ -60,6 +91,25 @@ describe("tagSongBytes", () => {
     if (typeof tags === "object" && tags !== null) {
       expect(tags.title).toBe("New Title");
       expect(tags.artist).toBe("New Artist");
+      expect(readMp3Genre(result)).toBe("Routine");
+    }
+  });
+
+  it("sets MP3 genre to Routine and overwrites an existing genre", async () => {
+    const bytes = minimalMp3({ genre: "Rock" });
+    expect(readMp3Genre(bytes)).toBe("Rock");
+
+    const result = await tagSongBytes({
+      bytes,
+      newTitle: "New Title",
+      newArtist: "New Artist",
+      mimeType: "audio/mpeg",
+    });
+    const tags = NodeID3.read(result);
+    if (typeof tags === "object" && tags !== null) {
+      expect(tags.title).toBe("New Title");
+      expect(tags.artist).toBe("New Artist");
+      expect(readMp3Genre(result)).toBe("Routine");
     }
   });
 
@@ -165,6 +215,31 @@ describe("WAV tagging (audio/wav)", () => {
     if (typeof tags === "object" && tags !== null) {
       expect(tags.title).toBe("New Title");
       expect(tags.artist).toBe("New Artist");
+      expect(readMp3Genre(id3!.payload)).toBe("Routine");
+    }
+  });
+
+  it("sets WAV genre to Routine and overwrites an existing genre", async () => {
+    const oldId3 = NodeID3.create({
+      title: "Old Title",
+      artist: "Old Artist",
+      genre: "Jazz",
+    });
+    if (!Buffer.isBuffer(oldId3)) throw new Error("expected ID3 buffer");
+    const bytes = buildMinimalWav([{ id: "id3 ", payload: oldId3 }]);
+    const result = await tagSongBytes({
+      bytes,
+      newTitle: "New Title",
+      newArtist: "New Artist",
+      mimeType: "audio/wav",
+    });
+    const id3Chunks = walkChunks(result).filter((c) => c.id === "id3 ");
+    expect(id3Chunks).toHaveLength(1);
+    const tags = NodeID3.read(id3Chunks[0]!.payload);
+    if (typeof tags === "object" && tags !== null) {
+      expect(tags.title).toBe("New Title");
+      expect(tags.artist).toBe("New Artist");
+      expect(readMp3Genre(id3Chunks[0]!.payload)).toBe("Routine");
     }
   });
 
@@ -575,9 +650,11 @@ describe("m4a tagging (audio/mp4)", () => {
     const names = entries.map((e) => e.name);
     expect(names).toContain("©nam");
     expect(names).toContain("©ART");
+    expect(names).toContain("©gen");
     expect(names).toContain("©cmt");
     expect(readIlstEntryText(entries.find((e) => e.name === "©nam")!.payload)).toBe("New Title");
     expect(readIlstEntryText(entries.find((e) => e.name === "©ART")!.payload)).toBe("New Artist");
+    expect(readIlstEntryText(entries.find((e) => e.name === "©gen")!.payload)).toBe("Routine");
     expect(readIlstEntryText(entries.find((e) => e.name === "©cmt")!.payload)).toMatch(
       /prev\[title=,artist=,album=\]/
     );
@@ -609,6 +686,7 @@ describe("m4a tagging (audio/mp4)", () => {
     }
     expect(readIlstEntryText(after.find((e) => e.name === "©nam")!.payload)).toBe("New Title");
     expect(readIlstEntryText(after.find((e) => e.name === "©ART")!.payload)).toBe("New Artist");
+    expect(readIlstEntryText(after.find((e) => e.name === "©gen")!.payload)).toBe("Routine");
     expect(after.some((e) => e.name === "©cmt")).toBe(true);
   });
 
@@ -643,6 +721,11 @@ describe("m4a tagging (audio/mp4)", () => {
       mimeType: "audio/mp4",
     });
 
+    const entries = findIlstEntries(result);
+    expect(readIlstEntryText(entries.find((e) => e.name === "©gen")!.payload)).toBe("Routine");
+    expect(readIlstEntryText(entries.find((e) => e.name === "©nam")!.payload)).toBe("New Title");
+    expect(readIlstEntryText(entries.find((e) => e.name === "©ART")!.payload)).toBe("New Artist");
+
     const resultMdat = findTopLevelAtom(result, "mdat")!;
     const resultPayloadOffset = resultMdat.start + resultMdat.headerLen;
     const resultStco = readStcoFirstEntry(result)!;
@@ -650,6 +733,27 @@ describe("m4a tagging (audio/mp4)", () => {
     expect(result.subarray(resultPayloadOffset, resultPayloadOffset + mdatPayloadLength)).toEqual(
       buf.subarray(mdatPayloadOffset, mdatPayloadOffset + mdatPayloadLength)
     );
+  });
+
+  it("overwrites an existing m4a genre with Routine", async () => {
+    const { buf } = buildMinimalM4a({
+      existingIlstEntries: [
+        buildM4aIlstTextEntry("©nam", "Old Song"),
+        buildM4aIlstTextEntry("©ART", "Old Band"),
+        buildM4aIlstTextEntry("©gen", "Pop"),
+      ],
+    });
+    const result = await tagSongBytes({
+      bytes: buf,
+      newTitle: "Fresh",
+      newArtist: "Fresh Band",
+      mimeType: "audio/mp4",
+    });
+    const entries = findIlstEntries(result);
+    expect(entries.filter((e) => e.name === "©gen")).toHaveLength(1);
+    expect(readIlstEntryText(entries.find((e) => e.name === "©gen")!.payload)).toBe("Routine");
+    expect(readIlstEntryText(entries.find((e) => e.name === "©nam")!.payload)).toBe("Fresh");
+    expect(readIlstEntryText(entries.find((e) => e.name === "©ART")!.payload)).toBe("Fresh Band");
   });
 
   it("does NOT adjust stco when moov follows mdat", async () => {
@@ -809,6 +913,51 @@ describe("m4a tagging (audio/mp4)", () => {
 });
 
 describe("FLAC tagging (audio/flac)", () => {
+  it("sets genre to Routine and preserves title and artist", async () => {
+    const bytes = buildMinimalFlac();
+    const result = await tagSongBytes({
+      bytes,
+      newTitle: "FLAC Title",
+      newArtist: "FLAC Artist",
+      mimeType: "audio/flac",
+    });
+    const tags = await readFlacTags(result);
+    expect(tags.tagMap.TITLE).toBe("FLAC Title");
+    expect(tags.tagMap.ARTIST).toBe("FLAC Artist");
+    expect(tags.tagMap.GENRE).toBe("Routine");
+
+    const parsed = await parseBuffer(result, { mimeType: "audio/flac" });
+    expect(parsed.common.title).toBe("FLAC Title");
+    expect(parsed.common.artist).toBe("FLAC Artist");
+    expect(parsed.common.genre).toEqual(["Routine"]);
+  });
+
+  it("overwrites an existing FLAC genre with Routine", async () => {
+    const bytes = buildMinimalFlac([
+      "TITLE=Old Title",
+      "ARTIST=Old Artist",
+      "GENRE=Electronic",
+    ]);
+    const before = await readFlacTags(bytes);
+    expect(before.tagMap.GENRE).toBe("Electronic");
+
+    const result = await tagSongBytes({
+      bytes,
+      newTitle: "New Title",
+      newArtist: "New Artist",
+      mimeType: "audio/flac",
+    });
+    const tags = await readFlacTags(result);
+    expect(tags.tagMap.TITLE).toBe("New Title");
+    expect(tags.tagMap.ARTIST).toBe("New Artist");
+    expect(tags.tagMap.GENRE).toBe("Routine");
+    expect(
+      Object.values(tags.tagMap).filter((value) =>
+        Array.isArray(value) ? value.includes("Electronic") : value === "Electronic"
+      )
+    ).toHaveLength(0);
+  });
+
   it("returns a Buffer for audio/flac MIME type without throwing", async () => {
     const bytes = Buffer.alloc(200);
     const result = await tagSongBytes({

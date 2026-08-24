@@ -11,6 +11,17 @@ import NodeID3 from "node-id3";
 const TAGGER_CATEGORY = "tagger" as LogCategory;
 const logger = createLogger("tagger");
 
+/**
+ * Every file this service tags is a competition routine, so genre is a
+ * constant rather than a caller-supplied value — DJ software groups and
+ * filters on it, and a consistent value makes an event's tracks selectable
+ * as one set.
+ *
+ * Deliberately not a parameter on TagSongInput: making it an input invites
+ * drift between callers, and there is no case for a different value.
+ */
+const SONG_GENRE = "Routine";
+
 export interface TagSongInput {
   bytes: Buffer;
   newTitle: string;
@@ -127,6 +138,7 @@ async function tagWav(
     const id3TagBytes = NodeID3.create({
       title: newTitle,
       artist: newArtist,
+      genre: SONG_GENRE,
       comment: { language: "eng", text: previousSummary },
     });
     if (!Buffer.isBuffer(id3TagBytes)) return bytes;
@@ -173,6 +185,7 @@ async function tagWithId3(
       {
         title: newTitle,
         artist: newArtist,
+        genre: SONG_GENRE,
         comment: { language: "eng", text: previousSummary },
       },
       Buffer.from(bytes)
@@ -221,6 +234,7 @@ async function tagFlac(
     const tagMap: Record<string, string | string[]> = { ...tags.tagMap };
     tagMap.TITLE = newTitle;
     tagMap.ARTIST = newArtist;
+    tagMap.GENRE = SONG_GENRE;
     tagMap.COMMENT = previousSummary;
 
     const stream = FlacStream.fromBuffer(bytes);
@@ -542,6 +556,7 @@ async function tagM4a(
     };
     setEntry("©nam", newTitle);
     setEntry("©ART", newArtist);
+    setEntry("©gen", SONG_GENRE);
     setEntry("©cmt", previousSummary);
 
     const newMoovSize = serializeAtom(moov).length;
