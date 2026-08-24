@@ -110,6 +110,11 @@ export default function EventSubmissionsPage() {
     [songs, submissionBySongId]
   );
 
+  const orphanedSubmissions = useMemo(() => {
+    const songIds = new Set(songs.map((s) => s.id));
+    return submissions.filter((sub) => !songIds.has(sub.song_id));
+  }, [submissions, songs]);
+
   const handleAdd = async (songId: string) => {
     if (!selectedEventId) return;
     setBusySongId(songId);
@@ -292,6 +297,38 @@ export default function EventSubmissionsPage() {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {selectedEventId && orphanedSubmissions.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Submitted songs that are no longer in your library. They still count against this
+                event, so remove them if they should not be entered.
+              </p>
+              {orphanedSubmissions.map((sub) => (
+                <div
+                  key={sub.id}
+                  className="flex items-start justify-between gap-3 rounded-lg border px-4 py-3"
+                >
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="font-medium text-sm break-all">{sub.song_label}</p>
+                    {sub.division && (
+                      <p className="text-xs text-muted-foreground">Division {sub.division}</p>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0 border-destructive/50 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                    disabled={busySongId === sub.song_id || submissionsLoading}
+                    onClick={() => void handleRemove(sub)}
+                  >
+                    {busySongId === sub.song_id ? "Removing…" : "Remove"}
+                  </Button>
+                </div>
+              ))}
             </div>
           )}
 

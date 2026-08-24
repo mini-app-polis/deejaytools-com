@@ -277,4 +277,59 @@ describe("EventSubmissionsPage", () => {
     expect(screen.queryByText(/already submitted for this division/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^add$/i })).toBeEnabled();
   });
+
+  it("renders orphaned submissions with a working Remove when the song is gone", async () => {
+    mockApi(
+      [SONG],
+      [
+        {
+          id: "orphan_sub",
+          event_id: "ev1",
+          song_id: "missing_song",
+          song_label: "2025_Classic_GoneRoutine.mp3",
+          division: "Classic",
+          created_at: 1,
+        },
+      ]
+    );
+    apiDel.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderPage();
+    await selectEvent(user);
+
+    expect(
+      await screen.findByText(/submitted songs that are no longer in your library/i)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/2025_Classic_GoneRoutine\.mp3/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Division Classic/).length).toBeGreaterThanOrEqual(1);
+
+    await user.click(screen.getByRole("button", { name: /^remove$/i }));
+    await waitFor(() => {
+      expect(apiDel).toHaveBeenCalledWith("/v1/event-song-submissions/orphan_sub");
+    });
+  });
+
+  it("does not render the orphaned block when every submission has a song", async () => {
+    mockApi(
+      [SONG],
+      [
+        {
+          id: "sub1",
+          event_id: "ev1",
+          song_id: "song1",
+          song_label: "2026_Classic_MyRoutine.mp3",
+          division: "Classic",
+          created_at: 1,
+        },
+      ]
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await selectEvent(user);
+
+    expect(await screen.findByRole("button", { name: /^remove$/i })).toBeInTheDocument();
+    expect(
+      screen.queryByText(/submitted songs that are no longer in your library/i)
+    ).not.toBeInTheDocument();
+  });
 });
