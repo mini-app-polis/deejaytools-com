@@ -293,7 +293,10 @@ async function buildAndUploadSong(
   // Same order as the filename so a DJ reading the player and the folder
   // listing sees one consistent entity.
   const newTitle = entitySecond ? `${entityFirst} & ${entitySecond}` : entityFirst;
-  const newArtist = [song.division, seasonYearStr, song.routineName].filter(Boolean).join(" - ");
+  // "|" rather than "-": routine names and division names contain hyphens
+  // ("Rising Star Classic", "Pro-Am"), so a hyphen separator is ambiguous when
+  // read back or split. "|" appears in none of the source fields.
+  const newArtist = [song.division, seasonYearStr, song.routineName].filter(Boolean).join(" | ");
 
   const taggedBytes = await tagSongBytes({ bytes: inputBytes, newTitle, newArtist, mimeType });
 

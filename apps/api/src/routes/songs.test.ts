@@ -854,6 +854,35 @@ describe("POST /v1/songs/upload/chunk", () => {
     );
   });
 
+  it("passes newArtist with pipe separators including routine name", async () => {
+    vi.mocked(tagger.tagSongBytes).mockClear();
+    const form = enqueueSoloChunkUpload();
+    await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
+    expect(vi.mocked(tagger.tagSongBytes)).toHaveBeenCalledWith(
+      expect.objectContaining({ newArtist: "Classic | 2026 | My Routine" })
+    );
+  });
+
+  it("passes newArtist without a trailing separator when routine name is absent", async () => {
+    vi.mocked(tagger.tagSongBytes).mockClear();
+    const form = enqueueSoloChunkUpload(
+      { routineName: null, personalDescriptor: null },
+      { routine_name: "", personal_descriptor: "" }
+    );
+    await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
+    expect(vi.mocked(tagger.tagSongBytes)).toHaveBeenCalledWith(
+      expect.objectContaining({ newArtist: "Classic | 2026" })
+    );
+  });
+
   it("omits optional routine and descriptor segments without stray underscores", async () => {
     const form = enqueueSoloChunkUpload(
       { routineName: null, personalDescriptor: null },
