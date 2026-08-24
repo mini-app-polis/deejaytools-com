@@ -372,21 +372,54 @@ describe("EventDetailPage — entered entities", () => {
     expect(screen.getByText("1 song")).toBeInTheDocument();
   });
 
-  it("counts distinct entities in the heading, not division rows", async () => {
+  it("counts distinct entities in the heading but sums their songs", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
       if (path === "/v1/events/ev-1/entities") {
-        // The same couple entered in two divisions is two rows but one entry.
+        // The same couple entered in two divisions is two rows but one entry —
+        // and their songs from both divisions still both count as songs.
         return Promise.resolve([
-          makeDivision("Classic", [makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz" })]),
-          makeDivision("Masters", [makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz" })]),
+          makeDivision("Classic", [
+            makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz", songs: 2 }),
+          ]),
+          makeDivision("Masters", [
+            makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz", songs: 1 }),
+          ]),
         ]);
       }
       return Promise.resolve([]);
     });
     renderPage();
 
-    await waitFor(() => expect(screen.getByText(/1 entry/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: /entered\s+1 entry · 3 songs/i })
+      ).toBeInTheDocument()
+    );
+  });
+
+  it("shows entry and song counts on each division header", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (path === "/v1/events/ev-1/entities") {
+        return Promise.resolve([
+          makeDivision("Classic", [
+            makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz", songs: 2 }),
+          ]),
+          makeDivision("Teams", [
+            makeEntity({ key: "pt:p9", label: "team2026", songs: 1 }),
+            makeEntity({ key: "us:u2", label: "Sam Lee", songs: 1 }),
+          ]),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    // One couple with two Classic songs: the counts differ, which is the whole
+    // reason both are printed.
+    await waitFor(() => expect(screen.getByText("1 entry · 2 songs")).toBeInTheDocument());
+    expect(screen.getByText("2 entries · 2 songs")).toBeInTheDocument();
   });
 
   it("hides a division's rows when its header is collapsed", async () => {

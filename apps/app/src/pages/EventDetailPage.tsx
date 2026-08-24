@@ -158,6 +158,17 @@ export default function EventDetailPage() {
 }
 
 /**
+ * "1 entry · 2 songs" — both counts, always, because they diverge whenever a
+ * competitor has more than one song in a division. A bare number next to a
+ * division would read as either one depending on the reader.
+ */
+function countsLabel(entryCount: number, songCount: number): string {
+  const entries = `${entryCount} ${entryCount === 1 ? "entry" : "entries"}`;
+  const songs = `${songCount} ${songCount === 1 ? "song" : "songs"}`;
+  return `${entries} · ${songs}`;
+}
+
+/**
  * Who has music in for this event, grouped by division.
  *
  * Laid out like the manager Event Songs view — collapsible division sections,
@@ -206,18 +217,25 @@ function EnteredEntities({ eventId, isSignedIn }: { eventId: string; isSignedIn:
 
   // An entity entered in two divisions is two rows but one competitor, so the
   // heading counts distinct entities rather than summing the section counts.
-  const entityCount =
+  // Songs do sum: the same couple's Classic and Masters songs are both songs.
+  const totals =
     divisions === null
       ? null
-      : new Set(divisions.flatMap((d) => d.entities.map((e) => e.entity_key))).size;
+      : {
+          entries: new Set(divisions.flatMap((d) => d.entities.map((e) => e.entity_key))).size,
+          songs: divisions.reduce(
+            (sum, d) => sum + d.entities.reduce((n, e) => n + e.song_count, 0),
+            0
+          ),
+        };
 
   return (
     <div className="space-y-4">
       <h2 className="text-base font-semibold">
         Entered
-        {entityCount !== null && (
+        {totals !== null && (
           <span className="ml-2 text-sm font-normal text-muted-foreground">
-            {entityCount} {entityCount === 1 ? "entry" : "entries"}
+            {countsLabel(totals.entries, totals.songs)}
           </span>
         )}
       </h2>
@@ -265,7 +283,10 @@ function EnteredEntities({ eventId, isSignedIn }: { eventId: string; isSignedIn:
                       {division}
                     </span>
                     <span className="text-xs font-normal text-muted-foreground/70">
-                      {entities.length}
+                      {countsLabel(
+                        entities.length,
+                        entities.reduce((n, e) => n + e.song_count, 0)
+                      )}
                     </span>
                   </button>
                   {!isCollapsed && (
