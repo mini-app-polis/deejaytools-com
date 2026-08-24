@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { partitionSubmittableSongs } from "@/lib/submittableSongs";
+import { buildFilledSlots, slotKeyForSong } from "@/lib/entitySlots";
 
 function songLabel(s: ApiSong): string {
   return (
@@ -118,6 +119,11 @@ export default function OpenSubmissionsPage() {
     for (const s of submissions) map.set(s.song_id, s);
     return map;
   }, [submissions]);
+
+  const filledSlots = useMemo(
+    () => buildFilledSlots(submissions, songs),
+    [submissions, songs]
+  );
 
   const { submittable: eligibleSongs, hiddenLegacyCount } = useMemo(
     () => partitionSubmittableSongs(songs, (id) => submissionBySongId.has(id)),
@@ -256,6 +262,11 @@ export default function OpenSubmissionsPage() {
             <div className={`space-y-3${submissionsLoading ? " opacity-60" : ""}`}>
               {eligibleSongs.map((song) => {
                 const existing = submissionBySongId.get(song.id);
+                const blockedBySongId = existing ? null : filledSlots.get(slotKeyForSong(song));
+                const blocked = !!blockedBySongId && blockedBySongId !== song.id;
+                const blockingSong = blockedBySongId
+                  ? songs.find((s) => s.id === blockedBySongId)
+                  : undefined;
                 const busy = busySongId === song.id;
                 return (
                   <div
@@ -266,6 +277,13 @@ export default function OpenSubmissionsPage() {
                       <p className="font-medium text-sm break-all">{songLabel(song)}</p>
                       {song.division && (
                         <p className="text-xs text-muted-foreground">Division {song.division}</p>
+                      )}
+                      {blocked && (
+                        <p className="text-xs text-muted-foreground">
+                          Already submitted for this division:{" "}
+                          {blockingSong ? songLabel(blockingSong) : "another song"}. Remove it first
+                          to submit this one.
+                        </p>
                       )}
                     </div>
                     {existing ? (
@@ -284,7 +302,7 @@ export default function OpenSubmissionsPage() {
                         type="button"
                         size="sm"
                         className="shrink-0"
-                        disabled={busy || submissionsLoading}
+                        disabled={busy || submissionsLoading || blocked}
                         onClick={() => void handleAdd(song.id)}
                       >
                         {busy ? "Adding…" : "Add"}

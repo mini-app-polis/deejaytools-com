@@ -46,6 +46,48 @@ const validBody = {
   song_id: "song_1",
 };
 
+const USER_ID = "user_test123";
+
+const classicPartnerSong = {
+  id: "song_1",
+  userId: USER_ID,
+  partnerId: "p1" as string | null,
+  managedPartnershipId: null as string | null,
+  division: "Classic" as string | null,
+};
+
+function enqueueCreatePath(
+  song: {
+    id: string;
+    userId: string;
+    partnerId: string | null;
+    managedPartnershipId: string | null;
+    division: string | null;
+  },
+  existingRows: Array<
+    {
+      id: string;
+      userId: string;
+      partnerId: string | null;
+      managedPartnershipId: string | null;
+      division: string | null;
+    } & { submissionId?: string }
+  > = []
+) {
+  enqueueSelectResult([song]);
+  enqueueSelectResult([{ id: "evt_1" }]);
+  enqueueSelectResult(
+    existingRows.map((row, index) => ({
+      submissionId: row.submissionId ?? `sub_existing_${index}`,
+      songId: row.id,
+      userId: row.userId,
+      partnerId: row.partnerId,
+      managedPartnershipId: row.managedPartnershipId,
+      division: row.division,
+    }))
+  );
+}
+
 const joinedRow = {
   id: "sub_1",
   eventId: "evt_1",
@@ -162,8 +204,7 @@ describe("POST /v1/event-song-submissions", () => {
   });
 
   it("creates and returns a joined submission row", async () => {
-    enqueueSelectResult([{ id: "song_1" }]);
-    enqueueSelectResult([{ id: "evt_1" }]);
+    enqueueCreatePath(classicPartnerSong);
     enqueueSelectResult([{ ...joinedRow, id: "sub_new" }]);
     const res = await app.request(BASE, {
       method: "POST",
@@ -188,8 +229,7 @@ describe("POST /v1/event-song-submissions", () => {
 
   it("still returns 201 and reports to Sentry when enqueueDriveJob rejects", async () => {
     enqueueDriveJob.mockRejectedValueOnce(new Error("queue down"));
-    enqueueSelectResult([{ id: "song_1" }]);
-    enqueueSelectResult([{ id: "evt_1" }]);
+    enqueueCreatePath(classicPartnerSong);
     enqueueSelectResult([{ ...joinedRow, id: "sub_new" }]);
     const res = await app.request(BASE, {
       method: "POST",
@@ -202,8 +242,7 @@ describe("POST /v1/event-song-submissions", () => {
   });
 
   it("returns 409 when the song is already submitted to the event", async () => {
-    enqueueSelectResult([{ id: "song_1" }]);
-    enqueueSelectResult([{ id: "evt_1" }]);
+    enqueueCreatePath(classicPartnerSong, [classicPartnerSong]);
     const insertMock = mockDb.insert as ReturnType<typeof vi.fn>;
     insertMock.mockImplementationOnce(() => ({
       values: vi.fn(() => Promise.reject({ code: "23505" })),
@@ -218,6 +257,162 @@ describe("POST /v1/event-song-submissions", () => {
     assertErrorEnvelope(body);
     expect(body.error.code).toBe("conflict");
     expect(body.error.message).toBe("That song is already submitted to this event.");
+  });
+
+  it("returns 409 ENTITY_SLOT_TAKEN for a second song with the same partner and division", async () => {
+    enqueueCreatePath(
+      { ...classicPartnerSong, id: "song_2" },
+      [{ ...classicPartnerSong, id: "song_1", submissionId: "sub_1" }]
+    );
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ event_id: "evt_1", song_id: "song_2" }),
+    });
+    expect(res.status).toBe(409);
+    const body = await readJson<ErrorEnvelope>(res);
+    assertErrorEnvelope(body);
+    expect(body.error.code).toBe("ENTITY_SLOT_TAKEN");
+  });
+
+  it("allows the same partner in a different division", async () => {
+    enqueueCreatePath(
+      { ...classicPartnerSong, id: "song_2", division: "Showcase" },
+      [{ ...classicPartnerSong, id: "song_1", submissionId: "sub_1" }]
+    );
+    enqueueSelectResult([{ ...joinedRow, id: "sub_new", songId: "song_2", songDivision: "Showcase" }]);
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ event_id: "evt_1", song_id: "song_2" }),
+    });
+    expect(res.status).toBe(201);
+  });
+
+  it("allows a different partner in the same division", async () => {
+    enqueueCreatePath(
+      { ...classicPartnerSong, id: "song_2", partnerId: "p2" },
+      [{ ...classicPartnerSong, id: "song_1", partnerId: "p1", submissionId: "sub_1" }]
+    );
+    enqueueSelectResult([{ ...joinedRow, id: "sub_new", songId: "song_2" }]);
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ event_id: "evt_1", song_id: "song_2" }),
+    });
+    expect(res.status).toBe(201);
+  });
+
+  it("blocks by managed partnership even when partner_id differs", async () => {
+    enqueueCreatePath(
+      {
+        id: "song_2",
+        userId: USER_ID,
+        partnerId: "p_other",
+        managedPartnershipId: "mp_1",
+        division: "Classic",
+      },
+      [
+        {
+          id: "song_1",
+          userId: USER_ID,
+          partnerId: "p1",
+          managedPartnershipId: "mp_1",
+          division: "Classic",
+          submissionId: "sub_1",
+        },
+      ]
+    );
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ event_id: "evt_1", song_id: "song_2" }),
+    });
+    expect(res.status).toBe(409);
+    const body = await readJson<ErrorEnvelope>(res);
+    expect(body.error.code).toBe("ENTITY_SLOT_TAKEN");
+  });
+
+  it("blocks a second solo song by the same user in the same division", async () => {
+    const soloSong = {
+      id: "song_1",
+      userId: USER_ID,
+      partnerId: null,
+      managedPartnershipId: null,
+      division: "Classic",
+    };
+    enqueueCreatePath(
+      { ...soloSong, id: "song_2" },
+      [{ ...soloSong, submissionId: "sub_1" }]
+    );
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ event_id: "evt_1", song_id: "song_2" }),
+    });
+    expect(res.status).toBe(409);
+    const body = await readJson<ErrorEnvelope>(res);
+    expect(body.error.code).toBe("ENTITY_SLOT_TAKEN");
+  });
+
+  it("treats null-division songs as one slot and keeps Classic separate", async () => {
+    const nullDivisionSong = {
+      id: "song_1",
+      userId: USER_ID,
+      partnerId: null,
+      managedPartnershipId: null,
+      division: null as string | null,
+    };
+    enqueueCreatePath(
+      { ...nullDivisionSong, id: "song_2" },
+      [{ ...nullDivisionSong, submissionId: "sub_1" }]
+    );
+    const blocked = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ event_id: "evt_1", song_id: "song_2" }),
+    });
+    expect(blocked.status).toBe(409);
+    expect((await readJson<ErrorEnvelope>(blocked)).error.code).toBe("ENTITY_SLOT_TAKEN");
+
+    resetSelectQueue();
+    enqueueCreatePath(
+      { ...nullDivisionSong, id: "song_3", division: "Classic" },
+      [{ ...nullDivisionSong, submissionId: "sub_1" }]
+    );
+    enqueueSelectResult([{ ...joinedRow, id: "sub_new", songId: "song_3", songDivision: "Classic" }]);
+    const allowed = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ event_id: "evt_1", song_id: "song_3" }),
+    });
+    expect(allowed.status).toBe(201);
+  });
+
+  it("allows a second song after the first submission is removed from the slot", async () => {
+    enqueueCreatePath(
+      { ...classicPartnerSong, id: "song_2" },
+      [{ ...classicPartnerSong, id: "song_1", submissionId: "sub_1" }]
+    );
+    expect(
+      (
+        await app.request(BASE, {
+          method: "POST",
+          headers: { ...authHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({ event_id: "evt_1", song_id: "song_2" }),
+        })
+      ).status
+    ).toBe(409);
+
+    resetSelectQueue();
+    enqueueCreatePath({ ...classicPartnerSong, id: "song_2" }, []);
+    enqueueSelectResult([{ ...joinedRow, id: "sub_new", songId: "song_2" }]);
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ event_id: "evt_1", song_id: "song_2" }),
+    });
+    expect(res.status).toBe(201);
   });
 
   it("returns 400 when event_id is missing", async () => {

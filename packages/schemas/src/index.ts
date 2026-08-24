@@ -45,6 +45,42 @@ export function isFollowerAmDivision(division: string | null | undefined): boole
   return division?.trim() === "ProAm FollowerAm";
 }
 
+/**
+ * Stable identifier for the competing entity a song belongs to.
+ *
+ * Precedence mirrors how the entity is built for filenames: a managed
+ * partnership names itself, otherwise the partner record defines the pairing,
+ * otherwise the song is a solo entry owned by the uploader.
+ *
+ * Prefixed by source table so ids from different tables can never collide —
+ * without the prefix a partner id equal to a user id would silently merge two
+ * unrelated entities.
+ *
+ * Keyed by id rather than by resolved name: two partner records describing the
+ * same real-world couple are treated as different entities. That is deliberate
+ * — matching on names breaks on spelling variants, middle names and typos.
+ */
+export function songEntityKey(song: {
+  userId: string;
+  partnerId?: string | null;
+  managedPartnershipId?: string | null;
+}): string {
+  if (song.managedPartnershipId) return `mp:${song.managedPartnershipId}`;
+  if (song.partnerId) return `pt:${song.partnerId}`;
+  return `us:${song.userId}`;
+}
+
+/**
+ * Key for the one-song-per-entity-per-division slot within an event.
+ *
+ * A null division groups all of an entity's division-less songs into a single
+ * slot. That is intentional: an entry with no division stated is still one
+ * entry.
+ */
+export function entitySlotKey(entityKey: string, division: string | null | undefined): string {
+  return `${entityKey}::${division?.trim() ?? ""}`;
+}
+
 export const SessionStatusSchema = z.enum([
   "scheduled",
   "checkin_open",

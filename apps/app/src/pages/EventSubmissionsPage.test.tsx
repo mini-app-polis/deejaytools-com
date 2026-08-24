@@ -40,7 +40,7 @@ const EVENT = {
 const SONG = {
   id: "song1",
   user_id: "u1",
-  partner_id: null,
+  partner_id: "p1",
   display_name: "My Routine",
   original_filename: "track.mp3",
   drive_file_id: null,
@@ -53,6 +53,22 @@ const SONG = {
   is_legacy: false,
   created_at: 1,
   updated_at: 1,
+};
+
+const SONG_SAME_ENTITY = {
+  ...SONG,
+  id: "song2",
+  display_name: "Second Routine",
+  processed_filename: "2026_Classic_SecondRoutine.mp3",
+  routine_name: "Second Routine",
+};
+
+const SONG_OTHER_DIVISION = {
+  ...SONG,
+  id: "song3",
+  division: "Showcase",
+  display_name: "Showcase Routine",
+  processed_filename: "2026_Showcase_MyRoutine.mp3",
 };
 
 const LEGACY_SONG = {
@@ -229,5 +245,36 @@ describe("EventSubmissionsPage", () => {
     expect(await screen.findByText(/all legacy catalog rows/i)).toBeInTheDocument();
     expect(screen.queryByText(/you have no songs yet/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^add$/i })).not.toBeInTheDocument();
+  });
+
+  it("disables Add for a second song in the same entity and division slot", async () => {
+    mockApi(
+      [SONG, SONG_SAME_ENTITY],
+      [{ id: "sub1", event_id: "ev1", song_id: "song1", created_at: 1 }]
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await selectEvent(user);
+
+    expect(await screen.findByText(/2026_Classic_SecondRoutine\.mp3/)).toBeInTheDocument();
+    expect(screen.getByText(/already submitted for this division/i)).toBeInTheDocument();
+    const addButtons = screen.getAllByRole("button", { name: /^add$/i });
+    expect(addButtons).toHaveLength(1);
+    expect(addButtons[0]).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^remove$/i })).toBeEnabled();
+  });
+
+  it("still allows Add for the same entity in another division", async () => {
+    mockApi(
+      [SONG, SONG_OTHER_DIVISION],
+      [{ id: "sub1", event_id: "ev1", song_id: "song1", created_at: 1 }]
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await selectEvent(user);
+
+    expect(await screen.findByText(/2026_Showcase_MyRoutine\.mp3/)).toBeInTheDocument();
+    expect(screen.queryByText(/already submitted for this division/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^add$/i })).toBeEnabled();
   });
 });

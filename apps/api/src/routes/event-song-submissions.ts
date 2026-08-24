@@ -1,5 +1,5 @@
 import { CommonErrors, createLogger, error, success, successList } from "common-typescript-utils";
-import { createEventSongSubmissionBodySchema } from "@deejaytools/schemas";
+import { createEventSongSubmissionBodySchema, entitySlotKey, songEntityKey } from "@deejaytools/schemas";
 import * as Sentry from "@sentry/node";
 import { Hono } from "hono";
 import { and, desc, eq } from "drizzle-orm";
@@ -182,7 +182,13 @@ eventSongSubmissionRoutes.post(
     const body = c.req.valid("json");
 
     const [song] = await db
-      .select({ id: songs.id })
+      .select({
+        id: songs.id,
+        userId: songs.userId,
+        partnerId: songs.partnerId,
+        managedPartnershipId: songs.managedPartnershipId,
+        division: songs.division,
+      })
       .from(songs)
       .where(and(eq(songs.id, body.song_id), eq(songs.userId, userId)))
       .limit(1);
@@ -199,6 +205,41 @@ eventSongSubmissionRoutes.post(
 
     if (!event) {
       return c.json(CommonErrors.notFound("Event"), 404);
+    }
+
+    // One song per entity per division, per event. Changing a song means
+    // removing the existing submission first — there is no implicit replace,
+    // so that withdrawing an entry is always a deliberate act.
+    //
+    // Compared in JS rather than SQL: songEntityKey owns the precedence rule
+    // and a COALESCE here would be a second copy of it, free to drift.
+    const slot = entitySlotKey(songEntityKey(song), song.division);
+
+    const existingForEvent = await db
+      .select({
+        submissionId: eventSongSubmissions.id,
+        songId: songs.id,
+        userId: songs.userId,
+        partnerId: songs.partnerId,
+        managedPartnershipId: songs.managedPartnershipId,
+        division: songs.division,
+      })
+      .from(eventSongSubmissions)
+      .innerJoin(songs, eq(songs.id, eventSongSubmissions.songId))
+      .where(eq(eventSongSubmissions.eventId, body.event_id));
+
+    const conflict = existingForEvent.find(
+      (row) => row.songId !== song.id && entitySlotKey(songEntityKey(row), row.division) === slot
+    );
+
+    if (conflict) {
+      return c.json(
+        error(
+          "ENTITY_SLOT_TAKEN",
+          `This entity already has a song submitted for ${song.division ?? "this division"}. Remove it before adding another.`
+        ),
+        409
+      );
     }
 
     const id = crypto.randomUUID();
