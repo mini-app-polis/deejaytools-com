@@ -488,8 +488,13 @@ export type ApiEventSongSubmission = z.infer<typeof ApiEventSongSubmissionSchema
 export const createEventSongSubmissionBodySchema = z.object({
   event_id: z.string().min(1),
   song_id: z.string().min(1),
-  /** Overrides the song's own division for this event only. Defaults to the song's. */
-  division: z.string().min(1).optional(),
+  /**
+   * Overrides the song's own division for this event only. Defaults to the
+   * song's. Constrained to the known list: an arbitrary string here would
+   * bypass the one-song-per-division rule (a differently-cased or
+   * whitespace-padded value compares unequal) and create a stray Drive folder.
+   */
+  division: z.enum(DIVISIONS as unknown as [Division, ...Division[]]).optional(),
   /** Classic on The Open only; rejected elsewhere. Defaults to prelims_and_finals. */
   round: z.enum(SUBMISSION_ROUNDS).optional(),
 });

@@ -36,6 +36,20 @@ function isUniqueViolation(err: unknown): boolean {
   );
 }
 
+/**
+ * The division a submission actually counts as: its own override when set,
+ * otherwise the song's. Trimmed, because songs.division is free text on the
+ * PATCH path and " Classic" must not read as a different division from
+ * "Classic" — driveJobs trims before choosing the Drive folder, so an
+ * untrimmed compare here would file two "different" divisions together.
+ */
+function effectiveDivision(
+  submissionDivision: string | null | undefined,
+  songDivision: string | null | undefined
+): string {
+  return (submissionDivision ?? songDivision ?? "").trim();
+}
+
 type JoinedSubmissionRow = {
   id: string;
   eventId: string;
@@ -221,8 +235,8 @@ eventSongSubmissionRoutes.post(
       return c.json(CommonErrors.notFound("Event"), 404);
     }
 
-    const divisionOverride = body.division?.trim();
-    const division = divisionOverride || song.division;
+    const division = body.division ?? song.division;
+    const normalizedDivision = (division ?? "").trim();
     const round = body.round ?? "prelims_and_finals";
 
     // Rounds are an Open-only affordance for Classic, which is the entire
@@ -235,7 +249,7 @@ eventSongSubmissionRoutes.post(
           400
         );
       }
-      if (division !== ROUND_SPLIT_DIVISION) {
+      if (normalizedDivision !== ROUND_SPLIT_DIVISION) {
         return c.json(
           CommonErrors.badRequest(
             `Round selection is only available for the ${ROUND_SPLIT_DIVISION} division`
@@ -264,8 +278,9 @@ eventSongSubmissionRoutes.post(
     const conflict = existingForEvent.find((row) => {
       if (row.songId === song.id) return false;
       if (songEntityKey(row) !== slotEntity) return false;
-      const rowDivision = row.submissionDivision ?? row.songDivision;
-      if ((rowDivision ?? "") !== (division ?? "")) return false;
+      if (effectiveDivision(row.submissionDivision, row.songDivision) !== normalizedDivision) {
+        return false;
+      }
       const rowRound = (row.submissionRound ?? "prelims_and_finals") as SubmissionRound;
       return roundsConflict(round, rowRound);
     });
@@ -274,7 +289,7 @@ eventSongSubmissionRoutes.post(
       return c.json(
         error(
           "ENTITY_SLOT_TAKEN",
-          `This entity already has a song submitted for ${division ?? "this division"}. Remove it before adding another.`
+          `This entity already has a song submitted for ${normalizedDivision || "this division"}. Remove it before adding another.`
         ),
         409
       );
@@ -289,7 +304,10 @@ eventSongSubmissionRoutes.post(
         eventId: body.event_id,
         songId: body.song_id,
         submittedByUserId: userId,
-        division: divisionOverride || null,
+        // Only persist an override the client sent; otherwise leave null so the
+        // song's division remains the source of truth. Normalize when set so
+        // conflict checks, Drive folders, and the stored value agree.
+        division: body.division !== undefined ? normalizedDivision || null : null,
         round: body.round ?? null,
         createdAt: now,
       });
