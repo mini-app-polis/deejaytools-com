@@ -85,24 +85,30 @@ export const OPEN_EVENT_LABEL = "The Open";
  * Does this event name refer to "The Open"?
  *
  * The Open never accepts songs through the generic event-submissions page —
- * it routes to its own dedicated submission page instead. Every consumer that
- * needs to make that distinction goes through this one predicate, so the rule
- * lives in exactly one place.
+ * it routes to its own dedicated submission page instead, and its submissions
+ * take a distinct Drive filename convention. Every consumer that needs to make
+ * that distinction goes through this one predicate, so the rule lives in
+ * exactly one place.
  *
- * Matching is deliberately forgiving so admins do not have to type the name
- * exactly: the name is lowercased and stripped of everything that is not a
- * letter or digit, then matched when it either contains "theopen" (covers
- * "The Open", "theopen", "THE OPEN 2026", "The-Open") or starts with "open"
- * (covers "Open Swing Dance Championships").
+ * The name is lowercased and stripped of everything that is not a letter or
+ * digit, then must START WITH "theopen". That covers "The Open", "theopen",
+ * "THE OPEN 2026", "The-Open", and "The Open - Swing Dance Championships".
  *
- * Trade-off: an unrelated event whose name starts with "Open" — say "Open
- * Practice Night" — also matches. Tighten this predicate if that becomes a
- * real problem.
+ * Two deliberate choices:
+ *
+ * - A bare leading "Open" does NOT match. It used to, which meant an unrelated
+ *   "Open Practice Night" was rerouted to the Open submission page.
+ * - startsWith, not includes. Normalization removes spaces, so `includes`
+ *   matches across word boundaries — "Breathe Open Air" becomes
+ *   "breatheopenair", which contains "theopen".
+ *
+ * Cost of this being strict: a name that leads with something else, like
+ * "2026 The Open", will not match. Rename the event or widen this predicate.
  */
 export function isOpenEvent(eventName: string | null | undefined): boolean {
   if (!eventName) return false;
   const normalized = eventName.toLowerCase().replace(/[^a-z0-9]/g, "");
-  return normalized.includes("theopen") || normalized.startsWith("open");
+  return normalized.startsWith("theopen");
 }
 
 export const ApiEventSchema = z.object({
