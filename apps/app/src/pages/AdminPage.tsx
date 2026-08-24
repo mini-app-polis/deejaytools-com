@@ -13,6 +13,7 @@ import {
 import { useApiClient } from "@/api/client";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import { CLICKABLE_ROW_CLASS } from "@/lib/clickable";
+import { seasonYearFromDateString } from "@/lib/seasonYear";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ChoiceGroup } from "@/components/ui/choice-group";
@@ -207,6 +208,9 @@ export default function AdminPage() {
   const [evName, setEvName] = useState("");
   const [evStartDate, setEvStartDate] = useState("");
   const [evEndDate, setEvEndDate] = useState("");
+  const [evSeasonYear, setEvSeasonYear] = useState("");
+  /** True once the admin has typed in the season year field — blocks auto-suggest. */
+  const [evSeasonTouched, setEvSeasonTouched] = useState(false);
   const [evTimezone, setEvTimezone] = useState("America/Chicago");
   /**
    * When set, the Event dialog is in edit mode: submitting calls PATCH on
@@ -554,6 +558,8 @@ export default function AdminPage() {
     setEvName("");
     setEvStartDate("");
     setEvEndDate("");
+    setEvSeasonYear("");
+    setEvSeasonTouched(false);
     setEvTimezone("America/Chicago");
     setEvDialogOpen(true);
   };
@@ -563,6 +569,8 @@ export default function AdminPage() {
     setEvName(ev.name);
     setEvStartDate(ev.start_date);
     setEvEndDate(ev.end_date);
+    setEvSeasonYear(ev.season_year);
+    setEvSeasonTouched(true);
     setEvTimezone(ev.timezone);
     setEvDialogOpen(true);
   };
@@ -573,6 +581,11 @@ export default function AdminPage() {
     if (!evStartDate) { toast.error("Start date is required"); return; }
     if (!evEndDate) { toast.error("End date is required"); return; }
     if (evEndDate < evStartDate) { toast.error("End date must be on or after start date"); return; }
+    const trimmedSeason = evSeasonYear.trim();
+    if (trimmedSeason && !/^\d{4}$/.test(trimmedSeason)) {
+      toast.error("Season year must be four digits");
+      return;
+    }
     setEvSubmitting(true);
     try {
       if (evEditId) {
@@ -583,6 +596,7 @@ export default function AdminPage() {
           start_date: evStartDate,
           end_date: evEndDate,
           timezone: evTimezone,
+          season_year: trimmedSeason || undefined,
         });
         toast.success("Event updated");
         setEvents((prev) =>
@@ -595,6 +609,7 @@ export default function AdminPage() {
           start_date: evStartDate,
           end_date: evEndDate,
           timezone: evTimezone,
+          season_year: trimmedSeason || undefined,
         });
         toast.success("Event created");
         setEvents((prev) => (prev ? [created, ...prev] : [created]));
@@ -604,6 +619,8 @@ export default function AdminPage() {
       setEvName("");
       setEvStartDate("");
       setEvEndDate("");
+      setEvSeasonYear("");
+      setEvSeasonTouched(false);
       setEvTimezone("America/Chicago");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save event");
@@ -943,6 +960,9 @@ export default function AdminPage() {
         {ev.end_date}
       </TableCell>
       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+        {ev.season_year}
+      </TableCell>
+      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
         <Badge variant="outline" className="text-xs font-normal">
           {formatTimezoneAbbr(ev.timezone)}
         </Badge>
@@ -1030,6 +1050,7 @@ export default function AdminPage() {
               <TableHead>Name</TableHead>
               <TableHead>Start date</TableHead>
               <TableHead>End date</TableHead>
+              <TableHead>Season</TableHead>
               <TableHead>Timezone</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-[160px]">Actions</TableHead>
@@ -1959,8 +1980,12 @@ export default function AdminPage() {
                     className={FIELD_INPUT_CLASS}
                     value={evStartDate}
                     onChange={(e) => {
-                      setEvStartDate(e.target.value);
-                      if (evEndDate && e.target.value > evEndDate) setEvEndDate(e.target.value);
+                      const v = e.target.value;
+                      setEvStartDate(v);
+                      if (evEndDate && v > evEndDate) setEvEndDate(v);
+                      if (!evEditId && !evSeasonTouched && v) {
+                        setEvSeasonYear(seasonYearFromDateString(v));
+                      }
                     }}
                     required
                   />
@@ -1976,6 +2001,23 @@ export default function AdminPage() {
                     required
                   />
                 </div>
+              </div>
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Season year</label>
+                <input
+                  className={FIELD_INPUT_CLASS}
+                  inputMode="numeric"
+                  pattern="\d{4}"
+                  placeholder="2027"
+                  value={evSeasonYear}
+                  onChange={(e) => {
+                    setEvSeasonTouched(true);
+                    setEvSeasonYear(e.target.value);
+                  }}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Defaults from the start date — seasons roll over October 1.
+                </p>
               </div>
               <div>
                 <label className={FIELD_LABEL_CLASS}>Timezone</label>

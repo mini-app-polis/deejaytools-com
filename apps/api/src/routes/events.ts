@@ -18,11 +18,14 @@ import {
 } from "../db/schema.js";
 import { requireAdmin, requireAuth } from "../middleware/auth.js";
 import { enqueueDriveJob } from "../services/driveJobs.js";
+import { seasonYearFromDateString } from "../lib/seasonYear.js";
 
 const logger = createLogger("deejaytools-api");
 
 // YYYY-MM-DD
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD");
+
+const seasonYearString = z.string().regex(/^\d{4}$/, "Must be a 4-digit year");
 
 /** Validate that a string is a recognised IANA timezone identifier. */
 const ianaTimezone = z
@@ -44,8 +47,9 @@ const createEvent = z.object({
   name: z.string().min(1),
   start_date: dateString,
   end_date: dateString,
-  /** IANA timezone for this event. All session times are displayed in this zone. */
   timezone: ianaTimezone.default("America/Chicago"),
+  /** Omit to derive from start_date. */
+  season_year: seasonYearString.optional(),
 });
 
 const patchEvent = z.object({
@@ -53,6 +57,7 @@ const patchEvent = z.object({
   start_date: dateString.optional(),
   end_date: dateString.optional(),
   timezone: ianaTimezone.optional(),
+  season_year: seasonYearString.optional(),
 });
 
 export const eventRoutes = new Hono();
@@ -72,6 +77,8 @@ function mapEvent(row: typeof events.$inferSelect) {
     start_date: row.startDate,
     end_date: row.endDate,
     timezone: row.timezone,
+    // Fall back for rows predating the column so consumers never see null.
+    season_year: row.seasonYear ?? seasonYearFromDateString(row.startDate),
     status: computeStatus(row.startDate, row.endDate),
     created_by: row.createdBy,
     created_at: row.createdAt,
@@ -110,6 +117,8 @@ eventRoutes.post("/", requireAdmin, zValidator("json", createEvent), async (c) =
     startDate: body.start_date,
     endDate: body.end_date,
     timezone: body.timezone,
+    // Explicit override wins; otherwise derive from the start date.
+    seasonYear: body.season_year ?? seasonYearFromDateString(body.start_date),
     createdBy: uid,
     createdAt: now,
     updatedAt: now,
@@ -136,8 +145,11 @@ eventRoutes.patch("/:id", requireAdmin, zValidator("json", patchEvent), async (c
     .set({
       ...(body.name !== undefined && { name: body.name }),
       ...(body.start_date !== undefined && { startDate: body.start_date }),
+      // season_year is NOT recomputed when start_date changes — it only moves
+      // when set explicitly, so a deliberate override is never silently lost.
       ...(body.end_date !== undefined && { endDate: body.end_date }),
       ...(body.timezone !== undefined && { timezone: body.timezone }),
+      ...(body.season_year !== undefined && { seasonYear: body.season_year }),
       updatedAt: now,
     })
     .where(eq(events.id, id));

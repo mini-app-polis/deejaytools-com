@@ -52,6 +52,8 @@ describe("GET /v1/events", () => {
       name: "Social",
       startDate: "2026-01-01",
       endDate: "2026-01-03",
+      timezone: "America/Chicago",
+      seasonYear: "2026",
       createdBy: "user_admin123",
       createdAt: 1,
       updatedAt: 2,
@@ -67,13 +69,36 @@ describe("GET /v1/events", () => {
       name: "Social",
       start_date: "2026-01-01",
       end_date: "2026-01-03",
+      season_year: "2026",
     });
+  });
+
+  it("derives season_year from start_date when the column is null", async () => {
+    const ev = {
+      id: "e1",
+      name: "Fall Classic",
+      startDate: "2026-10-15",
+      endDate: "2026-10-16",
+      timezone: "America/Chicago",
+      seasonYear: null,
+      createdBy: "user_admin123",
+      createdAt: 1,
+      updatedAt: 2,
+    };
+    enqueueSelectResult([ev]);
+    const res = await app.request(BASE);
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<unknown[]>>(res);
+    expect(body.data[0]).toMatchObject({ season_year: "2027" });
   });
 });
 
 describe("POST /v1/events", () => {
   beforeEach(() => {
     resetSelectQueue();
+    vi.mocked(mockDb.insert).mockImplementation(() => ({
+      values: vi.fn().mockResolvedValue(undefined),
+    }));
   });
 
   it("returns 401 without auth", async () => {
@@ -118,6 +143,8 @@ describe("POST /v1/events", () => {
       name: "Workshop",
       startDate: "2026-06-01",
       endDate: "2026-06-03",
+      timezone: "America/Chicago",
+      seasonYear: "2026",
       createdBy: "user_admin123",
       createdAt: 10,
       updatedAt: 10,
@@ -136,11 +163,145 @@ describe("POST /v1/events", () => {
     assertSuccessEnvelope(body);
     expect(body.data).toMatchObject({ id: "e_new", name: "Workshop", start_date: "2026-06-01", end_date: "2026-06-03" });
   });
+
+  it("derives season_year from start_date when omitted", async () => {
+    const valuesMock = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(mockDb.insert).mockImplementationOnce(() => ({ values: valuesMock }));
+
+    const created = {
+      id: "e_nov",
+      name: "November Open",
+      startDate: "2026-11-25",
+      endDate: "2026-11-25",
+      timezone: "America/Chicago",
+      seasonYear: "2027",
+      createdBy: "user_admin123",
+      createdAt: 10,
+      updatedAt: 10,
+    };
+    enqueueSelectResult([created]);
+
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: {
+        ...authHeaders(MOCK_ADMIN),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "November Open",
+        start_date: "2026-11-25",
+        end_date: "2026-11-25",
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ seasonYear: "2027", startDate: "2026-11-25" })
+    );
+  });
+
+  it("derives season_year 2026 for a September start date", async () => {
+    const valuesMock = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(mockDb.insert).mockImplementationOnce(() => ({ values: valuesMock }));
+
+    enqueueSelectResult([
+      {
+        id: "e_sep",
+        name: "September Classic",
+        startDate: "2026-09-15",
+        endDate: "2026-09-15",
+        timezone: "America/Chicago",
+        seasonYear: "2026",
+        createdBy: "user_admin123",
+        createdAt: 10,
+        updatedAt: 10,
+      },
+    ]);
+
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: {
+        ...authHeaders(MOCK_ADMIN),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "September Classic",
+        start_date: "2026-09-15",
+        end_date: "2026-09-15",
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ seasonYear: "2026" })
+    );
+  });
+
+  it("stores an explicit season_year override", async () => {
+    const valuesMock = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(mockDb.insert).mockImplementationOnce(() => ({ values: valuesMock }));
+
+    enqueueSelectResult([
+      {
+        id: "e_override",
+        name: "Custom",
+        startDate: "2026-09-15",
+        endDate: "2026-09-15",
+        timezone: "America/Chicago",
+        seasonYear: "2030",
+        createdBy: "user_admin123",
+        createdAt: 10,
+        updatedAt: 10,
+      },
+    ]);
+
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: {
+        ...authHeaders(MOCK_ADMIN),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "Custom",
+        start_date: "2026-09-15",
+        end_date: "2026-09-15",
+        season_year: "2030",
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ seasonYear: "2030" })
+    );
+  });
+
+  it("returns 400 when season_year is not four digits", async () => {
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: {
+        ...authHeaders(MOCK_ADMIN),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "Bad season",
+        start_date: "2026-06-01",
+        end_date: "2026-06-01",
+        season_year: "26",
+      }),
+    });
+    expect(res.status).toBe(400);
+    assertValidation400(await readJson<ErrorEnvelope>(res));
+  });
 });
 
 describe("PATCH /v1/events/:id", () => {
   beforeEach(() => {
     resetSelectQueue();
+    vi.mocked(mockDb.update).mockImplementation(() => ({
+      set: vi.fn(() => ({
+        where: vi.fn().mockResolvedValue(undefined),
+      })),
+    }));
   });
 
   it("returns 404 when event not found", async () => {
@@ -163,6 +324,8 @@ describe("PATCH /v1/events/:id", () => {
       name: "Old",
       startDate: "2026-06-01",
       endDate: "2026-06-01",
+      timezone: "America/Chicago",
+      seasonYear: "2026",
       createdBy: "user_admin123",
       createdAt: 1,
       updatedAt: 2,
@@ -187,6 +350,76 @@ describe("PATCH /v1/events/:id", () => {
     assertSuccessEnvelope(body);
     expect(body.data).toMatchObject({ id: "e1", name: "New name" });
   });
+
+  it("does not recompute season_year when only start_date changes", async () => {
+    const existing = {
+      id: "e1",
+      name: "Open",
+      startDate: "2026-09-01",
+      endDate: "2026-09-30",
+      timezone: "America/Chicago",
+      seasonYear: "2026",
+      createdBy: "user_admin123",
+      createdAt: 1,
+      updatedAt: 2,
+    };
+    const setMock = vi.fn(() => ({ where: vi.fn().mockResolvedValue(undefined) }));
+    vi.mocked(mockDb.update).mockImplementationOnce(() => ({ set: setMock }));
+
+    enqueueSelectResult([existing]);
+    enqueueSelectResult([
+      {
+        ...existing,
+        startDate: "2026-09-15",
+        updatedAt: 99,
+      },
+    ]);
+
+    const res = await app.request(`${BASE}/e1`, {
+      method: "PATCH",
+      headers: {
+        ...authHeaders(MOCK_ADMIN),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ start_date: "2026-09-15" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(setMock).toHaveBeenCalledWith(
+      expect.not.objectContaining({ seasonYear: expect.anything() })
+    );
+  });
+
+  it("updates season_year when explicitly patched", async () => {
+    const existing = {
+      id: "e1",
+      name: "Open",
+      startDate: "2026-09-15",
+      endDate: "2026-09-15",
+      timezone: "America/Chicago",
+      seasonYear: "2026",
+      createdBy: "user_admin123",
+      createdAt: 1,
+      updatedAt: 2,
+    };
+    const setMock = vi.fn(() => ({ where: vi.fn().mockResolvedValue(undefined) }));
+    vi.mocked(mockDb.update).mockImplementationOnce(() => ({ set: setMock }));
+
+    enqueueSelectResult([existing]);
+    enqueueSelectResult([{ ...existing, seasonYear: "2030", updatedAt: 99 }]);
+
+    const res = await app.request(`${BASE}/e1`, {
+      method: "PATCH",
+      headers: {
+        ...authHeaders(MOCK_ADMIN),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ season_year: "2030" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(setMock).toHaveBeenCalledWith(expect.objectContaining({ seasonYear: "2030" }));
+  });
 });
 
 describe("DELETE /v1/events/:id", () => {
@@ -196,6 +429,7 @@ describe("DELETE /v1/events/:id", () => {
     startDate: "2026-06-01",
     endDate: "2026-06-01",
     timezone: "America/Chicago",
+    seasonYear: "2026",
     createdBy: "user_admin123",
     createdAt: 1,
     updatedAt: 2,

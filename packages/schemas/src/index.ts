@@ -111,6 +111,7 @@ export const ApiEventSchema = z.object({
   start_date: z.string(),
   end_date: z.string(),
   timezone: z.string(),
+  season_year: z.string(),
   status: z.string(),
   created_by: z.string(),
   created_at: z.number(),

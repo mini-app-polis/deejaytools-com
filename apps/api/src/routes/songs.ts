@@ -9,6 +9,7 @@ import { z } from "zod";
 import { and, desc, eq, isNull, ne, notInArray, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { checkins, eventSongSubmissions, managedPartnerships, partners, queueEntries, sessions, songs, teams, users } from "../db/schema.js";
+import { seasonYearFromTimestamp } from "../lib/seasonYear.js";
 import { requireAuth } from "../middleware/auth.js";
 import { shareDriveFileWithUsers, softDeleteOnDrive, uploadSongToDrive } from "../services/drive.js";
 import { enqueueDriveJob } from "../services/driveJobs.js";
@@ -110,15 +111,6 @@ function splitNameAndExtension(filename: string): { base: string; ext: string } 
   };
 }
 
-
-/** Calendar months 11–12 (Nov–Dec) map to the next calendar year’s season label. */
-function seasonYearFromTimestamp(ms: number): string {
-  const d = new Date(ms);
-  const calMonth = d.getMonth() + 1;
-  const year = d.getFullYear();
-  const seasonYear = calMonth >= 11 ? year + 1 : year;
-  return String(seasonYear);
-}
 
 function computedSongDisplayName(row: typeof songs.$inferSelect): string | null {
   const d = row.displayName?.trim();

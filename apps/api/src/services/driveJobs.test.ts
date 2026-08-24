@@ -71,9 +71,10 @@ function makeCopySubmissionRow(
     driveFileId: string | null;
     originalFilename: string | null;
     processedFilename: string | null;
-    seasonYear: string | null;
     division: string | null;
     eventName: string;
+    eventSeasonYear: string | null;
+    eventStartDate: string;
   }> = {}
 ) {
   return {
@@ -83,9 +84,10 @@ function makeCopySubmissionRow(
     driveFileId: "source_file_1",
     originalFilename: "my track.mp3",
     processedFilename: "2026_Classic.mp3",
-    seasonYear: "2026",
     division: "Classic",
     eventName: "Spring Classic",
+    eventSeasonYear: "2027",
+    eventStartDate: "2026-11-25",
     ...over,
   };
 }
@@ -249,12 +251,48 @@ describe("processDriveJobs", () => {
     await expect(processDriveJobs(db)).resolves.toBe(1);
     expect(drive.copySongToEventFolder).toHaveBeenCalledWith("source_file_1", {
       filename: "2026_Classic.mp3",
-      seasonYear: "2026",
+      seasonYear: "2027",
       eventName: "Spring Classic",
       division: "Classic",
     });
     expect(submissionUpdateWhere).toHaveBeenCalled();
     expect(jobUpdates[0]?.status).toBe("done");
+  });
+
+  it("uses the event season year in the folder path, not the song's", async () => {
+    const { db } = makeProcessDb({
+      claimedJobs: [makeRawJob()],
+      submissionRows: [
+        makeCopySubmissionRow({
+          eventSeasonYear: "2028",
+          eventStartDate: "2027-09-01",
+        }),
+      ],
+    });
+
+    await expect(processDriveJobs(db)).resolves.toBe(1);
+    expect(drive.copySongToEventFolder).toHaveBeenCalledWith(
+      "source_file_1",
+      expect.objectContaining({ seasonYear: "2028" })
+    );
+  });
+
+  it("derives the event season year from start_date when the column is null", async () => {
+    const { db } = makeProcessDb({
+      claimedJobs: [makeRawJob()],
+      submissionRows: [
+        makeCopySubmissionRow({
+          eventSeasonYear: null,
+          eventStartDate: "2026-10-15",
+        }),
+      ],
+    });
+
+    await expect(processDriveJobs(db)).resolves.toBe(1);
+    expect(drive.copySongToEventFolder).toHaveBeenCalledWith(
+      "source_file_1",
+      expect.objectContaining({ seasonYear: "2027" })
+    );
   });
 
   it("reschedules a failing copy without reporting to Sentry", async () => {

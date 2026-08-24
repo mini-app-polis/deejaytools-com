@@ -696,6 +696,26 @@ describe("POST /v1/songs/upload/chunk", () => {
     );
   });
 
+  it("files an October upload under the following season year", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-15T12:00:00Z"));
+    try {
+      enqueueHappyPath([]);
+      vi.mocked(drive.uploadSongToDrive).mockClear();
+      await app.request(CHUNK_BASE, {
+        method: "POST",
+        headers: authHeaders(),
+        body: makeChunkForm(),
+      });
+      expect(vi.mocked(drive.uploadSongToDrive)).toHaveBeenCalledWith(
+        expect.any(Buffer),
+        expect.objectContaining({ seasonYear: "2027" })
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("assigns v01 independently per partner when division/routine/year match", async () => {
     type VersionRow = {
       partnerId: string;

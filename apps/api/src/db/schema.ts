@@ -156,6 +156,12 @@ export const events = pgTable(
     /** IANA timezone identifier, e.g. "America/Chicago". All session timestamps
      *  for this event are interpreted and displayed in this timezone. */
     timezone: text("timezone").notNull().default("America/Chicago"),
+    /**
+     * Competitive season this event belongs to. Defaulted from start_date on
+     * create (seasons roll over October 1) and overridable by an admin —
+     * editing start_date later does NOT recompute it.
+     */
+    seasonYear: text("season_year"),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),

@@ -4,6 +4,7 @@ import { and, eq, lt, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "../db/schema.js";
 import { resolveSubmissionFilename } from "../lib/submissionFilename.js";
+import { seasonYearFromDateString } from "../lib/seasonYear.js";
 import { copySongToEventFolder, renameDriveFile, softDeleteOnDrive } from "./drive.js";
 
 type Db = PostgresJsDatabase<typeof schema>;
@@ -188,9 +189,10 @@ async function fetchSubmissionCopyContext(database: Db, submissionId: string) {
       driveFileId: schema.songs.driveFileId,
       originalFilename: schema.songs.originalFilename,
       processedFilename: schema.songs.processedFilename,
-      seasonYear: schema.songs.seasonYear,
       division: schema.songs.division,
       eventName: schema.events.name,
+      eventSeasonYear: schema.events.seasonYear,
+      eventStartDate: schema.events.startDate,
     })
     .from(schema.eventSongSubmissions)
     .innerJoin(schema.songs, eq(schema.songs.id, schema.eventSongSubmissions.songId))
@@ -235,9 +237,15 @@ async function runCopyJob(database: Db, job: DriveJob): Promise<void> {
     event: { name: row.eventName },
   });
 
+  // The EVENT's season year, not the song's: one event's submissions belong in
+  // one year folder regardless of when each entrant happened to upload. Falls
+  // back to deriving from the start date for events predating the column.
+  const eventSeason =
+    row.eventSeasonYear?.trim() || seasonYearFromDateString(row.eventStartDate);
+
   const { fileId } = await copySongToEventFolder(row.driveFileId, {
     filename,
-    seasonYear: row.seasonYear?.trim() || "unknown",
+    seasonYear: eventSeason,
     eventName: row.eventName,
     division: row.division?.trim() || "unknown",
   });
