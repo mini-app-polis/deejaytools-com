@@ -1,5 +1,6 @@
 import { CommonErrors, createLogger, error, success, successList } from "common-typescript-utils";
 import { createManagedPartnershipBodySchema } from "@deejaytools/schemas";
+import * as Sentry from "@sentry/node";
 import { Hono } from "hono";
 import { and, desc, eq, inArray, isNull, notInArray } from "drizzle-orm";
 import { db } from "../db/index.js";
@@ -14,6 +15,7 @@ import {
 import { zValidator } from "../lib/validate.js";
 import { titleCaseWords } from "../lib/text.js";
 import { requireAuth } from "../middleware/auth.js";
+import { enqueueDriveJob } from "../services/driveJobs.js";
 
 const logger = createLogger("deejaytools-api");
 
@@ -182,6 +184,7 @@ managedPartnershipsRoutes.delete("/:id", requireAuth, async (c) => {
   }
 
   const now = Date.now();
+  let orphanedCopyIds: string[] = [];
   try {
     await db.transaction(async (tx) => {
       // Songs uploaded for this partnership: drop their event references, then soft-delete them.
@@ -191,6 +194,16 @@ managedPartnershipsRoutes.delete("/:id", requireAuth, async (c) => {
         .where(and(eq(songs.managedPartnershipId, id), isNull(songs.deletedAt)));
       const songIds = partnershipSongs.map((s) => s.id);
       if (songIds.length > 0) {
+        // Capture the per-event Drive copies before dropping the rows that
+        // reference them — see songs.ts for the same reasoning.
+        const copies = await tx
+          .select({ driveCopyFileId: eventSongSubmissions.driveCopyFileId })
+          .from(eventSongSubmissions)
+          .where(inArray(eventSongSubmissions.songId, songIds));
+        orphanedCopyIds = copies
+          .map((r) => r.driveCopyFileId)
+          .filter((v): v is string => v !== null);
+
         await tx.delete(eventSongSubmissions).where(inArray(eventSongSubmissions.songId, songIds));
         await tx.update(songs).set({ deletedAt: now }).where(inArray(songs.id, songIds));
       }
@@ -208,6 +221,30 @@ managedPartnershipsRoutes.delete("/:id", requireAuth, async (c) => {
       error: err,
     });
     return c.json(CommonErrors.internalError("Failed to delete managed partnership"), 500);
+  }
+
+  for (const fileId of orphanedCopyIds) {
+    try {
+      await enqueueDriveJob(db, { kind: "trash", fileId });
+    } catch (err) {
+      logger.error({
+        event: "drive_trash_enqueue_failed",
+        category: "api",
+        context: { userId, managedPartnershipId: id, driveFileId: fileId, source: "partnership_delete" },
+        error: err,
+      });
+      Sentry.withScope((scope) => {
+        scope.setLevel("error");
+        scope.setTag("subsystem", "drive_jobs");
+        scope.setTag("drive_job_kind", "trash");
+        scope.setContext("drive_job", {
+          file_id: fileId,
+          stage: "enqueue",
+          source: "partnership_delete",
+        });
+        Sentry.captureException(err instanceof Error ? err : new Error(String(err)));
+      });
+    }
   }
 
   return c.body(null, 204);
