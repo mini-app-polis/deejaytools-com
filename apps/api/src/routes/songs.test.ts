@@ -863,7 +863,10 @@ describe("POST /v1/songs/upload/chunk", () => {
       body: form,
     });
     expect(vi.mocked(tagger.tagSongBytes)).toHaveBeenCalledWith(
-      expect.objectContaining({ newArtist: "Classic | 2026 | My Routine" })
+      expect.objectContaining({
+        newArtist: "Classic | My Routine",
+        newYear: "2026",
+      })
     );
   });
 
@@ -879,7 +882,10 @@ describe("POST /v1/songs/upload/chunk", () => {
       body: form,
     });
     expect(vi.mocked(tagger.tagSongBytes)).toHaveBeenCalledWith(
-      expect.objectContaining({ newArtist: "Classic | 2026" })
+      expect.objectContaining({
+        newArtist: "Classic",
+        newYear: "2026",
+      })
     );
   });
 

@@ -20,12 +20,33 @@ const logger = createLogger("tagger");
  * Deliberately not a parameter on TagSongInput: making it an input invites
  * drift between callers, and there is no case for a different value.
  */
-const SONG_GENRE = "Routine";
+const SONG_GENRE = "_Routine_";
+
+/**
+ * Record whatever tags the file arrived with, so a mis-attributed upload can
+ * be traced back to what the entrant actually submitted.
+ *
+ * Only fields that had data appear. An entrant who uploaded an untagged file
+ * gets no comment at all rather than a row of empty placeholders — the tag is
+ * evidence, and empty evidence is noise.
+ */
+function buildProvenanceComment(fields: {
+  title?: string | null;
+  artist?: string | null;
+  album?: string | null;
+}): string {
+  return Object.entries(fields)
+    .filter(([, value]) => typeof value === "string" && value.trim().length > 0)
+    .map(([key, value]) => `${key}=${(value as string).trim()}`)
+    .join(",");
+}
 
 export interface TagSongInput {
   bytes: Buffer;
   newTitle: string;
   newArtist: string;
+  /** Season year, written to the format's native year field. Omitted when absent. */
+  newYear?: string;
   mimeType?: string;
 }
 
@@ -109,7 +130,8 @@ function writeRiffChunk(parts: Buffer[], chunk: RiffChunk): void {
 async function tagWav(
   bytes: Buffer,
   newTitle: string,
-  newArtist: string
+  newArtist: string,
+  newYear: string | undefined
 ): Promise<Buffer> {
   try {
     if (bytes.length < 12) return bytes;
@@ -134,12 +156,18 @@ async function tagWav(
       }
     }
 
-    const previousSummary = `prev[title=${prevTitle},artist=${prevArtist},album=${prevAlbum}]`;
+    const comment = buildProvenanceComment({
+      title: prevTitle,
+      artist: prevArtist,
+      album: prevAlbum,
+    });
+
     const id3TagBytes = NodeID3.create({
       title: newTitle,
       artist: newArtist,
       genre: SONG_GENRE,
-      comment: { language: "eng", text: previousSummary },
+      ...(newYear ? { year: newYear } : {}),
+      ...(comment ? { comment: { language: "eng", text: comment } } : {}),
     });
     if (!Buffer.isBuffer(id3TagBytes)) return bytes;
 
@@ -172,21 +200,27 @@ async function tagWav(
 async function tagWithId3(
   bytes: Buffer,
   newTitle: string,
-  newArtist: string
+  newArtist: string,
+  newYear: string | undefined
 ): Promise<Buffer> {
   try {
     const existing = NodeID3.read(bytes);
     const prevTitle = typeof existing === "object" ? (existing.title ?? "") : "";
     const prevArtist = typeof existing === "object" ? (existing.artist ?? "") : "";
     const prevAlbum = typeof existing === "object" ? (existing.album ?? "") : "";
-    const previousSummary = `prev[title=${prevTitle},artist=${prevArtist},album=${prevAlbum}]`;
+    const comment = buildProvenanceComment({
+      title: prevTitle,
+      artist: prevArtist,
+      album: prevAlbum,
+    });
 
     const updated = NodeID3.update(
       {
         title: newTitle,
         artist: newArtist,
         genre: SONG_GENRE,
-        comment: { language: "eng", text: previousSummary },
+        ...(newYear ? { year: newYear } : {}),
+        ...(comment ? { comment: { language: "eng", text: comment } } : {}),
       },
       Buffer.from(bytes)
     );
@@ -222,20 +256,23 @@ async function tagWithId3(
 async function tagFlac(
   bytes: Buffer,
   newTitle: string,
-  newArtist: string
+  newArtist: string,
+  newYear: string | undefined
 ): Promise<Buffer> {
   try {
     const existing = await parseBuffer(bytes, { mimeType: "audio/flac" });
     const prevTitle = existing.common.title ?? "";
     const prevArtist = existing.common.artist ?? "";
-    const previousSummary = `prev[title=${prevTitle},artist=${prevArtist}]`;
+    const comment = buildProvenanceComment({ title: prevTitle, artist: prevArtist });
 
     const tags = await readFlacTags(bytes);
     const tagMap: Record<string, string | string[]> = { ...tags.tagMap };
     tagMap.TITLE = newTitle;
     tagMap.ARTIST = newArtist;
     tagMap.GENRE = SONG_GENRE;
-    tagMap.COMMENT = previousSummary;
+    if (newYear) tagMap.DATE = newYear;
+    if (comment) tagMap.COMMENT = comment;
+    else delete tagMap.COMMENT;
 
     const stream = FlacStream.fromBuffer(bytes);
     const commentList: string[] = [];
@@ -500,7 +537,8 @@ function readIlstText(entry: ParsedAtom): string {
 async function tagM4a(
   bytes: Buffer,
   newTitle: string,
-  newArtist: string
+  newArtist: string,
+  newYear: string | undefined
 ): Promise<Buffer> {
   try {
     const atoms = parseAtoms(bytes, 0, bytes.length);
@@ -546,7 +584,11 @@ async function tagM4a(
     const prevTitle = prevTitleEntry ? readIlstText(prevTitleEntry) : "";
     const prevArtist = prevArtistEntry ? readIlstText(prevArtistEntry) : "";
     const prevAlbum = prevAlbumEntry ? readIlstText(prevAlbumEntry) : "";
-    const previousSummary = `prev[title=${prevTitle},artist=${prevArtist},album=${prevAlbum}]`;
+    const comment = buildProvenanceComment({
+      title: prevTitle,
+      artist: prevArtist,
+      album: prevAlbum,
+    });
 
     const setEntry = (name: string, text: string) => {
       const newEntry = buildIlstEntry(name, text);
@@ -557,7 +599,8 @@ async function tagM4a(
     setEntry("©nam", newTitle);
     setEntry("©ART", newArtist);
     setEntry("©gen", SONG_GENRE);
-    setEntry("©cmt", previousSummary);
+    if (newYear) setEntry("©day", newYear);
+    if (comment) setEntry("©cmt", comment);
 
     const newMoovSize = serializeAtom(moov).length;
     const delta = newMoovSize - oldMoovSize;
@@ -588,6 +631,7 @@ export async function tagSongBytes({
   bytes,
   newTitle,
   newArtist,
+  newYear,
   mimeType,
 }: TagSongInput): Promise<Buffer> {
   const sniffed = sniffFormat(bytes);
@@ -609,13 +653,13 @@ export async function tagSongBytes({
 
   switch (format) {
     case "mp3":
-      return tagWithId3(bytes, newTitle, newArtist);
+      return tagWithId3(bytes, newTitle, newArtist, newYear);
     case "wav":
-      return tagWav(bytes, newTitle, newArtist);
+      return tagWav(bytes, newTitle, newArtist, newYear);
     case "flac":
-      return tagFlac(bytes, newTitle, newArtist);
+      return tagFlac(bytes, newTitle, newArtist, newYear);
     case "m4a":
-      return tagM4a(bytes, newTitle, newArtist);
+      return tagM4a(bytes, newTitle, newArtist, newYear);
     default:
       logger.warn({
         event: "tagger_unsupported_format",
