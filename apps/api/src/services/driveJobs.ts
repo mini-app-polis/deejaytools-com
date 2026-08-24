@@ -89,6 +89,43 @@ export async function enqueueDriveJob(
 type DriveJob = typeof schema.driveJobs.$inferSelect;
 
 /**
+ * Shape of a drive_jobs row as returned by a RAW query.
+ *
+ * database.execute() bypasses drizzle's column-name mapping and returns the
+ * database's own snake_case names, with bigint columns as strings. This type
+ * describes that reality; mapDriveJobRow converts it to the camelCase,
+ * number-typed DriveJob the rest of this module expects. Reading a raw row as
+ * a DriveJob directly silently yields undefined for every underscored field.
+ */
+type RawDriveJobRow = {
+  id: string;
+  kind: string;
+  submission_id: string | null;
+  file_id: string | null;
+  status: string;
+  attempts: number | string;
+  next_attempt_at: number | string;
+  last_error: string | null;
+  created_at: number | string;
+  updated_at: number | string;
+};
+
+function mapDriveJobRow(row: RawDriveJobRow): DriveJob {
+  return {
+    id: row.id,
+    kind: row.kind,
+    submissionId: row.submission_id,
+    fileId: row.file_id,
+    status: row.status,
+    attempts: Number(row.attempts),
+    nextAttemptAt: Number(row.next_attempt_at),
+    lastError: row.last_error,
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+  };
+}
+
+/**
  * Return jobs stuck in 'running' past the lease timeout to 'pending' so the
  * next claim picks them up. Attempts is deliberately NOT incremented — the job
  * never got a real try, the process just died holding it.
@@ -120,7 +157,7 @@ async function reclaimStuckJobs(database: Db, now: number): Promise<number> {
  * replicas take disjoint sets instead of blocking on each other.
  */
 async function claimJobs(database: Db, limit: number, now: number): Promise<DriveJob[]> {
-  const rows = await database.execute<DriveJob>(sql`
+  const rows = await database.execute<RawDriveJobRow>(sql`
     UPDATE drive_jobs
     SET status = 'running', updated_at = ${now}
     WHERE id IN (
@@ -132,11 +169,17 @@ async function claimJobs(database: Db, limit: number, now: number): Promise<Driv
     )
     RETURNING *
   `);
-  return Array.from(rows as unknown as DriveJob[]);
+  // Raw execute() returns snake_case columns and string bigints — map before
+  // handing these to anything that expects a DriveJob.
+  return Array.from(rows as unknown as RawDriveJobRow[]);
 }
 
 async function runCopyJob(database: Db, job: DriveJob): Promise<void> {
-  if (!job.submissionId) throw new Error("copy job has no submission_id");
+  if (!job.submissionId) {
+    throw new Error(
+      `copy job ${job.id} has no submission_id (row keys: ${Object.keys(job).join(",")})`
+    );
+  }
 
   const [row] = await database
     .select({
@@ -202,7 +245,11 @@ async function runCopyJob(database: Db, job: DriveJob): Promise<void> {
 }
 
 async function runTrashJob(job: DriveJob): Promise<void> {
-  if (!job.fileId) throw new Error("trash job has no file_id");
+  if (!job.fileId) {
+    throw new Error(
+      `trash job ${job.id} has no file_id (row keys: ${Object.keys(job).join(",")})`
+    );
+  }
   await softDeleteOnDrive(job.fileId);
   logger.info({
     event: "drive_trash_succeeded",

@@ -25,32 +25,24 @@ vi.mock("./drive.js", () => ({
 
 type Db = Parameters<typeof processDriveJobs>[0];
 
-type DriveJob = {
-  id: string;
-  kind: "copy" | "trash";
-  submissionId: string | null;
-  fileId: string | null;
-  status: string;
-  attempts: number;
-  nextAttemptAt: number;
-  lastError: string | null;
-  createdAt: number;
-  updatedAt: number;
-};
-
-function makeJob(over: Partial<DriveJob> = {}): DriveJob {
-  const now = Date.now();
+/**
+ * A drive_jobs row as the DB actually returns it from a raw RETURNING *:
+ * snake_case columns, bigints as strings. claimJobs is responsible for
+ * mapping this to a DriveJob — a mock that returns camelCase would hide a
+ * regression of the outage where every underscored field read as undefined.
+ */
+function makeRawJob(over: Partial<Record<string, unknown>> = {}) {
   return {
     id: "job_1",
     kind: "copy",
-    submissionId: "sub_1",
-    fileId: null,
+    submission_id: "sub_1",
+    file_id: null,
     status: "running",
     attempts: 0,
-    nextAttemptAt: now,
-    lastError: null,
-    createdAt: now,
-    updatedAt: now,
+    next_attempt_at: "1756000000000",
+    last_error: null,
+    created_at: "1756000000000",
+    updated_at: "1756000000000",
     ...over,
   };
 }
@@ -92,7 +84,7 @@ function isReclaimUpdate(values: Record<string, unknown>): boolean {
 }
 
 function makeProcessDb(options: {
-  claimedJobs?: DriveJob[];
+  claimedJobs?: ReturnType<typeof makeRawJob>[];
   claimThrows?: boolean;
   reclaimThrows?: boolean;
   reclaimReturns?: { id: string }[];
@@ -195,9 +187,8 @@ describe("processDriveJobs", () => {
   });
 
   it("does not call Drive when the submission already has a copy (idempotent retry)", async () => {
-    const job = makeJob();
     const { db, submissionUpdateWhere } = makeProcessDb({
-      claimedJobs: [job],
+      claimedJobs: [makeRawJob()],
       submissionRows: [makeCopySubmissionRow({ alreadyCopied: "existing_copy" })],
     });
 
@@ -207,9 +198,8 @@ describe("processDriveJobs", () => {
   });
 
   it("does not call Drive and marks done when the song has no source file", async () => {
-    const job = makeJob();
     const { db, jobUpdates } = makeProcessDb({
-      claimedJobs: [job],
+      claimedJobs: [makeRawJob()],
       submissionRows: [makeCopySubmissionRow({ driveFileId: null })],
     });
 
@@ -219,9 +209,8 @@ describe("processDriveJobs", () => {
   });
 
   it("marks done when the submission row is gone", async () => {
-    const job = makeJob();
     const { db, jobUpdates } = makeProcessDb({
-      claimedJobs: [job],
+      claimedJobs: [makeRawJob()],
       submissionRows: [],
     });
 
@@ -231,9 +220,8 @@ describe("processDriveJobs", () => {
   });
 
   it("writes driveCopyFileId back to the submission on a successful copy", async () => {
-    const job = makeJob();
     const { db, submissionUpdateWhere, jobUpdates } = makeProcessDb({
-      claimedJobs: [job],
+      claimedJobs: [makeRawJob()],
       submissionRows: [makeCopySubmissionRow()],
     });
 
@@ -249,10 +237,9 @@ describe("processDriveJobs", () => {
   });
 
   it("reschedules a failing copy without reporting to Sentry", async () => {
-    const job = makeJob({ attempts: 1 });
     vi.mocked(drive.copySongToEventFolder).mockRejectedValueOnce(new Error("Drive down"));
     const { db, jobUpdates } = makeProcessDb({
-      claimedJobs: [job],
+      claimedJobs: [makeRawJob({ attempts: "1" })],
       submissionRows: [makeCopySubmissionRow()],
     });
 
@@ -266,10 +253,9 @@ describe("processDriveJobs", () => {
   });
 
   it("marks a copy job failed after MAX_ATTEMPTS and reports once", async () => {
-    const job = makeJob({ attempts: MAX_ATTEMPTS - 1 });
     vi.mocked(drive.copySongToEventFolder).mockRejectedValueOnce(new Error("Drive down"));
     const { db, jobUpdates } = makeProcessDb({
-      claimedJobs: [job],
+      claimedJobs: [makeRawJob({ attempts: String(MAX_ATTEMPTS - 1) })],
       submissionRows: [makeCopySubmissionRow()],
     });
 
@@ -283,12 +269,15 @@ describe("processDriveJobs", () => {
   });
 
   it("calls softDeleteOnDrive for a trash job", async () => {
-    const job = makeJob({
-      kind: "trash",
-      submissionId: null,
-      fileId: "copy_to_trash",
+    const { db, jobUpdates } = makeProcessDb({
+      claimedJobs: [
+        makeRawJob({
+          kind: "trash",
+          submission_id: null,
+          file_id: "copy_to_trash",
+        }),
+      ],
     });
-    const { db, jobUpdates } = makeProcessDb({ claimedJobs: [job] });
 
     await expect(processDriveJobs(db)).resolves.toBe(1);
     expect(drive.softDeleteOnDrive).toHaveBeenCalledWith("copy_to_trash");
@@ -297,10 +286,9 @@ describe("processDriveJobs", () => {
   });
 
   it("reclaims stuck running jobs back to pending without incrementing attempts", async () => {
-    const job = makeJob();
     const { db, executeMock, getReclaimSetValues } = makeProcessDb({
       reclaimReturns: [{ id: "stuck_job" }],
-      claimedJobs: [job],
+      claimedJobs: [makeRawJob()],
       submissionRows: [makeCopySubmissionRow()],
     });
 
@@ -310,10 +298,9 @@ describe("processDriveJobs", () => {
   });
 
   it("leaves fresh running leases alone when nothing is past the timeout", async () => {
-    const job = makeJob();
     const { db, executeMock } = makeProcessDb({
       reclaimReturns: [],
-      claimedJobs: [job],
+      claimedJobs: [makeRawJob()],
       submissionRows: [makeCopySubmissionRow()],
     });
 
@@ -322,16 +309,53 @@ describe("processDriveJobs", () => {
   });
 
   it("still claims jobs when reclaim fails", async () => {
-    const job = makeJob();
     const { db, executeMock } = makeProcessDb({
       reclaimThrows: true,
-      claimedJobs: [job],
+      claimedJobs: [makeRawJob()],
       submissionRows: [makeCopySubmissionRow()],
     });
 
     await expect(processDriveJobs(db)).resolves.toBe(1);
     expect(executeMock).toHaveBeenCalled();
     expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
+  it("maps snake_case submission_id from a raw claim and reaches copySongToEventFolder", async () => {
+    const { db } = makeProcessDb({
+      claimedJobs: [makeRawJob({ submission_id: "sub_1" })],
+      submissionRows: [makeCopySubmissionRow()],
+    });
+
+    await expect(processDriveJobs(db)).resolves.toBe(1);
+    expect(drive.copySongToEventFolder).toHaveBeenCalled();
+  });
+
+  it("maps snake_case file_id from a raw claim for trash jobs", async () => {
+    const { db } = makeProcessDb({
+      claimedJobs: [
+        makeRawJob({
+          kind: "trash",
+          submission_id: null,
+          file_id: "drive_copy_99",
+        }),
+      ],
+    });
+
+    await expect(processDriveJobs(db)).resolves.toBe(1);
+    expect(drive.softDeleteOnDrive).toHaveBeenCalledWith("drive_copy_99");
+  });
+
+  it("maps string bigint attempts to numbers when rescheduling", async () => {
+    vi.mocked(drive.copySongToEventFolder).mockRejectedValueOnce(new Error("Drive down"));
+    const { db, jobUpdates } = makeProcessDb({
+      claimedJobs: [makeRawJob({ attempts: "0", next_attempt_at: "1756000000000" })],
+      submissionRows: [makeCopySubmissionRow()],
+    });
+
+    await expect(processDriveJobs(db)).resolves.toBe(0);
+    expect(typeof jobUpdates[0]?.attempts).toBe("number");
+    expect(jobUpdates[0]?.attempts).toBe(1);
+    expect(jobUpdates[0]?.attempts).not.toBe("01");
   });
 });
 
