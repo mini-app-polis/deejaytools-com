@@ -220,7 +220,12 @@ async function tagWithId3(
         artist: newArtist,
         genre: SONG_GENRE,
         ...(newYear ? { year: newYear } : {}),
-        ...(comment ? { comment: { language: "eng", text: comment } } : {}),
+        // Always write the comment frame, empty included. NodeID3.update only
+        // overwrites frames named here and passes the rest through, so
+        // omitting this key when provenance is empty would leave the
+        // entrant's own comment in the processed file — which wav and flac
+        // both clear. Same input, same output, whatever the container.
+        comment: { language: "eng", text: comment },
       },
       Buffer.from(bytes)
     );
@@ -596,11 +601,18 @@ async function tagM4a(
       if (idx >= 0) ilst!.children![idx] = newEntry;
       else ilst!.children!.push(newEntry);
     };
+    const removeEntry = (name: string) => {
+      const idx = ilst!.children!.findIndex((a) => a.name === name);
+      if (idx >= 0) ilst!.children!.splice(idx, 1);
+    };
     setEntry("©nam", newTitle);
     setEntry("©ART", newArtist);
     setEntry("©gen", SONG_GENRE);
     if (newYear) setEntry("©day", newYear);
+    // Remove rather than skip: leaving the source file's own ©cmt in place
+    // would contradict the empty-provenance rule that flac and wav follow.
     if (comment) setEntry("©cmt", comment);
+    else removeEntry("©cmt");
 
     const newMoovSize = serializeAtom(moov).length;
     const delta = newMoovSize - oldMoovSize;
