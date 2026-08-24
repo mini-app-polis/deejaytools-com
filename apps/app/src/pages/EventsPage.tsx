@@ -65,19 +65,27 @@ export default function EventsPage() {
     );
   }
 
-  // Active events first, then upcoming (soonest first), then past (most recent first).
-  const sortedEvents = events?.slice().sort(compareEventChrono);
+  // This page answers "what is on right now, and what is coming up". Completed
+  // and cancelled events are dropped rather than sorted to the bottom — they
+  // stay reachable by direct URL, they just don't belong in the listing.
+  // Active first, then upcoming soonest-first.
+  const sortedEvents = events
+    ?.filter((ev) => ev.status === "active" || ev.status === "upcoming")
+    .sort(compareEventChrono);
 
   return (
     <div className="space-y-4">
       <div>
         <h1 className="page-title text-2xl">Events</h1>
+        <p className="text-sm text-muted-foreground">
+          Everything current and upcoming on the platform.
+        </p>
       </div>
 
       {/* Mobile card list */}
       <div className={`sm:hidden space-y-3${loading ? " opacity-60 pointer-events-none" : ""}`}>
         {sortedEvents?.length === 0 && (
-          <p className="text-sm text-muted-foreground py-4 text-center">No events yet.</p>
+          <p className="text-sm text-muted-foreground py-4 text-center">No current or upcoming events.</p>
         )}
         {sortedEvents?.map((ev) => (
           <button
@@ -118,7 +126,7 @@ export default function EventsPage() {
             {sortedEvents?.length === 0 && (
               <TableRow>
                 <TableCell colSpan={4} className="text-muted-foreground">
-                  No events yet.
+                  No current or upcoming events.
                 </TableCell>
               </TableRow>
             )}

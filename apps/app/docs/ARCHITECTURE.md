@@ -204,8 +204,8 @@ Defined in `pages/App.tsx`. Pattern: public landing **outside** `Layout`; everyt
 | `/event-submissions` | `RequireAuth` | `EventSubmissionsPage` | |
 | `/sessions` | `RequireAuth` | `SessionsPage` | |
 | `/sessions/:id` | — | `SessionDetailPage` | Public read; check-in UI hidden when signed out |
-| `/events` | `RequireAuth` | `EventsPage` | |
-| `/events/:id` | `RequireAuth` | `EventDetailPage` | |
+| `/events` | — | `EventsPage` | Public; lists active + upcoming only |
+| `/events/:id` | — | `EventDetailPage` | Public read; entity roster hidden when signed out |
 | `/admin` | — | `<Navigate to="/admin/events">` | |
 | `/admin/:section` | `AdminGuard` | `AdminPage` | |
 | `/manager` | — | `<Navigate to="/manager/active-sessions">` | |

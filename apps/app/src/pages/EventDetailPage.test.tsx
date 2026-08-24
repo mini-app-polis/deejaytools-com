@@ -23,6 +23,19 @@ vi.mock("sonner", () => ({
   toast: { error: vi.fn(), success: vi.fn() },
 }));
 
+// Clerk drives both the <SignedIn>/<SignedOut> wrappers around the entity
+// roster and the useAuth() flag that gates its fetch. One mutable flag keeps
+// the two in agreement, so a test that flips `signedIn` gets a consistent page.
+let signedIn = true;
+vi.mock("@clerk/clerk-react", () => ({
+  useAuth: () => ({ isSignedIn: signedIn }),
+  SignedIn: ({ children }: { children: React.ReactNode }) => (signedIn ? <>{children}</> : null),
+  SignedOut: ({ children }: { children: React.ReactNode }) => (signedIn ? null : <>{children}</>),
+  SignInButton: ({ children }: { children: React.ReactNode }) => (
+    <span data-testid="sign-in-button">{children}</span>
+  ),
+}));
+
 import EventDetailPage from "./EventDetailPage";
 import { toast } from "sonner";
 
@@ -66,6 +79,14 @@ function makeSession(opts: {
   };
 }
 
+function makeEntity(opts: { key: string; label: string; divisions?: string[] }) {
+  return {
+    entity_key: opts.key,
+    label: opts.label,
+    divisions: opts.divisions ?? [],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Render helper — provides the :id route param via Routes
 // ---------------------------------------------------------------------------
@@ -88,6 +109,7 @@ beforeEach(() => {
   vi.mocked(toast.error).mockClear();
   vi.mocked(toast.success).mockClear();
   apiGet.mockReset();
+  signedIn = true;
 });
 
 // ---------------------------------------------------------------------------
@@ -194,6 +216,7 @@ describe("EventDetailPage", () => {
   it("renders session cards as links to /sessions/:id", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (!path.startsWith("/v1/sessions")) return Promise.resolve([]);
       return Promise.resolve([
         makeSession({ id: "sess-abc", startsAt: "2026-06-03T08:00:00" }),
       ]);
@@ -209,6 +232,7 @@ describe("EventDetailPage", () => {
   it("renders multiple session cards", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (!path.startsWith("/v1/sessions")) return Promise.resolve([]);
       return Promise.resolve([
         makeSession({ id: "s1", startsAt: "2026-06-03T08:00:00" }),
         makeSession({ id: "s2", startsAt: "2026-06-04T08:00:00" }),
@@ -229,6 +253,7 @@ describe("EventDetailPage", () => {
   it("shows session status badges on session cards", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (!path.startsWith("/v1/sessions")) return Promise.resolve([]);
       return Promise.resolve([
         makeSession({ id: "s1", status: "checkin_open", startsAt: "2026-06-03T08:00:00" }),
       ]);
@@ -244,6 +269,7 @@ describe("EventDetailPage", () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events/ev-1")
         return Promise.resolve(makeEvent({ timezone: "America/Chicago" }));
+      if (!path.startsWith("/v1/sessions")) return Promise.resolve([]);
       return Promise.resolve([
         makeSession({ id: "s1", startsAt: "2026-06-03T08:00:00" }),
       ]);
@@ -294,5 +320,85 @@ describe("EventDetailPage", () => {
     await waitFor(() =>
       expect(apiGet).toHaveBeenCalledWith(expect.stringContaining("event_id=ev-1"))
     );
+  });
+});
+
+describe("EventDetailPage — entered entities", () => {
+  it("lists each entity with its divisions", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (path === "/v1/events/ev-1/entities") {
+        return Promise.resolve([
+          makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz", divisions: ["Classic", "Masters"] }),
+          makeEntity({ key: "us:u2", label: "Sam Lee", divisions: ["Showcase"] }),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByText("Alex Kim & Jo Ruiz")).toBeInTheDocument()
+    );
+    expect(screen.getByText("Sam Lee")).toBeInTheDocument();
+    expect(screen.getByText("Classic")).toBeInTheDocument();
+    expect(screen.getByText("Masters")).toBeInTheDocument();
+    expect(screen.getByText("Showcase")).toBeInTheDocument();
+    expect(screen.getByText(/2 entries/i)).toBeInTheDocument();
+  });
+
+  it("never renders song identity for an entity", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (path === "/v1/events/ev-1/entities") {
+        return Promise.resolve([
+          makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz", divisions: ["Classic"] }),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Alex Kim & Jo Ruiz")).toBeInTheDocument());
+    // The roster deliberately carries no song fields — nothing on the page
+    // should look like a title, routine name or filename.
+    expect(screen.queryByText(/\.mp3|\.wav|routine|song/i)).toBeNull();
+  });
+
+  it("shows an empty state when nothing has been submitted", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByText(/no music submitted for this event yet/i)).toBeInTheDocument()
+    );
+  });
+
+  it("shows a sign-in CTA and skips the fetch when signed out", async () => {
+    signedIn = false;
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    await waitFor(() => expect(screen.getByTestId("sign-in-button")).toBeInTheDocument());
+    expect(apiGet).not.toHaveBeenCalledWith("/v1/events/ev-1/entities");
+  });
+
+  it("surfaces a toast when the entity fetch fails", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (path === "/v1/events/ev-1/entities") {
+        return Promise.reject(new Error("Entities unavailable"));
+      }
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Entities unavailable"));
   });
 });

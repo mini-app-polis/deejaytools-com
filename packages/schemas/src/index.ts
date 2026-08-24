@@ -515,3 +515,19 @@ export const ApiAdminEventSongSubmissionSchema = z.object({
   created_at: z.number(),
 });
 export type ApiAdminEventSongSubmission = z.infer<typeof ApiAdminEventSongSubmissionSchema>;
+
+/**
+ * One competing entity that has at least one song submitted to an event.
+ *
+ * Deliberately carries no song identity — no title, filename, routine name or
+ * song id. The event page shows who is entered and in which divisions; what
+ * they are dancing to stays private until the floor.
+ */
+export const ApiEventEntitySchema = z.object({
+  /** Stable per-entity key from `songEntityKey` — `mp:` / `pt:` / `us:` prefixed. */
+  entity_key: z.string(),
+  label: z.string(),
+  /** Distinct effective divisions, in DIVISIONS display order. */
+  divisions: z.array(z.string()),
+});
+export type ApiEventEntity = z.infer<typeof ApiEventEntitySchema>;

@@ -1,7 +1,8 @@
+import { SignedIn, SignedOut, SignInButton, useAuth } from "@clerk/clerk-react";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import type { ApiEvent, ApiSession } from "@deejaytools/schemas";
+import type { ApiEvent, ApiEventEntity, ApiSession } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ function sessionStatusBadge(status: string) {
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
   const api = useApiClient();
+  const { isSignedIn } = useAuth();
   const [event, setEvent] = useState<ApiEvent | null>(null);
   const [sessions, setSessions] = useState<ApiSession[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -149,6 +151,103 @@ export default function EventDetailPage() {
           ))}
         </div>
       </div>
+
+      <EnteredEntities eventId={id} isSignedIn={Boolean(isSignedIn)} />
+    </div>
+  );
+}
+
+/**
+ * Who has music in for this event.
+ *
+ * Names and divisions only — never a song title, routine name or filename.
+ * Competitors want to know who is entered; what anyone is dancing to stays
+ * theirs until the floor.
+ */
+function EnteredEntities({ eventId, isSignedIn }: { eventId: string; isSignedIn: boolean }) {
+  const api = useApiClient();
+  const [entities, setEntities] = useState<ApiEventEntity[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // The endpoint is requireAuth — signed out there is nothing to fetch, and a
+    // 401 toast would be noise on a page that otherwise renders fine.
+    if (!isSignedIn) {
+      setEntities(null);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    api
+      .get<ApiEventEntity[]>(`/v1/events/${encodeURIComponent(eventId)}/entities`)
+      .then((rows) => {
+        if (!cancelled) setEntities(rows);
+      })
+      .catch((e: Error) => {
+        if (!cancelled) toast.error(e.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, eventId, isSignedIn]);
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-base font-semibold">
+        Entered
+        {entities !== null && (
+          <span className="ml-2 text-sm font-normal text-muted-foreground">
+            {entities.length} {entities.length === 1 ? "entry" : "entries"}
+          </span>
+        )}
+      </h2>
+
+      <SignedOut>
+        <div className="flex flex-wrap items-center gap-3">
+          <SignInButton
+            forceRedirectUrl={`/events/${eventId}`}
+            signUpForceRedirectUrl={`/events/${eventId}`}
+          >
+            <Button size="sm">Sign in to see who&apos;s entered</Button>
+          </SignInButton>
+          <p className="text-sm text-muted-foreground">
+            The entry list is visible to signed-in competitors.
+          </p>
+        </div>
+      </SignedOut>
+
+      <SignedIn>
+        {loading && entities === null && <Skeleton className="h-24 w-full" />}
+        {entities?.length === 0 && (
+          <p className="text-sm text-muted-foreground">No music submitted for this event yet.</p>
+        )}
+        {entities && entities.length > 0 && (
+          <ul className={cn("divide-y rounded-lg border", loading && "opacity-60")}>
+            {entities.map((entity) => (
+              <li
+                key={entity.entity_key}
+                className="flex flex-col gap-1.5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+              >
+                <span className="font-medium">{entity.label}</span>
+                <span className="flex flex-wrap gap-1.5">
+                  {entity.divisions.length === 0 ? (
+                    <span className="text-sm text-muted-foreground">No division set</span>
+                  ) : (
+                    entity.divisions.map((division) => (
+                      <Badge key={division} variant="outline" className="font-normal">
+                        {division}
+                      </Badge>
+                    ))
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </SignedIn>
     </div>
   );
 }

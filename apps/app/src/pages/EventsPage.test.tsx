@@ -122,11 +122,11 @@ describe("EventsPage", () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getAllByText(/no events yet/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/no current or upcoming events/i).length).toBeGreaterThan(0);
     });
   });
 
-  it("renders status badges based on event data", async () => {
+  it("lists only active and upcoming events, hiding completed and cancelled", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events") {
         return Promise.resolve([
@@ -168,10 +168,13 @@ describe("EventsPage", () => {
     await waitFor(() => {
       expect(screen.getAllByText("Active Event").length).toBeGreaterThan(0);
     });
+    expect(screen.getAllByText("Upcoming Event").length).toBeGreaterThan(0);
 
-    // Check that all badge variants render correctly.
-    const badges = screen.getAllByText(/active|upcoming|completed|cancelled/i);
-    expect(badges.length).toBeGreaterThanOrEqual(4);
+    // Past and cancelled events stay off the listing entirely.
+    expect(screen.queryByText("Completed Event")).toBeNull();
+    expect(screen.queryByText("Cancelled Event")).toBeNull();
+    expect(screen.queryByText("completed")).toBeNull();
+    expect(screen.queryByText("cancelled")).toBeNull();
   });
 
   it("shows toast error when API fails", async () => {

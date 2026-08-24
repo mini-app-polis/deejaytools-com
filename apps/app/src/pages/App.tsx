@@ -119,22 +119,10 @@ export default function App() {
           {/* Session detail is public-readable; the page itself shows a
               sign-in CTA in place of the check-in form when signed out. */}
           <Route path="sessions/:id" element={<SessionDetailPage />} />
-          <Route
-            path="events"
-            element={
-              <RequireAuth>
-                <EventsPage />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="events/:id"
-            element={
-              <RequireAuth>
-                <EventDetailPage />
-              </RequireAuth>
-            }
-          />
+          {/* Events are public — the nav links here for signed-out visitors.
+              The detail page gates only its entity roster behind sign-in. */}
+          <Route path="events" element={<EventsPage />} />
+          <Route path="events/:id" element={<EventDetailPage />} />
 
           {/* Admin-required.
               /admin is split into one route per section so each admin

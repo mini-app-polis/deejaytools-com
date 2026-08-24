@@ -94,6 +94,156 @@ describe("GET /v1/events", () => {
   });
 });
 
+describe("GET /v1/events/:id", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+  });
+
+  it("is public — no Authorization header required", async () => {
+    enqueueSelectResult([
+      {
+        id: "e1",
+        name: "Social",
+        startDate: "2026-01-01",
+        endDate: "2026-01-03",
+        timezone: "America/Chicago",
+        seasonYear: "2026",
+        createdBy: "user_admin123",
+        createdAt: 1,
+        updatedAt: 2,
+      },
+    ]);
+    const res = await app.request(`${BASE}/e1`);
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<{ id: string; name: string }>>(res);
+    assertSuccessEnvelope(body);
+    expect(body.data).toMatchObject({ id: "e1", name: "Social" });
+  });
+
+  it("returns 404 for an unknown id", async () => {
+    enqueueSelectResult([]);
+    const res = await app.request(`${BASE}/nope`);
+    expect(res.status).toBe(404);
+    const body = await readJson<ErrorEnvelope>(res);
+    assertErrorEnvelope(body);
+  });
+});
+
+describe("GET /v1/events/:id/entities", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+  });
+
+  function submissionRow(overrides: Record<string, unknown> = {}) {
+    return {
+      songUserId: "user_1",
+      songPartnerId: null,
+      songManagedPartnershipId: null,
+      songDivision: "Classic",
+      submissionDivision: null,
+      ownerFirst: "Sam",
+      ownerLast: "Lee",
+      partnerFirst: null,
+      partnerLast: null,
+      partnerKind: null,
+      managedLeaderFirst: null,
+      managedLeaderLast: null,
+      managedFollowerFirst: null,
+      managedFollowerLast: null,
+      ...overrides,
+    };
+  }
+
+  it("returns 401 without auth", async () => {
+    const res = await app.request(`${BASE}/e1/entities`);
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 404 when the event does not exist", async () => {
+    enqueueSelectResult([]); // event lookup
+    const res = await app.request(`${BASE}/nope/entities`, { headers: authHeaders() });
+    expect(res.status).toBe(404);
+    const body = await readJson<ErrorEnvelope>(res);
+    assertErrorEnvelope(body);
+  });
+
+  it("collapses an entity's submissions into one row with its divisions", async () => {
+    enqueueSelectResult([{ id: "e1" }]); // event lookup
+    enqueueSelectResult([
+      submissionRow({ songPartnerId: "p1", partnerFirst: "Jo", partnerLast: "Ruiz" }),
+      submissionRow({
+        songPartnerId: "p1",
+        partnerFirst: "Jo",
+        partnerLast: "Ruiz",
+        songDivision: "Masters",
+      }),
+    ]);
+
+    const res = await app.request(`${BASE}/e1/entities`, { headers: authHeaders() });
+    expect(res.status).toBe(200);
+    const body = await readJson<
+      SuccessEnvelope<{ entity_key: string; label: string; divisions: string[] }[]>
+    >(res);
+    assertSuccessListEnvelope(body);
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0]).toEqual({
+      entity_key: "pt:p1",
+      label: "Sam Lee & Jo Ruiz",
+      // DIVISIONS display order, not insertion or alphabetical order.
+      divisions: ["Classic", "Masters"],
+    });
+  });
+
+  it("keeps different entities apart and never leaks song identity", async () => {
+    enqueueSelectResult([{ id: "e1" }]);
+    enqueueSelectResult([
+      submissionRow({ songPartnerId: "p1", partnerFirst: "Jo", partnerLast: "Ruiz" }),
+      submissionRow({ songUserId: "user_2", ownerFirst: "Alex", ownerLast: "Kim" }),
+      submissionRow({
+        songManagedPartnershipId: "mp1",
+        managedLeaderFirst: "Dana",
+        managedLeaderLast: "Cruz",
+        managedFollowerFirst: "Ray",
+        managedFollowerLast: "Ng",
+        songDivision: "Showcase",
+      }),
+    ]);
+
+    const res = await app.request(`${BASE}/e1/entities`, { headers: authHeaders() });
+    const body = await readJson<
+      SuccessEnvelope<Record<string, unknown>[]>
+    >(res);
+    expect(body.data).toHaveLength(3);
+    expect(body.data.map((e) => e.entity_key).sort()).toEqual(["mp:mp1", "pt:p1", "us:user_2"]);
+    // The contract is name + divisions only. Anything song-shaped in this
+    // payload would be a leak, so assert the key set rather than the absence
+    // of any one field.
+    for (const entity of body.data) {
+      expect(Object.keys(entity).sort()).toEqual(["divisions", "entity_key", "label"]);
+    }
+  });
+
+  it("prefers the submission's division override over the song's", async () => {
+    enqueueSelectResult([{ id: "e1" }]);
+    enqueueSelectResult([
+      submissionRow({ songDivision: "Classic", submissionDivision: "Showcase" }),
+    ]);
+
+    const res = await app.request(`${BASE}/e1/entities`, { headers: authHeaders() });
+    const body = await readJson<SuccessEnvelope<{ divisions: string[] }[]>>(res);
+    expect(body.data[0]!.divisions).toEqual(["Showcase"]);
+  });
+
+  it("omits a blank division rather than emitting an empty string", async () => {
+    enqueueSelectResult([{ id: "e1" }]);
+    enqueueSelectResult([submissionRow({ songDivision: null, submissionDivision: null })]);
+
+    const res = await app.request(`${BASE}/e1/entities`, { headers: authHeaders() });
+    const body = await readJson<SuccessEnvelope<{ divisions: string[] }[]>>(res);
+    expect(body.data[0]!.divisions).toEqual([]);
+  });
+});
+
 describe("POST /v1/events", () => {
   beforeEach(() => {
     resetSelectQueue();

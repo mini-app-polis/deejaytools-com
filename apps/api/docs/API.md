@@ -329,7 +329,7 @@ const ianaTimezone = z
 
 ### GET /v1/events/:id
 
-**Auth:** requireAuth
+**Auth:** public
 
 **Purpose:** Fetch one event by id.
 
@@ -346,6 +346,55 @@ const ianaTimezone = z
 | Status | Code | Message | Trigger |
 |--------|------|---------|---------|
 | 404 | `NOT_FOUND` | Event not found | Unknown id |
+
+---
+
+### GET /v1/events/:id/entities
+
+**Auth:** requireAuth
+
+**Purpose:** List the competing entities that have at least one song submitted to
+this event, with the divisions they are entered in.
+
+Unlike the event itself this is **not public**: who is entered is
+competitor-visible information. The response carries **no song identity** — no
+title, routine name, filename or song id — by design.
+
+Entities are grouped by `songEntityKey` (managed partnership → partner →
+solo owner), so two submissions from the same couple collapse to one row.
+A division comes from the submission's per-event override when set, otherwise
+from the song; blank divisions are dropped rather than emitted as `""`.
+
+**Path params:** `id` — event UUID
+
+**Query params / Request body:** none
+
+**Response:**
+
+```json
+{
+  "data": [
+    {
+      "entity_key": "pt_…",
+      "label": "Alex Kim & Jo Ruiz",
+      "divisions": ["Classic", "Masters"]
+    }
+  ],
+  "meta": { "version": "…", "count": 1 }
+}
+```
+
+`entity_key` is prefixed by source table (`mp:` managed partnership, `pt:`
+partner, `us:` solo user) so ids from different tables can never collide.
+`divisions` is in `DIVISIONS` display order; unknown divisions sort last.
+
+**Errors:**
+
+| Status | Code | Message | Trigger |
+|--------|------|---------|---------|
+| 401 | `UNAUTHORIZED` | … | Missing/invalid token |
+| 404 | `NOT_FOUND` | Event not found | Unknown id |
+| 500 | `INTERNAL` | … | Query failed |
 
 ---
 
