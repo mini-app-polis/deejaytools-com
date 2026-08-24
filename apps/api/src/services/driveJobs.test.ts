@@ -112,11 +112,14 @@ function makeProcessDb(options: {
   reclaimReturns?: { id: string }[];
   submissionRows?: ReturnType<typeof makeCopySubmissionRow>[];
   jobUpdates?: Array<{ status: string; attempts?: number; lastError?: string | null }>;
+  /** When set, success-path `.returning()` yields this (empty = superseded). */
+  completionReturning?: { id: string }[];
 }) {
   const submissionUpdateWhere = vi.fn().mockResolvedValue(undefined);
   const jobUpdates = options.jobUpdates ?? [];
   let jobUpdateIndex = 0;
   let reclaimSetValues: Record<string, unknown> | null = null;
+  let lastDoneWhere = vi.fn();
 
   const selectChain = {
     from: vi.fn(() => selectChain),
@@ -160,6 +163,17 @@ function makeProcessDb(options: {
           lastError: (values.lastError as string | null | undefined) ?? null,
         };
         jobUpdateIndex++;
+
+        if (values.status === "done") {
+          const returningRows =
+            options.completionReturning ??
+            (options.claimedJobs ?? []).map((j) => ({ id: String(j.id) }));
+          lastDoneWhere = vi.fn(() => ({
+            returning: vi.fn(() => Promise.resolve(returningRows)),
+          }));
+          return { where: lastDoneWhere };
+        }
+
         return {
           where: vi.fn().mockResolvedValue(undefined),
         };
@@ -173,6 +187,7 @@ function makeProcessDb(options: {
     jobUpdates,
     executeMock,
     getReclaimSetValues: () => reclaimSetValues,
+    getLastDoneWhere: () => lastDoneWhere,
   };
 }
 
@@ -262,6 +277,20 @@ describe("processDriveJobs", () => {
     });
     expect(submissionUpdateWhere).toHaveBeenCalled();
     expect(jobUpdates[0]?.status).toBe("done");
+  });
+
+  it("does not mark done or count when the running lease was superseded", async () => {
+    const { db, jobUpdates } = makeProcessDb({
+      claimedJobs: [makeRawJob()],
+      submissionRows: [makeCopySubmissionRow()],
+      completionReturning: [],
+    });
+
+    await expect(processDriveJobs(db)).resolves.toBe(0);
+    expect(jobUpdates[0]?.status).toBe("done");
+    expect(loggerMocks.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ event: "drive_job_completion_superseded" })
+    );
   });
 
   it("copies finals_only submissions into the Finals subfolder", async () => {

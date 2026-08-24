@@ -385,11 +385,25 @@ export async function processDriveJobs(
         throw new Error(`unknown drive job kind: ${job.kind}`);
       }
 
-      await database
+      // Only the run that still holds the lease may complete the job. A run
+      // whose lease was reclaimed (because it hung past LEASE_TIMEOUT_MS) has
+      // since been superseded; without this guard its late return would
+      // overwrite the newer run's state and mark a job done that never copied.
+      const completed = await database
         .update(schema.driveJobs)
         .set({ status: "done", updatedAt: Date.now(), lastError: null })
-        .where(eq(schema.driveJobs.id, job.id));
-      done++;
+        .where(and(eq(schema.driveJobs.id, job.id), eq(schema.driveJobs.status, "running")))
+        .returning({ id: schema.driveJobs.id });
+
+      if (completed.length === 0) {
+        logger.warn({
+          event: "drive_job_completion_superseded",
+          category: "infra",
+          context: { job_id: job.id, kind: job.kind },
+        });
+      } else {
+        done++;
+      }
     } catch (err) {
       const attempts = job.attempts + 1;
       const exhausted = attempts >= MAX_ATTEMPTS;
@@ -405,7 +419,7 @@ export async function processDriveJobs(
           lastError: message,
           updatedAt: Date.now(),
         })
-        .where(eq(schema.driveJobs.id, job.id));
+        .where(and(eq(schema.driveJobs.id, job.id), eq(schema.driveJobs.status, "running")));
 
       // First failure is reported at error level even though we will retry:
       // a config error (missing GOOGLE_* env, wrong Drive scope) fails
