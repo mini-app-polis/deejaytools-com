@@ -81,6 +81,29 @@ describe("ChoiceGroup", () => {
       />
     );
     expect(screen.getAllByRole("radiogroup")).toHaveLength(1);
+    expect(screen.getByRole("radio", { name: "Alpha" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Beta" })).toBeInTheDocument();
+  });
+
+  it("marks grouped rows as presentation so radios stay in one radiogroup", () => {
+    const { container } = render(
+      <ChoiceGroup
+        ariaLabel="Grouped"
+        groups={[
+          [
+            { value: "a", label: "Alpha" },
+            { value: "b", label: "Beta" },
+          ],
+          [{ value: "c", label: "Gamma" }],
+        ]}
+        value=""
+        onChange={() => {}}
+      />
+    );
+
+    expect(screen.getAllByRole("radiogroup")).toHaveLength(1);
+    expect(container.querySelectorAll('[role="presentation"]')).toHaveLength(2);
+    expect(screen.getAllByRole("radio")).toHaveLength(3);
   });
 
   it("fires onChange when a pill in any row is selected", async () => {

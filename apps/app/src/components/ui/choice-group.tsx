@@ -52,7 +52,9 @@ export function ChoiceGroup<T extends string>({
     return (
       <div role="radiogroup" aria-label={ariaLabel} className={cn("space-y-2", className)}>
         {rows.map((group, i) => (
-          <div key={i} className="flex flex-wrap gap-2">
+          // presentation: the rows are visual grouping only — the radios must
+          // still read as owned by the single radiogroup above.
+          <div key={i} role="presentation" className="flex flex-wrap gap-2">
             {group.map(renderOption)}
           </div>
         ))}
