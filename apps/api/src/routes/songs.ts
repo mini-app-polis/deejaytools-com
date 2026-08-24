@@ -1,6 +1,7 @@
 import { File } from "node:buffer";
 import { mkdir, writeFile, readdir, readFile, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
+import * as Sentry from "@sentry/node";
 import { CommonErrors, createLogger, error, success, successList } from "common-typescript-utils";
 import { zValidator } from "../lib/validate.js";
 import { Hono } from "hono";
@@ -10,6 +11,7 @@ import { db } from "../db/index.js";
 import { checkins, eventSongSubmissions, managedPartnerships, partners, queueEntries, sessions, songs, teams, users } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
 import { shareDriveFileWithUsers, softDeleteOnDrive, uploadSongToDrive } from "../services/drive.js";
+import { enqueueDriveJob } from "../services/driveJobs.js";
 import { tagSongBytes } from "../services/tagger.js";
 import { detectAudioFormat } from "../services/audioFormat.js";
 
@@ -653,9 +655,21 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
   }
 
   // Soft-delete: stamp deleted_at, keep the row for historical FK references
+  let orphanedCopyIds: string[] = [];
   try {
     await db.transaction(async (tx) => {
-      // A removed song must not linger in any event — drop its submission references.
+      // A removed song must not linger in any event — drop its submission
+      // references. Capture the per-event Drive copies first: once these rows
+      // are gone the file ids are unrecoverable and the copies would sit in
+      // the event folders forever with nothing pointing at them.
+      const copies = await tx
+        .select({ driveCopyFileId: eventSongSubmissions.driveCopyFileId })
+        .from(eventSongSubmissions)
+        .where(eq(eventSongSubmissions.songId, id));
+      orphanedCopyIds = copies
+        .map((r) => r.driveCopyFileId)
+        .filter((v): v is string => v !== null);
+
       await tx.delete(eventSongSubmissions).where(eq(eventSongSubmissions.songId, id));
       // Soft-delete the song itself (row kept for historical run/check-in FK references).
       await tx
@@ -671,6 +685,29 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
       error: err,
     });
     return c.json(CommonErrors.internalError("Failed to delete song"), 500);
+  }
+
+  // Best-effort, matching the Drive soft-delete above: the DB state is what
+  // controls the app, and a failed enqueue is reported rather than surfaced
+  // to the user mid-delete.
+  for (const fileId of orphanedCopyIds) {
+    try {
+      await enqueueDriveJob(db, { kind: "trash", fileId });
+    } catch (err) {
+      logger.error({
+        event: "drive_trash_enqueue_failed",
+        category: "api",
+        context: { songId: id, userId, driveFileId: fileId, source: "song_delete" },
+        error: err,
+      });
+      Sentry.withScope((scope) => {
+        scope.setLevel("error");
+        scope.setTag("subsystem", "drive_jobs");
+        scope.setTag("drive_job_kind", "trash");
+        scope.setContext("drive_job", { file_id: fileId, stage: "enqueue", source: "song_delete" });
+        Sentry.captureException(err instanceof Error ? err : new Error(String(err)));
+      });
+    }
   }
 
   return c.body(null, 204);
