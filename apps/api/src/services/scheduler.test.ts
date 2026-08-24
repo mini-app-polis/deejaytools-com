@@ -14,6 +14,14 @@ vi.mock("./driveJobs.js", () => ({
   processDriveJobs,
 }));
 
+vi.mock("@sentry/node", () => ({
+  withScope: vi.fn((fn: (scope: unknown) => void) =>
+    fn({ setLevel: vi.fn(), setTag: vi.fn(), setContext: vi.fn() })
+  ),
+  captureException: vi.fn(),
+}));
+
+import * as Sentry from "@sentry/node";
 import { runTick, startScheduler } from "./scheduler.js";
 
 type Db = Parameters<typeof runTick>[0];
@@ -33,6 +41,7 @@ describe("runTick", () => {
     tickSessionStatuses.mockResolvedValue(0);
     fillRunningSessions.mockResolvedValue(0);
     processDriveJobs.mockResolvedValue(0);
+    vi.mocked(Sentry.captureException).mockClear();
   });
 
   it("calls tickSessionStatuses, fillRunningSessions, and processDriveJobs", async () => {
@@ -45,6 +54,19 @@ describe("runTick", () => {
   it("swallows errors so a bad pass does not throw", async () => {
     tickSessionStatuses.mockRejectedValueOnce(new Error("boom"));
     await expect(runTick(fakeDb)).resolves.toBeUndefined();
+  });
+
+  it("still drains Drive jobs when session steps fail", async () => {
+    tickSessionStatuses.mockRejectedValueOnce(new Error("session boom"));
+    await runTick(fakeDb);
+    expect(processDriveJobs).toHaveBeenCalledWith(fakeDb);
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
+  it("reports Drive drain failures to Sentry without throwing", async () => {
+    processDriveJobs.mockRejectedValueOnce(new Error("drive boom"));
+    await expect(runTick(fakeDb)).resolves.toBeUndefined();
+    expect(Sentry.captureException).toHaveBeenCalledTimes(1);
   });
 });
 
