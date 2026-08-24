@@ -130,6 +130,16 @@ export default function OpenSubmissionsPage() {
     };
   }, [api, selectedEventId]);
 
+  // Switching events must not leave a song/division/round chosen for the
+  // previous one — selectedSongId can otherwise point at a song filtered out
+  // of songsForSelect while canSubmit stays true.
+  useEffect(() => {
+    setSelectedSongId("");
+    setDivision("");
+    setDivisionTouched(false);
+    setRound("prelims_and_finals");
+  }, [selectedEventId]);
+
   const selectedEvent = useMemo(
     () => openEvents.find((e) => e.id === selectedEventId) ?? null,
     [openEvents, selectedEventId]
@@ -156,9 +166,14 @@ export default function OpenSubmissionsPage() {
   const handleSongChange = (songId: string) => {
     setSelectedSongId(songId);
     const song = songs.find((s) => s.id === songId);
-    if (song && !divisionTouched) {
-      setDivision(song.division?.trim() ?? "");
-    }
+    // A new song is a fresh entry: re-derive the division from it and drop any
+    // override, rather than silently carrying the previous song's division.
+    setDivisionTouched(false);
+    setDivision(song?.division?.trim() ?? "");
+    // Round belongs to the division that was showing when it was chosen. Left
+    // alone, a Finals Only pick survives a hop through a non-Classic song and
+    // is posted for the next Classic song without ever being displayed.
+    setRound("prelims_and_finals");
   };
 
   const handleDivisionChange = (value: string) => {
@@ -313,7 +328,11 @@ export default function OpenSubmissionsPage() {
             <div className={`space-y-4 rounded-lg border px-4 py-4${submissionsLoading ? " opacity-60" : ""}`}>
               <div className="space-y-2">
                 <Label htmlFor="open-submissions-song">Song</Label>
-                <Select value={selectedSongId || undefined} onValueChange={handleSongChange}>
+                <Select
+                  key={selectedEventId}
+                  value={selectedSongId || undefined}
+                  onValueChange={handleSongChange}
+                >
                   <SelectTrigger id="open-submissions-song">
                     <SelectValue placeholder="Select a song" />
                   </SelectTrigger>

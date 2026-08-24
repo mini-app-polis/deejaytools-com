@@ -172,7 +172,7 @@ describe("OpenSubmissionsPage", () => {
     expect(screen.queryByRole("radio", { name: /prelims & finals/i })).not.toBeInTheDocument();
   });
 
-  it("keeps an edited division when the song changes", async () => {
+  it("re-derives division from the new song when the song changes", async () => {
     mockApi([OPEN_EVENT], [SONG, SONG_SHOWCASE]);
     const user = userEvent.setup();
     renderPage();
@@ -185,9 +185,64 @@ describe("OpenSubmissionsPage", () => {
 
     await user.click(await screen.findByRole("combobox", { name: /song/i }));
     await user.click(await screen.findByRole("option", { name: /2026_Showcase_MyRoutine/ }));
+    await user.click(await screen.findByRole("combobox", { name: /song/i }));
+    await user.click(await screen.findByRole("option", { name: /2026_Classic_MyRoutine/ }));
 
     await user.click(await screen.findByRole("combobox", { name: /division/i }));
-    expect(await screen.findByRole("option", { name: /^Showcase$/ })).toBeInTheDocument();
+    // Override must not stick after a song change — Classic song re-derives Classic.
+    expect(await screen.findByRole("option", { name: /^Classic$/ })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+    await user.keyboard("{Escape}");
+    expect(await screen.findByRole("radio", { name: /prelims & finals/i })).toBeInTheDocument();
+  });
+
+  it("resets round to Prelims & Finals when the song changes", async () => {
+    mockApi([OPEN_EVENT], [SONG, SONG_SHOWCASE]);
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("combobox", { name: /song/i }));
+    await user.click(await screen.findByRole("option", { name: /2026_Classic_MyRoutine/ }));
+    await user.click(await screen.findByRole("radio", { name: /finals only/i }));
+    expect(screen.getByRole("radio", { name: /finals only/i })).toHaveAttribute(
+      "aria-checked",
+      "true"
+    );
+
+    await user.click(await screen.findByRole("combobox", { name: /song/i }));
+    await user.click(await screen.findByRole("option", { name: /2026_Showcase_MyRoutine/ }));
+    await user.click(await screen.findByRole("combobox", { name: /song/i }));
+    await user.click(await screen.findByRole("option", { name: /2026_Classic_MyRoutine/ }));
+
+    expect(await screen.findByRole("radio", { name: /prelims & finals/i })).toHaveAttribute(
+      "aria-checked",
+      "true"
+    );
+  });
+
+  it("clears the form when switching events", async () => {
+    const OPEN_EVENT_2 = { ...OPEN_EVENT, id: "open2", name: "The Open 2027" };
+    mockApi([OPEN_EVENT, OPEN_EVENT_2], [SONG]);
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("combobox", { name: /event/i }));
+    await user.click(await screen.findByRole("option", { name: /the open 2026/i }));
+
+    await user.click(await screen.findByRole("combobox", { name: /song/i }));
+    await user.click(await screen.findByRole("option", { name: /2026_Classic_MyRoutine/ }));
+    expect(await screen.findByRole("radio", { name: /prelims & finals/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^submit$/i })).toBeEnabled();
+
+    await user.click(await screen.findByRole("combobox", { name: /event/i }));
+    await user.click(await screen.findByRole("option", { name: /the open 2027/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("radio", { name: /prelims & finals/i })).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: /^submit$/i })).toBeDisabled();
   });
 
   it("posts division and round on submit", async () => {
