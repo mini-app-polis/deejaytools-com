@@ -1,5 +1,6 @@
 import { CommonErrors, createLogger, error, success, successList } from "common-typescript-utils";
 import { createEventSongSubmissionBodySchema } from "@deejaytools/schemas";
+import * as Sentry from "@sentry/node";
 import { Hono } from "hono";
 import { and, desc, eq } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -231,11 +232,21 @@ eventSongSubmissionRoutes.post(
     try {
       await enqueueDriveJob(db, { kind: "copy", submissionId: id });
     } catch (err) {
+      // Nothing retries this. The submission row exists with no job pointing at
+      // it, so the copy will never happen without manual intervention — report
+      // rather than only logging.
       logger.error({
         event: "drive_copy_enqueue_failed",
         category: "api",
         context: { submissionId: id, userId },
         error: err,
+      });
+      Sentry.withScope((scope) => {
+        scope.setLevel("error");
+        scope.setTag("subsystem", "drive_jobs");
+        scope.setTag("drive_job_kind", "copy");
+        scope.setContext("drive_job", { submission_id: id, stage: "enqueue" });
+        Sentry.captureException(err instanceof Error ? err : new Error(String(err)));
       });
     }
 
@@ -270,11 +281,26 @@ eventSongSubmissionRoutes.delete("/:id", requireAuth, async (c) => {
     try {
       await enqueueDriveJob(db, { kind: "trash", fileId: existing.driveCopyFileId });
     } catch (err) {
+      // The submission row is about to be deleted, taking the file id with it.
+      // If this enqueue is lost the copy is orphaned in the event folder with
+      // nothing left pointing at it — the file id in this report is the only
+      // remaining way to find it.
       logger.error({
         event: "drive_trash_enqueue_failed",
         category: "api",
         context: { submissionId: id, userId, driveFileId: existing.driveCopyFileId },
         error: err,
+      });
+      Sentry.withScope((scope) => {
+        scope.setLevel("error");
+        scope.setTag("subsystem", "drive_jobs");
+        scope.setTag("drive_job_kind", "trash");
+        scope.setContext("drive_job", {
+          submission_id: id,
+          file_id: existing.driveCopyFileId,
+          stage: "enqueue",
+        });
+        Sentry.captureException(err instanceof Error ? err : new Error(String(err)));
       });
     }
   }

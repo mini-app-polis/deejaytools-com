@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as Sentry from "@sentry/node";
 import { app } from "../app.js";
 import {
   assertErrorEnvelope,
@@ -14,6 +15,13 @@ import { enqueueSelectResult, mockDb, resetSelectQueue } from "../test/mocks.js"
 
 const { enqueueDriveJob } = vi.hoisted(() => ({
   enqueueDriveJob: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@sentry/node", () => ({
+  withScope: vi.fn((fn: (scope: unknown) => void) =>
+    fn({ setLevel: vi.fn(), setTag: vi.fn(), setContext: vi.fn() })
+  ),
+  captureException: vi.fn(),
 }));
 
 vi.mock("../db/index.js", async () => {
@@ -150,6 +158,7 @@ describe("POST /v1/event-song-submissions", () => {
   beforeEach(() => {
     resetSelectQueue();
     enqueueDriveJob.mockClear();
+    vi.mocked(Sentry.captureException).mockClear();
   });
 
   it("creates and returns a joined submission row", async () => {
@@ -174,9 +183,10 @@ describe("POST /v1/event-song-submissions", () => {
       expect.anything(),
       expect.objectContaining({ kind: "copy", submissionId: expect.any(String) })
     );
+    expect(Sentry.captureException).not.toHaveBeenCalled();
   });
 
-  it("still returns 201 when enqueueDriveJob rejects", async () => {
+  it("still returns 201 and reports to Sentry when enqueueDriveJob rejects", async () => {
     enqueueDriveJob.mockRejectedValueOnce(new Error("queue down"));
     enqueueSelectResult([{ id: "song_1" }]);
     enqueueSelectResult([{ id: "evt_1" }]);
@@ -188,6 +198,7 @@ describe("POST /v1/event-song-submissions", () => {
     });
     expect(res.status).toBe(201);
     expect(enqueueDriveJob).toHaveBeenCalledTimes(1);
+    expect(Sentry.captureException).toHaveBeenCalledTimes(1);
   });
 
   it("returns 409 when the song is already submitted to the event", async () => {
@@ -244,6 +255,7 @@ describe("DELETE /v1/event-song-submissions/:id", () => {
   beforeEach(() => {
     resetSelectQueue();
     enqueueDriveJob.mockClear();
+    vi.mocked(Sentry.captureException).mockClear();
   });
 
   it("returns 404 when the submission is not found", async () => {
@@ -285,6 +297,19 @@ describe("DELETE /v1/event-song-submissions/:id", () => {
       deleteWhere.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER
     );
     expect(deleteWhere).toHaveBeenCalled();
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
+  it("returns 204 and reports to Sentry when the trash enqueue rejects", async () => {
+    enqueueSelectResult([{ id: "sub_1", driveCopyFileId: "drive_copy_1" }]);
+    enqueueDriveJob.mockRejectedValueOnce(new Error("queue down"));
+    const res = await app.request(`${BASE}/sub_1`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(204);
+    expect(enqueueDriveJob).toHaveBeenCalledTimes(1);
+    expect(Sentry.captureException).toHaveBeenCalledTimes(1);
   });
 
   it("does not enqueue a trash job when drive_copy_file_id is null", async () => {

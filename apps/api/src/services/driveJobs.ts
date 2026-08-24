@@ -1,5 +1,6 @@
+import * as Sentry from "@sentry/node";
 import { createLogger } from "common-typescript-utils";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "../db/schema.js";
 import { resolveSubmissionFilename } from "../lib/submissionFilename.js";
@@ -9,15 +10,62 @@ type Db = PostgresJsDatabase<typeof schema>;
 
 const logger = createLogger("deejaytools-api");
 
-/** Give up after this many tries and leave the job as 'failed' for an operator. */
-export const MAX_ATTEMPTS = 6;
+/**
+ * Give up after this many tries, mark the job 'failed', and report to Sentry.
+ * With the backoff below this spans roughly three hours, which is meant to
+ * outlast a Google-side incident rather than a transient blip — entrants
+ * submit in the days before an event, so we have hours of slack, not minutes.
+ */
+export const MAX_ATTEMPTS = 10;
 
 /** Jobs claimed per tick. Keeps one slow Drive call from starving the tick. */
 export const DEFAULT_BATCH_SIZE = 10;
 
-/** 1m, 2m, 4m, 8m, 16m, capped at 30m. */
+/**
+ * A job claimed but never resolved is presumed orphaned after this long and is
+ * returned to 'pending'. The usual cause is the process dying mid-job — a
+ * Railway deploy, OOM, or SIGKILL — which is most likely during the pre-event
+ * rush when we are also deploying. Without reclaim those rows sit in 'running'
+ * forever and are never retried by anything.
+ *
+ * Must comfortably exceed the slowest realistic Drive call.
+ */
+export const LEASE_TIMEOUT_MS = 10 * 60_000;
+
+/** 1m, 2m, 4m, 8m, 16m, then 30m thereafter. ~3h across MAX_ATTEMPTS. */
 export function backoffMs(attempts: number): number {
   return Math.min(60_000 * 2 ** attempts, 30 * 60_000);
+}
+
+/**
+ * Report a Drive job we have given up on. Background work never passes through
+ * app.onError, so without this a permanently failed copy is invisible outside
+ * the logs. Tags are chosen so Sentry groups by kind and by job rather than
+ * lumping every Drive failure into one issue.
+ */
+function reportDriveJobFailure(
+  err: unknown,
+  context: {
+    jobId: string;
+    kind: string;
+    submissionId: string | null;
+    fileId: string | null;
+    attempts: number;
+  }
+): void {
+  Sentry.withScope((scope) => {
+    scope.setLevel("error");
+    scope.setTag("subsystem", "drive_jobs");
+    scope.setTag("drive_job_kind", context.kind);
+    scope.setContext("drive_job", {
+      job_id: context.jobId,
+      kind: context.kind,
+      submission_id: context.submissionId,
+      file_id: context.fileId,
+      attempts: context.attempts,
+    });
+    Sentry.captureException(err instanceof Error ? err : new Error(String(err)));
+  });
 }
 
 export async function enqueueDriveJob(
@@ -39,6 +87,33 @@ export async function enqueueDriveJob(
 }
 
 type DriveJob = typeof schema.driveJobs.$inferSelect;
+
+/**
+ * Return jobs stuck in 'running' past the lease timeout to 'pending' so the
+ * next claim picks them up. Attempts is deliberately NOT incremented — the job
+ * never got a real try, the process just died holding it.
+ */
+async function reclaimStuckJobs(database: Db, now: number): Promise<number> {
+  const reclaimed = await database
+    .update(schema.driveJobs)
+    .set({ status: "pending", updatedAt: now })
+    .where(
+      and(
+        eq(schema.driveJobs.status, "running"),
+        lt(schema.driveJobs.updatedAt, now - LEASE_TIMEOUT_MS)
+      )
+    )
+    .returning({ id: schema.driveJobs.id });
+
+  if (reclaimed.length > 0) {
+    logger.warn({
+      event: "drive_jobs_reclaimed",
+      category: "infra",
+      context: { count: reclaimed.length, job_ids: reclaimed.map((r) => r.id) },
+    });
+  }
+  return reclaimed.length;
+}
 
 /**
  * Atomically claim up to `limit` due jobs. SKIP LOCKED means concurrent
@@ -145,11 +220,28 @@ export async function processDriveJobs(
   limit: number = DEFAULT_BATCH_SIZE
 ): Promise<number> {
   const now = Date.now();
+
+  // Before claiming, rescue anything a dead process left holding a lease.
+  try {
+    await reclaimStuckJobs(database, now);
+  } catch (err) {
+    // Non-fatal: reclaim is a backstop, and failing it must not stop this tick
+    // from draining the jobs that are already pending.
+    logger.error({ event: "drive_jobs_reclaim_failed", category: "infra", error: err });
+  }
+
   let jobs: DriveJob[];
   try {
     jobs = await claimJobs(database, limit, now);
   } catch (err) {
+    // A claim failure means the queue is not draining at all — every submission
+    // made from here on goes uncopied. Loud, not just logged.
     logger.error({ event: "drive_jobs_claim_failed", category: "infra", error: err });
+    Sentry.withScope((scope) => {
+      scope.setLevel("error");
+      scope.setTag("subsystem", "drive_jobs");
+      Sentry.captureException(err instanceof Error ? err : new Error(String(err)));
+    });
     return 0;
   }
 
@@ -186,9 +278,27 @@ export async function processDriveJobs(
       logger[exhausted ? "error" : "warn"]({
         event: exhausted ? "drive_job_exhausted" : "drive_job_retrying",
         category: "infra",
-        context: { job_id: job.id, kind: job.kind, attempts },
+        context: {
+          job_id: job.id,
+          kind: job.kind,
+          submission_id: job.submissionId,
+          file_id: job.fileId,
+          attempts,
+        },
         error: err,
       });
+
+      // Only report once we have actually given up. Reporting every retry would
+      // bury the real failures under transient noise.
+      if (exhausted) {
+        reportDriveJobFailure(err, {
+          jobId: job.id,
+          kind: job.kind,
+          submissionId: job.submissionId,
+          fileId: job.fileId,
+          attempts,
+        });
+      }
     }
   }
 

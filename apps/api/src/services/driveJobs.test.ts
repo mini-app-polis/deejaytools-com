@@ -1,10 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as Sentry from "@sentry/node";
 import * as drive from "./drive.js";
 import {
+  LEASE_TIMEOUT_MS,
   MAX_ATTEMPTS,
   backoffMs,
   processDriveJobs,
 } from "./driveJobs.js";
+
+vi.mock("@sentry/node", () => ({
+  withScope: vi.fn((fn: (scope: unknown) => void) =>
+    fn({ setLevel: vi.fn(), setTag: vi.fn(), setContext: vi.fn() })
+  ),
+  captureException: vi.fn(),
+}));
 
 vi.mock("./drive.js", () => ({
   copySongToEventFolder: vi.fn().mockResolvedValue({
@@ -73,15 +82,27 @@ function makeCopySubmissionRow(
   };
 }
 
+function isReclaimUpdate(values: Record<string, unknown>): boolean {
+  return (
+    values.status === "pending" &&
+    !("attempts" in values) &&
+    !("nextAttemptAt" in values) &&
+    !("lastError" in values)
+  );
+}
+
 function makeProcessDb(options: {
   claimedJobs?: DriveJob[];
   claimThrows?: boolean;
+  reclaimThrows?: boolean;
+  reclaimReturns?: { id: string }[];
   submissionRows?: ReturnType<typeof makeCopySubmissionRow>[];
   jobUpdates?: Array<{ status: string; attempts?: number; lastError?: string | null }>;
 }) {
   const submissionUpdateWhere = vi.fn().mockResolvedValue(undefined);
   const jobUpdates = options.jobUpdates ?? [];
   let jobUpdateIndex = 0;
+  let reclaimSetValues: Record<string, unknown> | null = null;
 
   const selectChain = {
     from: vi.fn(() => selectChain),
@@ -90,15 +111,33 @@ function makeProcessDb(options: {
     limit: vi.fn(() => Promise.resolve(options.submissionRows ?? [])),
   };
 
+  const executeMock = options.claimThrows
+    ? vi.fn().mockRejectedValue(new Error("claim failed"))
+    : vi.fn().mockResolvedValue(options.claimedJobs ?? []);
+
   const db = {
-    execute: options.claimThrows
-      ? vi.fn().mockRejectedValue(new Error("claim failed"))
-      : vi.fn().mockResolvedValue(options.claimedJobs ?? []),
+    execute: executeMock,
     select: vi.fn(() => selectChain),
     update: vi.fn(() => ({
       set: vi.fn((values: Record<string, unknown>) => {
         if ("driveCopyFileId" in values) {
           return { where: submissionUpdateWhere };
+        }
+
+        if (isReclaimUpdate(values)) {
+          reclaimSetValues = values;
+          return {
+            where: vi.fn(() => {
+              if (options.reclaimThrows) {
+                return {
+                  returning: vi.fn(() => Promise.reject(new Error("reclaim failed"))),
+                };
+              }
+              return {
+                returning: vi.fn(() => Promise.resolve(options.reclaimReturns ?? [])),
+              };
+            }),
+          };
         }
 
         jobUpdates[jobUpdateIndex] = {
@@ -118,6 +157,8 @@ function makeProcessDb(options: {
     db: db as unknown as Db,
     submissionUpdateWhere,
     jobUpdates,
+    executeMock,
+    getReclaimSetValues: () => reclaimSetValues,
   };
 }
 
@@ -128,22 +169,29 @@ describe("backoffMs", () => {
     expect(backoffMs(2)).toBe(240_000);
     expect(backoffMs(10)).toBe(30 * 60_000);
   });
+
+  it("caps at 30m for high attempt counts", () => {
+    expect(backoffMs(4)).toBe(960_000);
+    expect(backoffMs(9)).toBe(1_800_000);
+  });
 });
 
 describe("processDriveJobs", () => {
   beforeEach(() => {
     vi.mocked(drive.copySongToEventFolder).mockClear();
     vi.mocked(drive.softDeleteOnDrive).mockClear();
+    vi.mocked(Sentry.captureException).mockClear();
     vi.mocked(drive.copySongToEventFolder).mockResolvedValue({
       fileId: "copy_file_1",
       folderId: "copy_folder_1",
     });
   });
 
-  it("returns 0 when claiming jobs fails", async () => {
+  it("returns 0 when claiming jobs fails and reports to Sentry", async () => {
     const { db } = makeProcessDb({ claimThrows: true });
     await expect(processDriveJobs(db)).resolves.toBe(0);
     expect(drive.copySongToEventFolder).not.toHaveBeenCalled();
+    expect(Sentry.captureException).toHaveBeenCalledTimes(1);
   });
 
   it("does not call Drive when the submission already has a copy (idempotent retry)", async () => {
@@ -200,7 +248,7 @@ describe("processDriveJobs", () => {
     expect(jobUpdates[0]?.status).toBe("done");
   });
 
-  it("reschedules a failing copy with pending status and incremented attempts", async () => {
+  it("reschedules a failing copy without reporting to Sentry", async () => {
     const job = makeJob({ attempts: 1 });
     vi.mocked(drive.copySongToEventFolder).mockRejectedValueOnce(new Error("Drive down"));
     const { db, jobUpdates } = makeProcessDb({
@@ -214,9 +262,10 @@ describe("processDriveJobs", () => {
       attempts: 2,
       lastError: "Drive down",
     });
+    expect(Sentry.captureException).not.toHaveBeenCalled();
   });
 
-  it("marks a copy job failed after MAX_ATTEMPTS", async () => {
+  it("marks a copy job failed after MAX_ATTEMPTS and reports once", async () => {
     const job = makeJob({ attempts: MAX_ATTEMPTS - 1 });
     vi.mocked(drive.copySongToEventFolder).mockRejectedValueOnce(new Error("Drive down"));
     const { db, jobUpdates } = makeProcessDb({
@@ -230,6 +279,7 @@ describe("processDriveJobs", () => {
       attempts: MAX_ATTEMPTS,
       lastError: "Drive down",
     });
+    expect(Sentry.captureException).toHaveBeenCalledTimes(1);
   });
 
   it("calls softDeleteOnDrive for a trash job", async () => {
@@ -244,5 +294,49 @@ describe("processDriveJobs", () => {
     expect(drive.softDeleteOnDrive).toHaveBeenCalledWith("copy_to_trash");
     expect(drive.copySongToEventFolder).not.toHaveBeenCalled();
     expect(jobUpdates[0]?.status).toBe("done");
+  });
+
+  it("reclaims stuck running jobs back to pending without incrementing attempts", async () => {
+    const job = makeJob();
+    const { db, executeMock, getReclaimSetValues } = makeProcessDb({
+      reclaimReturns: [{ id: "stuck_job" }],
+      claimedJobs: [job],
+      submissionRows: [makeCopySubmissionRow()],
+    });
+
+    await expect(processDriveJobs(db)).resolves.toBe(1);
+    expect(getReclaimSetValues()).toMatchObject({ status: "pending" });
+    expect(executeMock).toHaveBeenCalled();
+  });
+
+  it("leaves fresh running leases alone when nothing is past the timeout", async () => {
+    const job = makeJob();
+    const { db, executeMock } = makeProcessDb({
+      reclaimReturns: [],
+      claimedJobs: [job],
+      submissionRows: [makeCopySubmissionRow()],
+    });
+
+    await expect(processDriveJobs(db)).resolves.toBe(1);
+    expect(executeMock).toHaveBeenCalled();
+  });
+
+  it("still claims jobs when reclaim fails", async () => {
+    const job = makeJob();
+    const { db, executeMock } = makeProcessDb({
+      reclaimThrows: true,
+      claimedJobs: [job],
+      submissionRows: [makeCopySubmissionRow()],
+    });
+
+    await expect(processDriveJobs(db)).resolves.toBe(1);
+    expect(executeMock).toHaveBeenCalled();
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+});
+
+describe("LEASE_TIMEOUT_MS", () => {
+  it("is long enough to outlast a slow Drive call", () => {
+    expect(LEASE_TIMEOUT_MS).toBeGreaterThanOrEqual(10 * 60_000);
   });
 });
