@@ -5,12 +5,14 @@ const mocks = vi.hoisted(() => {
   const mockFilesList = vi.fn();
   const mockFilesGet = vi.fn();
   const mockFilesUpdate = vi.fn();
+  const mockFilesCopy = vi.fn();
   const driveApi = {
     files: {
       create: mockFilesCreate,
       list: mockFilesList,
       get: mockFilesGet,
       update: mockFilesUpdate,
+      copy: mockFilesCopy,
     },
   };
   const mockGoogleDrive = vi.fn(() => driveApi);
@@ -19,6 +21,7 @@ const mocks = vi.hoisted(() => {
     mockFilesList,
     mockFilesGet,
     mockFilesUpdate,
+    mockFilesCopy,
     mockGoogleDrive,
     driveApi,
   };
@@ -37,7 +40,12 @@ vi.mock("googleapis", () => ({
 }));
 
 import { JWT } from "google-auth-library";
-import { softDeleteOnDrive, uploadSongToDrive } from "./drive.js";
+import {
+  clearDriveFolderCache,
+  copySongToEventFolder,
+  softDeleteOnDrive,
+  uploadSongToDrive,
+} from "./drive.js";
 
 const TEST_ENV = {
   GOOGLE_SERVICE_ACCOUNT_EMAIL: "test@project.iam.gserviceaccount.com",
@@ -54,6 +62,7 @@ const DEFAULT_UPLOAD_OPTIONS = {
 };
 
 function resetDriveTestState() {
+  clearDriveFolderCache();
   vi.resetAllMocks();
   mocks.mockGoogleDrive.mockImplementation(() => mocks.driveApi);
   vi.mocked(JWT).mockImplementation(
@@ -305,5 +314,116 @@ describe("softDeleteOnDrive", () => {
         removeParents: "year_folder,div_folder",
       })
     );
+  });
+});
+
+const DEFAULT_COPY_OPTIONS = {
+  filename: "track.mp3",
+  seasonYear: "2026",
+  eventName: "Spring Classic",
+  division: "Classic",
+};
+
+function mockEventCopyFolders(
+  ids = {
+    year: "year_folder_2026",
+    events: "events_folder",
+    event: "event_spring",
+    division: "div_classic",
+  }
+) {
+  mocks.mockFilesList
+    .mockResolvedValueOnce({ data: { files: [{ id: ids.year }] } })
+    .mockResolvedValueOnce({ data: { files: [{ id: ids.events }] } })
+    .mockResolvedValueOnce({ data: { files: [{ id: ids.event }] } })
+    .mockResolvedValueOnce({ data: { files: [{ id: ids.division }] } });
+  return ids;
+}
+
+describe("copySongToEventFolder folder cache", () => {
+  beforeEach(() => {
+    resetDriveTestState();
+  });
+
+  const { mockFilesCopy, mockFilesList } = mocks;
+
+  it("lists each event folder only once across two identical copies", async () => {
+    mockEventCopyFolders();
+    mockFilesCopy.mockResolvedValue({ data: { id: "copy_1" } });
+
+    await copySongToEventFolder("source_1", DEFAULT_COPY_OPTIONS);
+    expect(mockFilesList).toHaveBeenCalledTimes(4);
+
+    mockFilesCopy.mockResolvedValue({ data: { id: "copy_2" } });
+    await copySongToEventFolder("source_2", DEFAULT_COPY_OPTIONS);
+    expect(mockFilesList).toHaveBeenCalledTimes(4);
+  });
+
+  it("re-lists only the division folder when division differs under the same event", async () => {
+    const ids = mockEventCopyFolders();
+    mockFilesCopy.mockResolvedValue({ data: { id: "copy_1" } });
+    await copySongToEventFolder("source_1", DEFAULT_COPY_OPTIONS);
+    expect(mockFilesList).toHaveBeenCalledTimes(4);
+
+    mockFilesList.mockResolvedValueOnce({ data: { files: [{ id: "div_proam" }] } });
+    mockFilesCopy.mockResolvedValue({ data: { id: "copy_2" } });
+    await copySongToEventFolder("source_2", { ...DEFAULT_COPY_OPTIONS, division: "ProAm" });
+    expect(mockFilesList).toHaveBeenCalledTimes(5);
+    expect(mockFilesList).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        q: expect.stringContaining(`'${ids.event}' in parents`),
+      })
+    );
+  });
+
+  it("treats the same folder name under different parents as separate cache entries", async () => {
+    mockEventCopyFolders({
+      year: "year_2026",
+      events: "events_folder",
+      event: "event_a",
+      division: "div_under_a",
+    });
+    mockFilesCopy.mockResolvedValueOnce({ data: { id: "copy_a" } });
+    await copySongToEventFolder("source_a", DEFAULT_COPY_OPTIONS);
+
+    mockEventCopyFolders({
+      year: "year_2026",
+      events: "events_folder",
+      event: "event_b",
+      division: "div_under_b",
+    });
+    mockFilesCopy.mockResolvedValueOnce({ data: { id: "copy_b" } });
+    await copySongToEventFolder("source_b", { ...DEFAULT_COPY_OPTIONS, eventName: "Fall Classic" });
+
+    // Four lookups for the first event, then event + division for the second (year/Events cached).
+    expect(mockFilesList).toHaveBeenCalledTimes(6);
+  });
+
+  it("re-lists after clearDriveFolderCache", async () => {
+    mockEventCopyFolders();
+    mockFilesCopy.mockResolvedValue({ data: { id: "copy_1" } });
+    await copySongToEventFolder("source_1", DEFAULT_COPY_OPTIONS);
+    expect(mockFilesList).toHaveBeenCalledTimes(4);
+
+    clearDriveFolderCache();
+    mockEventCopyFolders();
+    mockFilesCopy.mockResolvedValue({ data: { id: "copy_2" } });
+    await copySongToEventFolder("source_2", DEFAULT_COPY_OPTIONS);
+    expect(mockFilesList).toHaveBeenCalledTimes(8);
+  });
+
+  it("clears the cache and rethrows when files.copy fails", async () => {
+    mockEventCopyFolders();
+    mockFilesCopy.mockRejectedValueOnce(new Error("parent not found"));
+
+    await expect(copySongToEventFolder("source_1", DEFAULT_COPY_OPTIONS)).rejects.toThrow(
+      "parent not found"
+    );
+    expect(mockFilesList).toHaveBeenCalledTimes(4);
+
+    mockEventCopyFolders();
+    mockFilesCopy.mockResolvedValueOnce({ data: { id: "copy_2" } });
+    await copySongToEventFolder("source_2", DEFAULT_COPY_OPTIONS);
+    expect(mockFilesList).toHaveBeenCalledTimes(8);
   });
 });

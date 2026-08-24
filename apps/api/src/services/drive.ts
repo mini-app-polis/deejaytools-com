@@ -2,6 +2,25 @@ import { JWT } from "google-auth-library";
 import { google } from "googleapis";
 import type { drive_v3 } from "googleapis";
 import { Readable } from "node:stream";
+import { TtlCache } from "../lib/cache.js";
+
+/**
+ * Drive folder ids keyed by (parent, name). Folder ids are stable for the life
+ * of the folder, so this is cached for an hour rather than seconds — the TTL
+ * exists to recover from a folder deleted out from under us, not to track
+ * churn.
+ *
+ * A dedicated instance rather than the shared responseCache: different
+ * lifetime, different invalidation, and no risk of key collisions with HTTP
+ * response caching.
+ */
+const folderCache = new TtlCache();
+const FOLDER_CACHE_TTL_MS = 60 * 60_000;
+
+/** Exported for tests and for recovery when a cached parent turns out to be gone. */
+export function clearDriveFolderCache(): void {
+  folderCache.invalidatePrefix("drivefolder:");
+}
 
 function getAuthClient(): JWT {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
@@ -40,6 +59,10 @@ async function findOrCreateFolder(
   name: string,
   parentId: string
 ): Promise<string> {
+  const cacheKey = `drivefolder:${parentId}:${name}`;
+  const cached = folderCache.get<string>(cacheKey);
+  if (cached) return cached;
+
   const escaped = escapeDriveQueryValue(name);
   const listRes = await drive.files.list({
     q: `name='${escaped}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`,
@@ -51,7 +74,10 @@ async function findOrCreateFolder(
   });
 
   const existing = listRes.data.files?.[0]?.id;
-  if (existing) return existing;
+  if (existing) {
+    folderCache.set(cacheKey, existing, FOLDER_CACHE_TTL_MS);
+    return existing;
+  }
 
   const createRes = await drive.files.create({
     requestBody: {
@@ -65,6 +91,7 @@ async function findOrCreateFolder(
 
   const created = createRes.data.id;
   if (!created) throw new Error(`Failed to create Drive folder: ${name}`);
+  folderCache.set(cacheKey, created, FOLDER_CACHE_TTL_MS);
   return created;
 }
 
@@ -172,15 +199,24 @@ export async function copySongToEventFolder(
     eventFolderId
   );
 
-  const copyRes = await drive.files.copy({
-    fileId: sourceFileId,
-    requestBody: {
-      name: options.filename,
-      parents: [divisionFolderId],
-    },
-    fields: "id",
-    supportsAllDrives: true,
-  });
+  let copyRes;
+  try {
+    copyRes = await drive.files.copy({
+      fileId: sourceFileId,
+      requestBody: {
+        name: options.filename,
+        parents: [divisionFolderId],
+      },
+      fields: "id",
+      supportsAllDrives: true,
+    });
+  } catch (err) {
+    // The destination parent may be a cached id for a folder that has since
+    // been trashed, which would fail identically on every retry for the whole
+    // TTL. Cheap to rebuild, so drop the cache and let the retry re-resolve.
+    clearDriveFolderCache();
+    throw err;
+  }
 
   const fileId = copyRes.data.id;
   if (!fileId) {

@@ -18,7 +18,11 @@ const logger = createLogger("deejaytools-api");
  */
 export const MAX_ATTEMPTS = 10;
 
-/** Jobs claimed per tick. Keeps one slow Drive call from starving the tick. */
+/**
+ * Jobs claimed per tick. Keeps one slow Drive call from starving the tick.
+ * Coupled to LEASE_TIMEOUT_MS: a batch must finish within the lease, so
+ * raising this without also raising the lease risks orphaned running jobs.
+ */
 export const DEFAULT_BATCH_SIZE = 10;
 
 /**
