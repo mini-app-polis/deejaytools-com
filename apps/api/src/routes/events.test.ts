@@ -167,8 +167,31 @@ describe("GET /v1/events/:id/entities", () => {
     assertErrorEnvelope(body);
   });
 
-  it("collapses an entity's submissions into one row with its divisions", async () => {
+  it("collapses an entity's songs in one division into a single counted row", async () => {
     enqueueSelectResult([{ id: "e1" }]); // event lookup
+    enqueueSelectResult([
+      submissionRow({ songPartnerId: "p1", partnerFirst: "Jo", partnerLast: "Ruiz" }),
+      submissionRow({ songPartnerId: "p1", partnerFirst: "Jo", partnerLast: "Ruiz" }),
+    ]);
+
+    const res = await app.request(`${BASE}/e1/entities`, { headers: authHeaders() });
+    expect(res.status).toBe(200);
+    const body = await readJson<
+      SuccessEnvelope<
+        { division: string; entities: { entity_key: string; label: string; song_count: number }[] }[]
+      >
+    >(res);
+    assertSuccessListEnvelope(body);
+    expect(body.data).toEqual([
+      {
+        division: "Classic",
+        entities: [{ entity_key: "pt:p1", label: "Sam Lee & Jo Ruiz", song_count: 2 }],
+      },
+    ]);
+  });
+
+  it("puts the same entity in every division it entered", async () => {
+    enqueueSelectResult([{ id: "e1" }]);
     enqueueSelectResult([
       submissionRow({ songPartnerId: "p1", partnerFirst: "Jo", partnerLast: "Ruiz" }),
       submissionRow({
@@ -180,18 +203,25 @@ describe("GET /v1/events/:id/entities", () => {
     ]);
 
     const res = await app.request(`${BASE}/e1/entities`, { headers: authHeaders() });
-    expect(res.status).toBe(200);
     const body = await readJson<
-      SuccessEnvelope<{ entity_key: string; label: string; divisions: string[] }[]>
+      SuccessEnvelope<{ division: string; entities: { song_count: number }[] }[]>
     >(res);
-    assertSuccessListEnvelope(body);
-    expect(body.data).toHaveLength(1);
-    expect(body.data[0]).toEqual({
-      entity_key: "pt:p1",
-      label: "Sam Lee & Jo Ruiz",
-      // DIVISIONS display order, not insertion or alphabetical order.
-      divisions: ["Classic", "Masters"],
-    });
+    // Two rows, one per division — each counting only that division's songs.
+    expect(body.data.map((d) => d.division)).toEqual(["Classic", "Masters"]);
+    expect(body.data.every((d) => d.entities[0]!.song_count === 1)).toBe(true);
+  });
+
+  it("orders divisions by DIVISIONS display order, not alphabetically", async () => {
+    enqueueSelectResult([{ id: "e1" }]);
+    enqueueSelectResult([
+      submissionRow({ songDivision: "Teams" }),
+      submissionRow({ songUserId: "user_2", songDivision: "Classic" }),
+      submissionRow({ songUserId: "user_3", songDivision: "Showcase" }),
+    ]);
+
+    const res = await app.request(`${BASE}/e1/entities`, { headers: authHeaders() });
+    const body = await readJson<SuccessEnvelope<{ division: string }[]>>(res);
+    expect(body.data.map((d) => d.division)).toEqual(["Classic", "Showcase", "Teams"]);
   });
 
   it("keeps different entities apart and never leaks song identity", async () => {
@@ -205,21 +235,19 @@ describe("GET /v1/events/:id/entities", () => {
         managedLeaderLast: "Cruz",
         managedFollowerFirst: "Ray",
         managedFollowerLast: "Ng",
-        songDivision: "Showcase",
       }),
     ]);
 
     const res = await app.request(`${BASE}/e1/entities`, { headers: authHeaders() });
-    const body = await readJson<
-      SuccessEnvelope<Record<string, unknown>[]>
-    >(res);
-    expect(body.data).toHaveLength(3);
-    expect(body.data.map((e) => e.entity_key).sort()).toEqual(["mp:mp1", "pt:p1", "us:user_2"]);
-    // The contract is name + divisions only. Anything song-shaped in this
-    // payload would be a leak, so assert the key set rather than the absence
-    // of any one field.
-    for (const entity of body.data) {
-      expect(Object.keys(entity).sort()).toEqual(["divisions", "entity_key", "label"]);
+    const body = await readJson<SuccessEnvelope<{ entities: Record<string, unknown>[] }[]>>(res);
+    const entities = body.data.flatMap((d) => d.entities);
+    expect(entities).toHaveLength(3);
+    expect(entities.map((e) => e.entity_key).sort()).toEqual(["mp:mp1", "pt:p1", "us:user_2"]);
+    // The contract is name + count only. Anything song-shaped in this payload
+    // would be a leak, so assert the key set rather than the absence of any
+    // one field.
+    for (const entity of entities) {
+      expect(Object.keys(entity).sort()).toEqual(["entity_key", "label", "song_count"]);
     }
   });
 
@@ -230,17 +258,20 @@ describe("GET /v1/events/:id/entities", () => {
     ]);
 
     const res = await app.request(`${BASE}/e1/entities`, { headers: authHeaders() });
-    const body = await readJson<SuccessEnvelope<{ divisions: string[] }[]>>(res);
-    expect(body.data[0]!.divisions).toEqual(["Showcase"]);
+    const body = await readJson<SuccessEnvelope<{ division: string }[]>>(res);
+    expect(body.data.map((d) => d.division)).toEqual(["Showcase"]);
   });
 
-  it("omits a blank division rather than emitting an empty string", async () => {
+  it("buckets division-less submissions under Unspecified, sorted last", async () => {
     enqueueSelectResult([{ id: "e1" }]);
-    enqueueSelectResult([submissionRow({ songDivision: null, submissionDivision: null })]);
+    enqueueSelectResult([
+      submissionRow({ songDivision: null, submissionDivision: null }),
+      submissionRow({ songUserId: "user_2", songDivision: "Classic" }),
+    ]);
 
     const res = await app.request(`${BASE}/e1/entities`, { headers: authHeaders() });
-    const body = await readJson<SuccessEnvelope<{ divisions: string[] }[]>>(res);
-    expect(body.data[0]!.divisions).toEqual([]);
+    const body = await readJson<SuccessEnvelope<{ division: string }[]>>(res);
+    expect(body.data.map((d) => d.division)).toEqual(["Classic", "Unspecified"]);
   });
 });
 

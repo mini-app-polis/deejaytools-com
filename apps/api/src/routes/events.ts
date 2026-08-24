@@ -175,18 +175,27 @@ function entityLabel(row: {
   return partnershipDisplay({ ownerName, partnerName, partnerKind: row.partnerKind });
 }
 
-/** Position in the canonical display order; unknown divisions sort last. */
+/**
+ * Bucket for a submission with no division on either the submission or the
+ * song. Matches the manager Event Songs view, which uses the same label.
+ */
+const UNSPECIFIED_DIVISION = "Unspecified";
+
+/** Position in the canonical display order; Unspecified and unknowns sort last. */
 function divisionOrder(division: string): number {
+  if (division === UNSPECIFIED_DIVISION) return DIVISIONS.length + 1;
   const idx = (DIVISIONS as readonly string[]).indexOf(division);
   return idx === -1 ? DIVISIONS.length : idx;
 }
 
 /**
- * Entities with at least one song submitted to this event.
+ * Entities with at least one song submitted to this event, grouped by division.
  *
  * requireAuth, unlike the event itself: who is entered is competitor-visible
  * information, not a public listing. The response deliberately carries no song
- * identity — only the entity label and the divisions it is entered in.
+ * identity — only the entity label and how many songs it has in that division.
+ * The count is the whole point of the collapse: a couple with three Classic
+ * entries is one row, not three chances to read a routine name.
  */
 eventRoutes.get("/:id/entities", requireAuth, async (c) => {
   const eventId = c.req.param("id");
@@ -229,40 +238,53 @@ eventRoutes.get("/:id/entities", requireAuth, async (c) => {
     // Grouped in memory rather than with GROUP BY: the entity key is a
     // three-way precedence rule that already lives in songEntityKey, and
     // duplicating it as SQL would let the two drift apart.
-    const byEntity = new Map<string, { label: string; divisions: Set<string> }>();
+    const byDivision = new Map<string, Map<string, { label: string; songCount: number }>>();
 
     for (const row of rows) {
+      // Same precedence as a submission's effective division: the per-event
+      // override when set, otherwise the song's own.
+      const division =
+        (row.submissionDivision ?? row.songDivision ?? "").trim() || UNSPECIFIED_DIVISION;
       const key = songEntityKey({
         userId: row.songUserId,
         partnerId: row.songPartnerId,
         managedPartnershipId: row.songManagedPartnershipId,
       });
 
-      let entry = byEntity.get(key);
-      if (!entry) {
-        // A row whose owner and partner names are all null still represents a
-        // real entry — label it rather than emitting a blank row.
-        entry = { label: entityLabel(row) || "Unnamed entry", divisions: new Set<string>() };
-        byEntity.set(key, entry);
+      let entities = byDivision.get(division);
+      if (!entities) {
+        entities = new Map();
+        byDivision.set(division, entities);
       }
 
-      // Same precedence as a submission's effective division: the per-event
-      // override when set, otherwise the song's own.
-      const division = (row.submissionDivision ?? row.songDivision ?? "").trim();
-      if (division) entry.divisions.add(division);
+      const existing = entities.get(key);
+      if (existing) {
+        existing.songCount += 1;
+      } else {
+        // A row whose owner and partner names are all null still represents a
+        // real entry — label it rather than emitting a blank row.
+        entities.set(key, { label: entityLabel(row) || "Unnamed entry", songCount: 1 });
+      }
     }
 
-    const entities = [...byEntity.entries()]
-      .map(([entityKey, entry]) => ({
-        entity_key: entityKey,
-        label: entry.label,
-        divisions: [...entry.divisions].sort(
-          (a, b) => divisionOrder(a) - divisionOrder(b) || a.localeCompare(b)
-        ),
+    const divisions = [...byDivision.entries()]
+      .map(([division, entities]) => ({
+        division,
+        entities: [...entities.entries()]
+          .map(([entityKey, entity]) => ({
+            entity_key: entityKey,
+            label: entity.label,
+            song_count: entity.songCount,
+          }))
+          .sort((a, b) => a.label.localeCompare(b.label)),
       }))
-      .sort((a, b) => a.label.localeCompare(b.label));
+      .sort(
+        (a, b) =>
+          divisionOrder(a.division) - divisionOrder(b.division) ||
+          a.division.localeCompare(b.division)
+      );
 
-    return c.json(successList(entities));
+    return c.json(successList(divisions));
   } catch (err) {
     logger.error({
       event: "event_entity_list_failed",

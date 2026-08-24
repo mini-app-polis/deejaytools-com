@@ -517,17 +517,26 @@ export const ApiAdminEventSongSubmissionSchema = z.object({
 export type ApiAdminEventSongSubmission = z.infer<typeof ApiAdminEventSongSubmissionSchema>;
 
 /**
- * One competing entity that has at least one song submitted to an event.
+ * One competing entity entered in one division of an event.
  *
  * Deliberately carries no song identity — no title, filename, routine name or
- * song id. The event page shows who is entered and in which divisions; what
- * they are dancing to stays private until the floor.
+ * song id. Multiple songs from the same entity in the same division collapse
+ * into `song_count`: the event page shows who is entered and how much, never
+ * what they are dancing to.
  */
 export const ApiEventEntitySchema = z.object({
   /** Stable per-entity key from `songEntityKey` — `mp:` / `pt:` / `us:` prefixed. */
   entity_key: z.string(),
   label: z.string(),
-  /** Distinct effective divisions, in DIVISIONS display order. */
-  divisions: z.array(z.string()),
+  /** Songs this entity has submitted in this division. Always ≥ 1. */
+  song_count: z.number(),
 });
 export type ApiEventEntity = z.infer<typeof ApiEventEntitySchema>;
+
+/** Entities entered in one division of an event, sorted by label. */
+export const ApiEventDivisionEntitiesSchema = z.object({
+  /** Effective division name, or "Unspecified" when neither song nor submission set one. */
+  division: z.string(),
+  entities: z.array(ApiEventEntitySchema),
+});
+export type ApiEventDivisionEntities = z.infer<typeof ApiEventDivisionEntitiesSchema>;

@@ -354,16 +354,17 @@ const ianaTimezone = z
 **Auth:** requireAuth
 
 **Purpose:** List the competing entities that have at least one song submitted to
-this event, with the divisions they are entered in.
+this event, grouped by division — the read behind the "Entered" section of the
+event page.
 
 Unlike the event itself this is **not public**: who is entered is
 competitor-visible information. The response carries **no song identity** — no
-title, routine name, filename or song id — by design.
+title, routine name, filename or song id — by design. Multiple songs from the
+same entity in the same division collapse into `song_count`.
 
 Entities are grouped by `songEntityKey` (managed partnership → partner →
-solo owner), so two submissions from the same couple collapse to one row.
-A division comes from the submission's per-event override when set, otherwise
-from the song; blank divisions are dropped rather than emitted as `""`.
+solo owner). A division comes from the submission's per-event override when set,
+otherwise from the song; submissions with neither fall into `"Unspecified"`.
 
 **Path params:** `id` — event UUID
 
@@ -375,18 +376,29 @@ from the song; blank divisions are dropped rather than emitted as `""`.
 {
   "data": [
     {
-      "entity_key": "pt_…",
-      "label": "Alex Kim & Jo Ruiz",
-      "divisions": ["Classic", "Masters"]
+      "division": "Classic",
+      "entities": [
+        { "entity_key": "pt:…", "label": "Alex Kim & Jo Ruiz", "song_count": 2 },
+        { "entity_key": "us:…", "label": "Sam Lee", "song_count": 1 }
+      ]
+    },
+    {
+      "division": "Teams",
+      "entities": [{ "entity_key": "pt:…", "label": "team2026", "song_count": 1 }]
     }
   ],
-  "meta": { "version": "…", "count": 1 }
+  "meta": { "version": "…", "count": 2 }
 }
 ```
 
 `entity_key` is prefixed by source table (`mp:` managed partnership, `pt:`
 partner, `us:` solo user) so ids from different tables can never collide.
-`divisions` is in `DIVISIONS` display order; unknown divisions sort last.
+Divisions are in `DIVISIONS` display order, with unknown names and
+`"Unspecified"` last; entities within a division sort by `label`.
+
+An entity entered in two divisions appears once in each — the same competitor,
+two rows. Callers wanting a headcount should count distinct `entity_key`s rather
+than summing group sizes.
 
 **Errors:**
 

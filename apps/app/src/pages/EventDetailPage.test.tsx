@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -79,12 +80,16 @@ function makeSession(opts: {
   };
 }
 
-function makeEntity(opts: { key: string; label: string; divisions?: string[] }) {
+function makeEntity(opts: { key: string; label: string; songs?: number }) {
   return {
     entity_key: opts.key,
     label: opts.label,
-    divisions: opts.divisions ?? [],
+    song_count: opts.songs ?? 1,
   };
+}
+
+function makeDivision(division: string, entities: ReturnType<typeof makeEntity>[]) {
+  return { division, entities };
 }
 
 // ---------------------------------------------------------------------------
@@ -324,27 +329,84 @@ describe("EventDetailPage", () => {
 });
 
 describe("EventDetailPage — entered entities", () => {
-  it("lists each entity with its divisions", async () => {
+  it("groups entities under a heading per division", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
       if (path === "/v1/events/ev-1/entities") {
         return Promise.resolve([
-          makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz", divisions: ["Classic", "Masters"] }),
-          makeEntity({ key: "us:u2", label: "Sam Lee", divisions: ["Showcase"] }),
+          makeDivision("Classic", [
+            makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz", songs: 2 }),
+            makeEntity({ key: "us:u2", label: "Sam Lee", songs: 1 }),
+          ]),
+          makeDivision("Teams", [makeEntity({ key: "pt:p9", label: "team2026", songs: 1 })]),
         ]);
       }
       return Promise.resolve([]);
     });
     renderPage();
 
-    await waitFor(() =>
-      expect(screen.getByText("Alex Kim & Jo Ruiz")).toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.getByText("Classic")).toBeInTheDocument());
+    expect(screen.getByText("Teams")).toBeInTheDocument();
+    expect(screen.getByText("Alex Kim & Jo Ruiz")).toBeInTheDocument();
     expect(screen.getByText("Sam Lee")).toBeInTheDocument();
+    expect(screen.getByText("team2026")).toBeInTheDocument();
+  });
+
+  it("collapses an entity's songs into a count instead of listing them", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (path === "/v1/events/ev-1/entities") {
+        return Promise.resolve([
+          makeDivision("Classic", [
+            makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz", songs: 2 }),
+            makeEntity({ key: "us:u2", label: "Sam Lee", songs: 1 }),
+          ]),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("2 songs")).toBeInTheDocument());
+    // Singular for one, so the row never reads "1 songs".
+    expect(screen.getByText("1 song")).toBeInTheDocument();
+  });
+
+  it("counts distinct entities in the heading, not division rows", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (path === "/v1/events/ev-1/entities") {
+        // The same couple entered in two divisions is two rows but one entry.
+        return Promise.resolve([
+          makeDivision("Classic", [makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz" })]),
+          makeDivision("Masters", [makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz" })]),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText(/1 entry/i)).toBeInTheDocument());
+  });
+
+  it("hides a division's rows when its header is collapsed", async () => {
+    const user = userEvent.setup();
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (path === "/v1/events/ev-1/entities") {
+        return Promise.resolve([
+          makeDivision("Classic", [makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz" })]),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Alex Kim & Jo Ruiz")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { expanded: true }));
+    expect(screen.queryByText("Alex Kim & Jo Ruiz")).toBeNull();
+    // The header itself stays, so the section can be reopened.
     expect(screen.getByText("Classic")).toBeInTheDocument();
-    expect(screen.getByText("Masters")).toBeInTheDocument();
-    expect(screen.getByText("Showcase")).toBeInTheDocument();
-    expect(screen.getByText(/2 entries/i)).toBeInTheDocument();
   });
 
   it("never renders song identity for an entity", async () => {
@@ -352,7 +414,9 @@ describe("EventDetailPage — entered entities", () => {
       if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
       if (path === "/v1/events/ev-1/entities") {
         return Promise.resolve([
-          makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz", divisions: ["Classic"] }),
+          makeDivision("Classic", [
+            makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz", songs: 3 }),
+          ]),
         ]);
       }
       return Promise.resolve([]);
@@ -361,8 +425,10 @@ describe("EventDetailPage — entered entities", () => {
 
     await waitFor(() => expect(screen.getByText("Alex Kim & Jo Ruiz")).toBeInTheDocument());
     // The roster deliberately carries no song fields — nothing on the page
-    // should look like a title, routine name or filename.
-    expect(screen.queryByText(/\.mp3|\.wav|routine|song/i)).toBeNull();
+    // should look like a title, routine name, filename or version suffix.
+    // "3 songs" is the count, which is the whole point, so it is not a leak.
+    expect(screen.queryByText(/\.mp3|\.wav|\.m4a|routine|\bv\d{2}\b/i)).toBeNull();
+    expect(screen.getByText("3 songs")).toBeInTheDocument();
   });
 
   it("shows an empty state when nothing has been submitted", async () => {

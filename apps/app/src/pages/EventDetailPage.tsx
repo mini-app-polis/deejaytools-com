@@ -2,7 +2,7 @@ import { SignedIn, SignedOut, SignInButton, useAuth } from "@clerk/clerk-react";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import type { ApiEvent, ApiEventEntity, ApiSession } from "@deejaytools/schemas";
+import type { ApiEvent, ApiEventDivisionEntities, ApiSession } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -158,30 +158,40 @@ export default function EventDetailPage() {
 }
 
 /**
- * Who has music in for this event.
+ * Who has music in for this event, grouped by division.
  *
- * Names and divisions only — never a song title, routine name or filename.
- * Competitors want to know who is entered; what anyone is dancing to stays
- * theirs until the floor.
+ * Laid out like the manager Event Songs view — collapsible division sections,
+ * one row per competitor — but where that view names the song, this one shows
+ * only a count. Multiple songs from the same entity in the same division are
+ * one row: enough to see the field, never enough to learn a routine.
  */
 function EnteredEntities({ eventId, isSignedIn }: { eventId: string; isSignedIn: boolean }) {
   const api = useApiClient();
-  const [entities, setEntities] = useState<ApiEventEntity[] | null>(null);
+  const [divisions, setDivisions] = useState<ApiEventDivisionEntities[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  const toggleDivision = (division: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(division)) next.delete(division);
+      else next.add(division);
+      return next;
+    });
 
   useEffect(() => {
     // The endpoint is requireAuth — signed out there is nothing to fetch, and a
     // 401 toast would be noise on a page that otherwise renders fine.
     if (!isSignedIn) {
-      setEntities(null);
+      setDivisions(null);
       return;
     }
     let cancelled = false;
     setLoading(true);
     api
-      .get<ApiEventEntity[]>(`/v1/events/${encodeURIComponent(eventId)}/entities`)
+      .get<ApiEventDivisionEntities[]>(`/v1/events/${encodeURIComponent(eventId)}/entities`)
       .then((rows) => {
-        if (!cancelled) setEntities(rows);
+        if (!cancelled) setDivisions(rows);
       })
       .catch((e: Error) => {
         if (!cancelled) toast.error(e.message);
@@ -194,13 +204,20 @@ function EnteredEntities({ eventId, isSignedIn }: { eventId: string; isSignedIn:
     };
   }, [api, eventId, isSignedIn]);
 
+  // An entity entered in two divisions is two rows but one competitor, so the
+  // heading counts distinct entities rather than summing the section counts.
+  const entityCount =
+    divisions === null
+      ? null
+      : new Set(divisions.flatMap((d) => d.entities.map((e) => e.entity_key))).size;
+
   return (
     <div className="space-y-4">
       <h2 className="text-base font-semibold">
         Entered
-        {entities !== null && (
+        {entityCount !== null && (
           <span className="ml-2 text-sm font-normal text-muted-foreground">
-            {entities.length} {entities.length === 1 ? "entry" : "entries"}
+            {entityCount} {entityCount === 1 ? "entry" : "entries"}
           </span>
         )}
       </h2>
@@ -220,32 +237,56 @@ function EnteredEntities({ eventId, isSignedIn }: { eventId: string; isSignedIn:
       </SignedOut>
 
       <SignedIn>
-        {loading && entities === null && <Skeleton className="h-24 w-full" />}
-        {entities?.length === 0 && (
+        {loading && divisions === null && <Skeleton className="h-24 w-full" />}
+        {divisions?.length === 0 && (
           <p className="text-sm text-muted-foreground">No music submitted for this event yet.</p>
         )}
-        {entities && entities.length > 0 && (
-          <ul className={cn("divide-y rounded-lg border", loading && "opacity-60")}>
-            {entities.map((entity) => (
-              <li
-                key={entity.entity_key}
-                className="flex flex-col gap-1.5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
-              >
-                <span className="font-medium">{entity.label}</span>
-                <span className="flex flex-wrap gap-1.5">
-                  {entity.divisions.length === 0 ? (
-                    <span className="text-sm text-muted-foreground">No division set</span>
-                  ) : (
-                    entity.divisions.map((division) => (
-                      <Badge key={division} variant="outline" className="font-normal">
-                        {division}
-                      </Badge>
-                    ))
+        {divisions && divisions.length > 0 && (
+          <div className={cn("space-y-6", loading && "opacity-60")}>
+            {divisions.map(({ division, entities }) => {
+              const isCollapsed = collapsed.has(division);
+              return (
+                <section key={division} className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleDivision(division)}
+                    aria-expanded={!isCollapsed}
+                    className="flex w-full items-center gap-2 text-left"
+                  >
+                    <span
+                      className={cn(
+                        "text-[10px] text-muted-foreground transition-transform",
+                        isCollapsed ? "" : "rotate-90"
+                      )}
+                    >
+                      ▶
+                    </span>
+                    <span className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
+                      {division}
+                    </span>
+                    <span className="text-xs font-normal text-muted-foreground/70">
+                      {entities.length}
+                    </span>
+                  </button>
+                  {!isCollapsed && (
+                    <div className="space-y-2">
+                      {entities.map((entity) => (
+                        <div
+                          key={entity.entity_key}
+                          className="flex items-baseline justify-between gap-4 rounded-lg bg-white/[0.06] px-4 py-3 text-sm"
+                        >
+                          <span className="font-medium min-w-0 truncate">{entity.label}</span>
+                          <span className="text-muted-foreground text-right shrink-0">
+                            {entity.song_count} {entity.song_count === 1 ? "song" : "songs"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   )}
-                </span>
-              </li>
-            ))}
-          </ul>
+                </section>
+              );
+            })}
+          </div>
         )}
       </SignedIn>
     </div>
