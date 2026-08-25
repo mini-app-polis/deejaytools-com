@@ -206,6 +206,47 @@ describe("EventDetailPage", () => {
     );
   });
 
+  it("lists only active and upcoming sessions, tallying the rest in the heading", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (!path.startsWith("/v1/sessions")) return Promise.resolve([]);
+      return Promise.resolve([
+        makeSession({ id: "s-live", status: "in_progress", startsAt: "2026-06-03T08:00:00" }),
+        makeSession({ id: "s-next", status: "scheduled", startsAt: "2026-06-04T08:00:00" }),
+        makeSession({ id: "s-done", status: "completed", startsAt: "2026-06-02T08:00:00" }),
+      ]);
+    });
+    renderPage();
+
+    await waitFor(() => {
+      const hrefs = screen.getAllByRole("link").map((l) => l.getAttribute("href"));
+      expect(hrefs).toContain("/sessions/s-live");
+    });
+    const hrefs = screen.getAllByRole("link").map((l) => l.getAttribute("href"));
+    expect(hrefs).toContain("/sessions/s-next");
+    // Completed sessions are not cards anyone can act on...
+    expect(hrefs).not.toContain("/sessions/s-done");
+    // ...but the heading still accounts for them.
+    expect(
+      screen.getByRole("heading", { name: /sessions\s+1 active · 1 upcoming · 1 completed/i })
+    ).toBeInTheDocument();
+  });
+
+  it("distinguishes an event with no sessions from one whose sessions are all done", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (!path.startsWith("/v1/sessions")) return Promise.resolve([]);
+      return Promise.resolve([
+        makeSession({ id: "s-done", status: "completed", startsAt: "2026-06-02T08:00:00" }),
+      ]);
+    });
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByText(/no upcoming sessions for this event/i)).toBeInTheDocument()
+    );
+  });
+
   it("shows 'No sessions for this event.' when sessions list is empty", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));

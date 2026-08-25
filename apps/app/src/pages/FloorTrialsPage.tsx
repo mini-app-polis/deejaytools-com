@@ -7,10 +7,23 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
+import { floorTrialBucket } from "@/lib/floorTrials";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { cn } from "@/lib/utils";
 
-const ACTIVE_STATUSES = new Set(["scheduled", "checkin_open", "in_progress"]);
+/**
+ * This page lists what a competitor can still turn up to: sessions that are
+ * running now or yet to start. Completed and cancelled trials are excluded —
+ * they are still counted on the events page, which summarises an event's whole
+ * schedule rather than listing what to do next.
+ *
+ * Sourced from floorTrialBucket so the two pages cannot drift: a status added
+ * server-side is either mapped there once, or it is ignored by both.
+ */
+function isListable(status: string): boolean {
+  const bucket = floorTrialBucket(status);
+  return bucket === "active" || bucket === "upcoming";
+}
 
 function sessionStatusBadge(status: string) {
   switch (status) {
@@ -67,7 +80,7 @@ export default function FloorTrialsPage() {
   // Show active and upcoming sessions only — completed and cancelled sessions
   // are not relevant to regular users. Sort by start time ascending.
   const todaySessions = (sessions ?? [])
-    .filter((s) => ACTIVE_STATUSES.has(s.status))
+    .filter((s) => isListable(s.status))
     .slice()
     .sort((a, b) => a.floor_trial_starts_at - b.floor_trial_starts_at);
 

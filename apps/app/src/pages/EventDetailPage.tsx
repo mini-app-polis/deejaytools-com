@@ -6,10 +6,11 @@ import type { ApiEvent, ApiEventDivisionEntities, ApiSession } from "@deejaytool
 import { useApiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
+import { countFloorTrials, floorTrialBucket, formatFloorTrials } from "@/lib/floorTrials";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareSessionChrono } from "@/lib/chronoSort";
 import { cn } from "@/lib/utils";
@@ -79,6 +80,14 @@ export default function EventDetailPage() {
     return <p className="text-muted-foreground">Event not found.</p>;
   }
 
+  const trialCounts = countFloorTrials(sessions ?? []);
+  const listedSessions = sessions
+    ?.filter((sess) => {
+      const bucket = floorTrialBucket(sess.status);
+      return bucket === "active" || bucket === "upcoming";
+    })
+    .sort(compareSessionChrono);
+
   return (
     <div className={`space-y-6 ${loading ? "opacity-60" : ""}`}>
       <div>
@@ -111,42 +120,57 @@ export default function EventDetailPage() {
       </div>
 
       <div className="space-y-4">
-        <h2 className="text-base font-semibold">Sessions</h2>
-        {sessions?.length === 0 && (
-          <p className="text-sm text-muted-foreground">No sessions for this event.</p>
+        <h2 className="text-base font-semibold">
+          Sessions
+          {sessions !== null && (
+            <span className="ml-2 text-sm font-normal text-muted-foreground">
+              {formatFloorTrials(trialCounts)}
+            </span>
+          )}
+        </h2>
+        {/* Only what a competitor can still turn up to is listed — the same rule
+            as the Floor Trials page. Completed and cancelled trials stay in the
+            heading's tally so the schedule is not silently understated, but
+            they are not cards anyone can act on. */}
+        {listedSessions?.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            {sessions && sessions.length > 0
+              ? "No upcoming sessions for this event."
+              : "No sessions for this event."}
+          </p>
         )}
-        <div className="grid gap-3 md:grid-cols-2">
-          {sessions
-            ?.slice()
-            .sort(compareSessionChrono)
-            .map((sess) => (
-            // Whole-card click target — matches FloorTrialsPage. The inner
-            // "Open session →" line stays as a visual affordance.
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {listedSessions?.map((sess) => (
+            // Whole-card click target — same card treatment as FloorTrialsPage.
+            // The inner "Open session →" line stays as a visual affordance.
             <Link
               key={sess.id}
               to={`/sessions/${sess.id}`}
-              className={cn("block rounded-xl border border-transparent", CLICKABLE_CARD_CLASS)}
+              className={cn(
+                "flex h-full flex-col gap-2 rounded-lg border bg-card p-4 shadow-sm",
+                CLICKABLE_CARD_CLASS
+              )}
             >
-              <Card className="bg-transparent border-transparent shadow-none">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base flex flex-wrap items-center gap-2">
-                    {formatSessionTitle(sess, event.timezone)}
-                    {sessionStatusBadge(sess.status)}
-                    <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
-                      {formatTimezoneAbbr(event.timezone, sess.floor_trial_starts_at)}
-                    </Badge>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="text-sm text-muted-foreground space-y-1">
-                  <p>Open: {formatTimeOnly(sess.checkin_opens_at, event.timezone)}</p>
-                  <p>
-                    Floor trial: {formatTimeOnly(sess.floor_trial_starts_at, event.timezone)} –{" "}
-                    {formatTimeOnly(sess.floor_trial_ends_at, event.timezone)}
-                  </p>
-                  <Separator className="my-2" />
-                  <p className="text-sm font-medium text-primary">Open session →</p>
-                </CardContent>
-              </Card>
+              <div className="flex flex-wrap items-center gap-2">
+                {sessionStatusBadge(sess.status)}
+              </div>
+              <p className="flex flex-wrap items-center gap-2 font-medium text-base leading-snug transition-colors group-hover:text-primary">
+                {formatSessionTitle(sess, event.timezone)}
+                <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                  {formatTimezoneAbbr(event.timezone, sess.floor_trial_starts_at)}
+                </Badge>
+              </p>
+              <div className="text-sm text-muted-foreground space-y-1">
+                <p>Check-in opens: {formatTimeOnly(sess.checkin_opens_at, event.timezone)}</p>
+                <p>
+                  Floor trial: {formatTimeOnly(sess.floor_trial_starts_at, event.timezone)} –{" "}
+                  {formatTimeOnly(sess.floor_trial_ends_at, event.timezone)}
+                </p>
+              </div>
+              <div className="mt-auto pt-1">
+                <Separator className="mb-2" />
+                <p className="text-sm font-medium text-primary">Open session →</p>
+              </div>
             </Link>
           ))}
         </div>
