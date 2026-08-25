@@ -193,6 +193,34 @@ describe("EventsPage", () => {
     });
   });
 
+  it("renders each event as a card link to /events/:id, with no table", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events") {
+        return Promise.resolve([
+          makeEvent({
+            id: "ev1",
+            name: "Summer Nationals",
+            startDate: "2026-06-01",
+            endDate: "2026-06-05",
+            status: "upcoming",
+          }),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    const { container } = renderPage();
+
+    await waitFor(() => {
+      const link = screen.getByRole("link", { name: /summer nationals/i });
+      expect(link.getAttribute("href")).toBe("/events/ev1");
+    });
+    // Card view: the old desktop table markup is gone entirely, so there is
+    // one card per event rather than a duplicated mobile + desktop pair.
+    expect(container.querySelector("table")).toBeNull();
+    expect(screen.getAllByText("Summer Nationals")).toHaveLength(1);
+  });
+
   it("renders dates in single-date or range format", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events") {

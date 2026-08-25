@@ -1,21 +1,12 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import type { ApiEvent } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { compareEventChrono } from "@/lib/chronoSort";
-import { CLICKABLE_CARD_CLASS, CLICKABLE_ROW_CLASS } from "@/lib/clickable";
+import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
 import { cn } from "@/lib/utils";
 
 function eventStatusBadge(status: string) {
@@ -37,9 +28,15 @@ function eventStatusBadge(status: string) {
   }
 }
 
+/** "2026-06-15" for a one-day event, "2026-06-01 – 2026-06-05" for a run. */
+function formatEventDates(ev: Pick<ApiEvent, "start_date" | "end_date">): string {
+  return ev.start_date === ev.end_date
+    ? ev.start_date
+    : `${ev.start_date} – ${ev.end_date}`;
+}
+
 export default function EventsPage() {
   const api = useApiClient();
-  const navigate = useNavigate();
   const [events, setEvents] = useState<ApiEvent[] | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -82,80 +79,43 @@ export default function EventsPage() {
         </p>
       </div>
 
-      {/* Mobile card list */}
-      <div className={`sm:hidden space-y-3${loading ? " opacity-60 pointer-events-none" : ""}`}>
-        {sortedEvents?.length === 0 && (
-          <p className="text-sm text-muted-foreground py-4 text-center">No current or upcoming events.</p>
+      {sortedEvents?.length === 0 && (
+        <p className="text-sm text-muted-foreground py-4">No current or upcoming events.</p>
+      )}
+
+      {/* Cards at every breakpoint — a handful of events with a name, a date
+          range and a status has no columns worth aligning, and the card is
+          already the shape used for sessions on Floor Trials and the event
+          picker in Manager. */}
+      <div
+        className={cn(
+          "grid gap-3 sm:grid-cols-2 lg:grid-cols-3",
+          loading && "opacity-60 pointer-events-none"
         )}
+      >
         {sortedEvents?.map((ev) => (
-          <button
+          // A real <Link>, not a button + navigate: middle-click, cmd-click and
+          // "copy link address" all work, and the whole card is the target.
+          <Link
             key={ev.id}
-            type="button"
+            to={`/events/${ev.id}`}
             className={cn(
-              "w-full text-left rounded-lg border bg-card p-4 space-y-2 shadow-sm",
+              "flex h-full flex-col gap-2 rounded-lg border bg-card p-4 shadow-sm",
               CLICKABLE_CARD_CLASS
             )}
-            onClick={() => navigate(`/events/${ev.id}`)}
           >
             <div className="flex items-start justify-between gap-2">
-              <p className="font-medium text-base leading-snug">{ev.name}</p>
+              <p className="font-medium text-base leading-snug transition-colors group-hover:text-primary">
+                {ev.name}
+              </p>
               {eventStatusBadge(ev.status)}
             </div>
-            <p className="text-sm text-muted-foreground">
-              {ev.start_date === ev.end_date
-                ? ev.start_date
-                : `${ev.start_date} – ${ev.end_date}`}
-            </p>
-            <p className="text-sm font-medium text-primary pt-1">Open →</p>
-          </button>
+            <p className="text-sm text-muted-foreground">{formatEventDates(ev)}</p>
+            {/* Pushed to the bottom so the affordance lines up across a row of
+                cards whose names wrap to different heights. */}
+            <p className="mt-auto pt-1 text-sm font-medium text-primary">Open →</p>
+          </Link>
         ))}
-      </div>
-
-      {/* Desktop table */}
-      <div className={`hidden sm:block${loading ? " opacity-60 pointer-events-none" : ""}`}>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Dates</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="w-[120px]">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sortedEvents?.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={4} className="text-muted-foreground">
-                  No current or upcoming events.
-                </TableCell>
-              </TableRow>
-            )}
-            {sortedEvents?.map((ev) => (
-              <TableRow
-                key={ev.id}
-                className={CLICKABLE_ROW_CLASS}
-                onClick={() => navigate(`/events/${ev.id}`)}
-              >
-                <TableCell className="font-medium">{ev.name}</TableCell>
-                <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                  {ev.start_date === ev.end_date
-                    ? ev.start_date
-                    : `${ev.start_date} – ${ev.end_date}`}
-                </TableCell>
-                <TableCell>{eventStatusBadge(ev.status)}</TableCell>
-                <TableCell onClick={(e) => e.stopPropagation()}>
-                  <Button
-                    variant="link"
-                    className="px-0 h-auto"
-                    onClick={() => navigate(`/events/${ev.id}`)}
-                  >
-                    Open
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
       </div>
     </div>
   );
