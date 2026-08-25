@@ -45,6 +45,8 @@ function makeEvent(opts: {
   startDate: string;
   endDate: string;
   status: string;
+  seasonYear?: string;
+  timezone?: string;
 }) {
   return {
     id: opts.id,
@@ -52,6 +54,8 @@ function makeEvent(opts: {
     start_date: opts.startDate,
     end_date: opts.endDate,
     status: opts.status,
+    season_year: opts.seasonYear ?? "2026",
+    timezone: opts.timezone ?? "America/Chicago",
   };
 }
 
@@ -250,9 +254,37 @@ describe("EventsPage", () => {
       expect(screen.getAllByText("Single Day Event").length).toBeGreaterThan(0);
     });
 
-    // Single-date format: just the date (both mobile + desktop layouts render)
-    expect(screen.getAllByText("2026-06-15").length).toBeGreaterThan(0);
-    // Range format: start – end
-    expect(screen.getAllByText("2026-07-01 – 2026-07-05").length).toBeGreaterThan(0);
+    // Human dates, not the raw YYYY-MM-DD the API returns.
+    expect(screen.getByText("June 15, 2026")).toBeInTheDocument();
+    // Inside one month the month is stated once.
+    expect(screen.getByText("July 1 – 5, 2026")).toBeInTheDocument();
+    // A single-day event gets no duration line; the five-day run does.
+    expect(screen.getByText("5 days")).toBeInTheDocument();
+    expect(screen.queryByText("1 day")).toBeNull();
+  });
+
+  it("shows the season and timezone badges on each card", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events") {
+        return Promise.resolve([
+          makeEvent({
+            id: "ev1",
+            name: "Summer Nationals",
+            startDate: "2026-06-01",
+            endDate: "2026-06-05",
+            status: "upcoming",
+            seasonYear: "2026",
+            timezone: "America/Chicago",
+          }),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("2026 season")).toBeInTheDocument());
+    // CDT in June; the assertion stays DST-agnostic.
+    expect(screen.getByText(/^C[DS]T$/)).toBeInTheDocument();
   });
 });

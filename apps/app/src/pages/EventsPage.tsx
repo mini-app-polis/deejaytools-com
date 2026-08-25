@@ -4,9 +4,12 @@ import { toast } from "sonner";
 import type { ApiEvent } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { compareEventChrono } from "@/lib/chronoSort";
 import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
+import { eventDurationDays, formatEventDateRange, parseCalendarDate } from "@/lib/eventDates";
+import { formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { cn } from "@/lib/utils";
 
 function eventStatusBadge(status: string) {
@@ -28,12 +31,6 @@ function eventStatusBadge(status: string) {
   }
 }
 
-/** "2026-06-15" for a one-day event, "2026-06-01 – 2026-06-05" for a run. */
-function formatEventDates(ev: Pick<ApiEvent, "start_date" | "end_date">): string {
-  return ev.start_date === ev.end_date
-    ? ev.start_date
-    : `${ev.start_date} – ${ev.end_date}`;
-}
 
 export default function EventsPage() {
   const api = useApiClient();
@@ -93,29 +90,56 @@ export default function EventsPage() {
           loading && "opacity-60 pointer-events-none"
         )}
       >
-        {sortedEvents?.map((ev) => (
-          // A real <Link>, not a button + navigate: middle-click, cmd-click and
-          // "copy link address" all work, and the whole card is the target.
-          <Link
-            key={ev.id}
-            to={`/events/${ev.id}`}
-            className={cn(
-              "flex h-full flex-col gap-2 rounded-lg border bg-card p-4 shadow-sm",
-              CLICKABLE_CARD_CLASS
-            )}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <p className="font-medium text-base leading-snug transition-colors group-hover:text-primary">
+        {sortedEvents?.map((ev) => {
+          const days = eventDurationDays(ev.start_date, ev.end_date);
+          // Local noon on the start date — a safe instant for resolving the
+          // zone's DST abbreviation without touching a neighbouring day.
+          const tzAnchor = parseCalendarDate(ev.start_date)?.getTime();
+          return (
+            // A real <Link>, not a button + navigate: middle-click, cmd-click
+            // and "copy link address" all work, and the whole card is the target.
+            <Link
+              key={ev.id}
+              to={`/events/${ev.id}`}
+              className={cn(
+                "flex h-full flex-col gap-2 rounded-lg border bg-card p-4 shadow-sm",
+                CLICKABLE_CARD_CLASS
+              )}
+            >
+              {/* Badge row, then title, then muted detail lines — the same
+                  rhythm as the session cards on Floor Trials, so the two
+                  public listings read as one design. */}
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className="border-primary/40 bg-primary/10 text-primary font-medium"
+                >
+                  {ev.season_year} season
+                </Badge>
+                {eventStatusBadge(ev.status)}
+              </div>
+              <p className="flex flex-wrap items-center gap-2 font-medium text-base leading-snug transition-colors group-hover:text-primary">
                 {ev.name}
+                {ev.timezone && (
+                  <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                    {formatTimezoneAbbr(ev.timezone, tzAnchor)}
+                  </Badge>
+                )}
               </p>
-              {eventStatusBadge(ev.status)}
-            </div>
-            <p className="text-sm text-muted-foreground">{formatEventDates(ev)}</p>
-            {/* Pushed to the bottom so the affordance lines up across a row of
-                cards whose names wrap to different heights. */}
-            <p className="mt-auto pt-1 text-sm font-medium text-primary">Open →</p>
-          </Link>
-        ))}
+              <div className="text-sm text-muted-foreground space-y-1">
+                <p>{formatEventDateRange(ev.start_date, ev.end_date)}</p>
+                {/* Only for a run — "1 day" beside a single date says nothing. */}
+                {days !== null && days > 1 && <p>{days} days</p>}
+              </div>
+              {/* Pushed to the bottom so the affordance lines up across a row of
+                  cards whose names wrap to different heights. */}
+              <div className="mt-auto pt-1">
+                <Separator className="mb-2" />
+                <p className="text-sm font-medium text-primary">Open →</p>
+              </div>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );
