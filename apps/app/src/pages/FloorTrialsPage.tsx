@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import type { ApiEvent, ApiSession } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
@@ -106,52 +105,59 @@ export default function FloorTrialsPage() {
           </Link>
         </p>
       ) : (
-        <div className={`space-y-3${loading ? " opacity-60" : ""}`}>
+        /* Same card grid as the events list: one column on mobile, two from
+           sm, three from lg. The cards carry a resting border and surface
+           rather than only showing their edges on hover — in a grid the
+           boundary between neighbouring cards has to be visible without the
+           cursor. */
+        <div className={cn("grid gap-3 sm:grid-cols-2 lg:grid-cols-3", loading && "opacity-60")}>
           {todaySessions.map((s) => {
             const eventName = s.event_id ? eventNameById.get(s.event_id) ?? null : null;
             const eventTz = s.event_id ? eventTimezoneById.get(s.event_id) ?? null : null;
             return (
-              // The whole card is the click target — wrapping the Card in a
-              // Link makes any tap or click on the row navigate, matching the
-              // "Tap a session…" instruction in the page subtitle. The inner
+              // The whole card is the click target, matching the "Tap a
+              // session…" instruction in the page subtitle. The inner
               // "Open session →" element is kept as a visual affordance.
               <Link
                 key={s.id}
                 to={`/sessions/${s.id}`}
-                className={cn("block rounded-xl border border-transparent", CLICKABLE_CARD_CLASS)}
+                className={cn(
+                  "flex h-full flex-col gap-2 rounded-lg border bg-card p-4 shadow-sm",
+                  CLICKABLE_CARD_CLASS
+                )}
               >
-                <Card className="bg-transparent border-transparent shadow-none">
-                  <CardHeader className="pb-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {eventName && (
-                        <Badge
-                          variant="outline"
-                          className="border-primary/40 bg-primary/10 text-primary font-medium"
-                        >
-                          {eventName}
-                        </Badge>
-                      )}
-                      {sessionStatusBadge(s.status)}
-                    </div>
-                    <CardTitle className="text-base mt-1.5 flex flex-wrap items-center gap-2">
-                      {formatSessionTitle(s, eventTz)}
-                      {eventTz && (
-                        <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
-                          {formatTimezoneAbbr(eventTz, s.floor_trial_starts_at)}
-                        </Badge>
-                      )}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-sm text-muted-foreground space-y-1">
-                    <p>Check-in opens: {formatTimeOnly(s.checkin_opens_at, eventTz)}</p>
-                    <p>
-                      Floor trial: {formatTimeOnly(s.floor_trial_starts_at, eventTz)} –{" "}
-                      {formatTimeOnly(s.floor_trial_ends_at, eventTz)}
-                    </p>
-                    <Separator className="my-2" />
-                    <p className="text-sm font-medium text-primary">Open session →</p>
-                  </CardContent>
-                </Card>
+                <div className="flex flex-wrap items-center gap-2">
+                  {eventName && (
+                    <Badge
+                      variant="outline"
+                      className="border-primary/40 bg-primary/10 text-primary font-medium"
+                    >
+                      {eventName}
+                    </Badge>
+                  )}
+                  {sessionStatusBadge(s.status)}
+                </div>
+                <p className="flex flex-wrap items-center gap-2 font-medium text-base leading-snug transition-colors group-hover:text-primary">
+                  {formatSessionTitle(s, eventTz)}
+                  {eventTz && (
+                    <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                      {formatTimezoneAbbr(eventTz, s.floor_trial_starts_at)}
+                    </Badge>
+                  )}
+                </p>
+                <div className="text-sm text-muted-foreground space-y-1">
+                  <p>Check-in opens: {formatTimeOnly(s.checkin_opens_at, eventTz)}</p>
+                  <p>
+                    Floor trial: {formatTimeOnly(s.floor_trial_starts_at, eventTz)} –{" "}
+                    {formatTimeOnly(s.floor_trial_ends_at, eventTz)}
+                  </p>
+                </div>
+                {/* Pushed to the bottom so the affordance lines up across a row
+                    of cards whose titles wrap to different heights. */}
+                <div className="mt-auto pt-1">
+                  <Separator className="mb-2" />
+                  <p className="text-sm font-medium text-primary">Open session →</p>
+                </div>
               </Link>
             );
           })}
