@@ -1,3 +1,18 @@
+# [2.0.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.58.0...v2.0.0) (2026-08-25)
+
+
+### Features
+
+* public events section ([f25b04b](https://github.com/mini-app-polis/deejaytools-com/commit/f25b04b55b3798c547af1ea2343a35c791e3204a))
+
+
+### BREAKING CHANGES
+
+* the events listing no longer shows completed or cancelled
+events, and an event page no longer lists completed floor trials. Both stay
+reachable by direct URL, but anything relying on these pages to render an
+event's full history must read the event and session endpoints directly.
+
 # [1.58.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.57.0...v1.58.0) (2026-08-25)
 
 
