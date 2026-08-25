@@ -1,3 +1,61 @@
+# [1.58.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.57.0...v1.58.0) (2026-08-25)
+
+
+### Bug Fixes
+
+* adding floor trial status ([740c14e](https://github.com/mini-app-polis/deejaytools-com/commit/740c14ef2b1033b2e441731688533ee733d76c12))
+* adding floor trial status ([fea7cd3](https://github.com/mini-app-polis/deejaytools-com/commit/fea7cd3362e077d4945e1dc99d3dfaeeff3875a8))
+* **api:** cascade song submissions when an event is deleted ([9685da0](https://github.com/mini-app-polis/deejaytools-com/commit/9685da0f9f850bd7bcb94a65b0bb9f3367b06b4e))
+* **api:** clear the source comment on mp3 and m4a when provenance is empty ([b4e8f4e](https://github.com/mini-app-polis/deejaytools-com/commit/b4e8f4e40f8cbb557922c350db920e52d39e0f0c))
+* **api:** compute event status in the event timezone ([3729090](https://github.com/mini-app-polis/deejaytools-com/commit/3729090460fca3457fc0db709e52f4780222d1e0))
+* **api:** enqueue the trash job after the submission delete commits ([b0c800a](https://github.com/mini-app-polis/deejaytools-com/commit/b0c800ace46e72f33ea1d02a41c1d0a924f4f6e7))
+* **api:** guard the drive job success update against a reclaimed rerun ([fff36d7](https://github.com/mini-app-polis/deejaytools-com/commit/fff36d7a2008d9b52742ee49363bc76ec4c50c4c))
+* **api:** isolate drive job draining from the rest of the tick ([6f9e9ed](https://github.com/mini-app-polis/deejaytools-com/commit/6f9e9ed27c4fc8448ce4f5aee639eccfa83883da))
+* **api:** log the cause of Drive job failures and expose queue state to admins ([2d6df5b](https://github.com/mini-app-polis/deejaytools-com/commit/2d6df5be4629b537735805181fb6b5ce48b81fb5))
+* **api:** map snake_case columns from raw drive job claims ([dce6479](https://github.com/mini-app-polis/deejaytools-com/commit/dce64792d4c59a1a3238313433030bb6e3d3921d))
+* **api:** name event Drive copies with the processed filename ([570e678](https://github.com/mini-app-polis/deejaytools-com/commit/570e678b1fccca6d8347abc0314796504da7076b))
+* **api:** nest prelims-only submissions under a Prelims subfolder ([3f12509](https://github.com/mini-app-polis/deejaytools-com/commit/3f1250922ad552336032681a7c7bc3edb7832299))
+* **api:** order ProAm FollowerAm entities amateur-first ([d7d309c](https://github.com/mini-app-polis/deejaytools-com/commit/d7d309c08270c53e5bb19dad98b42dff718c98f4))
+* **api:** recover the folder cache when folder resolution fails ([1b959fe](https://github.com/mini-app-polis/deejaytools-com/commit/1b959fe1b5e1e87e3939bd8d6d8d17e0b2f1150b))
+* **api:** return 409 when a drive job is not retryable ([46e11ea](https://github.com/mini-app-polis/deejaytools-com/commit/46e11ea21e10de7a828c59060f307f0ffe99514a))
+* **api:** sanitize folder names on the song upload path ([ca97109](https://github.com/mini-app-polis/deejaytools-com/commit/ca97109a473b0d7c1bb6bf06c62ae0356b5c9609))
+* **api:** trash per-event Drive copies when a partnership is deleted ([8d0cca0](https://github.com/mini-app-polis/deejaytools-com/commit/8d0cca05011b59ad1ab81a7b8e8086a5852cd35c))
+* **api:** trash per-event Drive copies when a song is deleted ([4cfeea9](https://github.com/mini-app-polis/deejaytools-com/commit/4cfeea923861cff4ab31021c77a260c8c717ff37))
+* **api:** validate and normalize the submission division override ([a542671](https://github.com/mini-app-polis/deejaytools-com/commit/a542671ddf55f59102fb83bb4292880f4f3de645))
+* **app:** keep radio ownership intact in grouped ChoiceGroup rows ([7e37e2a](https://github.com/mini-app-polis/deejaytools-com/commit/7e37e2ac948275b19ee954376df8baa18609e90b))
+* **app:** render event submissions from submissions, not the song library ([0ee391c](https://github.com/mini-app-polis/deejaytools-com/commit/0ee391c96c9a45eb612663d7310021e5d49aca8f))
+* **app:** reset round and division tracking when the song changes ([401aa3b](https://github.com/mini-app-polis/deejaytools-com/commit/401aa3b7aace829ac28aff62c192a51ef26e2bd4))
+* display songs and entities separately ([e3ebb05](https://github.com/mini-app-polis/deejaytools-com/commit/e3ebb05844b08e07a3f37ade8aa6b00a71ef2d50))
+* event page view ui ([138bdb0](https://github.com/mini-app-polis/deejaytools-com/commit/138bdb0aae9a1ae051e2c9eac528079cee647411))
+* floor trials view ui ([ee15351](https://github.com/mini-app-polis/deejaytools-com/commit/ee15351579af7d0ef78ef5773405f447f1244669))
+* formatting ([5cc4abd](https://github.com/mini-app-polis/deejaytools-com/commit/5cc4abdedee5c081869273b6e74b7c7ad0e98fbd))
+* **schemas:** match only names beginning with "The Open" ([a24ab0e](https://github.com/mini-app-polis/deejaytools-com/commit/a24ab0ebd6bce279713f5ec53988e5815b7d6db8))
+* showing floor trials instead of days of event ([10a59ad](https://github.com/mini-app-polis/deejaytools-com/commit/10a59ad2278023ac6566efc628d34b20f1b48e9d))
+* updating event view ([0a444e9](https://github.com/mini-app-polis/deejaytools-com/commit/0a444e92f7cd582fcd9f564e734b4b588a9b64f7))
+* updating formatting for events page ([92b1847](https://github.com/mini-app-polis/deejaytools-com/commit/92b18475efbd066fd1db83eb5378af7358b9aec7))
+
+
+### Features
+
+* add per-submission division and Classic prelims/finals rounds to The Open ([e30f225](https://github.com/mini-app-polis/deejaytools-com/commit/e30f22513dabfbc665e061077d56137211c1a865))
+* adding back in event view ([ab718d2](https://github.com/mini-app-polis/deejaytools-com/commit/ab718d21d7836ea1b5ee2781b79ac7ce4ffeccde))
+* adding specific open page for submission ([3c1903b](https://github.com/mini-app-polis/deejaytools-com/commit/3c1903b66555b19d03784b6d0dd5343a1a279aa0))
+* **api:** add overridable season year to events and roll seasons over October 1 ([ae4c161](https://github.com/mini-app-polis/deejaytools-com/commit/ae4c161980c374df99c424fe6ca1dfb5a04dd510))
+* **api:** add rename drive job and backfill to re-apply naming rules ([d1d5f1a](https://github.com/mini-app-polis/deejaytools-com/commit/d1d5f1a3999bbae54cb907524a5f98bdeb782290))
+* **api:** copy submitted songs into per-event Drive folders ([d8acc4b](https://github.com/mini-app-polis/deejaytools-com/commit/d8acc4baa59f1dfc141a3147862ca434021e5235))
+* **api:** retry Drive jobs longer and report exhausted jobs to Sentry ([0ee3015](https://github.com/mini-app-polis/deejaytools-com/commit/0ee301513951a07274a9432cb6116b3ab9656a7a))
+* **api:** separate artist metadata fields with | instead of - ([0368c67](https://github.com/mini-app-polis/deejaytools-com/commit/0368c67c948f078022dc2c6059d016bc8e8b5fa7))
+* **api:** tag every song with genre "Routine" ([16e38d6](https://github.com/mini-app-polis/deejaytools-com/commit/16e38d66e4b07e6b3e2627e99d2abfdefbf411d2))
+* **api:** write season year to the year tag and trim tag metadata ([6a52dec](https://github.com/mini-app-polis/deejaytools-com/commit/6a52dece7d8fb9cca76eb5125a9422270a8cfd1f))
+* group divisions and apply a consistent display order ([90f442f](https://github.com/mini-app-polis/deejaytools-com/commit/90f442f88caf7ec28406b9f283e410c3826cc212))
+* limit submissions to one song per entity per division ([98c0e9f](https://github.com/mini-app-polis/deejaytools-com/commit/98c0e9fda9c619eae5e381f276be5d8094666f5a))
+* **open:** exclude legacy songs from The Open submission list ([8d008c5](https://github.com/mini-app-polis/deejaytools-com/commit/8d008c5b7323cbe786d746235dcc28290f85b692))
+
+
+### Performance Improvements
+
+* **api:** cache Drive folder ids across job batches ([be72f60](https://github.com/mini-app-polis/deejaytools-com/commit/be72f60e7deafc36232cad3d2ca4f6fd81098c9e))
+
 # [1.57.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.56.0...v1.57.0) (2026-08-23)
 
 
