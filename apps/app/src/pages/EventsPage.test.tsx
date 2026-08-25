@@ -255,15 +255,15 @@ describe("EventsPage", () => {
     });
 
     // Human dates, not the raw YYYY-MM-DD the API returns.
-    expect(screen.getByText("June 15, 2026")).toBeInTheDocument();
+    expect(screen.getByText("Dates: June 15, 2026")).toBeInTheDocument();
     // Inside one month the month is stated once.
-    expect(screen.getByText("July 1 – 5, 2026")).toBeInTheDocument();
+    expect(screen.getByText("Dates: July 1 – 5, 2026")).toBeInTheDocument();
     // A single-day event gets no duration line; the five-day run does.
-    expect(screen.getByText("5 days")).toBeInTheDocument();
-    expect(screen.queryByText("1 day")).toBeNull();
+    expect(screen.getByText("Length: 5 days")).toBeInTheDocument();
+    expect(screen.queryByText(/Length: 1 day/)).toBeNull();
   });
 
-  it("shows the season and timezone badges on each card", async () => {
+  it("shows the timezone badge on each card", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events") {
         return Promise.resolve([
@@ -283,8 +283,9 @@ describe("EventsPage", () => {
 
     renderPage();
 
-    await waitFor(() => expect(screen.getByText("2026 season")).toBeInTheDocument());
     // CDT in June; the assertion stays DST-agnostic.
-    expect(screen.getByText(/^C[DS]T$/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/^C[DS]T$/)).toBeInTheDocument());
+    // The season badge was dropped — the card leads with status alone.
+    expect(screen.queryByText(/season/i)).toBeNull();
   });
 });

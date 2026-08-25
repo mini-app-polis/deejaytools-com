@@ -54,7 +54,7 @@ export default function EventsPage() {
     return (
       <div className="space-y-3">
         <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-64 w-full" />
+        <Skeleton className="h-40 w-full" />
       </div>
     );
   }
@@ -71,13 +71,19 @@ export default function EventsPage() {
     <div className="space-y-4">
       <div>
         <h1 className="page-title text-2xl">Events</h1>
-        <p className="text-sm text-muted-foreground">
-          Everything current and upcoming on the platform.
+        <p className="text-sm text-muted-foreground mt-1">
+          Everything current and upcoming on the platform — tap an event to see its
+          sessions and who has music in.{" "}
+          <Link to="/how-it-works" className="text-primary hover:underline">
+            How this works →
+          </Link>
         </p>
       </div>
 
       {sortedEvents?.length === 0 && (
-        <p className="text-sm text-muted-foreground py-4">No current or upcoming events.</p>
+        <p className="text-sm text-muted-foreground py-8 text-center">
+          No current or upcoming events.
+        </p>
       )}
 
       {/* Cards at every breakpoint — a handful of events with a name, a date
@@ -106,18 +112,10 @@ export default function EventsPage() {
                 CLICKABLE_CARD_CLASS
               )}
             >
-              {/* Badge row, then title, then muted detail lines — the same
-                  rhythm as the session cards on Floor Trials, so the two
+              {/* Badge row, then title, then label: value detail lines — the
+                  same rhythm as the session cards on Floor Trials, so the two
                   public listings read as one design. */}
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge
-                  variant="outline"
-                  className="border-primary/40 bg-primary/10 text-primary font-medium"
-                >
-                  {ev.season_year} season
-                </Badge>
-                {eventStatusBadge(ev.status)}
-              </div>
+              <div className="flex flex-wrap items-center gap-2">{eventStatusBadge(ev.status)}</div>
               <p className="flex flex-wrap items-center gap-2 font-medium text-base leading-snug transition-colors group-hover:text-primary">
                 {ev.name}
                 {ev.timezone && (
@@ -127,15 +125,15 @@ export default function EventsPage() {
                 )}
               </p>
               <div className="text-sm text-muted-foreground space-y-1">
-                <p>{formatEventDateRange(ev.start_date, ev.end_date)}</p>
+                <p>Dates: {formatEventDateRange(ev.start_date, ev.end_date)}</p>
                 {/* Only for a run — "1 day" beside a single date says nothing. */}
-                {days !== null && days > 1 && <p>{days} days</p>}
+                {days !== null && days > 1 && <p>Length: {days} days</p>}
               </div>
               {/* Pushed to the bottom so the affordance lines up across a row of
                   cards whose names wrap to different heights. */}
               <div className="mt-auto pt-1">
                 <Separator className="mb-2" />
-                <p className="text-sm font-medium text-primary">Open →</p>
+                <p className="text-sm font-medium text-primary">Open event →</p>
               </div>
             </Link>
           );
