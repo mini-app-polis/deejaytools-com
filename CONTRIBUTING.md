@@ -40,12 +40,52 @@ Default `@semantic-release/commit-analyzer` (Angular preset) — no custom overr
 | `feat:` | **Minor** (`1.2.0` → `1.3.0`) | `feat: add manager event-songs export` |
 | `fix:` | **Patch** | `fix: reject empty partner last name` |
 | `perf:` | **Patch** | `perf: batch queue depth queries` |
-| `feat!:` or footer `BREAKING CHANGE:` | **Major** | `feat!: remove legacy /music-history route` |
+| footer `BREAKING CHANGE:` | **Major** | see [Forcing a major](#forcing-a-major) |
 | `revert:` | **Patch** | `revert: feat: …` |
 
 These **do not** cut a release by themselves: `docs:`, `chore:`, `style:`, `refactor:`, `test:`, `build:`, `ci:`.
 
 Use imperative mood and a short scope when helpful: `fix(api): …`, `feat(app): …`.
+
+### Forcing a major
+
+A **`BREAKING CHANGE:` footer is the only way** to cut a major in this repo:
+
+```
+feat: replace the event submission contract
+
+BREAKING CHANGE: GET /v1/event-song-submissions now returns division groups
+instead of a flat list.
+```
+
+Blank line before the footer, uppercase, and a **space** — not a hyphen. The
+header type does not matter: `fix:` with that footer still cuts a major.
+
+**`feat!:` does not work here, and it fails silently.** The pinned parser
+(`conventional-changelog-angular@8.3.0`) uses
+
+```js
+headerPattern: /^(\w*)(?:\((.*)\))?: (.*)$/,
+noteKeywords: ['BREAKING CHANGE'],
+```
+
+which has no slot for `!`. A `feat!:` header does not match at all, so the
+commit is not even recognised as a `feat` — it produces **no release**, not a
+minor. `BREAKING-CHANGE:` (hyphen) likewise misses `noteKeywords` and falls
+back to whatever the header alone earns.
+
+Behaviour of the installed analyzer, not the spec:
+
+| Commit | Result |
+|--------|--------|
+| `feat!: …` | **no release** |
+| `feat(app)!: …` | **no release** |
+| `feat: …` + `BREAKING CHANGE:` footer | **major** |
+| `fix: …` + `BREAKING CHANGE:` footer | **major** |
+| `feat: …` + `BREAKING-CHANGE:` footer | minor |
+
+If the pinned preset is ever upgraded to one with a `breakingHeaderPattern`,
+re-check this table — `!` support is what changes between preset versions.
 
 ### What the release job writes
 
