@@ -60,19 +60,3 @@ export function formatEventDateRange(startDate: string, endDate: string): string
       : end.toLocaleDateString(undefined, MONTH_DAY);
   return `${start.toLocaleDateString(undefined, MONTH_DAY)} – ${endPart}, ${start.getFullYear()}`;
 }
-
-/**
- * Inclusive length of an event in days — August 24 to August 26 is 3 days, not 2.
- * Returns null when either date is malformed or the range is inverted.
- */
-export function eventDurationDays(startDate: string, endDate: string): number | null {
-  const start = parseCalendarDate(startDate);
-  const end = parseCalendarDate(endDate);
-  if (!start || !end) return null;
-  const msPerDay = 24 * 60 * 60 * 1000;
-  // Both anchors are local noon, so the difference is a whole number of days
-  // even across a DST transition (which shifts the wall clock by an hour, far
-  // less than the 12-hour cushion).
-  const days = Math.round((end.getTime() - start.getTime()) / msPerDay) + 1;
-  return days >= 1 ? days : null;
-}

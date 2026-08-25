@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import type { ApiEvent } from "@deejaytools/schemas";
+import type { ApiEvent, ApiSession } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { compareEventChrono } from "@/lib/chronoSort";
 import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
-import { eventDurationDays, formatEventDateRange, parseCalendarDate } from "@/lib/eventDates";
+import { formatEventDateRange, parseCalendarDate } from "@/lib/eventDates";
 import { formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { cn } from "@/lib/utils";
 
@@ -35,13 +35,23 @@ function eventStatusBadge(status: string) {
 export default function EventsPage() {
   const api = useApiClient();
   const [events, setEvents] = useState<ApiEvent[] | null>(null);
+  // Sessions are fetched alongside events purely to count each event's floor
+  // trials. GET /v1/sessions is public and server-cached, and FloorTrialsPage
+  // already loads the same pair, so this costs a warm cache hit rather than a
+  // new per-event round trip.
+  const [sessions, setSessions] = useState<ApiSession[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = () => {
     setLoading(true);
-    api
-      .get<ApiEvent[]>("/v1/events")
-      .then(setEvents)
+    Promise.all([
+      api.get<ApiEvent[]>("/v1/events"),
+      api.get<ApiSession[]>("/v1/sessions"),
+    ])
+      .then(([evs, sess]) => {
+        setEvents(evs);
+        setSessions(sess);
+      })
       .catch((e: Error) => toast.error(e.message))
       .finally(() => setLoading(false));
   };
@@ -66,6 +76,14 @@ export default function EventsPage() {
   const sortedEvents = events
     ?.filter((ev) => ev.status === "active" || ev.status === "upcoming")
     .sort(compareEventChrono);
+
+  // Cancelled sessions are excluded — a called-off trial is not one a
+  // competitor can turn up to, so counting it would overstate the event.
+  const trialsByEvent = new Map<string, number>();
+  for (const s of sessions ?? []) {
+    if (!s.event_id || s.status === "cancelled") continue;
+    trialsByEvent.set(s.event_id, (trialsByEvent.get(s.event_id) ?? 0) + 1);
+  }
 
   return (
     <div className="space-y-4">
@@ -97,7 +115,9 @@ export default function EventsPage() {
         )}
       >
         {sortedEvents?.map((ev) => {
-          const days = eventDurationDays(ev.start_date, ev.end_date);
+          // Null until sessions land, so the card never flashes "Floor trials: 0"
+          // on its way to the real number.
+          const trials = sessions === null ? null : trialsByEvent.get(ev.id) ?? 0;
           // Local noon on the start date — a safe instant for resolving the
           // zone's DST abbreviation without touching a neighbouring day.
           const tzAnchor = parseCalendarDate(ev.start_date)?.getTime();
@@ -126,8 +146,11 @@ export default function EventsPage() {
               </p>
               <div className="text-sm text-muted-foreground space-y-1">
                 <p>Dates: {formatEventDateRange(ev.start_date, ev.end_date)}</p>
-                {/* Only for a run — "1 day" beside a single date says nothing. */}
-                {days !== null && days > 1 && <p>Length: {days} days</p>}
+                {trials !== null && (
+                  <p>
+                    {trials === 1 ? "Floor trial" : "Floor trials"}: {trials}
+                  </p>
+                )}
               </div>
               {/* Pushed to the bottom so the affordance lines up across a row of
                   cards whose names wrap to different heights. */}

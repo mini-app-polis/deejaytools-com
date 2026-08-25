@@ -59,6 +59,19 @@ function makeEvent(opts: {
   };
 }
 
+function makeSession(opts: { id: string; eventId: string | null; status?: string }) {
+  return {
+    id: opts.id,
+    event_id: opts.eventId,
+    name: "session",
+    date: "2026-06-01",
+    status: opts.status ?? "scheduled",
+    checkin_opens_at: 1,
+    floor_trial_starts_at: 2,
+    floor_trial_ends_at: 3,
+  };
+}
+
 function renderPage() {
   return render(
     <MemoryRouter>
@@ -258,9 +271,68 @@ describe("EventsPage", () => {
     expect(screen.getByText("Dates: June 15, 2026")).toBeInTheDocument();
     // Inside one month the month is stated once.
     expect(screen.getByText("Dates: July 1 – 5, 2026")).toBeInTheDocument();
-    // A single-day event gets no duration line; the five-day run does.
-    expect(screen.getByText("Length: 5 days")).toBeInTheDocument();
-    expect(screen.queryByText(/Length: 1 day/)).toBeNull();
+  });
+
+  it("counts each event's floor trials, skipping cancelled ones", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events") {
+        return Promise.resolve([
+          makeEvent({
+            id: "ev1",
+            name: "Summer Nationals",
+            startDate: "2026-06-01",
+            endDate: "2026-06-05",
+            status: "upcoming",
+          }),
+          makeEvent({
+            id: "ev2",
+            name: "Winter Championship",
+            startDate: "2026-12-01",
+            endDate: "2026-12-05",
+            status: "upcoming",
+          }),
+        ]);
+      }
+      if (path === "/v1/sessions") {
+        return Promise.resolve([
+          makeSession({ id: "s1", eventId: "ev1" }),
+          makeSession({ id: "s2", eventId: "ev1" }),
+          // Cancelled: nobody can turn up to it, so it is not counted.
+          makeSession({ id: "s3", eventId: "ev1", status: "cancelled" }),
+          makeSession({ id: "s4", eventId: "ev2" }),
+          // Orphan session with no event — must not land on any card.
+          makeSession({ id: "s5", eventId: null }),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Floor trials: 2")).toBeInTheDocument());
+    // Singular label for one, so a card never reads "Floor trials: 1".
+    expect(screen.getByText("Floor trial: 1")).toBeInTheDocument();
+  });
+
+  it("shows zero floor trials for an event with no sessions", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events") {
+        return Promise.resolve([
+          makeEvent({
+            id: "ev1",
+            name: "Summer Nationals",
+            startDate: "2026-06-01",
+            endDate: "2026-06-05",
+            status: "upcoming",
+          }),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Floor trials: 0")).toBeInTheDocument());
   });
 
   it("shows the timezone badge on each card", async () => {

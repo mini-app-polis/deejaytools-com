@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eventDurationDays, formatEventDateRange, parseCalendarDate } from "./eventDates";
+import { formatEventDateRange, parseCalendarDate } from "./eventDates";
 
 describe("parseCalendarDate", () => {
   it("anchors to local noon on the stated calendar day", () => {
@@ -47,26 +47,5 @@ describe("formatEventDateRange", () => {
   it("falls back to the raw strings when a date is malformed", () => {
     expect(formatEventDateRange("nope", "nope")).toBe("nope");
     expect(formatEventDateRange("nope", "later")).toBe("nope – later");
-  });
-});
-
-describe("eventDurationDays", () => {
-  it("counts inclusively", () => {
-    expect(eventDurationDays("2026-08-24", "2026-08-24")).toBe(1);
-    expect(eventDurationDays("2026-08-24", "2026-08-26")).toBe(3);
-  });
-
-  it("counts across a month boundary", () => {
-    expect(eventDurationDays("2026-08-24", "2026-10-02")).toBe(40);
-  });
-
-  it("counts across a DST transition", () => {
-    // US DST ends Nov 1 2026; the wall clock shifts an hour inside this range.
-    expect(eventDurationDays("2026-10-30", "2026-11-03")).toBe(5);
-  });
-
-  it("returns null for malformed or inverted ranges", () => {
-    expect(eventDurationDays("nope", "2026-08-24")).toBeNull();
-    expect(eventDurationDays("2026-08-26", "2026-08-24")).toBeNull();
   });
 });
