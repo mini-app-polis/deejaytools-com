@@ -273,7 +273,7 @@ describe("EventsPage", () => {
     expect(screen.getByText("Dates: July 1 – 5, 2026")).toBeInTheDocument();
   });
 
-  it("counts each event's floor trials, skipping cancelled ones", async () => {
+  it("breaks each event's floor trials into active, upcoming and completed", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events") {
         return Promise.resolve([
@@ -295,13 +295,15 @@ describe("EventsPage", () => {
       }
       if (path === "/v1/sessions") {
         return Promise.resolve([
-          makeSession({ id: "s1", eventId: "ev1" }),
-          makeSession({ id: "s2", eventId: "ev1" }),
-          // Cancelled: nobody can turn up to it, so it is not counted.
-          makeSession({ id: "s3", eventId: "ev1", status: "cancelled" }),
-          makeSession({ id: "s4", eventId: "ev2" }),
+          makeSession({ id: "s1", eventId: "ev1", status: "in_progress" }),
+          makeSession({ id: "s2", eventId: "ev1", status: "scheduled" }),
+          makeSession({ id: "s3", eventId: "ev1", status: "scheduled" }),
+          makeSession({ id: "s4", eventId: "ev1", status: "completed" }),
+          // Cancelled: nobody can turn up to it, so it is never surfaced.
+          makeSession({ id: "s5", eventId: "ev1", status: "cancelled" }),
+          makeSession({ id: "s6", eventId: "ev2", status: "scheduled" }),
           // Orphan session with no event — must not land on any card.
-          makeSession({ id: "s5", eventId: null }),
+          makeSession({ id: "s7", eventId: null }),
         ]);
       }
       return Promise.resolve([]);
@@ -309,12 +311,16 @@ describe("EventsPage", () => {
 
     renderPage();
 
-    await waitFor(() => expect(screen.getByText("Floor trials: 2")).toBeInTheDocument());
-    // Singular label for one, so a card never reads "Floor trials: 1".
-    expect(screen.getByText("Floor trial: 1")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        screen.getByText("Floor trials: 1 active · 2 upcoming · 1 completed")
+      ).toBeInTheDocument()
+    );
+    // Empty buckets are omitted rather than padded with zeroes.
+    expect(screen.getByText("Floor trials: 1 upcoming")).toBeInTheDocument();
   });
 
-  it("shows zero floor trials for an event with no sessions", async () => {
+  it("says so in words for an event with no sessions", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events") {
         return Promise.resolve([
@@ -332,7 +338,9 @@ describe("EventsPage", () => {
 
     renderPage();
 
-    await waitFor(() => expect(screen.getByText("Floor trials: 0")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Floor trials: none scheduled yet")).toBeInTheDocument()
+    );
   });
 
   it("shows the timezone badge on each card", async () => {

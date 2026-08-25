@@ -9,8 +9,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { compareEventChrono } from "@/lib/chronoSort";
 import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
 import { formatEventDateRange, parseCalendarDate } from "@/lib/eventDates";
+import { countFloorTrialsByEvent, formatFloorTrials } from "@/lib/floorTrials";
 import { formatTimezoneAbbr } from "@/lib/sessionFormat";
+import type { FloorTrialCounts } from "@/lib/floorTrials";
 import { cn } from "@/lib/utils";
+
+/** Shared empty tally for events that have no sessions at all. */
+const EMPTY_TRIALS: FloorTrialCounts = { active: 0, upcoming: 0, completed: 0, cancelled: 0 };
 
 function eventStatusBadge(status: string) {
   switch (status) {
@@ -77,13 +82,7 @@ export default function EventsPage() {
     ?.filter((ev) => ev.status === "active" || ev.status === "upcoming")
     .sort(compareEventChrono);
 
-  // Cancelled sessions are excluded — a called-off trial is not one a
-  // competitor can turn up to, so counting it would overstate the event.
-  const trialsByEvent = new Map<string, number>();
-  for (const s of sessions ?? []) {
-    if (!s.event_id || s.status === "cancelled") continue;
-    trialsByEvent.set(s.event_id, (trialsByEvent.get(s.event_id) ?? 0) + 1);
-  }
+  const trialsByEvent = countFloorTrialsByEvent(sessions ?? []);
 
   return (
     <div className="space-y-4">
@@ -115,9 +114,9 @@ export default function EventsPage() {
         )}
       >
         {sortedEvents?.map((ev) => {
-          // Null until sessions land, so the card never flashes "Floor trials: 0"
-          // on its way to the real number.
-          const trials = sessions === null ? null : trialsByEvent.get(ev.id) ?? 0;
+          // An event with no sessions has no map entry; the empty tally makes
+          // it read "none scheduled yet" rather than dropping the line.
+          const trials = trialsByEvent.get(ev.id) ?? EMPTY_TRIALS;
           // Local noon on the start date — a safe instant for resolving the
           // zone's DST abbreviation without touching a neighbouring day.
           const tzAnchor = parseCalendarDate(ev.start_date)?.getTime();
@@ -146,11 +145,9 @@ export default function EventsPage() {
               </p>
               <div className="text-sm text-muted-foreground space-y-1">
                 <p>Dates: {formatEventDateRange(ev.start_date, ev.end_date)}</p>
-                {trials !== null && (
-                  <p>
-                    {trials === 1 ? "Floor trial" : "Floor trials"}: {trials}
-                  </p>
-                )}
+                {/* Held back until sessions land, so no card flashes "none
+                    scheduled yet" on its way to the real numbers. */}
+                {sessions !== null && <p>Floor trials: {formatFloorTrials(trials)}</p>}
               </div>
               {/* Pushed to the bottom so the affordance lines up across a row of
                   cards whose names wrap to different heights. */}
