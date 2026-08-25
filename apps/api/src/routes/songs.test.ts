@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as Sentry from "@sentry/node";
 import * as drive from "../services/drive.js";
+import * as tagger from "../services/tagger.js";
 import * as fsPromises from "node:fs/promises";
 import { app } from "../app.js";
 import {
@@ -14,6 +16,10 @@ import {
   type SuccessEnvelope,
 } from "../test/helpers.js";
 import { enqueueSelectResult, mockDb, resetSelectQueue, skipNextSelectResult } from "../test/mocks.js";
+
+const { enqueueDriveJob } = vi.hoisted(() => ({
+  enqueueDriveJob: vi.fn().mockResolvedValue(undefined),
+}));
 
 /** Minimal bytes that pass server-side detectAudioFormat (ID3v2 header). */
 const MOCK_MP3_CHUNK_BYTES = Buffer.concat([Buffer.from("ID3"), Buffer.alloc(20)]);
@@ -40,6 +46,15 @@ vi.mock("../services/drive.js", () => ({
   }),
   softDeleteOnDrive: vi.fn().mockResolvedValue(undefined),
   shareDriveFileWithUsers: vi.fn().mockResolvedValue({ shared: [], failed: [] }),
+}));
+vi.mock("@sentry/node", () => ({
+  withScope: vi.fn((fn: (scope: unknown) => void) =>
+    fn({ setLevel: vi.fn(), setTag: vi.fn(), setContext: vi.fn() })
+  ),
+  captureException: vi.fn(),
+}));
+vi.mock("../services/driveJobs.js", () => ({
+  enqueueDriveJob,
 }));
 vi.mock("../services/tagger.js", () => ({
   tagSongBytes: vi
@@ -169,6 +184,57 @@ function makeChunkForm(overrides: Record<string, string | Blob> = {}): FormData 
   return form;
 }
 
+const leaderPartner = {
+  ...mockPartnerRow,
+  id: "p_leader",
+  firstName: "Leader",
+  lastName: "",
+  partnerRole: "leader" as const,
+};
+
+const followerUser = {
+  ...mockUserRow,
+  firstName: "Follower",
+  lastName: "",
+};
+
+function enqueuePartnerChunkUpload(
+  partner: typeof mockPartnerRow,
+  user: typeof mockUserRow,
+  songOverrides: Record<string, unknown> = {},
+  formOverrides: Record<string, string | Blob> = {}
+) {
+  mockFs.readdir.mockResolvedValue(["chunk_000000"]);
+  const division = String(songOverrides.division ?? "Classic");
+  const finalRow = makeFinalSongRow({ division, partnerId: partner.id, ...songOverrides });
+  enqueueSelectResult([{ id: partner.id }]);
+  enqueueSelectResult([{ ...finalRow.song, partnerId: partner.id }]);
+  enqueueSelectResult([user]);
+  enqueueSelectResult([partner]);
+  enqueueSelectResult([]);
+  enqueueSelectResult([
+    {
+      ...finalRow,
+      partner_first_name: partner.firstName,
+      partner_last_name: partner.lastName,
+    },
+  ]);
+  return makeChunkForm({ division, partner_id: partner.id, ...formOverrides });
+}
+
+function enqueueSoloChunkUpload(
+  songOverrides: Record<string, unknown> = {},
+  formOverrides: Record<string, string | Blob> = {}
+) {
+  mockFs.readdir.mockResolvedValue(["chunk_000000"]);
+  const finalRow = makeFinalSongRow(songOverrides);
+  enqueueSelectResult([finalRow.song]);
+  enqueueSelectResult([mockUserRow]);
+  enqueueSelectResult([]);
+  enqueueSelectResult([finalRow]);
+  return makeChunkForm(formOverrides);
+}
+
 function songSelectRow(detail: { id: string; partnerId?: string | null; userId?: string }) {
   const now = Date.now();
   return {
@@ -270,6 +336,13 @@ describe("POST /v1/songs", () => {
 describe("DELETE /v1/songs/:id", () => {
   beforeEach(() => {
     resetSelectQueue();
+    enqueueDriveJob.mockClear();
+    vi.mocked(Sentry.captureException).mockClear();
+    vi.mocked(mockDb.select).mockImplementation(() => mockDb);
+    vi.mocked(mockDb.delete).mockImplementation(() => ({
+      where: vi.fn().mockResolvedValue(undefined),
+    }));
+    vi.mocked(mockDb.transaction).mockImplementation((fn) => fn(mockDb));
   });
 
   it("returns 404 when song not found", async () => {
@@ -339,6 +412,121 @@ describe("DELETE /v1/songs/:id", () => {
     });
     expect(res.status).toBe(204);
     expect(vi.mocked(drive.softDeleteOnDrive)).toHaveBeenCalledWith("file1");
+  });
+
+  it("enqueues trash jobs for each submission with a Drive copy", async () => {
+    const existing = songSelectRow({ id: "s1" }).song;
+    enqueueSelectResult([existing]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([
+      { driveCopyFileId: "copy_1" },
+      { driveCopyFileId: "copy_2" },
+    ]);
+
+    const res = await app.request(`${BASE}/s1`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+
+    expect(res.status).toBe(204);
+    expect(enqueueDriveJob).toHaveBeenCalledTimes(2);
+    expect(enqueueDriveJob).toHaveBeenCalledWith(expect.anything(), {
+      kind: "trash",
+      fileId: "copy_1",
+    });
+    expect(enqueueDriveJob).toHaveBeenCalledWith(expect.anything(), {
+      kind: "trash",
+      fileId: "copy_2",
+    });
+  });
+
+  it("does not enqueue trash jobs when drive_copy_file_id is null", async () => {
+    const existing = songSelectRow({ id: "s1" }).song;
+    enqueueSelectResult([existing]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([
+      { driveCopyFileId: "copy_1" },
+      { driveCopyFileId: null },
+    ]);
+
+    const res = await app.request(`${BASE}/s1`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+
+    expect(res.status).toBe(204);
+    expect(enqueueDriveJob).toHaveBeenCalledTimes(1);
+    expect(enqueueDriveJob).toHaveBeenCalledWith(expect.anything(), {
+      kind: "trash",
+      fileId: "copy_1",
+    });
+  });
+
+  it("does not enqueue trash jobs when the song has no submissions", async () => {
+    const existing = songSelectRow({ id: "s1" }).song;
+    enqueueSelectResult([existing]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([]);
+
+    const res = await app.request(`${BASE}/s1`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+
+    expect(res.status).toBe(204);
+    expect(enqueueDriveJob).not.toHaveBeenCalled();
+  });
+
+  it("returns 204 when enqueueDriveJob rejects", async () => {
+    const existing = songSelectRow({ id: "s1" }).song;
+    enqueueSelectResult([existing]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([{ driveCopyFileId: "copy_1" }]);
+    enqueueDriveJob.mockRejectedValueOnce(new Error("queue down"));
+
+    const res = await app.request(`${BASE}/s1`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+
+    expect(res.status).toBe(204);
+    expect(enqueueDriveJob).toHaveBeenCalledTimes(1);
+    expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+  });
+
+  it("selects copy ids before deleting submission rows", async () => {
+    const existing = songSelectRow({ id: "s1" }).song;
+    enqueueSelectResult([existing]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([{ driveCopyFileId: "copy_1" }]);
+
+    const txCallOrder: string[] = [];
+    let inTx = false;
+    vi.mocked(mockDb.transaction).mockImplementationOnce(async (fn) => {
+      inTx = true;
+      try {
+        await fn(mockDb);
+      } finally {
+        inTx = false;
+      }
+    });
+    vi.mocked(mockDb.select).mockImplementation(() => {
+      if (inTx) txCallOrder.push("select");
+      return mockDb;
+    });
+    vi.mocked(mockDb.delete).mockImplementation(() => {
+      if (inTx) txCallOrder.push("delete");
+      return { where: vi.fn().mockResolvedValue(undefined) };
+    });
+
+    const res = await app.request(`${BASE}/s1`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+
+    expect(res.status).toBe(204);
+    expect(txCallOrder.indexOf("select")).toBeGreaterThanOrEqual(0);
+    expect(txCallOrder.indexOf("delete")).toBeGreaterThan(txCallOrder.indexOf("select"));
   });
 });
 
@@ -487,20 +675,273 @@ describe("POST /v1/songs/upload/chunk", () => {
   });
 
   it("preserves division casing in processed filename (ProAm LeaderAm → ProAmLeaderAm)", async () => {
-    mockFs.readdir.mockResolvedValue(["chunk_000000"]);
-    const finalRow = makeFinalSongRow({ division: "ProAm LeaderAm" });
-    enqueueSelectResult([finalRow.song]);
-    enqueueSelectResult([mockUserRow]);
-    enqueueSelectResult([]);
-    enqueueSelectResult([finalRow]);
+    const form = enqueuePartnerChunkUpload(
+      { ...leaderPartner, id: "p1" },
+      followerUser,
+      { division: "ProAm LeaderAm" }
+    );
     await app.request(CHUNK_BASE, {
       method: "POST",
       headers: authHeaders(),
-      body: makeChunkForm({ division: "ProAm LeaderAm" }),
+      body: form,
     });
     expect(vi.mocked(drive.uploadSongToDrive)).toHaveBeenCalledWith(
       expect.any(Buffer),
-      expect.objectContaining({ filename: expect.stringContaining("_ProAmLeaderAm_") })
+      expect.objectContaining({
+        filename: expect.stringMatching(/^Leader_Follower_ProAmLeaderAm_/),
+      })
+    );
+  });
+
+  it("orders ProAm FollowerAm entities amateur-first (follower before leader)", async () => {
+    const form = enqueuePartnerChunkUpload(
+      leaderPartner,
+      followerUser,
+      { division: "ProAm FollowerAm" }
+    );
+    await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
+    expect(vi.mocked(drive.uploadSongToDrive)).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      expect.objectContaining({
+        filename: expect.stringMatching(/^Follower_Leader_ProAmFollowerAm_/),
+      })
+    );
+  });
+
+  it("does not reorder ProAm LeaderAm (already amateur-first)", async () => {
+    vi.mocked(drive.uploadSongToDrive).mockClear();
+    const form = enqueuePartnerChunkUpload(
+      leaderPartner,
+      followerUser,
+      { division: "ProAm LeaderAm" }
+    );
+    await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
+    expect(vi.mocked(drive.uploadSongToDrive)).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      expect.objectContaining({
+        filename: expect.stringMatching(/^Leader_Follower_ProAmLeaderAm_/),
+      })
+    );
+  });
+
+  it("orders managed partnerships amateur-first in ProAm FollowerAm", async () => {
+    mockFs.readdir.mockResolvedValue(["chunk_000000"]);
+    const managedPartnershipRow = {
+      id: "mp_1",
+      userId: "user_test123",
+      leaderFirstName: "Leader",
+      leaderLastName: "",
+      followerFirstName: "Follower",
+      followerLastName: "",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    const finalRow = makeFinalSongRow({
+      division: "ProAm FollowerAm",
+      managedPartnershipId: "mp_1",
+    });
+    enqueueSelectResult([{ id: "mp_1" }]);
+    enqueueSelectResult([{ ...finalRow.song, managedPartnershipId: "mp_1" }]);
+    enqueueSelectResult([mockUserRow]);
+    enqueueSelectResult([managedPartnershipRow]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([finalRow]);
+
+    await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: makeChunkForm({
+        division: "ProAm FollowerAm",
+        managed_partnership_id: "mp_1",
+        partner_id: "",
+      }),
+    });
+
+    expect(vi.mocked(drive.uploadSongToDrive)).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      expect.objectContaining({
+        filename: expect.stringMatching(/^Follower_Leader_ProAmFollowerAm_/),
+      })
+    );
+  });
+
+  it("does not reorder Classic partnerships", async () => {
+    vi.mocked(drive.uploadSongToDrive).mockClear();
+    const form = enqueuePartnerChunkUpload(leaderPartner, followerUser, { division: "Classic" });
+    await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
+    expect(vi.mocked(drive.uploadSongToDrive)).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      expect.objectContaining({
+        filename: expect.stringMatching(/^Leader_Follower_Classic_/),
+      })
+    );
+  });
+
+  it("does not reorder a non-partner entity in ProAm FollowerAm", async () => {
+    mockFs.readdir.mockResolvedValue(["chunk_000000"]);
+    const teamPartner = { ...mockPartnerRow, id: "p_team", firstName: "Team", lastName: "Alpha", kind: "team" };
+    const finalRow = makeFinalSongRow({ division: "ProAm FollowerAm", partnerId: "p_team" });
+    enqueueSelectResult([{ id: "p_team" }]);
+    enqueueSelectResult([{ ...finalRow.song, partnerId: "p_team" }]);
+    enqueueSelectResult([mockUserRow]);
+    enqueueSelectResult([teamPartner]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([
+      {
+        ...finalRow,
+        partner_first_name: teamPartner.firstName,
+        partner_last_name: teamPartner.lastName,
+      },
+    ]);
+
+    await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: makeChunkForm({ division: "ProAm FollowerAm", partner_id: "p_team" }),
+    });
+
+    const uploadCall = vi.mocked(drive.uploadSongToDrive).mock.calls.at(-1);
+    const filename = uploadCall?.[1]?.filename ?? "";
+    expect(filename).toMatch(/^TeamAlpha_ProAmFollowerAm_/);
+    expect(filename).not.toMatch(/__/);
+  });
+
+  it("sets the ID3 title to match entity order for ProAm divisions", async () => {
+    vi.mocked(tagger.tagSongBytes).mockClear();
+
+    resetSelectQueue();
+    vi.mocked(drive.uploadSongToDrive).mockClear();
+    let form = enqueuePartnerChunkUpload(
+      leaderPartner,
+      followerUser,
+      { division: "ProAm FollowerAm" }
+    );
+    await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
+    expect(vi.mocked(tagger.tagSongBytes)).toHaveBeenCalledWith(
+      expect.objectContaining({ newTitle: "Follower & Leader" })
+    );
+
+    resetSelectQueue();
+    vi.mocked(tagger.tagSongBytes).mockClear();
+    form = enqueuePartnerChunkUpload(
+      leaderPartner,
+      followerUser,
+      { division: "ProAm LeaderAm" }
+    );
+    await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
+    expect(vi.mocked(tagger.tagSongBytes)).toHaveBeenCalledWith(
+      expect.objectContaining({ newTitle: "Leader & Follower" })
+    );
+  });
+
+  it("passes newArtist with pipe separators including routine name", async () => {
+    vi.mocked(tagger.tagSongBytes).mockClear();
+    const form = enqueueSoloChunkUpload();
+    await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
+    expect(vi.mocked(tagger.tagSongBytes)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        newArtist: "Classic | My Routine",
+        newYear: "2026",
+      })
+    );
+  });
+
+  it("passes newArtist without a trailing separator when routine name is absent", async () => {
+    vi.mocked(tagger.tagSongBytes).mockClear();
+    const form = enqueueSoloChunkUpload(
+      { routineName: null, personalDescriptor: null },
+      { routine_name: "", personal_descriptor: "" }
+    );
+    await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
+    expect(vi.mocked(tagger.tagSongBytes)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        newArtist: "Classic",
+        newYear: "2026",
+      })
+    );
+  });
+
+  it("omits optional routine and descriptor segments without stray underscores", async () => {
+    const form = enqueueSoloChunkUpload(
+      { routineName: null, personalDescriptor: null },
+      { routine_name: "", personal_descriptor: "" }
+    );
+    await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
+    expect(vi.mocked(drive.uploadSongToDrive)).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      expect.objectContaining({
+        filename: expect.stringMatching(/^KaianoLevine_Classic_2026_v01\.mp3$/),
+      })
+    );
+  });
+
+  it("includes routine name without descriptor when only routine is set", async () => {
+    vi.mocked(drive.uploadSongToDrive).mockClear();
+    const form = enqueueSoloChunkUpload(
+      { routineName: "My Routine", personalDescriptor: null },
+      { routine_name: "My Routine", personal_descriptor: "" }
+    );
+    await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
+    expect(vi.mocked(drive.uploadSongToDrive)).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      expect.objectContaining({
+        filename: expect.stringMatching(/^KaianoLevine_Classic_2026_MyRoutine_v01\.mp3$/),
+      })
+    );
+  });
+
+  it("includes descriptor without routine name when only descriptor is set", async () => {
+    vi.mocked(drive.uploadSongToDrive).mockClear();
+    const form = enqueueSoloChunkUpload(
+      { routineName: null, personalDescriptor: "Encore" },
+      { routine_name: "", personal_descriptor: "Encore" }
+    );
+    await app.request(CHUNK_BASE, {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
+    expect(vi.mocked(drive.uploadSongToDrive)).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      expect.objectContaining({
+        filename: expect.stringMatching(/^KaianoLevine_Classic_2026_Encore_v01\.mp3$/),
+      })
     );
   });
 
@@ -558,6 +999,26 @@ describe("POST /v1/songs/upload/chunk", () => {
       expect.any(Buffer),
       expect.objectContaining({ filename: expect.stringContaining("_v01") })
     );
+  });
+
+  it("files an October upload under the following season year", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-15T12:00:00Z"));
+    try {
+      enqueueHappyPath([]);
+      vi.mocked(drive.uploadSongToDrive).mockClear();
+      await app.request(CHUNK_BASE, {
+        method: "POST",
+        headers: authHeaders(),
+        body: makeChunkForm(),
+      });
+      expect(vi.mocked(drive.uploadSongToDrive)).toHaveBeenCalledWith(
+        expect.any(Buffer),
+        expect.objectContaining({ seasonYear: "2027" })
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("assigns v01 independently per partner when division/routine/year match", async () => {

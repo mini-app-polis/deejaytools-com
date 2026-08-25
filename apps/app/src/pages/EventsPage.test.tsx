@@ -45,6 +45,8 @@ function makeEvent(opts: {
   startDate: string;
   endDate: string;
   status: string;
+  seasonYear?: string;
+  timezone?: string;
 }) {
   return {
     id: opts.id,
@@ -52,6 +54,21 @@ function makeEvent(opts: {
     start_date: opts.startDate,
     end_date: opts.endDate,
     status: opts.status,
+    season_year: opts.seasonYear ?? "2026",
+    timezone: opts.timezone ?? "America/Chicago",
+  };
+}
+
+function makeSession(opts: { id: string; eventId: string | null; status?: string }) {
+  return {
+    id: opts.id,
+    event_id: opts.eventId,
+    name: "session",
+    date: "2026-06-01",
+    status: opts.status ?? "scheduled",
+    checkin_opens_at: 1,
+    floor_trial_starts_at: 2,
+    floor_trial_ends_at: 3,
   };
 }
 
@@ -122,11 +139,11 @@ describe("EventsPage", () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getAllByText(/no events yet/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/no current or upcoming events/i).length).toBeGreaterThan(0);
     });
   });
 
-  it("renders status badges based on event data", async () => {
+  it("lists only active and upcoming events, hiding completed and cancelled", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events") {
         return Promise.resolve([
@@ -168,10 +185,13 @@ describe("EventsPage", () => {
     await waitFor(() => {
       expect(screen.getAllByText("Active Event").length).toBeGreaterThan(0);
     });
+    expect(screen.getAllByText("Upcoming Event").length).toBeGreaterThan(0);
 
-    // Check that all badge variants render correctly.
-    const badges = screen.getAllByText(/active|upcoming|completed|cancelled/i);
-    expect(badges.length).toBeGreaterThanOrEqual(4);
+    // Past and cancelled events stay off the listing entirely.
+    expect(screen.queryByText("Completed Event")).toBeNull();
+    expect(screen.queryByText("Cancelled Event")).toBeNull();
+    expect(screen.queryByText("completed")).toBeNull();
+    expect(screen.queryByText("cancelled")).toBeNull();
   });
 
   it("shows toast error when API fails", async () => {
@@ -188,6 +208,34 @@ describe("EventsPage", () => {
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith(errorMsg);
     });
+  });
+
+  it("renders each event as a card link to /events/:id, with no table", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events") {
+        return Promise.resolve([
+          makeEvent({
+            id: "ev1",
+            name: "Summer Nationals",
+            startDate: "2026-06-01",
+            endDate: "2026-06-05",
+            status: "upcoming",
+          }),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    const { container } = renderPage();
+
+    await waitFor(() => {
+      const link = screen.getByRole("link", { name: /summer nationals/i });
+      expect(link.getAttribute("href")).toBe("/events/ev1");
+    });
+    // Card view: the old desktop table markup is gone entirely, so there is
+    // one card per event rather than a duplicated mobile + desktop pair.
+    expect(container.querySelector("table")).toBeNull();
+    expect(screen.getAllByText("Summer Nationals")).toHaveLength(1);
   });
 
   it("renders dates in single-date or range format", async () => {
@@ -219,9 +267,105 @@ describe("EventsPage", () => {
       expect(screen.getAllByText("Single Day Event").length).toBeGreaterThan(0);
     });
 
-    // Single-date format: just the date (both mobile + desktop layouts render)
-    expect(screen.getAllByText("2026-06-15").length).toBeGreaterThan(0);
-    // Range format: start – end
-    expect(screen.getAllByText("2026-07-01 – 2026-07-05").length).toBeGreaterThan(0);
+    // Human dates, not the raw YYYY-MM-DD the API returns.
+    expect(screen.getByText("Dates: June 15, 2026")).toBeInTheDocument();
+    // Inside one month the month is stated once.
+    expect(screen.getByText("Dates: July 1 – 5, 2026")).toBeInTheDocument();
+  });
+
+  it("breaks each event's floor trials into active, upcoming and completed", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events") {
+        return Promise.resolve([
+          makeEvent({
+            id: "ev1",
+            name: "Summer Nationals",
+            startDate: "2026-06-01",
+            endDate: "2026-06-05",
+            status: "upcoming",
+          }),
+          makeEvent({
+            id: "ev2",
+            name: "Winter Championship",
+            startDate: "2026-12-01",
+            endDate: "2026-12-05",
+            status: "upcoming",
+          }),
+        ]);
+      }
+      if (path === "/v1/sessions") {
+        return Promise.resolve([
+          makeSession({ id: "s1", eventId: "ev1", status: "in_progress" }),
+          makeSession({ id: "s2", eventId: "ev1", status: "scheduled" }),
+          makeSession({ id: "s3", eventId: "ev1", status: "scheduled" }),
+          makeSession({ id: "s4", eventId: "ev1", status: "completed" }),
+          // Cancelled: nobody can turn up to it, so it is never surfaced.
+          makeSession({ id: "s5", eventId: "ev1", status: "cancelled" }),
+          makeSession({ id: "s6", eventId: "ev2", status: "scheduled" }),
+          // Orphan session with no event — must not land on any card.
+          makeSession({ id: "s7", eventId: null }),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    renderPage();
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("Floor trials: 1 active · 2 upcoming · 1 completed")
+      ).toBeInTheDocument()
+    );
+    // Empty buckets are omitted rather than padded with zeroes.
+    expect(screen.getByText("Floor trials: 1 upcoming")).toBeInTheDocument();
+  });
+
+  it("says so in words for an event with no sessions", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events") {
+        return Promise.resolve([
+          makeEvent({
+            id: "ev1",
+            name: "Summer Nationals",
+            startDate: "2026-06-01",
+            endDate: "2026-06-05",
+            status: "upcoming",
+          }),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByText("Floor trials: none scheduled yet")).toBeInTheDocument()
+    );
+  });
+
+  it("shows the timezone badge on each card", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events") {
+        return Promise.resolve([
+          makeEvent({
+            id: "ev1",
+            name: "Summer Nationals",
+            startDate: "2026-06-01",
+            endDate: "2026-06-05",
+            status: "upcoming",
+            seasonYear: "2026",
+            timezone: "America/Chicago",
+          }),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    renderPage();
+
+    // CDT in June; the assertion stays DST-agnostic.
+    await waitFor(() => expect(screen.getByText(/^C[DS]T$/)).toBeInTheDocument());
+    // The season badge was dropped — the card leads with status alone.
+    expect(screen.queryByText(/season/i)).toBeNull();
   });
 });

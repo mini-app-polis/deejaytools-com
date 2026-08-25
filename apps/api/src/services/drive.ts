@@ -2,6 +2,25 @@ import { JWT } from "google-auth-library";
 import { google } from "googleapis";
 import type { drive_v3 } from "googleapis";
 import { Readable } from "node:stream";
+import { TtlCache } from "../lib/cache.js";
+
+/**
+ * Drive folder ids keyed by (parent, name). Folder ids are stable for the life
+ * of the folder, so this is cached for an hour rather than seconds — the TTL
+ * exists to recover from a folder deleted out from under us, not to track
+ * churn.
+ *
+ * A dedicated instance rather than the shared responseCache: different
+ * lifetime, different invalidation, and no risk of key collisions with HTTP
+ * response caching.
+ */
+const folderCache = new TtlCache();
+const FOLDER_CACHE_TTL_MS = 60 * 60_000;
+
+/** Exported for tests and for recovery when a cached parent turns out to be gone. */
+export function clearDriveFolderCache(): void {
+  folderCache.invalidatePrefix("drivefolder:");
+}
 
 function getAuthClient(): JWT {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
@@ -40,6 +59,10 @@ async function findOrCreateFolder(
   name: string,
   parentId: string
 ): Promise<string> {
+  const cacheKey = `drivefolder:${parentId}:${name}`;
+  const cached = folderCache.get<string>(cacheKey);
+  if (cached) return cached;
+
   const escaped = escapeDriveQueryValue(name);
   const listRes = await drive.files.list({
     q: `name='${escaped}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`,
@@ -51,7 +74,10 @@ async function findOrCreateFolder(
   });
 
   const existing = listRes.data.files?.[0]?.id;
-  if (existing) return existing;
+  if (existing) {
+    folderCache.set(cacheKey, existing, FOLDER_CACHE_TTL_MS);
+    return existing;
+  }
 
   const createRes = await drive.files.create({
     requestBody: {
@@ -65,7 +91,18 @@ async function findOrCreateFolder(
 
   const created = createRes.data.id;
   if (!created) throw new Error(`Failed to create Drive folder: ${name}`);
+  folderCache.set(cacheKey, created, FOLDER_CACHE_TTL_MS);
   return created;
+}
+
+/**
+ * Drive treats "/" as a path separator in some clients, and leading/trailing
+ * whitespace produces folders that look identical but aren't. Event names are
+ * free text typed by admins, so normalize before using one as a folder name.
+ */
+function sanitizeFolderName(name: string): string {
+  const cleaned = name.replace(/[/\\]/g, "-").replace(/\s+/g, " ").trim();
+  return cleaned || "unknown";
 }
 
 export interface DriveUploadResult {
@@ -93,8 +130,8 @@ export async function uploadSongToDrive(
   const rootFolderId = getParentFolderId();
   const drive = google.drive({ version: "v3", auth });
 
-  const yearLabel = options.seasonYear.trim() || "unknown";
-  const divisionLabel = options.division.trim() || "unknown";
+  const yearLabel = sanitizeFolderName(options.seasonYear);
+  const divisionLabel = sanitizeFolderName(options.division);
 
   const yearFolderId = await findOrCreateFolder(drive, yearLabel, rootFolderId);
   const divisionFolderId = await findOrCreateFolder(drive, divisionLabel, yearFolderId);
@@ -119,6 +156,112 @@ export async function uploadSongToDrive(
   }
 
   return { fileId, folderId: divisionFolderId };
+}
+
+/**
+ * Copies an existing song file into its event folder:
+ *   <root>/<seasonYear>/Events/<eventName>/<division>/<filename>
+ *
+ * Year, "Events", event and division subfolders are created on demand. The
+ * source must be a file this service account created — the drive.file scope
+ * grants no access to anything else, which holds for songs uploaded through
+ * uploadSongToDrive.
+ *
+ * Returns the copy's file ID and the division folder ID.
+ */
+export async function copySongToEventFolder(
+  sourceFileId: string,
+  options: {
+    filename: string;
+    seasonYear: string;
+    eventName: string;
+    division: string;
+    /** Optional folder nested under the division — "Finals" for finals-only entries. */
+    subfolder?: string;
+  }
+): Promise<DriveUploadResult> {
+  const auth = getAuthClient();
+  const rootFolderId = getParentFolderId();
+  const drive = google.drive({ version: "v3", auth });
+
+  let destinationFolderId: string;
+  let copyRes;
+  try {
+    const yearFolderId = await findOrCreateFolder(
+      drive,
+      sanitizeFolderName(options.seasonYear),
+      rootFolderId
+    );
+    const eventsFolderId = await findOrCreateFolder(drive, "Events", yearFolderId);
+    const eventFolderId = await findOrCreateFolder(
+      drive,
+      sanitizeFolderName(options.eventName),
+      eventsFolderId
+    );
+    const divisionFolderId = await findOrCreateFolder(
+      drive,
+      sanitizeFolderName(options.division),
+      eventFolderId
+    );
+    destinationFolderId = options.subfolder
+      ? await findOrCreateFolder(drive, sanitizeFolderName(options.subfolder), divisionFolderId)
+      : divisionFolderId;
+
+    copyRes = await drive.files.copy({
+      fileId: sourceFileId,
+      requestBody: {
+        name: options.filename,
+        parents: [destinationFolderId],
+      },
+      fields: "id",
+      supportsAllDrives: true,
+    });
+  } catch (err) {
+    // Any cached folder id in this chain may be for a folder that has since
+    // been trashed or deleted, which fails identically on every retry for the
+    // whole TTL. Folder resolution must be inside this try, not just the copy:
+    // a stale parent fails at files.list/files.create, before the copy is ever
+    // reached. Cheap to rebuild, so drop the cache and let the retry re-resolve.
+    clearDriveFolderCache();
+    throw err;
+  }
+
+  const fileId = copyRes.data.id;
+  if (!fileId) {
+    throw new Error("Drive copy did not return a file id");
+  }
+
+  return { fileId, folderId: destinationFolderId };
+}
+
+/**
+ * Renames an existing Drive file, returning true if a change was made.
+ *
+ * Reads the current name first so that re-running a rename sweep over files
+ * already named correctly costs one metadata GET each and issues no writes —
+ * this is what makes the backfill safe to run repeatedly after a naming-rule
+ * change.
+ */
+export async function renameDriveFile(fileId: string, name: string): Promise<boolean> {
+  const auth = getAuthClient();
+  const drive = google.drive({ version: "v3", auth });
+
+  const current = await drive.files.get({
+    fileId,
+    fields: "name",
+    supportsAllDrives: true,
+  });
+
+  if (current.data.name === name) return false;
+
+  await drive.files.update({
+    fileId,
+    requestBody: { name },
+    fields: "id,name",
+    supportsAllDrives: true,
+  });
+
+  return true;
 }
 
 /**

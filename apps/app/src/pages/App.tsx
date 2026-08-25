@@ -24,6 +24,7 @@ import SessionDetailPage from "./SessionDetailPage";
 import SessionsPage from "./SessionsPage";
 import AddSongPage from "./AddSongPage";
 import EventSubmissionsPage from "./EventSubmissionsPage";
+import OpenSubmissionsPage from "./OpenSubmissionsPage";
 import SongsPage from "./SongsPage";
 import FeedbackPage from "./FeedbackPage";
 
@@ -97,6 +98,16 @@ export default function App() {
               </RequireAuth>
             }
           />
+          {/* The Open has its own submission page. /event-submissions filters The
+              Open out of its event list and links here instead. */}
+          <Route
+            path="open-submissions"
+            element={
+              <RequireAuth>
+                <OpenSubmissionsPage />
+              </RequireAuth>
+            }
+          />
           <Route
             path="sessions"
             element={
@@ -108,22 +119,10 @@ export default function App() {
           {/* Session detail is public-readable; the page itself shows a
               sign-in CTA in place of the check-in form when signed out. */}
           <Route path="sessions/:id" element={<SessionDetailPage />} />
-          <Route
-            path="events"
-            element={
-              <RequireAuth>
-                <EventsPage />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="events/:id"
-            element={
-              <RequireAuth>
-                <EventDetailPage />
-              </RequireAuth>
-            }
-          />
+          {/* Events are public — the nav links here for signed-out visitors.
+              The detail page gates only its entity roster behind sign-in. */}
+          <Route path="events" element={<EventsPage />} />
+          <Route path="events/:id" element={<EventDetailPage />} />
 
           {/* Admin-required.
               /admin is split into one route per section so each admin

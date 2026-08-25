@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -21,6 +22,19 @@ vi.mock("@/api/client", () => ({
 
 vi.mock("sonner", () => ({
   toast: { error: vi.fn(), success: vi.fn() },
+}));
+
+// Clerk drives both the <SignedIn>/<SignedOut> wrappers around the entity
+// roster and the useAuth() flag that gates its fetch. One mutable flag keeps
+// the two in agreement, so a test that flips `signedIn` gets a consistent page.
+let signedIn = true;
+vi.mock("@clerk/clerk-react", () => ({
+  useAuth: () => ({ isSignedIn: signedIn }),
+  SignedIn: ({ children }: { children: React.ReactNode }) => (signedIn ? <>{children}</> : null),
+  SignedOut: ({ children }: { children: React.ReactNode }) => (signedIn ? null : <>{children}</>),
+  SignInButton: ({ children }: { children: React.ReactNode }) => (
+    <span data-testid="sign-in-button">{children}</span>
+  ),
 }));
 
 import EventDetailPage from "./EventDetailPage";
@@ -66,6 +80,18 @@ function makeSession(opts: {
   };
 }
 
+function makeEntity(opts: { key: string; label: string; songs?: number }) {
+  return {
+    entity_key: opts.key,
+    label: opts.label,
+    song_count: opts.songs ?? 1,
+  };
+}
+
+function makeDivision(division: string, entities: ReturnType<typeof makeEntity>[]) {
+  return { division, entities };
+}
+
 // ---------------------------------------------------------------------------
 // Render helper — provides the :id route param via Routes
 // ---------------------------------------------------------------------------
@@ -88,6 +114,7 @@ beforeEach(() => {
   vi.mocked(toast.error).mockClear();
   vi.mocked(toast.success).mockClear();
   apiGet.mockReset();
+  signedIn = true;
 });
 
 // ---------------------------------------------------------------------------
@@ -179,6 +206,47 @@ describe("EventDetailPage", () => {
     );
   });
 
+  it("lists only active and upcoming sessions, tallying the rest in the heading", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (!path.startsWith("/v1/sessions")) return Promise.resolve([]);
+      return Promise.resolve([
+        makeSession({ id: "s-live", status: "in_progress", startsAt: "2026-06-03T08:00:00" }),
+        makeSession({ id: "s-next", status: "scheduled", startsAt: "2026-06-04T08:00:00" }),
+        makeSession({ id: "s-done", status: "completed", startsAt: "2026-06-02T08:00:00" }),
+      ]);
+    });
+    renderPage();
+
+    await waitFor(() => {
+      const hrefs = screen.getAllByRole("link").map((l) => l.getAttribute("href"));
+      expect(hrefs).toContain("/sessions/s-live");
+    });
+    const hrefs = screen.getAllByRole("link").map((l) => l.getAttribute("href"));
+    expect(hrefs).toContain("/sessions/s-next");
+    // Completed sessions are not cards anyone can act on...
+    expect(hrefs).not.toContain("/sessions/s-done");
+    // ...but the heading still accounts for them.
+    expect(
+      screen.getByRole("heading", { name: /sessions\s+1 active · 1 upcoming · 1 completed/i })
+    ).toBeInTheDocument();
+  });
+
+  it("distinguishes an event with no sessions from one whose sessions are all done", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (!path.startsWith("/v1/sessions")) return Promise.resolve([]);
+      return Promise.resolve([
+        makeSession({ id: "s-done", status: "completed", startsAt: "2026-06-02T08:00:00" }),
+      ]);
+    });
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByText(/no upcoming sessions for this event/i)).toBeInTheDocument()
+    );
+  });
+
   it("shows 'No sessions for this event.' when sessions list is empty", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
@@ -194,6 +262,7 @@ describe("EventDetailPage", () => {
   it("renders session cards as links to /sessions/:id", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (!path.startsWith("/v1/sessions")) return Promise.resolve([]);
       return Promise.resolve([
         makeSession({ id: "sess-abc", startsAt: "2026-06-03T08:00:00" }),
       ]);
@@ -209,6 +278,7 @@ describe("EventDetailPage", () => {
   it("renders multiple session cards", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (!path.startsWith("/v1/sessions")) return Promise.resolve([]);
       return Promise.resolve([
         makeSession({ id: "s1", startsAt: "2026-06-03T08:00:00" }),
         makeSession({ id: "s2", startsAt: "2026-06-04T08:00:00" }),
@@ -229,6 +299,7 @@ describe("EventDetailPage", () => {
   it("shows session status badges on session cards", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (!path.startsWith("/v1/sessions")) return Promise.resolve([]);
       return Promise.resolve([
         makeSession({ id: "s1", status: "checkin_open", startsAt: "2026-06-03T08:00:00" }),
       ]);
@@ -244,6 +315,7 @@ describe("EventDetailPage", () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events/ev-1")
         return Promise.resolve(makeEvent({ timezone: "America/Chicago" }));
+      if (!path.startsWith("/v1/sessions")) return Promise.resolve([]);
       return Promise.resolve([
         makeSession({ id: "s1", startsAt: "2026-06-03T08:00:00" }),
       ]);
@@ -294,5 +366,179 @@ describe("EventDetailPage", () => {
     await waitFor(() =>
       expect(apiGet).toHaveBeenCalledWith(expect.stringContaining("event_id=ev-1"))
     );
+  });
+});
+
+describe("EventDetailPage — entered entities", () => {
+  it("groups entities under a heading per division", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (path === "/v1/events/ev-1/entities") {
+        return Promise.resolve([
+          makeDivision("Classic", [
+            makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz", songs: 2 }),
+            makeEntity({ key: "us:u2", label: "Sam Lee", songs: 1 }),
+          ]),
+          makeDivision("Teams", [makeEntity({ key: "pt:p9", label: "team2026", songs: 1 })]),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Classic")).toBeInTheDocument());
+    expect(screen.getByText("Teams")).toBeInTheDocument();
+    expect(screen.getByText("Alex Kim & Jo Ruiz")).toBeInTheDocument();
+    expect(screen.getByText("Sam Lee")).toBeInTheDocument();
+    expect(screen.getByText("team2026")).toBeInTheDocument();
+  });
+
+  it("collapses an entity's songs into a count instead of listing them", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (path === "/v1/events/ev-1/entities") {
+        return Promise.resolve([
+          makeDivision("Classic", [
+            makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz", songs: 2 }),
+            makeEntity({ key: "us:u2", label: "Sam Lee", songs: 1 }),
+          ]),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("2 songs")).toBeInTheDocument());
+    // Singular for one, so the row never reads "1 songs".
+    expect(screen.getByText("1 song")).toBeInTheDocument();
+  });
+
+  it("counts distinct entities in the heading but sums their songs", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (path === "/v1/events/ev-1/entities") {
+        // The same couple entered in two divisions is two rows but one entry —
+        // and their songs from both divisions still both count as songs.
+        return Promise.resolve([
+          makeDivision("Classic", [
+            makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz", songs: 2 }),
+          ]),
+          makeDivision("Masters", [
+            makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz", songs: 1 }),
+          ]),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: /entered\s+1 entry · 3 songs/i })
+      ).toBeInTheDocument()
+    );
+  });
+
+  it("shows entry and song counts on each division header", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (path === "/v1/events/ev-1/entities") {
+        return Promise.resolve([
+          makeDivision("Classic", [
+            makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz", songs: 2 }),
+          ]),
+          makeDivision("Teams", [
+            makeEntity({ key: "pt:p9", label: "team2026", songs: 1 }),
+            makeEntity({ key: "us:u2", label: "Sam Lee", songs: 1 }),
+          ]),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    // One couple with two Classic songs: the counts differ, which is the whole
+    // reason both are printed.
+    await waitFor(() => expect(screen.getByText("1 entry · 2 songs")).toBeInTheDocument());
+    expect(screen.getByText("2 entries · 2 songs")).toBeInTheDocument();
+  });
+
+  it("hides a division's rows when its header is collapsed", async () => {
+    const user = userEvent.setup();
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (path === "/v1/events/ev-1/entities") {
+        return Promise.resolve([
+          makeDivision("Classic", [makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz" })]),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Alex Kim & Jo Ruiz")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { expanded: true }));
+    expect(screen.queryByText("Alex Kim & Jo Ruiz")).toBeNull();
+    // The header itself stays, so the section can be reopened.
+    expect(screen.getByText("Classic")).toBeInTheDocument();
+  });
+
+  it("never renders song identity for an entity", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (path === "/v1/events/ev-1/entities") {
+        return Promise.resolve([
+          makeDivision("Classic", [
+            makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz", songs: 3 }),
+          ]),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Alex Kim & Jo Ruiz")).toBeInTheDocument());
+    // The roster deliberately carries no song fields — nothing on the page
+    // should look like a title, routine name, filename or version suffix.
+    // "3 songs" is the count, which is the whole point, so it is not a leak.
+    expect(screen.queryByText(/\.mp3|\.wav|\.m4a|routine|\bv\d{2}\b/i)).toBeNull();
+    expect(screen.getByText("3 songs")).toBeInTheDocument();
+  });
+
+  it("shows an empty state when nothing has been submitted", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByText(/no music submitted for this event yet/i)).toBeInTheDocument()
+    );
+  });
+
+  it("shows a sign-in CTA and skips the fetch when signed out", async () => {
+    signedIn = false;
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    await waitFor(() => expect(screen.getByTestId("sign-in-button")).toBeInTheDocument());
+    expect(apiGet).not.toHaveBeenCalledWith("/v1/events/ev-1/entities");
+  });
+
+  it("surfaces a toast when the entity fetch fails", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (path === "/v1/events/ev-1/entities") {
+        return Promise.reject(new Error("Entities unavailable"));
+      }
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Entities unavailable"));
   });
 });

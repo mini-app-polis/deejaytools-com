@@ -1,7 +1,9 @@
 import { createLogger } from "common-typescript-utils";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import * as Sentry from "@sentry/node";
 import * as schema from "../db/schema.js";
 import { fillRunningSessions, tickSessionStatuses } from "./cron.js";
+import { processDriveJobs } from "./driveJobs.js";
 
 type Db = PostgresJsDatabase<typeof schema>;
 
@@ -10,17 +12,33 @@ const logger = createLogger("deejaytools-api");
 export const DEFAULT_TICK_INTERVAL_MS = 30_000;
 
 /**
- * One scheduler pass: advance session statuses, then auto-fill the active
- * queue of every running floor trial. Shared by the in-process loop and the
- * manual /internal/tick endpoint so both do exactly the same work.
- * Swallows its own errors so a single bad pass never stops the loop.
+ * One scheduler pass: advance session statuses, auto-fill the active queue of
+ * every running floor trial, then drain queued Drive work. Shared by the
+ * in-process loop and the manual /internal/tick endpoint so both do exactly
+ * the same work. Swallows its own errors so a single bad pass never stops the
+ * loop.
  */
 export async function runTick(database: Db): Promise<void> {
+  // Session work and Drive work fail independently, so they get independent
+  // try blocks. Sharing one meant a persistent failure in the session steps
+  // silently stopped the Drive queue draining — every submission uncopied,
+  // with only a generic tick_failed log to show for it.
   try {
     await tickSessionStatuses(database);
     await fillRunningSessions(database);
   } catch (err) {
     logger.error({ event: "tick_failed", category: "infra", error: err });
+  }
+
+  try {
+    await processDriveJobs(database);
+  } catch (err) {
+    logger.error({ event: "drive_jobs_tick_failed", category: "infra", error: err });
+    Sentry.withScope((scope) => {
+      scope.setLevel("error");
+      scope.setTag("subsystem", "drive_jobs");
+      Sentry.captureException(err instanceof Error ? err : new Error(String(err)));
+    });
   }
 }
 

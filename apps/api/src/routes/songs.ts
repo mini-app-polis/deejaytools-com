@@ -1,6 +1,7 @@
 import { File } from "node:buffer";
 import { mkdir, writeFile, readdir, readFile, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
+import * as Sentry from "@sentry/node";
 import { CommonErrors, createLogger, error, success, successList } from "common-typescript-utils";
 import { zValidator } from "../lib/validate.js";
 import { Hono } from "hono";
@@ -8,8 +9,11 @@ import { z } from "zod";
 import { and, desc, eq, isNull, ne, notInArray, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { checkins, eventSongSubmissions, managedPartnerships, partners, queueEntries, sessions, songs, teams, users } from "../db/schema.js";
+import { isFollowerAmDivision } from "@deejaytools/schemas";
+import { seasonYearFromTimestamp } from "../lib/seasonYear.js";
 import { requireAuth } from "../middleware/auth.js";
 import { shareDriveFileWithUsers, softDeleteOnDrive, uploadSongToDrive } from "../services/drive.js";
+import { enqueueDriveJob } from "../services/driveJobs.js";
 import { tagSongBytes } from "../services/tagger.js";
 import { detectAudioFormat } from "../services/audioFormat.js";
 
@@ -108,15 +112,6 @@ function splitNameAndExtension(filename: string): { base: string; ext: string } 
   };
 }
 
-
-/** Calendar months 11–12 (Nov–Dec) map to the next calendar year’s season label. */
-function seasonYearFromTimestamp(ms: number): string {
-  const d = new Date(ms);
-  const calMonth = d.getMonth() + 1;
-  const year = d.getFullYear();
-  const seasonYear = calMonth >= 11 ? year + 1 : year;
-  return String(seasonYear);
-}
 
 function computedSongDisplayName(row: typeof songs.$inferSelect): string | null {
   const d = row.displayName?.trim();
@@ -271,9 +266,13 @@ async function buildAndUploadSong(
     followerName = partnerName ?? "";
   }
 
-  const partnershipSegment = followerName
-    ? `${sanitizeSegment(leaderName)}_${sanitizeSegment(followerName)}`
-    : sanitizeSegment(leaderName);
+  const swapForProAm = followerName != null && isFollowerAmDivision(song.division);
+  const entityFirst: string = swapForProAm ? followerName! : leaderName;
+  const entitySecond = swapForProAm ? leaderName : followerName;
+
+  const partnershipSegment = entitySecond
+    ? `${sanitizeSegment(entityFirst)}_${sanitizeSegment(entitySecond)}`
+    : sanitizeSegment(entityFirst);
 
   const originalParts = splitNameAndExtension(originalName);
   const pathSegments = [
@@ -291,10 +290,24 @@ async function buildAndUploadSong(
   const extSegment = originalParts.ext.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
   const processedFilename = extSegment ? `${versionedStem}.${extSegment}` : versionedStem;
 
-  const newTitle = followerName ? `${leaderName} & ${followerName}` : leaderName;
-  const newArtist = [song.division, seasonYearStr, song.routineName].filter(Boolean).join(" - ");
+  // Same order as the filename so a DJ reading the player and the folder
+  // listing sees one consistent entity.
+  const newTitle = entitySecond ? `${entityFirst} & ${entitySecond}` : entityFirst;
+  // Season year is no longer in the artist string — it goes to the native year
+  // tag below, where DJ software can sort and filter on it.
+  //
+  // "|" rather than "-": routine names and division names contain hyphens
+  // ("Rising Star Classic", "Pro-Am"), so a hyphen separator is ambiguous when
+  // read back or split. "|" appears in none of the source fields.
+  const newArtist = [song.division, song.routineName].filter(Boolean).join(" | ");
 
-  const taggedBytes = await tagSongBytes({ bytes: inputBytes, newTitle, newArtist, mimeType });
+  const taggedBytes = await tagSongBytes({
+    bytes: inputBytes,
+    newTitle,
+    newArtist,
+    newYear: seasonYearStr,
+    mimeType,
+  });
 
   const uploadResult = await uploadSongToDrive(taggedBytes, {
     filename: processedFilename,
@@ -653,9 +666,21 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
   }
 
   // Soft-delete: stamp deleted_at, keep the row for historical FK references
+  let orphanedCopyIds: string[] = [];
   try {
     await db.transaction(async (tx) => {
-      // A removed song must not linger in any event — drop its submission references.
+      // A removed song must not linger in any event — drop its submission
+      // references. Capture the per-event Drive copies first: once these rows
+      // are gone the file ids are unrecoverable and the copies would sit in
+      // the event folders forever with nothing pointing at them.
+      const copies = await tx
+        .select({ driveCopyFileId: eventSongSubmissions.driveCopyFileId })
+        .from(eventSongSubmissions)
+        .where(eq(eventSongSubmissions.songId, id));
+      orphanedCopyIds = copies
+        .map((r) => r.driveCopyFileId)
+        .filter((v): v is string => v !== null);
+
       await tx.delete(eventSongSubmissions).where(eq(eventSongSubmissions.songId, id));
       // Soft-delete the song itself (row kept for historical run/check-in FK references).
       await tx
@@ -671,6 +696,29 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
       error: err,
     });
     return c.json(CommonErrors.internalError("Failed to delete song"), 500);
+  }
+
+  // Best-effort, matching the Drive soft-delete above: the DB state is what
+  // controls the app, and a failed enqueue is reported rather than surfaced
+  // to the user mid-delete.
+  for (const fileId of orphanedCopyIds) {
+    try {
+      await enqueueDriveJob(db, { kind: "trash", fileId });
+    } catch (err) {
+      logger.error({
+        event: "drive_trash_enqueue_failed",
+        category: "api",
+        context: { songId: id, userId, driveFileId: fileId, source: "song_delete" },
+        error: err,
+      });
+      Sentry.withScope((scope) => {
+        scope.setLevel("error");
+        scope.setTag("subsystem", "drive_jobs");
+        scope.setTag("drive_job_kind", "trash");
+        scope.setContext("drive_job", { file_id: fileId, stage: "enqueue", source: "song_delete" });
+        Sentry.captureException(err instanceof Error ? err : new Error(String(err)));
+      });
+    }
   }
 
   return c.body(null, 204);

@@ -11,6 +11,7 @@ import pkg from "../../../../package.json";
 type NavItem = { to: string; label: string };
 
 const PUBLIC_ITEMS: NavItem[] = [
+  { to: "/events", label: "Events" },
   { to: "/floor-trials", label: "Floor Trials" },
 ];
 

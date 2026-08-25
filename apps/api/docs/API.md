@@ -329,7 +329,7 @@ const ianaTimezone = z
 
 ### GET /v1/events/:id
 
-**Auth:** requireAuth
+**Auth:** public
 
 **Purpose:** Fetch one event by id.
 
@@ -346,6 +346,67 @@ const ianaTimezone = z
 | Status | Code | Message | Trigger |
 |--------|------|---------|---------|
 | 404 | `NOT_FOUND` | Event not found | Unknown id |
+
+---
+
+### GET /v1/events/:id/entities
+
+**Auth:** requireAuth
+
+**Purpose:** List the competing entities that have at least one song submitted to
+this event, grouped by division — the read behind the "Entered" section of the
+event page.
+
+Unlike the event itself this is **not public**: who is entered is
+competitor-visible information. The response carries **no song identity** — no
+title, routine name, filename or song id — by design. Multiple songs from the
+same entity in the same division collapse into `song_count`.
+
+Entities are grouped by `songEntityKey` (managed partnership → partner →
+solo owner). A division comes from the submission's per-event override when set,
+otherwise from the song; submissions with neither fall into `"Unspecified"`.
+
+**Path params:** `id` — event UUID
+
+**Query params / Request body:** none
+
+**Response:**
+
+```json
+{
+  "data": [
+    {
+      "division": "Classic",
+      "entities": [
+        { "entity_key": "pt:…", "label": "Alex Kim & Jo Ruiz", "song_count": 2 },
+        { "entity_key": "us:…", "label": "Sam Lee", "song_count": 1 }
+      ]
+    },
+    {
+      "division": "Teams",
+      "entities": [{ "entity_key": "pt:…", "label": "team2026", "song_count": 1 }]
+    }
+  ],
+  "meta": { "version": "…", "count": 2 }
+}
+```
+
+`entity_key` is prefixed by source table (`mp:` managed partnership, `pt:`
+partner, `us:` solo user) so ids from different tables can never collide.
+Divisions are in `DIVISIONS` display order, with unknown names and
+`"Unspecified"` last; entities within a division sort by `label`.
+
+An entity entered in two divisions appears once in each — the same competitor,
+two rows. Callers wanting a headcount should count distinct `entity_key`s rather
+than summing group sizes.
+
+**Errors:**
+
+| Status | Code | Message | Trigger |
+|--------|------|---------|---------|
+| 401 | `UNAUTHORIZED` | … | Missing/invalid token |
+| 404 | `NOT_FOUND` | Event not found | Unknown id |
+| 500 | `INTERNAL` | … | Query failed |
 
 ---
 

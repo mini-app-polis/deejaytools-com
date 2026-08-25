@@ -156,6 +156,12 @@ export const events = pgTable(
     /** IANA timezone identifier, e.g. "America/Chicago". All session timestamps
      *  for this event are interpreted and displayed in this timezone. */
     timezone: text("timezone").notNull().default("America/Chicago"),
+    /**
+     * Competitive season this event belongs to. Defaulted from start_date on
+     * create (seasons roll over October 1) and overridable by an admin —
+     * editing start_date later does NOT recompute it.
+     */
+    seasonYear: text("season_year"),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
@@ -178,6 +184,12 @@ export const eventSongSubmissions = pgTable(
     submittedByUserId: text("submitted_by_user_id")
       .notNull()
       .references(() => users.id),
+    /** Division for this submission. Null = fall back to the song's division. */
+    division: text("division"),
+    /** 'prelims_and_finals' | 'prelims_only' | 'finals_only'. Null = prelims_and_finals. */
+    round: text("round"),
+    /** Drive id of the per-event copy. Null until the queued copy job runs. */
+    driveCopyFileId: text("drive_copy_file_id"),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
   },
   (t) => ({
@@ -399,5 +411,38 @@ export const eventDivisionRunLimits = pgTable(
   },
   (t) => ({
     pk: uniqueIndex("uq_event_division_run_limits_pk").on(t.eventId, t.divisionName),
+  })
+);
+
+/**
+ * Durable work queue for Google Drive side effects, drained by the in-process
+ * scheduler (services/scheduler.ts). Drive calls are slow and fail
+ * independently of our DB, so they never run inside a request — the request
+ * enqueues, the tick executes with backoff.
+ *
+ *   kind='copy'  — copy a submission's song into its event folder
+ *   kind='trash' — move a copy to _deprecated (submission was removed)
+ */
+export const driveJobs = pgTable(
+  "drive_jobs",
+  {
+    id: text("id").primaryKey(),
+    /** 'copy' | 'trash' */
+    kind: text("kind").notNull(),
+    /** Set for kind='copy'. Not a FK: the job outlives a deleted submission. */
+    submissionId: text("submission_id"),
+    /** Set for kind='trash' — the Drive file to deprecate. */
+    fileId: text("file_id"),
+    /** 'pending' | 'running' | 'done' | 'failed' */
+    status: text("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: bigint("next_attempt_at", { mode: "number" }).notNull(),
+    lastError: text("last_error"),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+  },
+  (t) => ({
+    dueIdx: index("idx_drive_jobs_due").on(t.status, t.nextAttemptAt),
+    submissionIdx: index("idx_drive_jobs_submission_id").on(t.submissionId),
   })
 );

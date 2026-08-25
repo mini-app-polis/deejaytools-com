@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as Sentry from "@sentry/node";
 import { app } from "../app.js";
 import {
   assertErrorEnvelope,
@@ -12,6 +13,10 @@ import {
 } from "../test/helpers.js";
 import { enqueueSelectResult, mockDb, resetSelectQueue } from "../test/mocks.js";
 
+const { enqueueDriveJob } = vi.hoisted(() => ({
+  enqueueDriveJob: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../db/index.js", async () => {
   const { mockDb: db } = await import("../test/mocks.js");
   return { db };
@@ -23,6 +28,15 @@ vi.mock("../middleware/auth.js", async () => {
     requireAdmin: mockRequireAdmin(),
   };
 });
+vi.mock("@sentry/node", () => ({
+  withScope: vi.fn((fn: (scope: unknown) => void) =>
+    fn({ setLevel: vi.fn(), setTag: vi.fn(), setContext: vi.fn() })
+  ),
+  captureException: vi.fn(),
+}));
+vi.mock("../services/driveJobs.js", () => ({
+  enqueueDriveJob,
+}));
 
 const BASE = "/v1/managed-partnerships";
 
@@ -221,9 +235,16 @@ describe("DELETE /v1/managed-partnerships/:id", () => {
 
   beforeEach(() => {
     resetSelectQueue();
+    enqueueDriveJob.mockClear();
+    vi.mocked(Sentry.captureException).mockClear();
     vi.mocked(mockDb.delete).mockClear();
     vi.mocked(mockDb.update).mockClear();
     vi.mocked(mockDb.transaction).mockClear();
+    vi.mocked(mockDb.select).mockImplementation(() => mockDb);
+    vi.mocked(mockDb.delete).mockImplementation(() => ({
+      where: vi.fn().mockResolvedValue(undefined),
+    }));
+    vi.mocked(mockDb.transaction).mockImplementation((fn) => fn(mockDb));
   });
 
   it("returns 404 when the managed partnership is not owned or found", async () => {
@@ -287,5 +308,98 @@ describe("DELETE /v1/managed-partnerships/:id", () => {
     expect(mockDb.transaction).toHaveBeenCalledTimes(1);
     expect(mockDb.delete).toHaveBeenCalledTimes(1);
     expect(mockDb.update).toHaveBeenCalledTimes(2);
+  });
+
+  it("enqueues trash jobs for copies across partnership songs", async () => {
+    enqueueSelectResult([existing]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([{ id: "song_1" }, { id: "song_2" }]);
+    enqueueSelectResult([
+      { driveCopyFileId: "copy_1" },
+      { driveCopyFileId: "copy_2" },
+    ]);
+
+    const res = await app.request(`${BASE}/mp_1`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+
+    expect(res.status).toBe(204);
+    expect(enqueueDriveJob).toHaveBeenCalledTimes(2);
+    expect(enqueueDriveJob).toHaveBeenCalledWith(expect.anything(), {
+      kind: "trash",
+      fileId: "copy_1",
+    });
+    expect(enqueueDriveJob).toHaveBeenCalledWith(expect.anything(), {
+      kind: "trash",
+      fileId: "copy_2",
+    });
+  });
+
+  it("does not enqueue trash jobs when copies are missing", async () => {
+    enqueueSelectResult([existing]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([{ id: "song_1" }]);
+    enqueueSelectResult([{ driveCopyFileId: null }]);
+
+    const res = await app.request(`${BASE}/mp_1`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+
+    expect(res.status).toBe(204);
+    expect(enqueueDriveJob).not.toHaveBeenCalled();
+  });
+
+  it("returns 204 when enqueueDriveJob rejects", async () => {
+    enqueueSelectResult([existing]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([{ id: "song_1" }]);
+    enqueueSelectResult([{ driveCopyFileId: "copy_1" }]);
+    enqueueDriveJob.mockRejectedValueOnce(new Error("queue down"));
+
+    const res = await app.request(`${BASE}/mp_1`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+
+    expect(res.status).toBe(204);
+    expect(enqueueDriveJob).toHaveBeenCalledTimes(1);
+    expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+  });
+
+  it("selects copy ids before deleting submission rows", async () => {
+    enqueueSelectResult([existing]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([{ id: "song_1" }]);
+    enqueueSelectResult([{ driveCopyFileId: "copy_1" }]);
+
+    const txCallOrder: string[] = [];
+    let inTx = false;
+    vi.mocked(mockDb.transaction).mockImplementationOnce(async (fn) => {
+      inTx = true;
+      try {
+        await fn(mockDb);
+      } finally {
+        inTx = false;
+      }
+    });
+    vi.mocked(mockDb.select).mockImplementation(() => {
+      if (inTx) txCallOrder.push("select");
+      return mockDb;
+    });
+    vi.mocked(mockDb.delete).mockImplementation(() => {
+      if (inTx) txCallOrder.push("delete");
+      return { where: vi.fn().mockResolvedValue(undefined) };
+    });
+
+    const res = await app.request(`${BASE}/mp_1`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+
+    expect(res.status).toBe(204);
+    expect(txCallOrder.indexOf("select")).toBeGreaterThanOrEqual(0);
+    expect(txCallOrder.indexOf("delete")).toBeGreaterThan(txCallOrder.indexOf("select"));
   });
 });

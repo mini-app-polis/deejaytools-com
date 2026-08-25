@@ -62,6 +62,9 @@ describe("NavBar — signed out", () => {
 
     expect(screen.getAllByRole("link", { name: /floor trials/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /^help$/i }).length).toBeGreaterThan(0);
+    // Events is public — signed-out visitors get the listing from the nav.
+    const eventsLinks = screen.getAllByRole("link", { name: /^events$/i });
+    expect(eventsLinks.some((link) => link.getAttribute("href") === "/events")).toBe(true);
     // Sign in CTA renders.
     expect(screen.getByTestId("sign-in-button")).toBeInTheDocument();
     // Authenticated-only items must not appear.
@@ -105,7 +108,13 @@ describe("NavBar — signed in (admin)", () => {
     expect(screen.queryByRole("button", { name: /^admin$/i })).toBeNull();
     expect(screen.getByText("Superuser")).toBeInTheDocument();
     expect(screen.getByText("Manager")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /^events$/i })).toBeInTheDocument();
+    // Both an "Events" link exist for an admin — the public listing and the
+    // Superuser section — so assert by href rather than by accessible name.
+    const adminEventsLinks = screen.getAllByRole("link", { name: /^events$/i });
+    expect(adminEventsLinks.some((link) => link.getAttribute("href") === "/admin/events")).toBe(
+      true
+    );
+    expect(adminEventsLinks.some((link) => link.getAttribute("href") === "/events")).toBe(true);
     expect(screen.getByRole("link", { name: /^test checkin$/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^active sessions$/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^checkin for$/i })).toBeInTheDocument();
@@ -126,7 +135,9 @@ describe("NavBar — signed in (manager only)", () => {
     expect(screen.getByRole("link", { name: /^upload for$/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^checkin for$/i })).toBeInTheDocument();
     expect(screen.queryByText("Superuser")).toBeNull();
-    expect(screen.queryByRole("link", { name: /^events$/i })).toBeNull();
+    // The public /events link still renders; only the Superuser section is gone.
+    const eventsLinks = screen.queryAllByRole("link", { name: /^events$/i });
+    expect(eventsLinks.some((link) => link.getAttribute("href") === "/admin/events")).toBe(false);
   });
 });
 

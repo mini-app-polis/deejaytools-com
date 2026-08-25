@@ -5,32 +5,109 @@ import { z } from "zod";
 // ---------------------------------------------------------------------------
 
 /**
- * Master list of competition divisions. This is the single source of truth
- * used across the admin panel, the upload form, and any future consumers.
- * "My Division Is Not Listed" is a UI-only escape hatch — it is not included
- * here so consumers that need it can append it themselves.
+ * Divisions in display order, grouped by how competitors think about them.
+ *
+ * This is the source of truth for both order and grouping — DIVISIONS is
+ * derived from it, so a division added to a group automatically appears in
+ * every list and the two can never disagree.
+ *
+ * Pills render one row per group. Dropdowns and checkbox lists use the flat
+ * DIVISIONS order and ignore the grouping.
  */
-export const DIVISIONS = [
-  "Classic",
-  "Showcase",
-  "Rising Star Classic",
-  "Rising Star Showcase",
-  "Sophisticated",
-  "Masters",
-  "Teams",
-  "ProAm LeaderAm",
-  "ProAm FollowerAm",
-  "NovInt Routines",
-  "Juniors",
-  "Young Adult",
-  "Exhibition",
-  "Superstar",
-  "Cabaret",
-  "Carolina Shag Divisions",
-  "My Division Is Not Listed",
+export const DIVISION_GROUPS = [
+  ["Classic", "Showcase", "Rising Star Classic", "Rising Star Showcase"],
+  ["ProAm LeaderAm", "ProAm FollowerAm", "NovInt Routines"],
+  ["Sophisticated", "Masters", "Juniors", "Young Adult"],
+  ["Exhibition", "Superstar"],
+  ["Carolina Shag Divisions"],
+  ["Teams", "Cabaret"],
+  ["My Division Is Not Listed"],
 ] as const;
 
-export type Division = (typeof DIVISIONS)[number];
+export type Division = (typeof DIVISION_GROUPS)[number][number];
+
+export const DIVISIONS: readonly Division[] = DIVISION_GROUPS.flat();
+
+/**
+ * Divisions where the entity is ordered amateur-first rather than
+ * leader-first, because the pairing is a pro with an amateur and the amateur
+ * is the competitor being scored.
+ *
+ * "ProAm LeaderAm" needs no reordering — the leader IS the amateur, so the
+ * default leader-first order is already amateur-first. Only "ProAm FollowerAm"
+ * inverts.
+ */
+export function isFollowerAmDivision(division: string | null | undefined): boolean {
+  return division?.trim() === "ProAm FollowerAm";
+}
+
+/**
+ * Stable identifier for the competing entity a song belongs to.
+ *
+ * Precedence mirrors how the entity is built for filenames: a managed
+ * partnership names itself, otherwise the partner record defines the pairing,
+ * otherwise the song is a solo entry owned by the uploader.
+ *
+ * Prefixed by source table so ids from different tables can never collide —
+ * without the prefix a partner id equal to a user id would silently merge two
+ * unrelated entities.
+ *
+ * Keyed by id rather than by resolved name: two partner records describing the
+ * same real-world couple are treated as different entities. That is deliberate
+ * — matching on names breaks on spelling variants, middle names and typos.
+ */
+export function songEntityKey(song: {
+  userId: string;
+  partnerId?: string | null;
+  managedPartnershipId?: string | null;
+}): string {
+  if (song.managedPartnershipId) return `mp:${song.managedPartnershipId}`;
+  if (song.partnerId) return `pt:${song.partnerId}`;
+  return `us:${song.userId}`;
+}
+
+/**
+ * Key for the one-song-per-entity-per-division slot within an event.
+ *
+ * A null division groups all of an entity's division-less songs into a single
+ * slot. That is intentional: an entry with no division stated is still one
+ * entry.
+ */
+export function entitySlotKey(entityKey: string, division: string | null | undefined): string {
+  return `${entityKey}::${division?.trim() ?? ""}`;
+}
+
+export const SUBMISSION_ROUNDS = ["prelims_and_finals", "prelims_only", "finals_only"] as const;
+export type SubmissionRound = (typeof SUBMISSION_ROUNDS)[number];
+
+/** The only division where a prelims/finals split is offered. */
+export const ROUND_SPLIT_DIVISION = "Classic";
+
+/**
+ * Rounds a submission occupies. A song entered for both rounds fills both
+ * slots, so nothing else can be added for that entity and division.
+ */
+export function roundsOccupied(round: SubmissionRound): readonly ("prelims" | "finals")[] {
+  switch (round) {
+    case "prelims_only":
+      return ["prelims"];
+    case "finals_only":
+      return ["finals"];
+    case "prelims_and_finals":
+      return ["prelims", "finals"];
+  }
+}
+
+/**
+ * Can two submissions for the same entity and division coexist?
+ *
+ * Only when their occupied rounds are disjoint — in practice a
+ * prelims_only paired with a finals_only. Every other combination overlaps.
+ */
+export function roundsConflict(a: SubmissionRound, b: SubmissionRound): boolean {
+  const bOccupied = new Set(roundsOccupied(b));
+  return roundsOccupied(a).some((r) => bOccupied.has(r));
+}
 
 export const SessionStatusSchema = z.enum([
   "scheduled",
@@ -74,12 +151,50 @@ export type PartnerRole = z.infer<typeof PartnerRoleSchema>;
 // validation in contract tests.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// "The Open" — dedicated submission path
+// ---------------------------------------------------------------------------
+
+/** Display name used in copy that points people at the dedicated Open page. */
+export const OPEN_EVENT_LABEL = "The Open";
+
+/**
+ * Does this event name refer to "The Open"?
+ *
+ * The Open never accepts songs through the generic event-submissions page —
+ * it routes to its own dedicated submission page instead, and its submissions
+ * take a distinct Drive filename convention. Every consumer that needs to make
+ * that distinction goes through this one predicate, so the rule lives in
+ * exactly one place.
+ *
+ * The name is lowercased and stripped of everything that is not a letter or
+ * digit, then must START WITH "theopen". That covers "The Open", "theopen",
+ * "THE OPEN 2026", "The-Open", and "The Open - Swing Dance Championships".
+ *
+ * Two deliberate choices:
+ *
+ * - A bare leading "Open" does NOT match. It used to, which meant an unrelated
+ *   "Open Practice Night" was rerouted to the Open submission page.
+ * - startsWith, not includes. Normalization removes spaces, so `includes`
+ *   matches across word boundaries — "Breathe Open Air" becomes
+ *   "breatheopenair", which contains "theopen".
+ *
+ * Cost of this being strict: a name that leads with something else, like
+ * "2026 The Open", will not match. Rename the event or widen this predicate.
+ */
+export function isOpenEvent(eventName: string | null | undefined): boolean {
+  if (!eventName) return false;
+  const normalized = eventName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return normalized.startsWith("theopen");
+}
+
 export const ApiEventSchema = z.object({
   id: z.string(),
   name: z.string(),
   start_date: z.string(),
   end_date: z.string(),
   timezone: z.string(),
+  season_year: z.string(),
   status: z.string(),
   created_by: z.string(),
   created_at: z.number(),
@@ -363,7 +478,9 @@ export const ApiEventSongSubmissionSchema = z.object({
   event_status: z.string(),
   song_id: z.string(),
   song_label: z.string(),
+  /** Effective division for this submission (stored override or the song's). */
   division: z.string().nullable(),
+  round: z.enum(SUBMISSION_ROUNDS),
   created_at: z.number(),
 });
 export type ApiEventSongSubmission = z.infer<typeof ApiEventSongSubmissionSchema>;
@@ -371,6 +488,15 @@ export type ApiEventSongSubmission = z.infer<typeof ApiEventSongSubmissionSchema
 export const createEventSongSubmissionBodySchema = z.object({
   event_id: z.string().min(1),
   song_id: z.string().min(1),
+  /**
+   * Overrides the song's own division for this event only. Defaults to the
+   * song's. Constrained to the known list: an arbitrary string here would
+   * bypass the one-song-per-division rule (a differently-cased or
+   * whitespace-padded value compares unequal) and create a stray Drive folder.
+   */
+  division: z.enum(DIVISIONS as unknown as [Division, ...Division[]]).optional(),
+  /** Classic on The Open only; rejected elsewhere. Defaults to prelims_and_finals. */
+  round: z.enum(SUBMISSION_ROUNDS).optional(),
 });
 
 /**
@@ -389,3 +515,28 @@ export const ApiAdminEventSongSubmissionSchema = z.object({
   created_at: z.number(),
 });
 export type ApiAdminEventSongSubmission = z.infer<typeof ApiAdminEventSongSubmissionSchema>;
+
+/**
+ * One competing entity entered in one division of an event.
+ *
+ * Deliberately carries no song identity — no title, filename, routine name or
+ * song id. Multiple songs from the same entity in the same division collapse
+ * into `song_count`: the event page shows who is entered and how much, never
+ * what they are dancing to.
+ */
+export const ApiEventEntitySchema = z.object({
+  /** Stable per-entity key from `songEntityKey` — `mp:` / `pt:` / `us:` prefixed. */
+  entity_key: z.string(),
+  label: z.string(),
+  /** Songs this entity has submitted in this division. Always ≥ 1. */
+  song_count: z.number(),
+});
+export type ApiEventEntity = z.infer<typeof ApiEventEntitySchema>;
+
+/** Entities entered in one division of an event, sorted by label. */
+export const ApiEventDivisionEntitiesSchema = z.object({
+  /** Effective division name, or "Unspecified" when neither song nor submission set one. */
+  division: z.string(),
+  entities: z.array(ApiEventEntitySchema),
+});
+export type ApiEventDivisionEntities = z.infer<typeof ApiEventDivisionEntitiesSchema>;
