@@ -1,3 +1,10 @@
+## [2.0.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.0.0...v2.0.1) (2026-08-26)
+
+
+### Bug Fixes
+
+* **app:** correct session start time conversion across calendar days ([081d706](https://github.com/mini-app-polis/deejaytools-com/commit/081d706f0eac7a48db0326804aedd701df964877))
+
 # [2.0.0](https://github.com/mini-app-polis/deejaytools-com/compare/v1.58.0...v2.0.0) (2026-08-25)
 
 
