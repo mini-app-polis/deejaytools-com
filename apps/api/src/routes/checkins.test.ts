@@ -340,7 +340,7 @@ describe("POST /v1/checkins", () => {
     expect(body.data.initialQueue).toBe("non_priority");
   });
 
-  it("returns 400 for solo check-in for someone else", async () => {
+  it("returns 400 for a partnerless song without an attachable entity", async () => {
     enqueueSelectResult([openSession]);
     enqueueSelectResult([ownedSong]);
     const res = await app.request(BASE, {
@@ -349,33 +349,11 @@ describe("POST /v1/checkins", () => {
       body: JSON.stringify({
         sessionId: "sess1",
         divisionName: "Classic",
-        entitySoloUserId: "other_user",
         songId: "song1",
       }),
     });
     expect(res.status).toBe(400);
-  });
-
-  it("returns 201 for valid solo check-in for current user", async () => {
-    enqueueSelectResult([openSession]);
-    enqueueSelectResult([ownedSong]);
-    enqueueSelectResult([]);
-    enqueueSelectResult([openSession]);
-    enqueueSelectResult([{ isPriority: false, priorityRunLimit: 0 }]);
-    const res = await app.request(BASE, {
-      method: "POST",
-      headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId: "sess1",
-        divisionName: "Classic",
-        entitySoloUserId: "user_test123",
-        songId: "song1",
-      }),
-    });
-    expect(res.status).toBe(201);
-    const body = await readJson<SuccessEnvelope<{ initialQueue: string }>>(res);
-    assertSuccessEnvelope(body);
-    expect(body.data.initialQueue).toBe("non_priority");
+    assertValidation400(await readJson<ErrorEnvelope>(res));
   });
 
   it("returns 403 when a non-admin passes on_behalf_of_user_id", async () => {
@@ -392,11 +370,37 @@ describe("POST /v1/checkins", () => {
     expect(res.status).toBe(403);
   });
 
-  it("returns 201 when an admin checks in on behalf of another user", async () => {
+  it("returns 400 when an admin checks in on behalf for a partnerless song", async () => {
     const targetUserId = "user_target";
     enqueueSelectResult([{ id: targetUserId }]);
     enqueueSelectResult([eventSession]);
     enqueueSelectResult([ownedSong]);
+    const res = await app.request(BASE, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "sess1",
+        divisionName: "Classic",
+        songId: "song1",
+        on_behalf_of_user_id: targetUserId,
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await readJson<ErrorEnvelope>(res);
+    expect(body.error.message).toContain("no partner or managed partnership");
+  });
+
+  it("returns 201 when an admin checks in on behalf of another user", async () => {
+    const targetUserId = "user_target";
+    const songWithPartner = {
+      id: "song1",
+      managedPartnershipId: null as string | null,
+      partnerId: "partner_b",
+    };
+    enqueueSelectResult([{ id: targetUserId }]);
+    enqueueSelectResult([eventSession]);
+    enqueueSelectResult([songWithPartner]);
+    enqueueSelectResult([{ id: "pair_target" }]);
     enqueueSelectResult([]);
     enqueueSelectResult([{ id: "sub_1" }]);
     enqueueSelectResult([eventSession]);
@@ -434,7 +438,7 @@ describe("POST /v1/checkins", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns 400 when both entityPairId and entitySoloUserId provided", async () => {
+  it("returns 400 when both entityPairId and entityManagedPartnershipId provided", async () => {
     const res = await app.request(BASE, {
       method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
@@ -442,7 +446,7 @@ describe("POST /v1/checkins", () => {
         sessionId: "sess1",
         divisionName: "Classic",
         entityPairId: "p1",
-        entitySoloUserId: "user_test123",
+        entityManagedPartnershipId: "mp1",
         songId: "song1",
       }),
     });

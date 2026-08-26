@@ -29,6 +29,7 @@ export const queueEventActionEnum = pgEnum("queue_event_action", [
   "run_completed",
   "run_incomplete_rotated",
   "withdrawn",
+  "moved_within_queue",
 ]);
 
 export const initialQueueEnum = pgEnum("initial_queue", ["priority", "non_priority"]);
@@ -256,6 +257,7 @@ export const checkins = pgTable(
       .references(() => sessions.id),
     divisionName: text("division_name").notNull(),
     entityPairId: text("entity_pair_id").references(() => pairs.id, { onDelete: "restrict" }),
+    /** Legacy read-only — solo entities are no longer created; column retained for historical rows. */
     entitySoloUserId: text("entity_solo_user_id").references(() => users.id, { onDelete: "restrict" }),
     entityManagedPartnershipId: text("entity_managed_partnership_id").references(
       () => managedPartnerships.id,
@@ -297,6 +299,7 @@ export const queueEntries = pgTable(
       .notNull()
       .references(() => sessions.id),
     entityPairId: text("entity_pair_id").references(() => pairs.id, { onDelete: "restrict" }),
+    /** Legacy read-only — solo entities are no longer created; column retained for historical rows. */
     entitySoloUserId: text("entity_solo_user_id").references(() => users.id, { onDelete: "restrict" }),
     entityManagedPartnershipId: text("entity_managed_partnership_id").references(
       () => managedPartnerships.id,

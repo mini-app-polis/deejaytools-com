@@ -815,7 +815,7 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
       400
     );
   }
-  if (isPortalUpload && !["solo", "team", "other"].includes(entityType)) {
+  if (isPortalUpload && !["team", "other"].includes(entityType)) {
     await rm(uploadDir, { recursive: true, force: true }).catch(() => {});
     return c.json(CommonErrors.badRequest("Invalid entity_type"), 400);
   }

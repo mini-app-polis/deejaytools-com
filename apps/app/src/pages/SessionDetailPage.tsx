@@ -331,7 +331,7 @@ export default function ApiSessionPage() {
     try {
       // If the song has a partner but no pair row exists yet, create it transparently
       let pairId: string | null = derivedPair?.id ?? null;
-      if (!isSolo && !isManaged && !pairId && selectedSong?.partner_id) {
+      if (!isManaged && !pairId && selectedSong?.partner_id) {
         const created = await api.post<{ id: string }>("/v1/pairs/find-or-create", {
           partner_id: selectedSong.partner_id,
         });
@@ -342,8 +342,7 @@ export default function ApiSessionPage() {
       await api.post("/v1/checkins", {
         sessionId: id,
         divisionName: fDivision,
-        entityPairId: !isSolo && !isManaged ? pairId : null,
-        entitySoloUserId: isSolo ? user.id : null,
+        entityPairId: !isManaged ? pairId : null,
         entityManagedPartnershipId: isManaged
           ? selectedSong!.managed_partnership_id
           : null,

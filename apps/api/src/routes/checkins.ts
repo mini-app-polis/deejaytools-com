@@ -31,6 +31,9 @@ import { invalidateSessionCache } from "./sessions.js";
 
 const logger = createLogger("deejaytools-api");
 
+const NO_ATTACHABLE_ENTITY_MSG =
+  "This song has no partner or managed partnership. Attach one on the song before checking in.";
+
 export const checkinRoutes = new Hono();
 
 /** POST /v1/checkins — create a new check-in for an entity in an open session. */
@@ -88,7 +91,7 @@ checkinRoutes.post(
     if (!song) return c.json(CommonErrors.notFound("Song"), 404);
 
     let entityPairId: string | null = null;
-    let entitySoloUserId: string | null = null;
+    const entitySoloUserId: string | null = null;
     let entityManagedPartnershipId: string | null = null;
     let entity: EntityRef;
 
@@ -128,8 +131,7 @@ checkinRoutes.post(
         entityPairId = pair.id;
         entity = { pairId: pair.id };
       } else {
-        entitySoloUserId = effectiveUserId;
-        entity = { soloUserId: effectiveUserId };
+        return c.json(CommonErrors.badRequest(NO_ATTACHABLE_ENTITY_MSG), 400);
       }
     } else if (song.managedPartnershipId) {
       const [managed] = await db
@@ -163,10 +165,7 @@ checkinRoutes.post(
         400
       );
     } else {
-      if (body.entitySoloUserId !== effectiveUserId)
-        return c.json(CommonErrors.badRequest("You may only submit a solo check-in for yourself"), 400);
-      entitySoloUserId = body.entitySoloUserId ?? null;
-      entity = { soloUserId: body.entitySoloUserId! };
+      return c.json(CommonErrors.badRequest(NO_ATTACHABLE_ENTITY_MSG), 400);
     }
 
     if (await entityHasLiveEntry(entity, body.sessionId))
