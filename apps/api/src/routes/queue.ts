@@ -435,7 +435,9 @@ queueRoutes.post("/incomplete", requireAdmin, zValidator("json", entryActionBody
  * Returns 400 if the entry is already at the bottom or not found.
  */
 queueRoutes.post("/move-down", requireAdmin, zValidator("json", z.object({ queueEntryId: z.string().min(1) })), async (c) => {
+  const adminId = c.get("user").userId;
   const { queueEntryId } = c.req.valid("json");
+  const now = Date.now();
 
   const [entry] = await db
     .select({
@@ -479,6 +481,22 @@ queueRoutes.post("/move-down", requireAdmin, zValidator("json", z.object({ queue
         .update(queueEntries)
         .set({ position: below.position })
         .where(eq(queueEntries.id, entry.id));
+
+      // One audit row for the initiating entry is enough to reconstruct the swap;
+      // the swapped-with entry's position change is the inverse of this row.
+      await tx.insert(queueEvents).values({
+        id: crypto.randomUUID(),
+        sessionId: entry.sessionId,
+        checkinId: entry.checkinId,
+        action: "moved_within_queue",
+        fromQueue: entry.queueType,
+        fromPosition: entry.position,
+        toQueue: entry.queueType,
+        toPosition: below.position,
+        actorUserId: adminId,
+        reason: null,
+        createdAt: now,
+      });
     });
   } catch (err) {
     logger.error({

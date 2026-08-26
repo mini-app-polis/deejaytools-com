@@ -349,6 +349,7 @@ export const runs = pgTable(
     eventId: text("event_id").references(() => events.id),
     divisionName: text("division_name").notNull(),
     entityPairId: text("entity_pair_id").references(() => pairs.id, { onDelete: "restrict" }),
+    /** Legacy read-only — solo entities are no longer created; column retained for historical rows. */
     entitySoloUserId: text("entity_solo_user_id").references(() => users.id, { onDelete: "restrict" }),
     entityManagedPartnershipId: text("entity_managed_partnership_id").references(
       () => managedPartnerships.id,
