@@ -1,3 +1,14 @@
+## [2.0.2](https://github.com/mini-app-polis/deejaytools-com/compare/v2.0.1...v2.0.2) (2026-08-26)
+
+
+### Bug Fixes
+
+* **app:** correct inaccurate help claims and managed-partnership check-in ([e8b9526](https://github.com/mini-app-polis/deejaytools-com/commit/e8b9526d4d1069a860c1eab0323204a8c0cfc484))
+* **app:** distinguish an unreadable upload file from a network failure ([2fd415f](https://github.com/mini-app-polis/deejaytools-com/commit/2fd415f29b7c78cab6c51045f29c2c94f9a04028))
+* **app:** polyfill Blob.arrayBuffer in jsdom test setup ([7427fb8](https://github.com/mini-app-polis/deejaytools-com/commit/7427fb81cb52b872a22341b565c4913f143f7eb9))
+* **app:** recognise team and exhibition entries as the user's own in the queue ([f580c92](https://github.com/mini-app-polis/deejaytools-com/commit/f580c9295fc183c7eb90e8a19d012fe3f7a7c037))
+* **app:** send the managed partnership entity when checking in ([b165b83](https://github.com/mini-app-polis/deejaytools-com/commit/b165b8336d995f1f01fd329b306e2fe0ef71b281))
+
 ## [2.0.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.0.0...v2.0.1) (2026-08-26)
 
 
