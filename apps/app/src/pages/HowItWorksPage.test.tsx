@@ -40,6 +40,20 @@ describe("HowItWorksPage", () => {
     expect(screen.getByText("Submitting your music")).toBeInTheDocument();
   });
 
+  it("links to the event-submission prerequisite from the hub callout", () => {
+    render(
+      <MemoryRouter initialEntries={["/how-it-works"]}>
+        <Routes>
+          <Route path="/how-it-works" element={<HowItWorksPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(
+      screen.getByRole("link", { name: /uploading vs event submission/i })
+    ).toHaveAttribute("href", "/how-it-works/submitting-music#event-submission-required");
+  });
+
   it.each(LEGACY_REDIRECT_CASES)(
     "redirects /how-it-works#%s to %s with hash preserved",
     async (anchor, expectedPath, probeId) => {

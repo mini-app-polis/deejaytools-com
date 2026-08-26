@@ -39,6 +39,20 @@ export default function HowItWorksPage() {
         </p>
       </header>
 
+      <div className="mb-8 rounded-lg border border-primary/40 bg-primary/5 px-4 py-3 text-sm text-foreground/80">
+        <p>
+          Uploading a song and submitting it to an event are separate steps — check-in requires the
+          second. See{" "}
+          <Link
+            to="/how-it-works/submitting-music#event-submission-required"
+            className="text-primary hover:underline"
+          >
+            uploading vs event submission
+          </Link>
+          .
+        </p>
+      </div>
+
       <ul className="grid gap-3 sm:grid-cols-2">
         {HELP_TOPICS.map((topic) => (
           <li key={topic.id}>
