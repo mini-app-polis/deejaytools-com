@@ -1,3 +1,12 @@
+## [2.0.3](https://github.com/mini-app-polis/deejaytools-com/compare/v2.0.2...v2.0.3) (2026-08-26)
+
+
+### Bug Fixes
+
+* **api:** count managed partnerships in has_active_checkin ([d417a38](https://github.com/mini-app-polis/deejaytools-com/commit/d417a3833197ecf6e82bf982f071b0fce5cedb16))
+* **api:** record an audit event when a queue entry is moved ([705d3a4](https://github.com/mini-app-polis/deejaytools-com/commit/705d3a4fc65ca12473749bbdef925a762b9dee0c))
+* **api:** stop creating solo queue entities ([6367e37](https://github.com/mini-app-polis/deejaytools-com/commit/6367e37d2a0133464467c9ffdead7ec7588a17aa))
+
 ## [2.0.2](https://github.com/mini-app-polis/deejaytools-com/compare/v2.0.1...v2.0.2) (2026-08-26)
 
 
