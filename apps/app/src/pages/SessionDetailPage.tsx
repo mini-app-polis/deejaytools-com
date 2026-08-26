@@ -294,19 +294,22 @@ export default function ApiSessionPage() {
     try {
       // If the song has a partner but no pair row exists yet, create it transparently
       let pairId: string | null = derivedPair?.id ?? null;
-      if (!isSolo && !pairId && selectedSong?.partner_id) {
+      if (!isSolo && !isManaged && !pairId && selectedSong?.partner_id) {
         const created = await api.post<{ id: string }>("/v1/pairs/find-or-create", {
           partner_id: selectedSong.partner_id,
         });
         pairId = created.id;
       }
 
+      // Exactly one entity field must be non-null or createCheckinBodySchema rejects the request.
       await api.post("/v1/checkins", {
         sessionId: id,
         divisionName: fDivision,
-        entityPairId: isManaged || isSolo ? null : pairId,
+        entityPairId: !isSolo && !isManaged ? pairId : null,
         entitySoloUserId: isSolo ? user.id : null,
-        entityManagedPartnershipId: isManaged ? selectedSong.managed_partnership_id : null,
+        entityManagedPartnershipId: isManaged
+          ? selectedSong!.managed_partnership_id
+          : null,
         songId: fSongId,
         notes: fNotes.trim() || undefined,
       });
