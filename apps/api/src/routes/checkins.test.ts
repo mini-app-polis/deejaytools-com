@@ -451,10 +451,10 @@ describe("POST /v1/checkins", () => {
   });
 
   describe("managed partnership entity", () => {
-    const managedBody = (songId: string) => ({
+    const managedBody = (songId: string, managedPartnershipId: string) => ({
       sessionId: "sess1",
       divisionName: "Classic",
-      entitySoloUserId: "user_test123",
+      entityManagedPartnershipId: managedPartnershipId,
       songId,
     });
 
@@ -474,7 +474,7 @@ describe("POST /v1/checkins", () => {
       const first = await app.request(BASE, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify(managedBody("song_mp1")),
+        body: JSON.stringify(managedBody("song_mp1", "mp1")),
       });
       expect(first.status).toBe(201);
 
@@ -488,7 +488,7 @@ describe("POST /v1/checkins", () => {
       const second = await app.request(BASE, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify(managedBody("song_mp2")),
+        body: JSON.stringify(managedBody("song_mp2", "mp2")),
       });
       expect(second.status).toBe(201);
     });
@@ -502,12 +502,12 @@ describe("POST /v1/checkins", () => {
       const res = await app.request(BASE, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify(managedBody("song_mp1")),
+        body: JSON.stringify(managedBody("song_mp1", "mp1")),
       });
       expect(res.status).toBe(409);
     });
 
-    it("persists the managed partnership entity even when the client sends entitySoloUserId", async () => {
+    it("persists the managed partnership entity when the client sends entityManagedPartnershipId", async () => {
       vi.mocked(mockDb.insert).mockClear();
       enqueueSelectResult([openSession]);
       enqueueSelectResult([managedSong("song_mp1", "mp1")]);
@@ -518,7 +518,7 @@ describe("POST /v1/checkins", () => {
       const res = await app.request(BASE, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify(managedBody("song_mp1")),
+        body: JSON.stringify(managedBody("song_mp1", "mp1")),
       });
       expect(res.status).toBe(201);
 
@@ -545,7 +545,7 @@ describe("POST /v1/checkins", () => {
       const res = await app.request(BASE, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify(managedBody("song_mp1")),
+        body: JSON.stringify(managedBody("song_mp1", "mp1")),
       });
       expect(res.status).toBe(201);
       const body = await readJson<SuccessEnvelope<{ initialQueue: string }>>(res);
@@ -561,7 +561,7 @@ describe("POST /v1/checkins", () => {
       const other = await app.request(BASE, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify(managedBody("song_mp2")),
+        body: JSON.stringify(managedBody("song_mp2", "mp2")),
       });
       expect(other.status).toBe(201);
       const otherBody = await readJson<SuccessEnvelope<{ initialQueue: string }>>(other);

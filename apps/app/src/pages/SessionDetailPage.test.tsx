@@ -84,6 +84,7 @@ function stubGets(opts: {
   waiting?: unknown[];
   pairs?: unknown[];
   songs?: unknown[];
+  myCheckins?: unknown[];
   eventSubmissions?: unknown[] | "reject";
 }) {
   apiGet.mockImplementation((path: string) => {
@@ -92,6 +93,7 @@ function stubGets(opts: {
     if (path.includes("/waiting")) return Promise.resolve(opts.waiting ?? []);
     if (path === "/v1/partners/leading-pairs") return Promise.resolve(opts.pairs ?? []);
     if (path === "/v1/songs") return Promise.resolve(opts.songs ?? []);
+    if (path === "/v1/checkins/mine") return Promise.resolve(opts.myCheckins ?? []);
     if (path.startsWith("/v1/event-song-submissions")) {
       if (opts.eventSubmissions === "reject") {
         return Promise.reject(new Error("event submissions unavailable"));
@@ -100,6 +102,39 @@ function stubGets(opts: {
     }
     return Promise.resolve([]);
   });
+}
+
+function makeMyCheckin(opts: {
+  sessionId?: string;
+  queueEntryId?: string;
+  entityPairId?: string | null;
+  entitySoloUserId?: string | null;
+  entityManagedPartnershipId?: string | null;
+  divisionName?: string;
+}) {
+  return {
+    id: `ci_${opts.queueEntryId ?? "qe1"}`,
+    sessionId: opts.sessionId ?? "s1",
+    eventName: "GNDC",
+    sessionName: "Session",
+    sessionFloorTrialStartsAt: 1,
+    sessionStatus: "in_progress",
+    eventTimezone: null,
+    divisionName: opts.divisionName ?? "Classic",
+    entityPairId: opts.entityPairId ?? null,
+    entitySoloUserId: opts.entitySoloUserId ?? null,
+    entityManagedPartnershipId: opts.entityManagedPartnershipId ?? null,
+    entityLabel: "Test Entity",
+    songDisplayName: null,
+    songProcessedFilename: null,
+    notes: null,
+    checkedInAt: 1,
+    queueEntryId: opts.queueEntryId ?? "qe1",
+    queueType: "priority",
+    queuePosition: 1,
+    overallPosition: 1,
+    runCount: 0,
+  };
 }
 
 function openCheckinWindowSession(eventName = "GNDC") {
@@ -281,6 +316,7 @@ describe("SessionDetailPage — check-in button", () => {
       ],
       pairs: [{ id: "pair_1", display_name: "User One & Partner A", partner_b_id: "partner_1" }],
       songs: [],
+      myCheckins: [makeMyCheckin({ entityPairId: "pair_1", queueEntryId: "qe1" })],
     });
     renderAt();
 
@@ -336,6 +372,10 @@ describe("SessionDetailPage — check-in button", () => {
         { id: "pair_2", display_name: "User One & Partner B", partner_b_id: "partner_2" },
       ],
       songs: [],
+      myCheckins: [
+        makeMyCheckin({ entityPairId: "pair_1", queueEntryId: "qe1", divisionName: "Classic" }),
+        makeMyCheckin({ entityPairId: "pair_2", queueEntryId: "qe2", divisionName: "Showcase" }),
+      ],
     });
     renderAt();
 
@@ -347,6 +387,101 @@ describe("SessionDetailPage — check-in button", () => {
     // Entity labels are shown when multiple entries are present
     expect(screen.getAllByText(/Partner A/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Partner B/i).length).toBeGreaterThan(0);
+  });
+
+  it("shows queue position for a placeholder partner absent from leading-pairs", async () => {
+    signedIn = true;
+    stubGets({
+      session: makeSession({
+        checkinOpensAt: "2026-04-27T07:00:00",
+        floorTrialStartsAt: "2026-04-27T08:00:00",
+        floorTrialEndsAt: "2026-04-27T22:00:00",
+      }),
+      active: [],
+      waiting: [
+        {
+          queueEntryId: "qe_team",
+          checkinId: "c_team",
+          position: 2,
+          enteredQueueAt: 1,
+          entityPairId: "pair_team",
+          entitySoloUserId: null,
+          entityLabel: "User One · Team Alpha",
+          divisionName: "Teams",
+          songId: "song_team",
+          notes: null,
+          initialQueue: "non_priority",
+          checkedInAt: 1,
+          subQueue: "non_priority",
+        },
+      ],
+      pairs: [],
+      songs: [],
+      myCheckins: [makeMyCheckin({ entityPairId: "pair_team", queueEntryId: "qe_team", divisionName: "Teams" })],
+    });
+    renderAt();
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/#2 in queue/i).length).toBeGreaterThan(0);
+    });
+    expect(screen.getAllByText(/Teams/i).length).toBeGreaterThan(0);
+  });
+
+  it("shows a position line for both a normal partner and a placeholder entry", async () => {
+    signedIn = true;
+    stubGets({
+      session: makeSession({
+        checkinOpensAt: "2026-04-27T07:00:00",
+        floorTrialStartsAt: "2026-04-27T08:00:00",
+        floorTrialEndsAt: "2026-04-27T22:00:00",
+      }),
+      active: [],
+      waiting: [
+        {
+          queueEntryId: "qe1",
+          checkinId: "c1",
+          position: 1,
+          enteredQueueAt: 1,
+          entityPairId: "pair_1",
+          entitySoloUserId: null,
+          entityLabel: "User One & Partner A",
+          divisionName: "Classic",
+          songId: "song1",
+          notes: null,
+          initialQueue: "priority",
+          checkedInAt: 1,
+          subQueue: "priority",
+        },
+        {
+          queueEntryId: "qe_team",
+          checkinId: "c_team",
+          position: 1,
+          enteredQueueAt: 2,
+          entityPairId: "pair_team",
+          entitySoloUserId: null,
+          entityLabel: "User One · Team Alpha",
+          divisionName: "Teams",
+          songId: "song_team",
+          notes: null,
+          initialQueue: "non_priority",
+          checkedInAt: 2,
+          subQueue: "non_priority",
+        },
+      ],
+      pairs: [{ id: "pair_1", display_name: "User One & Partner A", partner_b_id: "partner_1" }],
+      songs: [],
+      myCheckins: [
+        makeMyCheckin({ entityPairId: "pair_1", queueEntryId: "qe1", divisionName: "Classic" }),
+        makeMyCheckin({ entityPairId: "pair_team", queueEntryId: "qe_team", divisionName: "Teams" }),
+      ],
+    });
+    renderAt();
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/#1 in queue/i).length).toBeGreaterThan(0);
+    });
+    expect(screen.getAllByText(/Classic/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Teams/i).length).toBeGreaterThan(0);
   });
 
   it("shows 'no songs uploaded' when window open and user has no songs", async () => {
@@ -568,5 +703,163 @@ describe("SessionDetailPage — check-in song selector", () => {
     );
     expect(screen.queryByRole("radiogroup", { name: /^song$/i })).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /^check in$/i })[0]).toBeDisabled();
+  });
+
+  it("sends entityManagedPartnershipId when checking in with a managed-partnership song", async () => {
+    signedIn = true;
+    apiPost.mockResolvedValue({});
+    stubGets({
+      session: openCheckinWindowSession(),
+      songs: [
+        {
+          id: "song_mp",
+          processed_filename: "Managed Routine",
+          division: "Classic",
+          partner_id: null,
+          managed_partnership_id: "mp_1",
+        },
+      ],
+      eventSubmissions: [makeSubmission("song_mp")],
+    });
+    renderAt();
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: /^check in$/i }).length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getAllByRole("button", { name: /^check in$/i })[0]!);
+
+    await waitFor(() => {
+      expect(screen.getByRole("radiogroup", { name: /^song$/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("radio", { name: /Managed Routine/i }));
+    const submitButton = screen
+      .getAllByRole("button", { name: /^check in$/i })
+      .find((button) => button.getAttribute("type") === "submit");
+    expect(submitButton).toBeTruthy();
+    fireEvent.click(submitButton!);
+
+    await waitFor(() => {
+      expect(apiPost).toHaveBeenCalledWith("/v1/checkins", {
+        sessionId: "s1",
+        divisionName: "Classic",
+        entityPairId: null,
+        entitySoloUserId: null,
+        entityManagedPartnershipId: "mp_1",
+        songId: "song_mp",
+        notes: undefined,
+      });
+    });
+    expect(apiPost).not.toHaveBeenCalledWith("/v1/pairs/find-or-create", expect.anything());
+  });
+
+  it("sends entityPairId when checking in with a partner song", async () => {
+    signedIn = true;
+    apiPost.mockResolvedValue({});
+    stubGets({
+      session: openCheckinWindowSession(),
+      songs: [
+        {
+          id: "song_pair",
+          processed_filename: "Partner Routine",
+          division: "Classic",
+          partner_id: "partner_1",
+          managed_partnership_id: null,
+        },
+      ],
+      pairs: [{ id: "pair_1", display_name: "User One & Partner A", partner_b_id: "partner_1" }],
+      eventSubmissions: [makeSubmission("song_pair")],
+    });
+    renderAt();
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: /^check in$/i }).length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getAllByRole("button", { name: /^check in$/i })[0]!);
+
+    await waitFor(() => {
+      expect(screen.getByRole("radiogroup", { name: /^song$/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("radio", { name: /Partner Routine/i }));
+    const submitButton = screen
+      .getAllByRole("button", { name: /^check in$/i })
+      .find((button) => button.getAttribute("type") === "submit");
+    expect(submitButton).toBeTruthy();
+    fireEvent.click(submitButton!);
+
+    await waitFor(() => {
+      expect(apiPost).toHaveBeenCalledWith("/v1/checkins", {
+        sessionId: "s1",
+        divisionName: "Classic",
+        entityPairId: "pair_1",
+        entitySoloUserId: null,
+        entityManagedPartnershipId: null,
+        songId: "song_pair",
+        notes: undefined,
+      });
+    });
+    expect(apiPost).not.toHaveBeenCalledWith("/v1/pairs/find-or-create", expect.anything());
+  });
+
+  it("warns and disables submit when a placeholder entity is already queued", async () => {
+    signedIn = true;
+    stubGets({
+      session: openCheckinWindowSession(),
+      active: [],
+      waiting: [
+        {
+          queueEntryId: "qe_team",
+          checkinId: "c_team",
+          position: 1,
+          enteredQueueAt: 1,
+          entityPairId: "pair_team",
+          entitySoloUserId: null,
+          entityLabel: "User One · Team Alpha",
+          divisionName: "Teams",
+          songId: "song_team",
+          notes: null,
+          initialQueue: "non_priority",
+          checkedInAt: 1,
+          subQueue: "non_priority",
+        },
+      ],
+      pairs: [],
+      songs: [
+        {
+          id: "song_team",
+          processed_filename: "Team Routine",
+          division: "Teams",
+          partner_id: "partner_team",
+          managed_partnership_id: null,
+        },
+      ],
+      myCheckins: [makeMyCheckin({ entityPairId: "pair_team", queueEntryId: "qe_team", divisionName: "Teams" })],
+      eventSubmissions: [makeSubmission("song_team")],
+    });
+    renderAt();
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: /^check in$/i }).length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getAllByRole("button", { name: /^check in$/i })[0]!);
+
+    await waitFor(() => {
+      expect(screen.getByRole("radiogroup", { name: /^song$/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("radio", { name: /Team Routine/i }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/already in the queue/i).length).toBeGreaterThan(0);
+    });
+
+    const submitButton = screen
+      .getAllByRole("button", { name: /^check in$/i })
+      .find((button) => button.getAttribute("type") === "submit");
+    expect(submitButton).toBeDisabled();
   });
 });

@@ -31,10 +31,11 @@ export default function ManagerGuideSection() {
             date, and timezone.
           </p>
           <p className="mt-2">
-            <strong>Timezone matters.</strong> Every time shown in the product — session start,
-            check-in window, queue timestamps — is displayed in the <strong>event&apos;s</strong>{" "}
-            timezone, not the viewer&apos;s browser timezone. Pick the venue&apos;s zone before
-            creating sessions.
+            <strong>Timezone matters.</strong> Session start times, check-in windows, and floor-trial
+            end times on competitor and manager session pages are displayed in the{" "}
+            <strong>event&apos;s</strong> timezone, not the viewer&apos;s browser timezone. Pick the
+            venue&apos;s zone before creating sessions. Admin list timestamps (Run History run times,
+            Songs created_at) use your browser&apos;s local timezone instead.
           </p>
         </div>
 

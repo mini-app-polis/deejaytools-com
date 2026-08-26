@@ -4,13 +4,13 @@ import { HelpActionLink, HelpSection, HelpSubheading } from "@/components/help/H
 
 const SUBMITTING = {
   id: "submitting-music",
-  eyebrow: "02",
+  eyebrow: "02a",
   title: "Submitting your music",
 };
 
 const CONFIRMING = {
   id: "confirming-music-on-file",
-  eyebrow: "03",
+  eyebrow: "02b",
   title: "Confirming your music is on file",
 };
 
@@ -34,19 +34,17 @@ export default function HelpSubmittingMusicPage() {
           </p>
 
           <HelpSubheading>Before you can upload</HelpSubheading>
-          <p>Fix these on <Link to="/my-profile" className="text-primary hover:underline">My Profile</Link> or in the upload form before the Upload button will work:</p>
-          <ul className="list-disc pl-5 space-y-2">
-            <li>
-              <strong className="text-foreground">Your name.</strong> If first or last name is missing,
-              you will see: &ldquo;Set your first and last name on the My Profile page so we can label
-              your uploads correctly.&rdquo;
-            </li>
-            <li>
-              <strong className="text-foreground">A partner (Upload for myself only).</strong> If your
-              partner list is empty: &ldquo;You need a partner to upload. Add one on the My Profile
-              page.&rdquo;
-            </li>
-          </ul>
+          <p>
+            Your name is required — it is captured when you sign up and you can change it on{" "}
+            <Link to="/my-profile" className="text-primary hover:underline">My Profile</Link>.
+            If it is missing, the upload still goes through but your user id may appear in the
+            processed filename instead of your name.
+          </p>
+          <p>
+            For <strong className="text-foreground">Upload for myself</strong>, the Upload button is
+            disabled until you pick a partner. If your partner list is empty: &ldquo;You need a
+            partner to upload. Add one on the My Profile page.&rdquo;
+          </p>
 
           <HelpSubheading>Three upload modes</HelpSubheading>
           <p>
@@ -110,19 +108,31 @@ export default function HelpSubmittingMusicPage() {
               <code className="px-1 rounded bg-muted/30 text-foreground break-all">
                 KaianoLevine_LibbyWooton_Classic_2026_MyRoutine_98_v01.mp3
               </code>
-              . Solo uploads use your name only. The{" "}
-              <strong className="text-foreground">leader&apos;s name always comes first</strong>, even if
-              the follower uploaded the file — the server decides from each partner&apos;s role.
+              . The <strong className="text-foreground">leader&apos;s name comes first</strong> in
+              every division except <strong className="text-foreground">ProAm FollowerAm</strong>,
+              where the amateur follower is listed first — the server decides from each
+              partner&apos;s role.
             </li>
             <li>
               <strong className="text-foreground">Tags the audio</strong> — title becomes{" "}
-              &ldquo;Leader &amp; Follower&rdquo; (or just the leader for solo), artist becomes{" "}
-              &ldquo;Division - Year - Routine name&rdquo;.
+              &ldquo;Leader &amp; Follower&rdquo; (or &ldquo;Follower &amp; Leader&rdquo; for ProAm
+              FollowerAm when both names are present), artist becomes{" "}
+              &ldquo;Division | Routine name&rdquo; joined with &ldquo; | &rdquo;, and the season
+              year is written to the file&apos;s native year tag (not the artist string).
             </li>
             <li>
-              <strong className="text-foreground">Uploads to Google Drive</strong> under the event
-              season folder, and shares read access with your account email and your partner&apos;s email
-              (if you entered one on their partner record).
+              <strong className="text-foreground">Uploads to Google Drive</strong> under{" "}
+              <code className="px-1 rounded bg-muted/30 text-foreground">
+                &lt;season year&gt;/&lt;division&gt;/
+              </code>{" "}
+              using the processed filename. No event folder exists yet — when you later submit the
+              song to an event, a separate copy job places a copy under{" "}
+              <code className="px-1 rounded bg-muted/30 text-foreground">
+                &lt;season year&gt;/Events/&lt;event&gt;/&lt;division&gt;/
+              </code>
+              . Read access is shared with your account email and, for partner uploads, your
+              partner&apos;s email if you entered one on their partner record. Managed-partnership
+              uploads share with the uploader only.
             </li>
           </ul>
           <p>
@@ -194,8 +204,8 @@ export default function HelpSubmittingMusicPage() {
             . Before you can check in with a song at a floor trial, you must also add it to that event on{" "}
             <Link to="/event-submissions" className="text-primary hover:underline">
               Event submissions
-            </Link>{" "}
-            (or via the Events section on My Content).
+            </Link>
+            .
           </p>
           <p>
             If you skip this, check-in fails with: &ldquo;This song hasn&apos;t been submitted to this

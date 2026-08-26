@@ -2,6 +2,39 @@ const apiBase = import.meta.env.VITE_API_URL ?? "";
 export const CHUNK_SIZE = 5 * 1024 * 1024;
 export const MAX_FILE_BYTES = 100 * 1024 * 1024;
 
+const UNREADABLE_FILE_HINT =
+  "couldn't be read from disk. If it's stored in iCloud Drive, Google Drive or " +
+  "Dropbox, it may be a placeholder that hasn't downloaded yet — open its folder, " +
+  "make sure it isn't showing a cloud icon, then try again.";
+
+/**
+ * Why a File can't be uploaded, or null if it looks fine.
+ *
+ * Reading a File is a live read from disk, not a copy, so a cloud placeholder
+ * hands us a File whose bytes are not local. fetch() surfaces that as
+ * `TypeError: Failed to fetch` — indistinguishable from a dead network unless
+ * we check the file ourselves.
+ *
+ * Both ends are probed because hydration can be partial: a readable first byte
+ * does not prove the tail is there. This is a heuristic, not a proof — a
+ * provider that serves partial reads can pass here and still fail mid-upload,
+ * which is why the per-chunk catch re-checks rather than trusting this once.
+ *
+ * Note a placeholder reports its REAL size (the metadata is local, only the
+ * bytes are not), so size is not a placeholder signal — a zero-byte file is a
+ * genuinely different fault and gets its own message.
+ */
+async function fileReadFailure(file: File): Promise<string | null> {
+  if (file.size === 0) return `"${file.name}" is empty (0 bytes).`;
+  try {
+    await file.slice(0, 1).arrayBuffer();
+    await file.slice(file.size - 1).arrayBuffer();
+    return null;
+  } catch {
+    return `"${file.name}" ${UNREADABLE_FILE_HINT}`;
+  }
+}
+
 export type UploadStage = "idle" | "uploading" | "processing" | "finishing";
 
 export type ChunkUploadProgress = {
@@ -23,6 +56,9 @@ export async function uploadSongInChunks({
   buildFormFields,
   onProgress,
 }: UploadSongChunksOptions): Promise<void> {
+  const upfrontFailure = await fileReadFailure(file);
+  if (upfrontFailure) throw new Error(upfrontFailure);
+
   onProgress?.({ stage: "uploading", progress: 10, bytesSent: 0 });
 
   const uploadId = crypto.randomUUID();
@@ -71,9 +107,16 @@ export async function uploadSongInChunks({
           body: form,
         });
       } catch (fetchErr) {
+        // A fetch rejection only tells us no response came back. Check the file
+        // before blaming the network — and never retry an unreadable file,
+        // which is guaranteed to fail again and only delays the real message.
+        const readFailure = await fileReadFailure(file);
+        if (readFailure) throw new Error(readFailure);
         const detail =
           fetchErr instanceof Error ? `${fetchErr.name}: ${fetchErr.message}` : String(fetchErr);
-        lastErr = new Error(`Network error (${detail}) — check your connection and try again.`);
+        lastErr = new Error(
+          `Upload failed (${detail}) — the connection may have dropped. Retrying…`
+        );
         continue;
       }
       if (!res.ok) {
