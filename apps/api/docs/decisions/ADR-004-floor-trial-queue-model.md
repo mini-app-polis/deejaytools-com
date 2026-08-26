@@ -4,7 +4,14 @@ Date: 2026-04-25
 
 ## Status
 
-Accepted
+Superseded by [ADR-005](./ADR-005-floor-trial-queue-model-as-built.md)
+
+This record is kept as the decision made on 2026-04-25. The system that
+shipped diverges from it substantially — auto-promotion replaced manual
+promotion, a third entity type (managed partnerships) was added, queue
+actions are not slot-1-only, reorder shipped, and concurrency is
+pessimistic rather than optimistic-with-retry. Read ADR-005 for how the
+queue actually works.
 
 ## Context
 

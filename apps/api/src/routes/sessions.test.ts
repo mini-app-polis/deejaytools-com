@@ -6,17 +6,22 @@ import {
   assertSuccessListEnvelope,
   assertValidation400,
   adminHeaders,
+  authHeaders,
   type ErrorEnvelope,
   readJson,
   type SuccessEnvelope,
 } from "../test/helpers.js";
 import { enqueueSelectResult, resetSelectQueue } from "../test/mocks.js";
 import { responseCache } from "../lib/cache.js";
+import { getOptionalSyncedUserId } from "../lib/optional-user.js";
 
 vi.mock("../db/index.js", async () => {
   const { mockDb: db } = await import("../test/mocks.js");
   return { db };
 });
+vi.mock("../lib/optional-user.js", () => ({
+  getOptionalSyncedUserId: vi.fn(),
+}));
 vi.mock("../middleware/auth.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../middleware/auth.js")>();
   const { mockRequireAdmin, mockRequireAuth } = await import("../test/mocks.js");
@@ -323,6 +328,21 @@ describe("GET /v1/sessions/:id — caching", () => {
     enqueueSelectResult([]); // session not found
     const res = await app.request(`${BASE}/nonexistent`);
     expect(res.status).toBe(404);
+  });
+
+  it("returns has_active_checkin true when the user's only live entry is a managed partnership", async () => {
+    vi.mocked(getOptionalSyncedUserId).mockResolvedValue("user_test123");
+    enqueueSelectResult([sessionA]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([]);
+    enqueueSelectResult([]); // user pairs
+    enqueueSelectResult([{ id: "mp1" }]); // managed partnerships
+    enqueueSelectResult([{ divisionName: "Classic" }]); // live queue hit
+
+    const res = await app.request(`${BASE}/s1`, { headers: authHeaders() });
+    expect(res.status).toBe(200);
+    const body = await readJson<SuccessEnvelope<{ has_active_checkin: boolean }>>(res);
+    expect(body.data.has_active_checkin).toBe(true);
   });
 });
 

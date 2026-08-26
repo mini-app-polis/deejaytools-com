@@ -9,6 +9,7 @@ import { db } from "../db/index.js";
 import {
   checkins,
   events,
+  managedPartnerships,
   pairs,
   queueEntries,
   queueEvents,
@@ -321,6 +322,11 @@ sessionRoutes.get("/", zValidator("query", listQuery), async (c) => {
   if (userId && sessionIds.length > 0) {
     const userPairs = await db.select({ id: pairs.id }).from(pairs).where(eq(pairs.userAId, userId));
     const pairIds = userPairs.map((p) => p.id);
+    const userManagedPartnerships = await db
+      .select({ id: managedPartnerships.id })
+      .from(managedPartnerships)
+      .where(eq(managedPartnerships.userId, userId));
+    const managedPartnershipIds = userManagedPartnerships.map((p) => p.id);
     // Filter directly on queueEntries.entityPairId / entitySoloUserId — the
     // authoritative "who is in the queue" columns. Filtering on checkins.*
     // instead can produce false positives when the two tables have mismatched
@@ -331,6 +337,9 @@ sessionRoutes.get("/", zValidator("query", listQuery), async (c) => {
     ];
     if (pairIds.length > 0) {
       liveParts.push(inArray(queueEntries.entityPairId, pairIds));
+    }
+    if (managedPartnershipIds.length > 0) {
+      liveParts.push(inArray(queueEntries.entityManagedPartnershipId, managedPartnershipIds));
     }
     const live = await db
       .select({ sessionId: queueEntries.sessionId })
@@ -747,6 +756,11 @@ sessionRoutes.get("/:id", async (c) => {
   if (userId) {
     const userPairs = await db.select({ id: pairs.id }).from(pairs).where(eq(pairs.userAId, userId));
     const pairIds = userPairs.map((p) => p.id);
+    const userManagedPartnerships = await db
+      .select({ id: managedPartnerships.id })
+      .from(managedPartnerships)
+      .where(eq(managedPartnerships.userId, userId));
+    const managedPartnershipIds = userManagedPartnerships.map((p) => p.id);
     // Filter on queueEntries.* (the authoritative queue-membership columns)
     // rather than checkins.* to avoid false positives from legacy rows where
     // the two tables had mismatched entity IDs.
@@ -754,6 +768,9 @@ sessionRoutes.get("/:id", async (c) => {
       eq(queueEntries.entitySoloUserId, userId),
     ];
     if (pairIds.length > 0) parts.push(inArray(queueEntries.entityPairId, pairIds));
+    if (managedPartnershipIds.length > 0) {
+      parts.push(inArray(queueEntries.entityManagedPartnershipId, managedPartnershipIds));
+    }
 
     const [hit] = await db
       .select({ divisionName: checkins.divisionName })

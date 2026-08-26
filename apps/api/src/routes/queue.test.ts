@@ -8,7 +8,7 @@ import {
   type SuccessEnvelope,
 } from "../test/helpers.js";
 import { enqueueSelectResult, mockDb, resetSelectQueue } from "../test/mocks.js";
-import { runs } from "../db/schema.js";
+import { queueEvents, runs } from "../db/schema.js";
 import { responseCache } from "../lib/cache.js";
 
 // Global pre-test setup: flush the response cache so that a cached result from
@@ -658,6 +658,76 @@ describe("POST /v1/queue/incomplete", () => {
     expect(res.status).toBe(200);
     const body = await readJson<SuccessEnvelope<{ rotated: boolean }>>(res);
     expect(body.data.rotated).toBe(true);
+  });
+});
+
+describe("POST /v1/queue/move-down", () => {
+  beforeEach(() => {
+    resetSelectQueue();
+  });
+
+  it("returns 400 when the entry is already at the bottom", async () => {
+    enqueueSelectResult([
+      {
+        id: "qe1",
+        checkinId: "c1",
+        sessionId: "s1",
+        queueType: "priority",
+        position: 2,
+      },
+    ]);
+    enqueueSelectResult([]);
+    const res = await app.request(`${BASE}/move-down`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ queueEntryId: "qe1" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("writes one moved_within_queue audit row with correct from/to positions", async () => {
+    enqueueSelectResult([
+      {
+        id: "qe1",
+        checkinId: "c1",
+        sessionId: "s1",
+        queueType: "priority",
+        position: 1,
+      },
+    ]);
+    enqueueSelectResult([{ id: "qe2", position: 2 }]);
+
+    const inserted: { table: unknown; payload: unknown }[] = [];
+    const insertMock = mockDb.insert as ReturnType<typeof vi.fn>;
+    insertMock.mockImplementation((table: unknown) => ({
+      values: vi.fn((payload: unknown) => ({
+        then(
+          onfulfilled?: ((value: unknown) => unknown) | null,
+          onrejected?: ((reason: unknown) => unknown) | null
+        ) {
+          inserted.push({ table, payload });
+          return Promise.resolve(undefined).then(onfulfilled, onrejected);
+        },
+      })),
+    }));
+
+    const res = await app.request(`${BASE}/move-down`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ queueEntryId: "qe1" }),
+    });
+    expect(res.status).toBe(200);
+
+    const eventInserts = inserted.filter((row) => row.table === queueEvents);
+    expect(eventInserts).toHaveLength(1);
+    expect(eventInserts[0]!.payload).toMatchObject({
+      action: "moved_within_queue",
+      fromQueue: "priority",
+      fromPosition: 1,
+      toQueue: "priority",
+      toPosition: 2,
+      actorUserId: "user_admin123",
+    });
   });
 });
 
