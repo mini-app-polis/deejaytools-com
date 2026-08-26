@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import HelpLayout from "@/components/help/HelpLayout";
 import { HelpSection } from "@/components/help/HelpSection";
 
@@ -21,6 +22,16 @@ export default function HelpFloorTrialsPage() {
         <p>
           Floor trials are scheduled in blocks throughout the event. Each block has its own check-in
           window, its own queue, and its own seat at the deejay booth.
+        </p>
+        <p>
+          Before you can check in, you must{" "}
+          <Link
+            to="/how-it-works/submitting-music#event-submission-required"
+            className="text-primary hover:underline"
+          >
+            submit your song to the event
+          </Link>
+          .
         </p>
       </HelpSection>
     </HelpLayout>

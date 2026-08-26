@@ -29,7 +29,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     path: "/how-it-works/submitting-music",
     eyebrow: "02",
     title: "Submitting your music",
-    description: "File requirements, uploading, and confirming the deejay has your routine.",
+    description: "File requirements, uploading, and submitting your song to the event before check-in.",
   },
   {
     id: "checking-in",
