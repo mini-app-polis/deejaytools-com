@@ -4,25 +4,25 @@ import { HelpActionLink, HelpSection } from "@/components/help/HelpSection";
 
 const PREPARING = {
   id: "preparing-to-run",
-  eyebrow: "06",
+  eyebrow: "06a",
   title: "When you're next in line",
 };
 
 const DURING = {
   id: "during-your-run",
-  eyebrow: "07",
+  eyebrow: "06b",
   title: "When it's your turn",
 };
 
 const GOING_AGAIN = {
   id: "going-again",
-  eyebrow: "08",
+  eyebrow: "06c",
   title: "After your run",
 };
 
 const ETIQUETTE = {
   id: "etiquette",
-  eyebrow: "09",
+  eyebrow: "06d",
   title: "Etiquette and other notes",
 };
 
@@ -94,8 +94,9 @@ export default function HelpOnTheFloorPage() {
           <p>
             Want another run? Check in again. There's no cooldown beyond "the queue has to actually
             progress." Your next check-in joins whichever queue your division qualifies for at that
-            moment — priority if you're still within the session's priority run limit for your
-            division, standard if you've exceeded it.
+            moment — priority only if your division is flagged priority for this session, you are
+            still under this session&apos;s priority run limit for that division, and any event-wide
+            cap for that division has not been reached; otherwise you join Standard.
           </p>
           <p>
             A note on order of operations: don&apos;t check in again for the same partnership while

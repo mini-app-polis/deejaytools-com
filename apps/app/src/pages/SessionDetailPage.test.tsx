@@ -569,4 +569,52 @@ describe("SessionDetailPage — check-in song selector", () => {
     expect(screen.queryByRole("radiogroup", { name: /^song$/i })).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /^check in$/i })[0]).toBeDisabled();
   });
+
+  it("sends entityManagedPartnershipId when checking in with a managed-partnership song", async () => {
+    signedIn = true;
+    apiPost.mockResolvedValue({});
+    stubGets({
+      session: openCheckinWindowSession(),
+      songs: [
+        {
+          id: "song_mp",
+          processed_filename: "Managed Routine",
+          division: "Classic",
+          partner_id: null,
+          managed_partnership_id: "mp_1",
+        },
+      ],
+      eventSubmissions: [makeSubmission("song_mp")],
+    });
+    renderAt();
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: /^check in$/i }).length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getAllByRole("button", { name: /^check in$/i })[0]!);
+
+    await waitFor(() => {
+      expect(screen.getByRole("radiogroup", { name: /^song$/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("radio", { name: /Managed Routine/i }));
+    const submitButton = screen
+      .getAllByRole("button", { name: /^check in$/i })
+      .find((button) => button.getAttribute("type") === "submit");
+    expect(submitButton).toBeTruthy();
+    fireEvent.click(submitButton!);
+
+    await waitFor(() => {
+      expect(apiPost).toHaveBeenCalledWith("/v1/checkins", {
+        sessionId: "s1",
+        divisionName: "Classic",
+        entityPairId: null,
+        entitySoloUserId: null,
+        entityManagedPartnershipId: "mp_1",
+        songId: "song_mp",
+        notes: undefined,
+      });
+    });
+  });
 });

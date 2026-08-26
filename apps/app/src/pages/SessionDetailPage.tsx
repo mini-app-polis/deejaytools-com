@@ -304,8 +304,9 @@ export default function ApiSessionPage() {
       await api.post("/v1/checkins", {
         sessionId: id,
         divisionName: fDivision,
-        entityPairId: !isSolo ? pairId : null,
+        entityPairId: isManaged || isSolo ? null : pairId,
         entitySoloUserId: isSolo ? user.id : null,
+        entityManagedPartnershipId: isManaged ? selectedSong.managed_partnership_id : null,
         songId: fSongId,
         notes: fNotes.trim() || undefined,
       });

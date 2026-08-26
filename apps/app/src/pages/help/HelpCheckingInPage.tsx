@@ -4,7 +4,7 @@ import { HelpSection, HelpSubheading } from "@/components/help/HelpSection";
 
 const SECTION = {
   id: "checking-in",
-  eyebrow: "04",
+  eyebrow: "03",
   title: "Checking in",
 };
 
@@ -28,17 +28,19 @@ export default function HelpCheckingInPage() {
             when you have a DeejayTools account session.
           </li>
           <li>
-            <strong className="text-foreground">Name set</strong> on My Profile (same rule as upload).
+            <strong className="text-foreground">Name set</strong> on My Profile — required at
+            sign-up, same as upload. Nothing in the check-in form blocks you if it is missing.
           </li>
           <li>
-            <strong className="text-foreground">Partner added</strong> for couple routines (solo songs
-            skip this).
+            <strong className="text-foreground">Partner added</strong> for couple routines on songs
+            you uploaded for yourself.
           </li>
           <li>
             <strong className="text-foreground">Song uploaded</strong> with a playable file on My Content.
           </li>
           <li>
-            <strong className="text-foreground">Song submitted to the event</strong> — see{" "}
+            <strong className="text-foreground">Song submitted to the event</strong> — for sessions
+            that belong to an event only. See{" "}
             <Link to="/how-it-works/submitting-music#event-submission-required" className="text-primary hover:underline">
               uploading vs event submission
             </Link>
@@ -66,8 +68,9 @@ export default function HelpCheckingInPage() {
           </li>
           <li>
             A confirmation card shows <strong className="text-foreground">You</strong>,{" "}
-            <strong className="text-foreground">Partner</strong> (or italic{" "}
-            <strong className="text-foreground">Solo</strong>), and <strong className="text-foreground">Song</strong>.
+            <strong className="text-foreground">Partner</strong> (your partner&apos;s name, or the
+            managed partnership&apos;s leader &amp; follower names), and{" "}
+            <strong className="text-foreground">Song</strong>.
           </li>
           <li>
             <strong className="text-foreground">Division</strong> auto-fills from the song when that
@@ -84,8 +87,9 @@ export default function HelpCheckingInPage() {
 
         <HelpSubheading>Priority vs standard — you don&apos;t choose</HelpSubheading>
         <p>
-          The system assigns priority or standard from your division, how many priority runs you have
-          already used in this session, and any event-wide limits. You cannot pick a queue. See{" "}
+          The system assigns priority or standard from your division, how many completed runs you
+          already have in that division this session, and any event-wide limits. You cannot pick a
+          queue. See{" "}
           <Link to="/how-it-works/the-queue" className="text-primary hover:underline">
             Watching the queue
           </Link>{" "}
@@ -94,16 +98,16 @@ export default function HelpCheckingInPage() {
 
         <HelpSubheading>One queue spot per partnership (with an exception)</HelpSubheading>
         <p>
-          For a given couple (the same partnership), you can only have{" "}
-          <strong className="text-foreground">one live queue entry</strong> in a session at a time. If
-          you try again, the form warns: &ldquo;This partnership is already in the queue. Pick a
-          different song or withdraw your current entry first.&rdquo; After submit, you may also see:{" "}
-          &ldquo;You&apos;re already in the queue for this session.&rdquo;
+          For a given stored partnership record (your account linked to one partner roster entry),
+          you can only have <strong className="text-foreground">one live queue entry</strong> in a
+          session at a time. If you try again, the form warns: &ldquo;This partnership is already in
+          the queue. Pick a different song or withdraw your current entry first.&rdquo; After submit,
+          you may also see: &ldquo;You&apos;re already in the queue for this session.&rdquo;
         </p>
         <p>
           You <em>can</em> be in the queue more than once in the same session if the entries are
-          different partnerships — for example a solo routine and a couple routine, or two different
-          partners — because each counts as a separate entity.
+          different partnership records — for example you uploaded as the leader with Partner A and
+          again as the follower with Partner B — because each direction is a separate stored pair.
         </p>
 
         <HelpSubheading>Withdrawing</HelpSubheading>

@@ -127,12 +127,16 @@ const ENTRIES: TroubleEntry[] = [
     ),
     steps: (
       <>
-        Go to{" "}
+        For most events, go to{" "}
         <Link to="/event-submissions" className="text-primary hover:underline">
           Event submissions
+        </Link>
+        . For <strong>The Open</strong>, use{" "}
+        <Link to="/open-submissions" className="text-primary hover:underline">
+          The Open submissions
         </Link>{" "}
-        (or My Content → Events), add the song to the correct event, then return to the session page
-        and check in. See{" "}
+        instead — The Open does not appear on the generic Event submissions page. Add the song to the
+        correct event, then return to the session page and check in. See{" "}
         <Link to="/how-it-works/submitting-music#event-submission-required" className="text-primary hover:underline">
           Uploading vs event submission
         </Link>
@@ -182,25 +186,49 @@ const ENTRIES: TroubleEntry[] = [
 
   // ── Uploading ────────────────────────────────────────────────────────────
   {
-    id: "file-100mb",
+    id: "file-100mb-client",
     group: "Uploading",
-    heading: "File exceeds 100 MB limit",
+    heading: "That file is too large. Please choose an audio file under 100 MB.",
     meaning: (
       <>
-        Your file is over the 100 MB limit enforced in the browser before upload starts. The form
-        shows: &ldquo;That file is too large. Please choose an audio file under 100 MB.&rdquo;
+        The browser blocks the upload before any chunks are sent when the file is over{" "}
+        <strong className="text-foreground">100 MB</strong>. This is separate from the server-side
+        assembled-file cap below.
       </>
     ),
     steps: (
       <>
         Export or compress your audio to under 100 MB (MP3, WAV, FLAC, or M4A), then upload again at{" "}
         <Link to="/songs/add" className="text-primary hover:underline">
-          Add a song
+          Add Song
         </Link>
         .
       </>
     ),
-    keywords: "file exceeds 100 mb limit too large",
+    keywords: "that file is too large please choose an audio file under 100 mb browser",
+  },
+  {
+    id: "file-100mb-server",
+    group: "Uploading",
+    heading: "File exceeds 100 MB limit",
+    meaning: (
+      <>
+        After all chunks arrive, the server assembles the file and rejects it if the assembled size
+        exceeds <strong className="text-foreground">110 MB</strong>. The error message still reads{" "}
+        &ldquo;File exceeds 100 MB limit.&rdquo; This can happen even when the original file was
+        under the browser&apos;s 100 MB gate.
+      </>
+    ),
+    steps: (
+      <>
+        Export or compress your audio further, then upload again at{" "}
+        <Link to="/songs/add" className="text-primary hover:underline">
+          Add Song
+        </Link>
+        .
+      </>
+    ),
+    keywords: "file exceeds 100 mb limit assembled server",
   },
   {
     id: "unsupported-format",
@@ -237,7 +265,7 @@ const ENTRIES: TroubleEntry[] = [
       <>
         Sign in again, then start the upload from the beginning on{" "}
         <Link to="/songs/add" className="text-primary hover:underline">
-          Add a song
+          Add Song
         </Link>
         .
       </>
@@ -281,7 +309,7 @@ const ENTRIES: TroubleEntry[] = [
         </Link>
         , fill in first and last name, save, then return to{" "}
         <Link to="/songs/add" className="text-primary hover:underline">
-          Add a song
+          Add Song
         </Link>
         .
       </>
@@ -328,7 +356,7 @@ const ENTRIES: TroubleEntry[] = [
         <Link to="/my-profile" className="text-primary hover:underline">
           My Profile
         </Link>
-        , then return to Add a song → Teams, Cabaret, Other.
+        , then return to Add Song → Teams, Cabaret, Other.
       </>
     ),
     keywords: "you need a team to upload my profile teams",
@@ -378,7 +406,7 @@ const ENTRIES: TroubleEntry[] = [
         <Link to="/my-profile" className="text-primary hover:underline">
           My Profile
         </Link>
-        . Linked songs will be handled per the next message if applicable.
+        .
       </>
     ),
     keywords: "partner check-in history preserved after deletion",
@@ -448,9 +476,13 @@ const ENTRIES: TroubleEntry[] = [
     ),
     steps: (
       <>
-        Submit the song to the event on{" "}
+        For most events, submit the song on{" "}
         <Link to="/event-submissions" className="text-primary hover:underline">
           Event submissions
+        </Link>
+        . For <strong>The Open</strong>, use{" "}
+        <Link to="/open-submissions" className="text-primary hover:underline">
+          The Open submissions
         </Link>
         , then reopen the session check-in form.
       </>
@@ -514,7 +546,7 @@ const ENTRIES: TroubleEntry[] = [
       <>
         Upload the routine again at{" "}
         <Link to="/songs/add" className="text-primary hover:underline">
-          Add a song
+          Add Song
         </Link>
         , submit it to the event, then check in.
       </>

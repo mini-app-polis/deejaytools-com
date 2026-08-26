@@ -4,7 +4,7 @@ import { HelpSection, HelpSubheading } from "@/components/help/HelpSection";
 
 const SECTION = {
   id: "the-queue",
-  eyebrow: "05",
+  eyebrow: "04",
   title: "Watching the queue",
 };
 
