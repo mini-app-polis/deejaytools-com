@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { SignedIn, SignedOut, SignInButton, useAuth, useUser } from "@clerk/clerk-react";
-import type { ApiSession, ApiQueueEntry, ApiLeadingPair, ApiSong, ApiEventSongSubmission } from "@deejaytools/schemas";
+import type { ApiSession, ApiQueueEntry, ApiLeadingPair, ApiSong, ApiEventSongSubmission, ApiMyCheckin } from "@deejaytools/schemas";
 import { useApiClient } from "@/api/client";
 import { SessionInfoHeader } from "@/components/SessionInfoHeader";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,7 @@ export default function ApiSessionPage() {
   const [waiting, setWaiting] = useState<ApiQueueEntry[]>([]);
   const [pairs, setPairs] = useState<ApiLeadingPair[]>([]);
   const [songs, setSongs] = useState<ApiSong[]>([]);
+  const [myCheckins, setMyCheckins] = useState<ApiMyCheckin[]>([]);
   const [eventSubmissions, setEventSubmissions] = useState<ApiEventSongSubmission[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkinOpen, setCheckinOpen] = useState(false);
@@ -69,6 +70,15 @@ export default function ApiSessionPage() {
     setWaiting(w);
   }, [api, id]);
 
+  const loadMyCheckins = useCallback(async () => {
+    if (!isSignedIn) {
+      setMyCheckins([]);
+      return;
+    }
+    const mine = await api.get<ApiMyCheckin[]>("/v1/checkins/mine");
+    setMyCheckins(mine);
+  }, [api, isSignedIn]);
+
   const loadExtras = useCallback(
     async (eventId?: string | null) => {
       // /v1/partners/leading-pairs and /v1/songs both require auth — skip when
@@ -76,6 +86,7 @@ export default function ApiSessionPage() {
       if (!isSignedIn) {
         setPairs([]);
         setSongs([]);
+        setMyCheckins([]);
         setEventSubmissions(null);
         return;
       }
@@ -89,14 +100,16 @@ export default function ApiSessionPage() {
               .catch(() => null)
           : Promise.resolve(null);
 
-      const [p, s, subs] = await Promise.all([
+      const [p, s, subs, mine] = await Promise.all([
         api.get<ApiLeadingPair[]>("/v1/partners/leading-pairs"),
         api.get<ApiSong[]>("/v1/songs"),
         submissionsPromise,
+        api.get<ApiMyCheckin[]>("/v1/checkins/mine"),
       ]);
       setPairs(p);
       setSongs(s);
       setEventSubmissions(subs);
+      setMyCheckins(mine);
     },
     [api, isSignedIn]
   );
@@ -206,27 +219,33 @@ export default function ApiSessionPage() {
   const priorityWaiting = waiting.filter((r) => r.subQueue === "priority");
   const standardWaiting = waiting.filter((r) => r.subQueue !== "priority");
 
-  const userManagedPartnershipIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const song of songs) {
-      if (song.managed_partnership_id) ids.add(song.managed_partnership_id);
+  // Ownership comes from /v1/checkins/mine, not the pairs list: leading-pairs is
+  // the check-in entity PICKER and deliberately excludes placeholder partners
+  // (team / solo / other), which would make every team and exhibition entry look
+  // like someone else's.
+  const myEntityIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const ci of myCheckins) {
+      if (ci.sessionId !== id) continue;
+      if (ci.entityPairId) s.add(ci.entityPairId);
+      if (ci.entitySoloUserId) s.add(ci.entitySoloUserId);
+      if (ci.entityManagedPartnershipId) s.add(ci.entityManagedPartnershipId);
     }
-    return ids;
-  }, [songs]);
+    return s;
+  }, [myCheckins, id]);
 
   // Find ALL of the current user's active queue entries — one per entity
   // (pair, solo, or managed partnership). A user with multiple partnerships can have several.
   const userQueueEntries = useMemo(() => {
     if (!user?.id) return [];
-    const userPairIds = new Set(pairs.map((p) => p.id));
     return [...active, ...waiting].filter(
       (r) =>
-        r.entitySoloUserId === user.id ||
-        (r.entityPairId !== null && userPairIds.has(r.entityPairId)) ||
+        (r.entityPairId != null && myEntityIds.has(r.entityPairId)) ||
         (r.entityManagedPartnershipId != null &&
-          userManagedPartnershipIds.has(r.entityManagedPartnershipId))
+          myEntityIds.has(r.entityManagedPartnershipId)) ||
+        r.entitySoloUserId === user.id
     );
-  }, [active, waiting, pairs, user?.id, userManagedPartnershipIds]);
+  }, [active, waiting, myEntityIds, user?.id]);
 
   const inQueueEntityIds = useMemo(() => {
     const s = new Set<string>();
@@ -247,14 +266,32 @@ export default function ApiSessionPage() {
     }
     if (isSolo) return inQueueEntityIds.has(user?.id ?? "");
     const pid = derivedPair?.id;
-    // If the pair hasn't been created yet (pid is null), it can't be in queue.
-    return pid ? inQueueEntityIds.has(pid) : false;
+    if (pid) return inQueueEntityIds.has(pid);
+    // Placeholder partner: pair isn't in leading-pairs — resolve via ownership set.
+    if (selectedSong.partner_id) {
+      for (const eid of myEntityIds) {
+        if (!inQueueEntityIds.has(eid)) continue;
+        const entry = userQueueEntries.find(
+          (r) =>
+            r.entityPairId === eid ||
+            r.entityManagedPartnershipId === eid ||
+            r.entitySoloUserId === eid
+        );
+        if (entry && songs.find((s) => s.id === entry.songId)?.partner_id === selectedSong.partner_id) {
+          return true;
+        }
+      }
+    }
+    return false;
   }, [
     fSongId,
     selectedSong,
     isSolo,
     derivedPair?.id,
     inQueueEntityIds,
+    myEntityIds,
+    userQueueEntries,
+    songs,
     user?.id,
   ]);
 
@@ -315,7 +352,7 @@ export default function ApiSessionPage() {
       });
       toast.success("Checked in");
       setCheckinOpen(false);
-      await Promise.all([loadQueue(), loadSession()]);
+      await Promise.all([loadQueue(), loadSession(), loadMyCheckins()]);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Check-in failed";
       if (msg.includes("already has a live")) {
