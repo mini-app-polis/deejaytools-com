@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
+import { epochToTimeInTz, toEpochInTz } from "@/lib/zonedTime";
 import { compareEventChrono, compareSessionChrono } from "@/lib/chronoSort";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -51,59 +52,6 @@ function randomFourDigitTag(): string {
 }
 function randomDivision(): string {
   return DIVISION_OPTIONS[Math.floor(Math.random() * DIVISION_OPTIONS.length)];
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/**
- * Convert a "YYYY-MM-DD" date + "HH:MM" time string to a Unix epoch (ms),
- * interpreting the wall-clock time as local time in the given IANA timezone.
- *
- * e.g. ("2026-04-27", "19:30", "America/Chicago") → epoch for 7:30 PM CDT.
- * Falls back to browser local time if the timezone is empty or invalid.
- */
-/**
- * Inverse of toEpochInTz: given an epoch and a timezone, return the local
- * wall-clock time in that zone as "HH:MM" (24-hour). Used by the Edit
- * Session dialog to pre-fill the start-time input from a stored epoch.
- */
-function epochToTimeInTz(epoch: number, tz: string): string {
-  try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: tz,
-      hour: "2-digit", minute: "2-digit", hour12: false,
-    }).formatToParts(new Date(epoch));
-    const h = parts.find((p) => p.type === "hour")!.value;
-    const m = parts.find((p) => p.type === "minute")!.value;
-    // Intl in Chrome can return "24" instead of "00" for midnight; normalize.
-    return `${h === "24" ? "00" : h}:${m}`;
-  } catch {
-    const d = new Date(epoch);
-    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  }
-}
-
-function toEpochInTz(dateStr: string, timeStr: string, tz: string): number {
-  try {
-    const [year, month, day] = dateStr.split("-").map(Number);
-    const [hours, minutes] = timeStr.split(":").map(Number);
-    // Create a UTC epoch for the date+time as if it were UTC, then adjust.
-    const utcGuess = Date.UTC(year!, month! - 1, day!, hours!, minutes!, 0);
-    // Find what local time that UTC epoch corresponds to in `tz`.
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: tz,
-      year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", hour12: false,
-    }).formatToParts(new Date(utcGuess));
-    const tzHour = parseInt(parts.find((p) => p.type === "hour")!.value);
-    const tzMin  = parseInt(parts.find((p) => p.type === "minute")!.value);
-    // Difference between desired local time and what UTC gave us in `tz`.
-    const diffMs = ((hours! * 60 + minutes!) - (tzHour * 60 + tzMin)) * 60_000;
-    return utcGuess + diffMs;
-  } catch {
-    // Fallback: treat as browser local time.
-    return new Date(`${dateStr}T${timeStr}:00`).getTime();
-  }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -2118,7 +2066,14 @@ export default function AdminPage() {
                   {sessEventId && events?.find((ev) => ev.id === sessEventId)?.timezone && (
                     <span className="ml-1.5 font-normal text-muted-foreground">
                       ({formatTimezoneAbbr(
-                        events.find((ev) => ev.id === sessEventId)!.timezone
+                        events.find((ev) => ev.id === sessEventId)!.timezone,
+                        sessDate && sessStartTime
+                          ? toEpochInTz(
+                              sessDate,
+                              sessStartTime,
+                              events.find((ev) => ev.id === sessEventId)!.timezone
+                            )
+                          : undefined
                       )})
                     </span>
                   )}
