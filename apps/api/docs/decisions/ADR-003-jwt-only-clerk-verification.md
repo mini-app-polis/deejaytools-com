@@ -4,7 +4,22 @@ Date: 2026-04-24
 
 ## Status
 
-Accepted
+Accepted. The decision — verify session JWTs, defer machine callers —
+still stands.
+
+> **Superseded in part (Sep 2026).** This ADR was written against
+> ecosystem-standards CD-012, which required the Clerk M2M opaque-token
+> path. CD-012 was retired and replaced by CD-019: machine callers now
+> hold one named API key each, verified locally by constant-time
+> comparison against configuration, with no Clerk involvement and no
+> remote verification call. See ecosystem-standards ADR-008.
+>
+> What this means here: the deferral is unchanged in substance, but it
+> now sits against CD-019 in `apps/api/evaluator.yaml`, and the
+> implementation shape described in **Trigger to revisit** and
+> **Consequences** below is out of date. There is no BAPI call to add
+> and no `CLERK_SECRET_KEY` to introduce. The work is a machine-key
+> verifier alongside the JWT one, routed structurally by dot count.
 
 ## Context
 
@@ -57,6 +72,7 @@ Add the M2M path when any of the following becomes true:
 
 ## References
 
-- ecosystem-standards CD-012 (Internal auth via Clerk Bearer tokens)
-- apps/api/evaluator.yaml — CD-012 deferral
+- ecosystem-standards CD-019 (Bearer credential contract) — replaced CD-012
+- ecosystem-standards ADR-008 (named machine keys as the machine identity)
+- apps/api/evaluator.yaml — CD-019 deferral
 - apps/api/src/middleware/auth.ts — JWT-only implementation

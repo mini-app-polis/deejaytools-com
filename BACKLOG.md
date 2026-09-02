@@ -118,7 +118,7 @@ rationale and a revisit trigger.
 | XSTACK-002 | apps/api | Test fixture `src/test/mocks.ts` mirrors handler shape with raw `c.json`. | Evaluator-cog excludes `src/test/` from XSTACK-002. |
 | API-004 | apps/api | `/internal/tick` is unversioned by design (manual operator override; primary driver is the in-process scheduler in `index.ts`). | Never — intentional. Rationale inline in `src/app.ts`. |
 | CD-010, PRIN-005 | apps/api | Python-pattern observability checker false-positives against TypeScript. | Evaluator-cog adds `@sentry/node` + `common-typescript-utils` patterns. |
-| CD-012 | apps/api | JWT-only verification; no machine callers exist. | See [apps/api ADR-003](./apps/api/docs/decisions/ADR-003-jwt-only-clerk-verification.md). |
+| CD-019 | apps/api | JWT-only verification; no machine callers exist, so no machine-key verifier is configured. Replaces the CD-012 deferral (rule retired Sep 2026). | See [apps/api ADR-003](./apps/api/docs/decisions/ADR-003-jwt-only-clerk-verification.md). |
 | TEST-013 | apps/app | UI timing `setTimeout` calls flagged as production timeouts. | Evaluator-cog scopes the check to retry/HTTP/Prefect contexts. |
 
 ---
