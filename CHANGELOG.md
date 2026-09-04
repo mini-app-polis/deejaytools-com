@@ -1,3 +1,10 @@
+## [2.0.5](https://github.com/mini-app-polis/deejaytools-com/compare/v2.0.4...v2.0.5) (2026-09-04)
+
+
+### Bug Fixes
+
+* **deploy:** raise the restart retry ceiling to 10 ([d39d859](https://github.com/mini-app-polis/deejaytools-com/commit/d39d859526ba387fa01958a123171ac04d700786))
+
 ## [2.0.4](https://github.com/mini-app-polis/deejaytools-com/compare/v2.0.3...v2.0.4) (2026-09-04)
 
 
