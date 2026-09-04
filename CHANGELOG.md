@@ -1,3 +1,10 @@
+## [2.1.2](https://github.com/mini-app-polis/deejaytools-com/compare/v2.1.1...v2.1.2) (2026-09-04)
+
+
+### Bug Fixes
+
+* **deps:** bump @eslint/js from 9.39.4 to 9.39.5 ([818b007](https://github.com/mini-app-polis/deejaytools-com/commit/818b007893e75bf0dbe194151f43622f2ccc2e74))
+
 ## [2.1.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.1.0...v2.1.1) (2026-09-04)
 
 
