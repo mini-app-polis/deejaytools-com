@@ -1,0 +1,15 @@
+# osv-scanner exceptions for this repo.
+#
+# An entry here says the scanner's data is wrong about us, not that we have
+# decided to live with a vulnerability. Anything we are genuinely failing
+# belongs in a dated deferral in evaluator.yaml instead, per ADR-002.
+
+[[IgnoredVulns]]
+id = "GHSA-4r6h-8v6p-xvw6"
+ignoreUntil = 2027-03-01
+reason = "SheetJS prototype pollution, fixed in xlsx 0.19.3. We run 0.20.3, installed from https://cdn.sheetjs.com per the vendor's own instructions. OSV reports no fixed version because SheetJS delisted the package from npm and never published the patch there, so the advisory's affected range stays open-ended for the npm ecosystem. The installed code carries the fix. Revisit if we migrate off xlsx or SheetJS returns to npm."
+
+[[IgnoredVulns]]
+id = "GHSA-5pgg-2g8v-p4x9"
+ignoreUntil = 2027-03-01
+reason = "SheetJS ReDoS, fixed in xlsx 0.20.2. Same situation as GHSA-4r6h-8v6p-xvw6: we run 0.20.3 from the vendor CDN, and OSV cannot express a fix that was never published to npm."
