@@ -1,3 +1,52 @@
+## [2.1.2](https://github.com/mini-app-polis/deejaytools-com/compare/v2.1.1...v2.1.2) (2026-09-04)
+
+
+### Bug Fixes
+
+* **deps:** bump @eslint/js from 9.39.4 to 9.39.5 ([818b007](https://github.com/mini-app-polis/deejaytools-com/commit/818b007893e75bf0dbe194151f43622f2ccc2e74))
+
+## [2.1.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.1.0...v2.1.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* **git:** never three-way merge a lockfile ([236cd5c](https://github.com/mini-app-polis/deejaytools-com/commit/236cd5cbc32b87ad50b2cc3373d987cf8f23dd0a))
+
+# [2.1.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.0.5...v2.1.0) (2026-09-04)
+
+
+### Features
+
+* **deploy:** declare resource ceilings (placeholder values) ([c0f12c2](https://github.com/mini-app-polis/deejaytools-com/commit/c0f12c2b528d0469e24a2a3431fca71afe5d72b1))
+* **deps:** automate dependency updates ([4756b88](https://github.com/mini-app-polis/deejaytools-com/commit/4756b88c929a220fe13b05a73a1e95a455e1d553))
+
+## [2.0.5](https://github.com/mini-app-polis/deejaytools-com/compare/v2.0.4...v2.0.5) (2026-09-04)
+
+
+### Bug Fixes
+
+* **deploy:** raise the restart retry ceiling to 10 ([d39d859](https://github.com/mini-app-polis/deejaytools-com/commit/d39d859526ba387fa01958a123171ac04d700786))
+
+## [2.0.4](https://github.com/mini-app-polis/deejaytools-com/compare/v2.0.3...v2.0.4) (2026-09-04)
+
+
+### Bug Fixes
+
+* **ci:** delegate security to the shared fleet workflow ([ffe4c92](https://github.com/mini-app-polis/deejaytools-com/commit/ffe4c92343b92f0bf1b151197ca390735c035084))
+* **deps:** close remaining audit findings ([560ef64](https://github.com/mini-app-polis/deejaytools-com/commit/560ef642865fd713741faa7253b44e3c0c62cecb))
+* **deps:** upgrade vulnerable packages and repair JWT mock ([22b79a7](https://github.com/mini-app-polis/deejaytools-com/commit/22b79a792676c1830427c50ee5cf8cda752c6a76))
+* **security:** add pre-commit hooks and security scanning ([c35d756](https://github.com/mini-app-polis/deejaytools-com/commit/c35d7567f5aabb35f5458e0a21c39cc7f9f5c2e1))
+* updating dependencies due to security findings ([1bfd6c3](https://github.com/mini-app-polis/deejaytools-com/commit/1bfd6c3f41f64a29e871d154ed2c051eb475003f))
+
+## [2.0.3](https://github.com/mini-app-polis/deejaytools-com/compare/v2.0.2...v2.0.3) (2026-08-26)
+
+
+### Bug Fixes
+
+* **api:** count managed partnerships in has_active_checkin ([d417a38](https://github.com/mini-app-polis/deejaytools-com/commit/d417a3833197ecf6e82bf982f071b0fce5cedb16))
+* **api:** record an audit event when a queue entry is moved ([705d3a4](https://github.com/mini-app-polis/deejaytools-com/commit/705d3a4fc65ca12473749bbdef925a762b9dee0c))
+* **api:** stop creating solo queue entities ([6367e37](https://github.com/mini-app-polis/deejaytools-com/commit/6367e37d2a0133464467c9ffdead7ec7588a17aa))
+
 ## [2.0.2](https://github.com/mini-app-polis/deejaytools-com/compare/v2.0.1...v2.0.2) (2026-08-26)
 
 
