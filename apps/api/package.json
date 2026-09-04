@@ -29,7 +29,7 @@
     "google-auth-library": "^10.6.2",
     "googleapis": "^171.4.0",
     "hono": "4.13.5",
-    "multer": "^2.1.1",
+    "multer": "^2.2.0",
     "music-metadata": "^11.12.3",
     "node-id3": "^0.2.9",
     "postgres": "^3.4.5",
