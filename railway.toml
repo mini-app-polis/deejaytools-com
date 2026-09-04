@@ -20,3 +20,11 @@ healthcheckPath = "/health"
 healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
+
+# CD-024. Placeholder ceilings, well above what this service uses, so the
+# bound exists and is version-controlled without risking an OOM kill on a
+# workload nobody has measured. Bring them down to real usage plus
+# headroom once Railway's metrics have been read.
+[deploy.limitOverride.containers]
+cpu = 4
+memoryBytes = 4294967296
