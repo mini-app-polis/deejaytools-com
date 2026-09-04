@@ -1,3 +1,10 @@
+## [2.1.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.1.0...v2.1.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* **git:** never three-way merge a lockfile ([236cd5c](https://github.com/mini-app-polis/deejaytools-com/commit/236cd5cbc32b87ad50b2cc3373d987cf8f23dd0a))
+
 # [2.1.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.0.5...v2.1.0) (2026-09-04)
 
 
