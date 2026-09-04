@@ -15,9 +15,11 @@ of the `deejaytools-com` monorepo at `apps/api/`.
 | Observability | Sentry (errors), common-typescript-utils logger (structured logs) |
 | Deployment | Railway (NIXPACKS, `railway.toml`; `startCommand` runs `pnpm --filter api db:migrate && pnpm --filter api start`) |
 
-Auth verifies Clerk session JWTs only. Machine-to-machine (M2M)
-opaque-token verification is deferred — see [ADR-003](./docs/decisions/ADR-003-jwt-only-clerk-verification.md)
-for rationale and revisit triggers.
+Auth verifies Clerk session JWTs only. Machine callers are deferred —
+see [ADR-003](./docs/decisions/ADR-003-jwt-only-clerk-verification.md) for
+rationale and revisit triggers. The deferred work is a named-machine-key
+verifier (ecosystem-standards CD-019), not the Clerk M2M opaque-token
+path the ADR was originally written against; that was retired in Sep 2026.
 
 ## Data inputs
 

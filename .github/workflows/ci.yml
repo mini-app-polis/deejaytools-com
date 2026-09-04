@@ -7,6 +7,18 @@ on:
     branches: [main]
 
 jobs:
+  # SEC-002 through SEC-005. Delegates to the fleet's shared security
+  # workflow: gitleaks over full history, pnpm audit against the resolved
+  # dependency set, semgrep, and a CycloneDX SBOM retained as a build
+  # artifact. The steps live in mini-app-polis/.github so the pinned tool
+  # versions and the gating decisions are in one place; see that repo's
+  # README for the inputs.
+  security:
+    uses: mini-app-polis/.github/.github/workflows/security.yml@v2
+    with:
+      language: typescript
+      package-manager: pnpm
+
   verify:
     runs-on: ubuntu-latest
     steps:
@@ -19,6 +31,7 @@ jobs:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install
+
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm -r test:coverage
@@ -28,7 +41,7 @@ jobs:
   release:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    needs: verify
+    needs: [verify, security]
     permissions:
       contents: write
       issues: write

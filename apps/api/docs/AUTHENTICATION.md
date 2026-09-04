@@ -83,7 +83,7 @@ JWKS URL comes from **`CLERK_JWKS_URL`** (read via `jwksUrl()` in [`middleware/a
 - **`nbf` (not before)** — not validated
 - **`exp` absent** — not rejected; token treated as non-expiring
 
-**Signature** and presence/shape of **`sub`** are always enforced; **`exp`** is enforced only when the claim is a number. This matches [ADR-003](decisions/ADR-003-jwt-only-clerk-verification.md): session JWTs only, no M2M opaque tokens.
+**Signature** and presence/shape of **`sub`** are always enforced; **`exp`** is enforced only when the claim is a number. This matches [ADR-003](decisions/ADR-003-jwt-only-clerk-verification.md): session JWTs only, no machine callers.
 
 ### `CLERK_JWKS_URL` missing
 
@@ -490,7 +490,7 @@ Tests that hit **`getOptionalSyncedUserId`** (session list/detail) should mock [
 
 ## 10. Known limitations
 
-- **No M2M / opaque Clerk tokens** — session JWTs only. See [ADR-003](decisions/ADR-003-jwt-only-clerk-verification.md). Adding a machine caller requires a second verification path and CD-012 compliance work.
+- **No machine callers** — session JWTs only. See [ADR-003](decisions/ADR-003-jwt-only-clerk-verification.md). Adding one requires a second verification path and CD-019 compliance work: a named-machine-key verifier compared locally against configuration. It is not the Clerk M2M opaque-token path — that was retired ecosystem-wide in Sep 2026 (ecosystem-standards ADR-008).
 
 - **One DB round-trip per authenticated request** — `resolveAuthUser` always `SELECT`s `users` by `sub`. No caching of role or sync state on the JWT.
 

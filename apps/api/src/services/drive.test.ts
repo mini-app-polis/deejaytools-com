@@ -29,7 +29,12 @@ const mocks = vi.hoisted(() => {
 
 // Mock google-auth-library
 vi.mock("google-auth-library", () => ({
-  JWT: vi.fn().mockImplementation(() => ({ type: "jwt" })),
+  // Must be a regular function, not an arrow: drive.ts calls `new JWT(...)`,
+  // and Vitest constructs the mock implementation directly. Arrow functions
+  // have no [[Construct]] slot and throw "is not a constructor".
+  JWT: vi.fn(function () {
+    return { type: "jwt" };
+  }),
 }));
 
 // Mock googleapis
@@ -66,9 +71,9 @@ function resetDriveTestState() {
   clearDriveFolderCache();
   vi.resetAllMocks();
   mocks.mockGoogleDrive.mockImplementation(() => mocks.driveApi);
-  vi.mocked(JWT).mockImplementation(
-    () => ({ type: "jwt" }) as unknown as InstanceType<typeof JWT>
-  );
+  vi.mocked(JWT).mockImplementation(function () {
+    return { type: "jwt" } as unknown as InstanceType<typeof JWT>;
+  });
   Object.assign(process.env, TEST_ENV);
 }
 

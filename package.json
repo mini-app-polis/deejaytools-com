@@ -26,5 +26,35 @@
     "semantic-release": "^24.2.9",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.0"
+  },
+  "pnpm": {
+    "_comment": [
+      "Transitive-only advisories from the SEC-003 audit. Direct dependencies",
+      "are bumped in their own package.json instead; these have no declaration",
+      "to bump. Each version is the fixed version the advisory names.",
+      "xlsx is deliberately absent: no fixed version exists on npm."
+    ],
+    "overrides": {
+      "@babel/core": "^7.29.6",
+      "@humanfs/node": "^0.16.8",
+      "@opentelemetry/core": "^2.8.0",
+      "brace-expansion@1": "^1.1.18",
+      "brace-expansion@5": "^5.0.9",
+      "browserslist": "^4.28.7",
+      "esbuild@<0.25.0": "^0.25.0",
+      "esbuild@>=0.26.0 <0.28.1": "^0.28.1",
+      "form-data": "^4.0.6",
+      "handlebars": "^4.7.9",
+      "js-yaml@4": "^4.3.1",
+      "lodash": "^4.18.0",
+      "lodash-es": "^4.18.0",
+      "postcss-selector-parser": "^6.1.3",
+      "qs": "^6.16.0",
+      "shell-quote": "^1.9.0",
+      "undici@6": "^6.28.0",
+      "vite": "^6.4.3",
+      "undici@7": "^7.29.0",
+      "ws": "^8.21.0"
+    }
   }
 }
