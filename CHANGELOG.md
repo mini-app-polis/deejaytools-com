@@ -1,3 +1,10 @@
+## [2.1.3](https://github.com/mini-app-polis/deejaytools-com/compare/v2.1.2...v2.1.3) (2026-09-04)
+
+
+### Bug Fixes
+
+* **auth:** only mark the account sync done once it has succeeded ([d66760e](https://github.com/mini-app-polis/deejaytools-com/commit/d66760e6a3693e2117859eb8ca3e0095d3146a9e))
+
 ## [2.1.2](https://github.com/mini-app-polis/deejaytools-com/compare/v2.1.1...v2.1.2) (2026-09-04)
 
 
