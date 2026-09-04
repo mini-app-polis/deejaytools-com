@@ -1,3 +1,11 @@
+# [2.1.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.0.5...v2.1.0) (2026-09-04)
+
+
+### Features
+
+* **deploy:** declare resource ceilings (placeholder values) ([c0f12c2](https://github.com/mini-app-polis/deejaytools-com/commit/c0f12c2b528d0469e24a2a3431fca71afe5d72b1))
+* **deps:** automate dependency updates ([4756b88](https://github.com/mini-app-polis/deejaytools-com/commit/4756b88c929a220fe13b05a73a1e95a455e1d553))
+
 ## [2.0.5](https://github.com/mini-app-polis/deejaytools-com/compare/v2.0.4...v2.0.5) (2026-09-04)
 
 
