@@ -19,6 +19,26 @@ jobs:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install
+
+      # SEC-003: Dependency vulnerability scan — fail the build if pnpm audit finds issues
+      - name: Audit dependencies
+        run: pnpm audit --audit-level=moderate
+
+      # SEC-002: Secret scanning on pull-request diffs using gitleaks
+      - name: Scan for secrets (PR diffs)
+        if: github.event_name == 'pull_request'
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          source: diff
+          verbose: true
+
+      # SEC-002: Full gitleaks scan on push to main
+      - name: Scan for secrets (full history)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          verbose: true
+
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm -r test:coverage
