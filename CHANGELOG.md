@@ -1,3 +1,14 @@
+## [2.0.4](https://github.com/mini-app-polis/deejaytools-com/compare/v2.0.3...v2.0.4) (2026-09-04)
+
+
+### Bug Fixes
+
+* **ci:** delegate security to the shared fleet workflow ([ffe4c92](https://github.com/mini-app-polis/deejaytools-com/commit/ffe4c92343b92f0bf1b151197ca390735c035084))
+* **deps:** close remaining audit findings ([560ef64](https://github.com/mini-app-polis/deejaytools-com/commit/560ef642865fd713741faa7253b44e3c0c62cecb))
+* **deps:** upgrade vulnerable packages and repair JWT mock ([22b79a7](https://github.com/mini-app-polis/deejaytools-com/commit/22b79a792676c1830427c50ee5cf8cda752c6a76))
+* **security:** add pre-commit hooks and security scanning ([c35d756](https://github.com/mini-app-polis/deejaytools-com/commit/c35d7567f5aabb35f5458e0a21c39cc7f9f5c2e1))
+* updating dependencies due to security findings ([1bfd6c3](https://github.com/mini-app-polis/deejaytools-com/commit/1bfd6c3f41f64a29e871d154ed2c051eb475003f))
+
 ## [2.0.3](https://github.com/mini-app-polis/deejaytools-com/compare/v2.0.2...v2.0.3) (2026-08-26)
 
 
