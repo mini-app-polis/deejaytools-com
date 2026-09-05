@@ -1,3 +1,10 @@
+## [2.1.4](https://github.com/mini-app-polis/deejaytools-com/compare/v2.1.3...v2.1.4) (2026-09-05)
+
+
+### Bug Fixes
+
+* **deploy:** pin the Node version and stop swallowing the verifier's error ([0c8e1eb](https://github.com/mini-app-polis/deejaytools-com/commit/0c8e1eb3a654a444d7d788827752a58daa67524f))
+
 ## [2.1.3](https://github.com/mini-app-polis/deejaytools-com/compare/v2.1.2...v2.1.3) (2026-09-04)
 
 
