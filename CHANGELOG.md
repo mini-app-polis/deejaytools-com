@@ -1,3 +1,24 @@
+## [2.1.5](https://github.com/mini-app-polis/deejaytools-com/compare/v2.1.4...v2.1.5) (2026-09-05)
+
+
+### Bug Fixes
+
+* **deps:** bump the js-minor-and-patch group across 1 directory with 29 updates ([71e25ac](https://github.com/mini-app-polis/deejaytools-com/commit/71e25ac6f016adceec2da2e5ea2c0c47be7273f4))
+
+## [2.1.4](https://github.com/mini-app-polis/deejaytools-com/compare/v2.1.3...v2.1.4) (2026-09-05)
+
+
+### Bug Fixes
+
+* **deploy:** pin the Node version and stop swallowing the verifier's error ([0c8e1eb](https://github.com/mini-app-polis/deejaytools-com/commit/0c8e1eb3a654a444d7d788827752a58daa67524f))
+
+## [2.1.3](https://github.com/mini-app-polis/deejaytools-com/compare/v2.1.2...v2.1.3) (2026-09-04)
+
+
+### Bug Fixes
+
+* **auth:** only mark the account sync done once it has succeeded ([d66760e](https://github.com/mini-app-polis/deejaytools-com/commit/d66760e6a3693e2117859eb8ca3e0095d3146a9e))
+
 ## [2.1.2](https://github.com/mini-app-polis/deejaytools-com/compare/v2.1.1...v2.1.2) (2026-09-04)
 
 
