@@ -50,11 +50,18 @@ async function resolveAuthUser(c: Context): Promise<AuthUser | Response> {
   let payload: ClerkPayload;
   try {
     payload = await verifyClerkToken(token, jwksUrl());
-  } catch {
+  } catch (err) {
     logger.warn({
       event: "auth_failed",
       category: "api",
-      context: { reason: "invalid_token" as const },
+      // Carry the verifier's message. Swallowing it makes an environment fault
+      // -- an unreachable JWKS, a missing WebCrypto global, a rotated key --
+      // indistinguishable from a genuinely bad token, so a total auth outage
+      // reads in the logs exactly like ordinary unauthenticated traffic.
+      context: {
+        reason: "invalid_token" as const,
+        message: err instanceof Error ? err.message : String(err),
+      },
     });
     return c.json(CommonErrors.unauthorized(), 401);
   }
