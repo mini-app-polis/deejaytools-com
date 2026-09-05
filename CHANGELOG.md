@@ -1,3 +1,11 @@
+## [2.1.6](https://github.com/mini-app-polis/deejaytools-com/compare/v2.1.5...v2.1.6) (2026-09-05)
+
+
+### Bug Fixes
+
+* **deps:** repair the lockfile mismerged by "Merge branch 'main' into dev" ([1577649](https://github.com/mini-app-polis/deejaytools-com/commit/157764908a2d5229636f9720b75ed3265a8e6cdc))
+* **deps:** upgrade to vite 8 and vitest 4 so the dependabot bumps pass ([7defb78](https://github.com/mini-app-polis/deejaytools-com/commit/7defb78d333535ed15b2adae0cf462b7b612c537))
+
 ## [2.1.5](https://github.com/mini-app-polis/deejaytools-com/compare/v2.1.4...v2.1.5) (2026-09-05)
 
 
