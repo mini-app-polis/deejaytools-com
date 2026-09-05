@@ -13,8 +13,11 @@ describe("HelpLayout hash scrolling", () => {
   beforeEach(() => {
     scrollIntoView = vi.fn();
     scrollTo = vi.fn();
-    window.scrollTo = scrollTo;
-    Element.prototype.scrollIntoView = scrollIntoView;
+    // Both DOM methods are overloaded, which no mock type can satisfy
+    // structurally; the cast is the standard way to stand one in.
+    window.scrollTo = scrollTo as unknown as typeof window.scrollTo;
+    Element.prototype.scrollIntoView =
+      scrollIntoView as unknown as typeof Element.prototype.scrollIntoView;
     vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
       cb(0);
       return 1;

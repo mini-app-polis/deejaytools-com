@@ -229,7 +229,7 @@ describe("AddSongPage — Upload chunk loop", () => {
       }
       return Promise.resolve([]);
     });
-    fetchSpy = vi.spyOn(global, "fetch") as ReturnType<typeof vi.spyOn>;
+    fetchSpy = vi.spyOn(globalThis, "fetch") as ReturnType<typeof vi.spyOn>;
   });
 
   afterEach(() => {
@@ -340,7 +340,7 @@ describe("AddSongPage — managed partnership upload", () => {
       if (path === "/v1/managed-partnerships") return Promise.resolve([samplePartnership]);
       return Promise.resolve([]);
     });
-    fetchSpy = vi.spyOn(global, "fetch") as ReturnType<typeof vi.spyOn>;
+    fetchSpy = vi.spyOn(globalThis, "fetch") as ReturnType<typeof vi.spyOn>;
   });
 
   afterEach(() => {

@@ -1056,9 +1056,13 @@ describe("POST /v1/songs/upload/chunk", () => {
       return false;
     };
 
-    const origSelect = mockDb.select.getMockImplementation()!;
-    const origWhere = mockDb.where.getMockImplementation()!;
-    const origThen = mockDb.then.getMockImplementation()!;
+    // `getMockImplementation()` is typed off the mock's own (deliberately
+    // wide) signature, so narrow the captured chain implementations to the
+    // shape this test calls them with.
+    type ChainImpl = (this: typeof mockDb, ...args: unknown[]) => unknown;
+    const origSelect = mockDb.select.getMockImplementation() as ChainImpl;
+    const origWhere = mockDb.where.getMockImplementation() as ChainImpl;
+    const origThen = mockDb.then.getMockImplementation() as ChainImpl;
 
     vi.mocked(mockDb.select).mockImplementation(function (this: typeof mockDb, arg?: unknown) {
       versionQueryActive =
