@@ -1,3 +1,10 @@
+## [2.1.5](https://github.com/mini-app-polis/deejaytools-com/compare/v2.1.4...v2.1.5) (2026-09-05)
+
+
+### Bug Fixes
+
+* **deps:** bump the js-minor-and-patch group across 1 directory with 29 updates ([71e25ac](https://github.com/mini-app-polis/deejaytools-com/commit/71e25ac6f016adceec2da2e5ea2c0c47be7273f4))
+
 ## [2.1.4](https://github.com/mini-app-polis/deejaytools-com/compare/v2.1.3...v2.1.4) (2026-09-05)
 
 
