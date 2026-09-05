@@ -130,7 +130,7 @@ describe("SongsPage — delete flow", () => {
   it("calls api.del and removes the song from the list on confirm", async () => {
     const { toast } = await import("sonner");
     const apiDel = vi.fn();
-    vi.mocked(apiClient).del = apiDel;
+    apiClient.del = apiDel;
 
     apiGet.mockResolvedValue([
       {
@@ -183,7 +183,7 @@ describe("SongsPage — delete flow", () => {
   it("shows toast error and keeps song in list when api.del rejects with check-in message", async () => {
     const { toast } = await import("sonner");
     const apiDel = vi.fn();
-    vi.mocked(apiClient).del = apiDel;
+    apiClient.del = apiDel;
 
     apiGet.mockResolvedValue([
       {
