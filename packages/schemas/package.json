@@ -22,7 +22,7 @@
     "test:coverage": "vitest run --coverage --passWithNoTests"
   },
   "dependencies": {
-    "typescript": "^5.7.2",
+    "typescript": "^6.0.3",
     "zod": "^3.24.1"
   },
   "devDependencies": {
