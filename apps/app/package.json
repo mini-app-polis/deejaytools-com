@@ -33,7 +33,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "common-typescript-utils": "^1.2.1",
-    "eslint": "^9.16.0",
+    "eslint": "^10.9.1",
     "lucide-react": "^1.39.0",
     "postcss": "^8.5.28",
     "react": "^19.2.8",
