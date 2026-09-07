@@ -43,7 +43,7 @@
     "@types/multer": "^2.1.0",
     "@vitest/coverage-v8": "^4.1.11",
     "tsx": "^4.19.2",
-    "vitest": "^4.1.11",
+    "vitest": "^5.0.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   }
 }
