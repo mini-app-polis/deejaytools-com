@@ -4,7 +4,11 @@ on:
   push:
     branches: ["**"]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # SEC-002 through SEC-005. Delegates to the fleet's shared security
@@ -19,7 +23,7 @@ jobs:
       language: typescript
       package-manager: pnpm
 
-  verify:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -41,7 +45,7 @@ jobs:
   release:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    needs: [verify, security]
+    needs: [test, security]
     permissions:
       contents: write
       issues: write
