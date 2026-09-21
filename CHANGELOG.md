@@ -1,3 +1,13 @@
+## [2.2.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.2.0...v2.2.1) (2026-09-21)
+
+
+### Bug Fixes
+
+* **deps:** align google-auth-library with googleapis 181 ([0bd73d2](https://github.com/mini-app-polis/deejaytools-com/commit/0bd73d26d4e3ac93c1969bb115d5dd02c66acc5c))
+* **deps:** bump @types/node from 22.19.15 to 26.6.1 ([4d6a1de](https://github.com/mini-app-polis/deejaytools-com/commit/4d6a1dec9a03842c25a0b15e59cfac83a5856ce6))
+* **deps:** bump googleapis from 171.4.0 to 181.0.0 ([06c5cfd](https://github.com/mini-app-polis/deejaytools-com/commit/06c5cfd50c81780fe43f538300209c81027f8773))
+* **deps:** bump the js-minor-and-patch group with 8 updates ([6e6ca8c](https://github.com/mini-app-polis/deejaytools-com/commit/6e6ca8cc02f36657fc1932585ce3f9e370aa41ff))
+
 # [2.2.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.1.6...v2.2.0) (2026-09-15)
 
 
