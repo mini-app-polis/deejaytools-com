@@ -29,7 +29,7 @@
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
     "flac-tagger": "^2.0.0",
-    "google-auth-library": "^10.9.1",
+    "google-auth-library": "^11.1.0",
     "googleapis": "^181.0.0",
     "hono": "4.13.8",
     "multer": "^2.4.0",
