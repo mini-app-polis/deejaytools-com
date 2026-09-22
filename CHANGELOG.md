@@ -1,3 +1,15 @@
+# [2.3.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.2.1...v2.3.0) (2026-09-22)
+
+
+### Bug Fixes
+
+* **deps:** prune orphaned monorepo entries from lockfile ([2b9e4f6](https://github.com/mini-app-polis/deejaytools-com/commit/2b9e4f6967ae408de6ae044875e1d9d5099bde5d))
+
+
+### Features
+
+* refactor ([3f5e9c2](https://github.com/mini-app-polis/deejaytools-com/commit/3f5e9c29433e0cdb069a7c6efdd914aad86a1f75))
+
 ## [2.2.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.2.0...v2.2.1) (2026-09-21)
 
 
