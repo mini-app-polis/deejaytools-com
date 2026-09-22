@@ -1,3 +1,40 @@
+## [2.2.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.2.0...v2.2.1) (2026-09-21)
+
+
+### Bug Fixes
+
+* **deps:** align google-auth-library with googleapis 181 ([0bd73d2](https://github.com/mini-app-polis/deejaytools-com/commit/0bd73d26d4e3ac93c1969bb115d5dd02c66acc5c))
+* **deps:** bump @types/node from 22.19.15 to 26.6.1 ([4d6a1de](https://github.com/mini-app-polis/deejaytools-com/commit/4d6a1dec9a03842c25a0b15e59cfac83a5856ce6))
+* **deps:** bump googleapis from 171.4.0 to 181.0.0 ([06c5cfd](https://github.com/mini-app-polis/deejaytools-com/commit/06c5cfd50c81780fe43f538300209c81027f8773))
+* **deps:** bump the js-minor-and-patch group with 8 updates ([6e6ca8c](https://github.com/mini-app-polis/deejaytools-com/commit/6e6ca8cc02f36657fc1932585ce3f9e370aa41ff))
+
+# [2.2.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.1.6...v2.2.0) (2026-09-15)
+
+
+### Bug Fixes
+
+* **deps:** bump eslint from 9.39.4 to 10.10.0 ([90e3d2f](https://github.com/mini-app-polis/deejaytools-com/commit/90e3d2fb8ccf05bb12762d83477d2bce2a2e8d5e))
+* **deps:** bump google-auth-library from 10.6.2 to 11.0.2 ([642f8e3](https://github.com/mini-app-polis/deejaytools-com/commit/642f8e399713eb3826e9850711f733426bce21a9))
+* **deps:** bump tailwindcss from 3.4.19 to 4.3.3 ([7d641d7](https://github.com/mini-app-polis/deejaytools-com/commit/7d641d75b9308f33acc6bc2acbf9e9cab90e68b9))
+* **deps:** bump the js-minor-and-patch group across 1 directory with 7 updates ([8c71568](https://github.com/mini-app-polis/deejaytools-com/commit/8c715683c2657bfa2d846268fae90efebbcbf0c5))
+* **deps:** bump the js-minor-and-patch group with 10 updates ([7155f70](https://github.com/mini-app-polis/deejaytools-com/commit/7155f70b812c8b2515b51f96dd375e740a0bcc21))
+* fixing builds from dependency bumps ([27fb587](https://github.com/mini-app-polis/deejaytools-com/commit/27fb587e2b5cac785840239d27e241fd8bbd7e22))
+* fixing builds from dependency bumps ([7dfb400](https://github.com/mini-app-polis/deejaytools-com/commit/7dfb400416bdf2cc648ecb4690418c7f3f24ab60))
+* fixing builds from dependency bumps ([541946b](https://github.com/mini-app-polis/deejaytools-com/commit/541946b84051583f5423516fed54d118d01812cf))
+
+
+### Features
+
+* upgrade to tailwind 4 ([9514852](https://github.com/mini-app-polis/deejaytools-com/commit/951485242194e16583e4e2a15e6ccc786246a05a))
+
+## [2.1.6](https://github.com/mini-app-polis/deejaytools-com/compare/v2.1.5...v2.1.6) (2026-09-05)
+
+
+### Bug Fixes
+
+* **deps:** repair the lockfile mismerged by "Merge branch 'main' into dev" ([1577649](https://github.com/mini-app-polis/deejaytools-com/commit/157764908a2d5229636f9720b75ed3265a8e6cdc))
+* **deps:** upgrade to vite 8 and vitest 4 so the dependabot bumps pass ([7defb78](https://github.com/mini-app-polis/deejaytools-com/commit/7defb78d333535ed15b2adae0cf462b7b612c537))
+
 ## [2.1.5](https://github.com/mini-app-polis/deejaytools-com/compare/v2.1.4...v2.1.5) (2026-09-05)
 
 

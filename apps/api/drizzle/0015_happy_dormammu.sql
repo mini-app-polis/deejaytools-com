@@ -1,1 +1,0 @@
-ALTER TYPE "public"."queue_event_action" ADD VALUE 'moved_within_queue';

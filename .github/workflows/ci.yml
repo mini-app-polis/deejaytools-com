@@ -38,9 +38,8 @@ jobs:
 
       - run: pnpm typecheck
       - run: pnpm lint
-      - run: pnpm -r test:coverage
-      - run: pnpm --filter api build
-      - run: pnpm --filter app build
+      - run: pnpm test:coverage
+      - run: pnpm build
 
   release:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'

@@ -8,13 +8,13 @@ For deployment topology and env var checklists, see [`DEPLOYMENT.md`](./DEPLOYME
 
 ## `DATABASE_URL is required`
 
-**Symptom:** API process exits immediately on boot; stack trace points at `apps/api/src/db/index.ts`.
+**Symptom:** API process exits immediately on boot; stack trace points at `deejaytools-api/src/db/index.ts`.
 
 **Cause:** `DATABASE_URL` is missing or empty. The DB module throws before the server listens.
 
 **Fix:**
 
-1. Set `DATABASE_URL` to a valid Postgres connection string (`apps/api/.env` locally, Railway variables in production).
+1. Set `DATABASE_URL` to a valid Postgres connection string (`deejaytools-api/.env` locally, Railway variables in production).
 2. Redeploy / restart the API.
 3. Confirm Postgres is reachable from the host (network, credentials, SSL mode if required by the provider).
 
@@ -55,7 +55,7 @@ For deployment topology and env var checklists, see [`DEPLOYMENT.md`](./DEPLOYME
 
 ## `VITE_CLERK_PUBLISHABLE_KEY is required`
 
-**Symptom:** Blank page; browser console shows uncaught error at startup from `apps/app/src/main.tsx`.
+**Symptom:** Blank page; browser console shows uncaught error at startup from `src/main.tsx`.
 
 **Cause:** Production build was deployed without `VITE_CLERK_PUBLISHABLE_KEY`. Vite inlines env vars at **build time** — setting the variable after build does nothing.
 
@@ -63,7 +63,7 @@ For deployment topology and env var checklists, see [`DEPLOYMENT.md`](./DEPLOYME
 
 1. Add `VITE_CLERK_PUBLISHABLE_KEY` in Cloudflare Pages → Settings → Environment variables (Production **and** Preview if you use previews).
 2. **Trigger a new build** (retry deployment or push a commit).
-3. Verify locally: copy `apps/app/.env.example` to `.env.local` and set the key before `pnpm dev`.
+3. Verify locally: copy `.env.example` to `.env.local` and set the key before `pnpm dev`.
 
 ---
 
@@ -81,7 +81,7 @@ For deployment topology and env var checklists, see [`DEPLOYMENT.md`](./DEPLOYME
 
 1. Verify `DATABASE_URL` (host, port, user, password, database name, SSL).
 2. Confirm Postgres is running / Railway Postgres plugin is healthy.
-3. Tune pool settings in Railway (all optional, defaults in `apps/api/src/db/index.ts`):
+3. Tune pool settings in Railway (all optional, defaults in `deejaytools-api/src/db/index.ts`):
    - `DB_POOL_MAX` — default **20**; lower if you hit `too many clients`.
    - `DB_CONNECT_TIMEOUT` — default **10** s; increase on slow networks.
    - `DB_IDLE_TIMEOUT` — default **30** s; idle connections released to free DB slots.
@@ -97,8 +97,8 @@ For deployment topology and env var checklists, see [`DEPLOYMENT.md`](./DEPLOYME
 
 **Fix:**
 
-1. **Production:** Railway `startCommand` runs `db:migrate` before start — if deploy succeeded, migrations should be applied. If you bypassed deploy or restored DB manually, redeploy or run `pnpm --filter api db:migrate` against that URL from a trusted environment.
-2. **Local:** `pnpm --filter api db:migrate`.
+1. **Production:** Railway `startCommand` runs `db:migrate` before start — if deploy succeeded, migrations should be applied. If you bypassed deploy or restored DB manually, redeploy or run `pnpm db:migrate` against that URL from a trusted environment.
+2. **Local:** `pnpm db:migrate`.
 3. If migrate fails on deploy, Railway keeps the **previous** image — fix the migration SQL and redeploy (see ADR-001).
 
 ---
@@ -107,13 +107,13 @@ For deployment topology and env var checklists, see [`DEPLOYMENT.md`](./DEPLOYME
 
 **Symptom:** API fails to start locally with Node error that port **3001** is already in use.
 
-**Cause:** Another process (often a previous `pnpm dev:api`) is bound to `3001`.
+**Cause:** Another process (often a previous `pnpm dev` in deejaytools-api) is bound to `3001`.
 
 **Fix:**
 
 1. Find the process: `lsof -i :3001` (macOS/Linux).
 2. Stop it: `kill <PID>` or stop the other terminal session.
-3. Or set a different `PORT` in `apps/api/.env` and point `VITE_API_URL` / Vite proxy at the new port.
+3. Or set a different `PORT` in `deejaytools-api/.env` and point `VITE_API_URL` / Vite proxy at the new port.
 
 Production on Railway uses the injected `PORT` — this error is almost always local dev.
 
@@ -127,7 +127,7 @@ Production on Railway uses the injected `PORT` — this error is almost always l
 
 **Fix:**
 
-1. Set all three on Railway (see `apps/api/.env.example`).
+1. Set all three on Railway (see `deejaytools-api/.env.example`).
 2. Redeploy.
 3. Retry upload.
 
@@ -142,7 +142,7 @@ Production on Railway uses the injected `PORT` — this error is almost always l
 **Fix:**
 
 1. Store the key with `\n` for line breaks in the env var (Railway multiline secret editor, or escaped string).
-2. Code applies `.replace(/\\n/g, "\n")` in `apps/api/src/services/drive.ts` — the stored value must use **literal backslash-n**, not actual newlines, if your platform requires single-line secrets.
+2. Code applies `.replace(/\\n/g, "\n")` in `deejaytools-api/src/services/drive.ts` — the stored value must use **literal backslash-n**, not actual newlines, if your platform requires single-line secrets.
 3. Redeploy and retry.
 
 ---
@@ -164,7 +164,7 @@ Production on Railway uses the injected `PORT` — this error is almost always l
 
 **Symptom:** API **400** with message exactly: `File exceeds 100 MB limit`.
 
-**Cause:** Assembled file after chunked upload exceeds `MAX_ASSEMBLED_BYTES` (~110 MB) in `apps/api/src/routes/songs.ts`. The API error message still says “100 MB”; the browser rejects uploads over 100 MB client-side (`MAX_FILE_BYTES` in `chunkedSongUpload.ts`), so a file between 100 and 110 MB never reaches the server from the app but would pass a direct API upload.
+**Cause:** Assembled file after chunked upload exceeds `MAX_ASSEMBLED_BYTES` (~110 MB) in `deejaytools-api/src/routes/songs.ts`. The API error message still says “100 MB”; the browser rejects uploads over 100 MB client-side (`MAX_FILE_BYTES` in `chunkedSongUpload.ts`), so a file between 100 and 110 MB never reaches the server from the app but would pass a direct API upload.
 
 **Fix:** Upload a smaller file. Client-side `SongUploadForm` also rejects files over 100 MB before upload starts.
 
@@ -174,7 +174,7 @@ Production on Railway uses the injected `PORT` — this error is almost always l
 
 **Symptom:** API **400** with `error.code` **`UNSUPPORTED_FORMAT`** and the message above.
 
-**Cause:** Server magic-byte sniffing (`detectAudioFormat` in `apps/api/src/services/audioFormat.ts`) did not recognize the file — wrong type, corrupt file, or renamed non-audio extension. Client MIME type is intentionally not trusted (iOS often sends `application/octet-stream`).
+**Cause:** Server magic-byte sniffing (`detectAudioFormat` in `deejaytools-api/src/services/audioFormat.ts`) did not recognize the file — wrong type, corrupt file, or renamed non-audio extension. Client MIME type is intentionally not trusted (iOS often sends `application/octet-stream`).
 
 **Fix:**
 
@@ -186,7 +186,7 @@ Production on Railway uses the injected `PORT` — this error is almost always l
 
 ## `Your session expired. Please sign in again and retry the upload.`
 
-**Symptom:** Mid-upload failure in the browser; toast or inline error with this exact string from `apps/app/src/lib/chunkedSongUpload.ts`.
+**Symptom:** Mid-upload failure in the browser; toast or inline error with this exact string from `src/lib/chunkedSongUpload.ts`.
 
 **Cause:** `getToken()` returned null on a chunk retry (Clerk session expired, signed out in another tab, or token fetch threw).
 
@@ -207,7 +207,7 @@ Production on Railway uses the injected `PORT` — this error is almost always l
 **Fix:**
 
 1. Check API health and CORS.
-2. If uploads fail consistently with no status code, verify the Fastly body-drain server in `apps/api/src/index.ts` is still deployed (see [`DEPLOYMENT.md`](./DEPLOYMENT.md)).
+2. If uploads fail consistently with no status code, verify the Fastly body-drain server in `deejaytools-api/src/index.ts` is still deployed (see [`DEPLOYMENT.md`](./DEPLOYMENT.md)).
 3. Retry on stable network.
 
 ---
@@ -258,7 +258,7 @@ and still returns success — **by design**, invisible to the user.
 
 **Symptom:** Browser console blocks fetch to API; preflight or response missing CORS headers.
 
-**Cause:** Frontend origin not listed in Railway `CORS_ORIGINS`. Default when unset is only `http://localhost:5173` (`apps/api/src/app.ts`).
+**Cause:** Frontend origin not listed in Railway `CORS_ORIGINS`. Default when unset is only `http://localhost:5173` (`deejaytools-api/src/app.ts`).
 
 **Fix:**
 
@@ -282,7 +282,7 @@ and still returns success — **by design**, invisible to the user.
 
 **Symptom:** Anyone can hit `GET /internal/tick` without a header and receive `{ "data": { "ticked": true } }`.
 
-**Cause:** `TICK_SECRET` is **unset** (`undefined`). Code only gates when `secret !== undefined` (`apps/api/src/app.ts`).
+**Cause:** `TICK_SECRET` is **unset** (`undefined`). Code only gates when `secret !== undefined` (`deejaytools-api/src/app.ts`).
 
 **Fix:** Set `TICK_SECRET` to a long random string in Railway production; always send matching `x-tick-secret` from cron/monitors. Never rely on obscurity alone.
 
@@ -292,7 +292,7 @@ and still returns success — **by design**, invisible to the user.
 
 **Symptom:** Browser network tab shows failed request with no response body; often on large uploads or first authenticated POST after idle.
 
-**Cause:** Fastly idle write-timeout before server consumed request body (see `apps/api/src/index.ts` comment). Regression if custom `createServer` body drain is removed.
+**Cause:** Fastly idle write-timeout before server consumed request body (see `deejaytools-api/src/index.ts` comment). Regression if custom `createServer` body drain is removed.
 
 **Fix:** Ensure production runs current `index.ts` with `rawBody` drain. Do not add async middleware before body consumption without testing through Railway/Fastly.
 
@@ -396,5 +396,5 @@ Structured logs use `{ event, category, context?, error? }`. Grep Railway log st
 ## Related docs
 
 - [`DEPLOYMENT.md`](./DEPLOYMENT.md) — Railway, Cloudflare, CI, env vars, first-deploy runbook
-- [`apps/api/docs/AUTHENTICATION.md`](../apps/api/docs/AUTHENTICATION.md) — auth codes and guards
-- [`apps/app/docs/ARCHITECTURE.md`](../apps/app/docs/ARCHITECTURE.md) — frontend upload and auth sync behaviour
+- [`deejaytools-api` docs/AUTHENTICATION.md](https://github.com/mini-app-polis/deejaytools-api/blob/main/docs/AUTHENTICATION.md) — auth codes and guards
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — frontend upload and auth sync behaviour

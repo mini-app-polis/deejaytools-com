@@ -10,7 +10,7 @@ left out of the initial build and need to come back.
 - **ADR-004 floor-trial queue model.** Schema, helpers, routes, and
   frontend updated. Replaces the original `floor_slots` design with
   three queues, audit trail, and run-history tables. See
-  `apps/api/docs/decisions/ADR-004-floor-trial-queue-model.md`.
+  `deejaytools-api/docs/decisions/ADR-004-floor-trial-queue-model.md`.
 - **Two-step queue compaction.** `compactAfterRemoval` now moves rows
   to sentinel positions before settling them at their final values, to
   avoid unique-index conflicts during concurrent withdraw/promote/
@@ -21,24 +21,24 @@ left out of the initial build and need to come back.
   (`queue_withdraw_failed`, `checkin_create_failed`, `auth_sync_failed`,
   `admin_checkin_inject_failed`, etc.) so production failures are
   debuggable without losing the user-facing status.
-- **Frontend test suite.** `apps/app` now has Vitest set up with
+- **Frontend test suite.** This repo now has Vitest set up with
   pure-function tests (Node env) and component tests (jsdom env)
   covering the api client, auth hooks, route guards, NavBar, and the
   critical pages (FloorTrials, SessionDetail, Songs/AddSong, Landing,
-  Partners). Integrated into CI via `pnpm -r test:coverage`.
+  Partners). Integrated into CI via `pnpm test:coverage`.
 - **Public-readable session detail.** Visitors can browse Floor Trials
   and individual session pages without signing in; the check-in form
   is replaced with a "Sign in to check in" CTA when unauthenticated.
 - **In-process session scheduler.** `startScheduler()` in
-  `apps/api/src/index.ts` runs `tickSessionStatuses()` and
+  `deejaytools-api/src/index.ts` runs `tickSessionStatuses()` and
   `fillRunningSessions()` on a repeating timer (default 30 s via
   `TICK_INTERVAL_MS`). `GET /internal/tick` is a manual operator
-  override, not a Railway cron job — see `apps/api/src/app.ts` and
+  override, not a Railway cron job — see `deejaytools-api/src/app.ts` and
   `services/scheduler.ts`.
 - **Sentry release tagging.** API reads `RAILWAY_DEPLOYMENT_ID` or
   `npm_package_version` in `instrument.ts`; the app injects
   `VITE_APP_VERSION` via `vite.config.ts` and passes it to
-  `Sentry.init` in `apps/app/src/lib/instrument.ts`.
+  `Sentry.init` in `src/lib/instrument.ts`.
 
 ---
 
@@ -81,9 +81,9 @@ Remaining intentional gaps:
 
 - `optional-user.ts` — fail-soft contract; nothing meaningful to
   assert beyond "returns undefined for invalid input".
-- `apps/app/src/pages/AdminPage.tsx` — large, tab-heavy admin surface
+- `src/pages/AdminPage.tsx` — large, tab-heavy admin surface
   whose API endpoints are all tested. Manual QA covers the UI side.
-- `apps/app/src/components/ui/*` — shadcn primitives (third-party).
+- `src/components/ui/*` — shadcn primitives (third-party).
 
 ---
 
@@ -113,13 +113,12 @@ rationale and a revisit trigger.
 
 | Rule | Scope | Rationale | Revisit when |
 |------|-------|-----------|--------------|
-| API-011 | apps/api | Drizzle migrations run at Railway deploy time, not in CI. | See [apps/api ADR-001](./apps/api/docs/decisions/ADR-001-drizzle-migrations-at-deploy.md). |
-| API-001 | apps/api | Railway config lives at the monorepo root rather than per-app. | Evaluator-cog API-001 check learns to look at the monorepo root. |
-| XSTACK-002 | apps/api | Test fixture `src/test/mocks.ts` mirrors handler shape with raw `c.json`. | Evaluator-cog excludes `src/test/` from XSTACK-002. |
-| API-004 | apps/api | `/internal/tick` is unversioned by design (manual operator override; primary driver is the in-process scheduler in `index.ts`). | Never — intentional. Rationale inline in `src/app.ts`. |
-| CD-010, PRIN-005 | apps/api | Python-pattern observability checker false-positives against TypeScript. | Evaluator-cog adds `@sentry/node` + `common-typescript-utils` patterns. |
-| CD-019 | apps/api | JWT-only verification; no machine callers exist, so no machine-key verifier is configured. Replaces the CD-012 deferral (rule retired Sep 2026). | See [apps/api ADR-003](./apps/api/docs/decisions/ADR-003-jwt-only-clerk-verification.md). |
-| TEST-013 | apps/app | UI timing `setTimeout` calls flagged as production timeouts. | Evaluator-cog scopes the check to retry/HTTP/Prefect contexts. |
+| API-011 | deejaytools-api | Drizzle migrations run at Railway deploy time, not in CI. | See [API ADR-001](https://github.com/mini-app-polis/deejaytools-api/blob/main/docs/decisions/ADR-001-drizzle-migrations-at-deploy.md). |
+| XSTACK-002 | deejaytools-api | Test fixture `src/test/mocks.ts` mirrors handler shape with raw `c.json`. | Evaluator-cog excludes `src/test/` from XSTACK-002. |
+| API-004 | deejaytools-api | `/internal/tick` is unversioned by design (manual operator override; primary driver is the in-process scheduler in `index.ts`). | Never — intentional. Rationale inline in `src/app.ts`. |
+| CD-010, PRIN-005 | deejaytools-api | Python-pattern observability checker false-positives against TypeScript. | Evaluator-cog adds `@sentry/node` + `common-typescript-utils` patterns. |
+| CD-019 | deejaytools-api | JWT-only verification; no machine callers exist, so no machine-key verifier is configured. Replaces the CD-012 deferral (rule retired Sep 2026). | See [API ADR-003](https://github.com/mini-app-polis/deejaytools-api/blob/main/docs/decisions/ADR-003-jwt-only-clerk-verification.md). |
+| TEST-013 | this repo | UI timing `setTimeout` calls flagged as production timeouts. | Evaluator-cog scopes the check to retry/HTTP/Prefect contexts. |
 
 ---
 
@@ -134,7 +133,7 @@ preserved as an operational reference for anyone tuning the setup.
   Railway). `app.onError` calls `Sentry.captureException` on every
   unhandled exception.
 - **Frontend: live.** `VITE_SENTRY_DSN` is set in Doppler `prd`
-  (syncs to Cloudflare Pages). `apps/app/src/lib/instrument.ts`
+  (syncs to Cloudflare Pages). `src/lib/instrument.ts`
   initializes `@sentry/react`, and `src/main.tsx` wires React 19
   error hooks (`onUncaughtError`, `onCaughtError`, `onRecoverableError`)
   through `Sentry.reactErrorHandler()`. `lib/logger.ts` also forwards
@@ -175,5 +174,5 @@ granular (lose visibility for a day, not the month).
 ## Doppler development config
 
 The `development` config in Doppler is not populated. Local dev currently
-requires manually maintaining `apps/api/.env`. Populate the development
+requires manually maintaining `deejaytools-api/.env`. Populate the development
 config and document the `doppler run` local dev workflow in the README.
