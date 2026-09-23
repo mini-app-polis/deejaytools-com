@@ -175,7 +175,7 @@ describe("useApiClient.del", () => {
       jsonResponse({ data: { withdrawn: true }, meta: { version: "v1" } })
     );
     const { result } = renderHook(() => useApiClient());
-    await expect(result.current.del("/v1/foo/1")).resolves.toBeUndefined();
+    await expect(result.current.del("/v1/foo/1")).resolves.toEqual({ withdrawn: true });
   });
 
   it("throws when DELETE returns an error envelope", async () => {

@@ -1,4 +1,4 @@
-import { PartnerRoleSchema, type PartnerRole } from "@/schemas";
+import { PartnerRoleSchema, type PartnerRole, type ApiPartner, type ApiPartnerAssociations } from "@/schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useApiClient } from "@/api/client";
+import { call, endpoints } from "@/api/endpoints";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,13 +30,7 @@ import { Input } from "@/components/ui/input";
 import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Skeleton } from "@/components/ui/skeleton";
 
-type PartnerRow = {
-  id: string;
-  first_name: string;
-  last_name: string;
-  partner_role: PartnerRole;
-  email: string | null;
-};
+type PartnerRow = ApiPartner;
 
 const partnerSchema = z.object({
   first_name: z.string().min(1),
@@ -50,11 +45,7 @@ const partnerSchema = z.object({
 });
 type PartnerForm = z.infer<typeof partnerSchema>;
 
-type DeleteAssociations = {
-  song_count: number;
-  has_active_checkin: boolean;
-  has_checkin_history?: boolean;
-};
+type DeleteAssociations = ApiPartnerAssociations;
 
 export default function PartnersSection() {
   const api = useApiClient();
@@ -76,8 +67,7 @@ export default function PartnersSection() {
 
   const loadPartners = () => {
     setPartnersLoading(true);
-    api
-      .get<PartnerRow[]>("/v1/partners")
+    call(api, endpoints.partners.list)
       .then(setPartners)
       .catch((e: Error) => toast.error(e.message))
       .finally(() => setPartnersLoading(false));
@@ -108,21 +98,21 @@ export default function PartnersSection() {
     setIsFormSubmitting(true);
     try {
       if (editing) {
-        const updated = await api.patch<PartnerRow>(`/v1/partners/${editing.id}`, {
+        const updated = await call(api, endpoints.partners.update, { params: { id: editing.id }, body: {
           first_name: values.first_name.trim(),
           last_name: values.last_name.trim(),
           partner_role: values.partner_role,
           email: values.email?.trim() ? values.email.trim() : null,
-        });
+        } });
         toast.success("Partner updated");
         setPartners((prev) => prev?.map((x) => (x.id === updated.id ? updated : x)) ?? null);
       } else {
-        const created = await api.post<PartnerRow>("/v1/partners", {
+        const created = await call(api, endpoints.partners.create, { body: {
           first_name: values.first_name.trim(),
           last_name: values.last_name.trim(),
           partner_role: values.partner_role,
           ...(values.email?.trim() ? { email: values.email.trim() } : {}),
-        });
+        } });
         toast.success("Partner added");
         setPartners((prev) => (prev ? [created, ...prev] : [created]));
       }
@@ -139,10 +129,10 @@ export default function PartnersSection() {
     setDeleteAssociations(null);
     setIsCheckingAssociations(true);
     try {
-      const result = await api.get<DeleteAssociations>(`/v1/partners/${partner.id}/associations`);
+      const result = await call(api, endpoints.partners.associations, { params: { id: partner.id } });
       setDeleteAssociations(result);
     } catch {
-      setDeleteAssociations({ song_count: 0, has_active_checkin: false });
+      setDeleteAssociations({ song_count: 0, has_active_checkin: false, has_checkin_history: false });
     } finally {
       setIsCheckingAssociations(false);
     }
@@ -152,7 +142,7 @@ export default function PartnersSection() {
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
-      await api.del(`/v1/partners/${deleteTarget.id}`);
+      await call(api, endpoints.partners.remove, { params: { id: deleteTarget.id } });
       setPartners((prev) => prev?.filter((p) => p.id !== deleteTarget.id) ?? null);
       setDeleteTarget(null);
       setDeleteAssociations(null);

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useApiClient } from "@/api/client";
+import { call, endpoints } from "@/api/endpoints";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -53,8 +54,8 @@ export default function EventSubmissionsPage() {
     let cancelled = false;
     setLoading(true);
     Promise.all([
-      api.get<ApiEvent[]>("/v1/events").catch(() => [] as ApiEvent[]),
-      api.get<ApiSong[]>("/v1/songs").catch(() => [] as ApiSong[]),
+      call(api, endpoints.events.list).catch(() => [] as ApiEvent[]),
+      call(api, endpoints.songs.list).catch(() => [] as ApiSong[]),
     ])
       .then(([evs, songRows]) => {
         if (cancelled) return;
@@ -78,10 +79,7 @@ export default function EventSubmissionsPage() {
     }
     let cancelled = false;
     setSubmissionsLoading(true);
-    api
-      .get<ApiEventSongSubmission[]>(
-        `/v1/event-song-submissions?event_id=${encodeURIComponent(selectedEventId)}`
-      )
+    call(api, endpoints.eventSongSubmissions.list, { params: { eventId: selectedEventId } })
       .catch(() => [] as ApiEventSongSubmission[])
       .then((rows) => {
         if (!cancelled) setSubmissions(rows);
@@ -119,14 +117,11 @@ export default function EventSubmissionsPage() {
     if (!selectedEventId) return;
     setBusySongId(songId);
     try {
-      await api.post<ApiEventSongSubmission>("/v1/event-song-submissions", {
+      await call(api, endpoints.eventSongSubmissions.create, { body: {
         event_id: selectedEventId,
         song_id: songId,
-      });
-      const rows = await api
-        .get<ApiEventSongSubmission[]>(
-          `/v1/event-song-submissions?event_id=${encodeURIComponent(selectedEventId)}`
-        )
+      } });
+      const rows = await call(api, endpoints.eventSongSubmissions.list, { params: { eventId: selectedEventId } })
         .catch(() => [] as ApiEventSongSubmission[]);
       setSubmissions(rows);
       toast.success("Song added to event.");
@@ -140,7 +135,7 @@ export default function EventSubmissionsPage() {
   const handleRemove = async (submission: ApiEventSongSubmission) => {
     setBusySongId(submission.song_id);
     try {
-      await api.del(`/v1/event-song-submissions/${submission.id}`);
+      await call(api, endpoints.eventSongSubmissions.remove, { params: { id: submission.id } });
       setSubmissions((prev) => prev.filter((s) => s.id !== submission.id));
       toast.success("Song removed from event.");
     } catch (err) {

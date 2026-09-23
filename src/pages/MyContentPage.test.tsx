@@ -20,8 +20,9 @@ vi.mock("sonner", () => ({
 }));
 
 import MyContentPage from "./MyContentPage";
+import { fx } from "@/test/fixtures";
 
-const EVENT = {
+const EVENT = fx.event({
   id: "ev1",
   name: "Spring Classic",
   start_date: "2026-04-01",
@@ -31,9 +32,9 @@ const EVENT = {
   created_by: "u1",
   created_at: 1,
   updated_at: 1,
-};
+});
 
-const ACTIVE_SESSION = {
+const ACTIVE_SESSION = fx.session({
   id: "sess-active-1",
   event_id: "ev1",
   event_timezone: "America/Los_Angeles",
@@ -45,9 +46,8 @@ const ACTIVE_SESSION = {
   active_priority_max: 6,
   active_non_priority_max: 4,
   created_at: 1,
-  updated_at: 1,
   divisions: [],
-};
+});
 
 function defaultApiGet(path: string) {
   if (path === "/v1/checkins/mine") return Promise.resolve([]);
@@ -109,7 +109,7 @@ describe("MyContentPage — Events section", () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/event-song-submissions") {
         return Promise.resolve([
-          {
+          fx.eventSongSubmission({
             id: "sub1",
             event_id: "ev1",
             event_name: "Spring Classic",
@@ -119,7 +119,7 @@ describe("MyContentPage — Events section", () => {
             song_label: "2026_Classic_MyRoutine.mp3",
             division: "Classic",
             created_at: 1,
-          },
+          }),
         ]);
       }
       return defaultApiGet(path);
@@ -209,7 +209,7 @@ describe("MyContentPage — Active Floor Trials section", () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/sessions") {
         return Promise.resolve([
-          { ...ACTIVE_SESSION, id: "sess-done", status: "completed" },
+          fx.session({ ...ACTIVE_SESSION, id: "sess-done", status: "completed" }),
           { ...ACTIVE_SESSION, id: "sess-later", status: "scheduled" },
         ]);
       }

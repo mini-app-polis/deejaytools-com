@@ -40,6 +40,7 @@ vi.mock("@clerk/clerk-react", () => ({
 
 import AddSongPage from "./AddSongPage";
 import { toast } from "sonner";
+import { fx } from "@/test/fixtures";
 
 function renderPage() {
   return render(
@@ -60,7 +61,7 @@ describe("AddSongPage — mode toggle", () => {
   it("shows the Upload for myself panel by default", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/partners") return Promise.resolve([]);
-      if (path === "/v1/auth/me") return Promise.resolve({ id: "u1", first_name: "U", last_name: "1" });
+      if (path === "/v1/auth/me") return Promise.resolve(fx.authMe({ id: "u1", first_name: "U", last_name: "1" }));
       return Promise.resolve([]);
     });
 
@@ -83,8 +84,8 @@ describe("AddSongPage — mode toggle", () => {
     const user = userEvent.setup();
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/partners") return Promise.resolve([]);
-      if (path === "/v1/auth/me") return Promise.resolve({ id: "u1", first_name: "U", last_name: "1" });
-      if (path === "/v1/teams") return Promise.resolve([{ id: "team-1", identifier: "Team Alpha" }]);
+      if (path === "/v1/auth/me") return Promise.resolve(fx.authMe({ id: "u1", first_name: "U", last_name: "1" }));
+      if (path === "/v1/teams") return Promise.resolve([fx.team({ id: "team-1", identifier: "Team Alpha" })]);
       return Promise.resolve([]);
     });
 
@@ -120,11 +121,11 @@ describe("AddSongPage — managed partnerships load is non-fatal", () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/partners") {
         return Promise.resolve([
-          { id: "partner-1", first_name: "Bob", last_name: "Jones", partner_role: "follower" },
+          fx.partner({ id: "partner-1", first_name: "Bob", last_name: "Jones", partner_role: "follower" }),
         ]);
       }
       if (path === "/v1/auth/me") {
-        return Promise.resolve({ id: "u1", first_name: "Ann", last_name: "One" });
+        return Promise.resolve(fx.authMe({ id: "u1", first_name: "Ann", last_name: "One" }));
       }
       if (path === "/v1/managed-partnerships") {
         return Promise.reject(new Error("Managed partnerships unavailable"));
@@ -169,7 +170,7 @@ describe("AddSongPage — upload", () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/partners") return Promise.resolve([]);
       if (path === "/v1/auth/me") {
-        return Promise.resolve({ id: "u1", first_name: "Ann", last_name: "One" });
+        return Promise.resolve(fx.authMe({ id: "u1", first_name: "Ann", last_name: "One" }));
       }
       return Promise.resolve([]);
     });
@@ -221,11 +222,11 @@ describe("AddSongPage — Upload chunk loop", () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/partners") {
         return Promise.resolve([
-          { id: "partner-1", first_name: "Bob", last_name: "Jones", partner_role: "follower" },
+          fx.partner({ id: "partner-1", first_name: "Bob", last_name: "Jones", partner_role: "follower" }),
         ]);
       }
       if (path === "/v1/auth/me") {
-        return Promise.resolve({ id: "u1", first_name: "U", last_name: "1" });
+        return Promise.resolve(fx.authMe({ id: "u1", first_name: "U", last_name: "1" }));
       }
       return Promise.resolve([]);
     });
@@ -238,8 +239,8 @@ describe("AddSongPage — Upload chunk loop", () => {
 
   it("refreshes the Clerk token before each chunk fetch", async () => {
     getTokenMock.mockResolvedValue("fresh-token");
-    fetchSpy.mockResolvedValue(
-      new Response(JSON.stringify({ ok: true }), { status: 200 })
+    fetchSpy.mockImplementation(async () =>
+      new Response(JSON.stringify({ data: { received: true, complete: false } }), { status: 200 })
     );
 
     await fillAndSubmitUpload({ fileSizeBytes: 6 * 1024 * 1024 });
@@ -250,8 +251,8 @@ describe("AddSongPage — Upload chunk loop", () => {
 
   it("aborts the upload with a session-expired message when getToken returns null", async () => {
     getTokenMock.mockResolvedValueOnce("valid-token").mockResolvedValueOnce(null);
-    fetchSpy.mockResolvedValue(
-      new Response(JSON.stringify({ ok: true }), { status: 200 })
+    fetchSpy.mockImplementation(async () =>
+      new Response(JSON.stringify({ data: { received: true, complete: false } }), { status: 200 })
     );
 
     await fillAndSubmitUpload({ fileSizeBytes: 6 * 1024 * 1024 });
@@ -264,7 +265,7 @@ describe("AddSongPage — Upload chunk loop", () => {
 
   it("does not retry when the server returns 401", async () => {
     getTokenMock.mockResolvedValue("valid-token");
-    fetchSpy.mockResolvedValue(
+    fetchSpy.mockImplementation(async () =>
       new Response(JSON.stringify({ error: { message: "Unauthorized" } }), { status: 401 })
     );
 
@@ -280,7 +281,7 @@ describe("AddSongPage — Upload chunk loop", () => {
     getTokenMock.mockResolvedValue("valid-token");
     fetchSpy
       .mockResolvedValueOnce(new Response("", { status: 503 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: { received: true, complete: false } }), { status: 200 }));
 
     const user = userEvent.setup();
     renderPage();
@@ -335,7 +336,7 @@ describe("AddSongPage — managed partnership upload", () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/partners") return Promise.resolve([]);
       if (path === "/v1/auth/me") {
-        return Promise.resolve({ id: "u1", first_name: "Ann", last_name: "One" });
+        return Promise.resolve(fx.authMe({ id: "u1", first_name: "Ann", last_name: "One" }));
       }
       if (path === "/v1/managed-partnerships") return Promise.resolve([samplePartnership]);
       return Promise.resolve([]);
@@ -348,8 +349,8 @@ describe("AddSongPage — managed partnership upload", () => {
   });
 
   it("uploads via /v1/songs/upload/chunk with managed_partnership_id", async () => {
-    fetchSpy.mockResolvedValue(
-      new Response(JSON.stringify({ data: { received: true, complete: true }, meta: { version: "v1" } }), {
+    fetchSpy.mockImplementation(async () =>
+      new Response(JSON.stringify({ data: { received: true, complete: true, song: fx.song() }, meta: { version: "v1" } }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       })

@@ -324,7 +324,7 @@ export const ApiPartnerSchema = z.object({
   user_id: z.string().nullable(),
   first_name: z.string(),
   last_name: z.string(),
-  partner_role: z.string(),
+  partner_role: PartnerRoleSchema,
   email: z.string().nullable(),
   linked_user_id: z.string().nullable(),
   created_at: z.number(),
@@ -545,3 +545,43 @@ export const ApiEventDivisionEntitiesSchema = z.object({
   entities: z.array(ApiEventEntitySchema),
 });
 export type ApiEventDivisionEntities = z.infer<typeof ApiEventDivisionEntitiesSchema>;
+
+// ---------------------------------------------------------------------------
+// Mutation and action responses. Declared here, beside the resource shapes,
+// so the web app's endpoint catalog and the API's contract tests describe
+// the same payloads.
+// ---------------------------------------------------------------------------
+
+/** GET /v1/partners/:id/associations — what deleting a partner would affect. */
+export const ApiPartnerAssociationsSchema = z.object({
+  song_count: z.number(),
+  has_active_checkin: z.boolean(),
+  has_checkin_history: z.boolean(),
+});
+export type ApiPartnerAssociations = z.infer<typeof ApiPartnerAssociationsSchema>;
+
+/** POST /v1/checkins — the created check-in and the queue it entered. */
+export const ApiCheckinCreatedSchema = z.object({
+  id: z.string(),
+  sessionId: z.string(),
+  divisionName: z.string(),
+  initialQueue: z.enum(["priority", "non_priority"]),
+});
+export type ApiCheckinCreated = z.infer<typeof ApiCheckinCreatedSchema>;
+
+/** POST /v1/admin/checkins — a test injection, with the stub pair it made. */
+export const ApiTestInjectionCreatedSchema = ApiCheckinCreatedSchema.extend({
+  pair: ApiLeadingPairSchema,
+});
+export type ApiTestInjectionCreated = z.infer<typeof ApiTestInjectionCreatedSchema>;
+
+/** POST /v1/pairs/find-or-create. */
+export const ApiPairRefSchema = z.object({ id: z.string() });
+export type ApiPairRef = z.infer<typeof ApiPairRefSchema>;
+
+/** POST /v1/songs/upload/chunk — every chunk but the last, then the last. */
+export const ApiSongUploadChunkSchema = z.union([
+  z.object({ received: z.literal(true), complete: z.literal(false) }),
+  z.object({ received: z.literal(true), complete: z.literal(true), song: ApiSongSchema }),
+]);
+export type ApiSongUploadChunk = z.infer<typeof ApiSongUploadChunkSchema>;

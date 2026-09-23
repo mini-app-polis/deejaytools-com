@@ -24,6 +24,7 @@ vi.mock("@clerk/clerk-react", () => ({
 }));
 
 import SongUploadForm from "./SongUploadForm";
+import { fx } from "@/test/fixtures";
 
 const EXPECTED_UPLOAD_DIVISIONS = [
   "Classic",
@@ -45,10 +46,10 @@ const EXPECTED_UPLOAD_DIVISIONS = [
 function mockLoadedSelfForm() {
   apiGet.mockImplementation((path: string) => {
     if (path === "/v1/partners") {
-      return Promise.resolve([{ id: "p1", first_name: "Alex", last_name: "Lee", partner_role: "leader" }]);
+      return Promise.resolve([fx.partner({ id: "p1", first_name: "Alex", last_name: "Lee", partner_role: "leader" })]);
     }
     if (path === "/v1/auth/me") {
-      return Promise.resolve({ id: "u1", first_name: "Alex", last_name: "Lee" });
+      return Promise.resolve(fx.authMe({ id: "u1", first_name: "Alex", last_name: "Lee" }));
     }
     return Promise.resolve([]);
   });

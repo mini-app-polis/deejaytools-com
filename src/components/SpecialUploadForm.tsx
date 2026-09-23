@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useApiClient } from "@/api/client";
+import { call, endpoints } from "@/api/endpoints";
 import { Button } from "@/components/ui/button";
 import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Input } from "@/components/ui/input";
@@ -52,8 +53,7 @@ export default function SpecialUploadForm() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    api
-      .get<ApiTeam[]>("/v1/teams")
+    call(api, endpoints.teams.list)
       .then((t) => {
         if (cancelled) return;
         setTeams(t);

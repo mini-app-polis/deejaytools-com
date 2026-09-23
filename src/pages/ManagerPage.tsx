@@ -12,6 +12,7 @@ import {
   type ApiSong,
 } from "@/schemas";
 import { useApiClient } from "@/api/client";
+import { call, endpoints } from "@/api/endpoints";
 import SongUploadForm from "@/components/SongUploadForm";
 import { SessionInfoHeader } from "@/components/SessionInfoHeader";
 import { Button } from "@/components/ui/button";
@@ -98,7 +99,7 @@ export default function ManagerPage() {
   lqSessionRef.current = lqSessionId;
 
   const loadSessions = useCallback(() => {
-    api.get<ApiSession[]>("/v1/sessions").then(setSessions).catch(() => setSessions([]));
+    call(api, endpoints.sessions.list).then(setSessions).catch(() => setSessions([]));
   }, [api]);
 
   const cfActiveSessions = (sessions ?? []).filter(
@@ -114,9 +115,9 @@ export default function ManagerPage() {
       if (!silent) setLqLoading(true);
       try {
         const [active, priority, nonPriority] = await Promise.all([
-          api.get<ApiQueueEntry[]>(`/v1/queue/${sessionId}/active`),
-          api.get<ApiQueueEntry[]>(`/v1/queue/${sessionId}/priority`),
-          api.get<ApiQueueEntry[]>(`/v1/queue/${sessionId}/non-priority`),
+          call(api, endpoints.queue.active, { params: { sessionId: sessionId } }),
+          call(api, endpoints.queue.priority, { params: { sessionId: sessionId } }),
+          call(api, endpoints.queue.nonPriority, { params: { sessionId: sessionId } }),
         ]);
         setLqActive(active);
         setLqPriority(priority);
@@ -135,8 +136,8 @@ export default function ManagerPage() {
 
   const loadLqExtras = useCallback(async () => {
     const [pairs, songs] = await Promise.all([
-      api.get<ApiLeadingPair[]>("/v1/partners/leading-pairs"),
-      api.get<ApiSong[]>("/v1/songs"),
+      call(api, endpoints.partners.leadingPairs),
+      call(api, endpoints.songs.list),
     ]);
     setLqPairs(pairs);
     setLqSongs(songs);
@@ -151,8 +152,7 @@ export default function ManagerPage() {
     if (section !== "event-songs") return;
     let cancelled = false;
     setEsEventsLoading(true);
-    api
-      .get<ApiEvent[]>("/v1/events")
+    call(api, endpoints.events.list)
       .catch(() => [] as ApiEvent[])
       .then((evs) => {
         if (!cancelled) setEsEvents(evs);
@@ -172,10 +172,7 @@ export default function ManagerPage() {
     }
     let cancelled = false;
     setEsSubmissionsLoading(true);
-    api
-      .get<ApiAdminEventSongSubmission[]>(
-        `/v1/admin/event-song-submissions?event_id=${encodeURIComponent(esEventId)}`
-      )
+    call(api, endpoints.admin.eventSongSubmissions, { params: { eventId: esEventId } })
       .catch(() => [] as ApiAdminEventSongSubmission[])
       .then((rows) => {
         if (!cancelled) setEsSubmissions(rows);
@@ -199,7 +196,7 @@ export default function ManagerPage() {
     const t = setTimeout(async () => {
       setCfSearching(true);
       try {
-        const rows = await api.get<ApiAdminUser[]>(`/v1/admin/users?q=${encodeURIComponent(q)}`);
+        const rows = await call(api, endpoints.admin.users, { params: { q: q } });
         setCfUserResults(rows);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Search failed");
@@ -218,9 +215,7 @@ export default function ManagerPage() {
     if (!cfSelectedUser || !cfSessionId) return;
     const eventId = cfSessionObj?.event_id ?? null;
     if (!eventId) { setCfSubmissions([]); return; }
-    api.get<ApiEventSongSubmission[]>(
-      `/v1/admin/users/${cfSelectedUser.id}/event-song-submissions?event_id=${encodeURIComponent(eventId)}`
-    ).then(setCfSubmissions).catch(() => setCfSubmissions([]));
+    call(api, endpoints.admin.userEventSongSubmissions, { params: { id: cfSelectedUser.id, eventId: eventId } }).then(setCfSubmissions).catch(() => setCfSubmissions([]));
   }, [cfSelectedUser, cfSessionId, cfSessionObj?.event_id, api]);
 
   useEffect(() => {
@@ -236,7 +231,7 @@ export default function ManagerPage() {
     const t = setTimeout(async () => {
       setUfSearching(true);
       try {
-        const rows = await api.get<typeof ufResults>(`/v1/admin/users?q=${encodeURIComponent(q)}`);
+        const rows = await call(api, endpoints.admin.users, { params: { q: q } });
         setUfResults(rows);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Search failed");
@@ -352,9 +347,15 @@ export default function ManagerPage() {
   const renderSongLabel = (row: ApiQueueEntry) =>
     row.songDisplayName ?? (row.songId ? (songMap.get(row.songId) ?? row.songId) : "—");
 
-  const queueAction = async (path: string, body: Record<string, unknown>) => {
+  type QueueActionEndpoint =
+    | typeof endpoints.queue.complete
+    | typeof endpoints.queue.incomplete
+    | typeof endpoints.queue.moveDown
+    | typeof endpoints.queue.withdraw;
+
+  const queueAction = async (ep: QueueActionEndpoint, body: { queueEntryId: string }) => {
     try {
-      await api.post(path, body);
+      await call(api, ep as typeof endpoints.queue.complete, { body });
       await loadLiveQueues(lqSessionRef.current);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Action failed");
@@ -362,16 +363,16 @@ export default function ManagerPage() {
   };
 
   const handleComplete = (queueEntryId: string) =>
-    queueAction("/v1/queue/complete", { queueEntryId });
+    queueAction(endpoints.queue.complete, { queueEntryId });
 
   const handleIncomplete = (queueEntryId: string) =>
-    queueAction("/v1/queue/incomplete", { queueEntryId });
+    queueAction(endpoints.queue.incomplete, { queueEntryId });
 
   const handleMoveDown = (queueEntryId: string) =>
-    queueAction("/v1/queue/move-down", { queueEntryId });
+    queueAction(endpoints.queue.moveDown, { queueEntryId });
 
   const handleWithdraw = (queueEntryId: string) =>
-    queueAction("/v1/queue/withdraw", { queueEntryId });
+    queueAction(endpoints.queue.withdraw, { queueEntryId });
 
   const submitCheckinFor = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -381,12 +382,12 @@ export default function ManagerPage() {
     if (!cfDivision) { toast.error("Select a division"); return; }
     setCfSubmitting(true);
     try {
-      await api.post("/v1/checkins", {
+      await call(api, endpoints.checkins.create, { body: {
         sessionId: cfSessionId,
         songId: cfSongId,
         divisionName: cfDivision,
         on_behalf_of_user_id: cfSelectedUser.id,
-      });
+      } });
       const who = [cfSelectedUser.first_name, cfSelectedUser.last_name].filter(Boolean).join(" ") || cfSelectedUser.email;
       toast.success(`Checked in ${who}`);
       setCfSongId("");

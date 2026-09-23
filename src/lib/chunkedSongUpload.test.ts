@@ -5,7 +5,10 @@ const getToken = vi.fn().mockResolvedValue("test-token");
 const buildFormFields = vi.fn(() => ({ division: "Classic" }));
 
 function okFetchResponse(): Response {
-  return { ok: true, json: async () => ({}) } as Response;
+  return {
+    ok: true,
+    json: async () => ({ data: { received: true, complete: false } }),
+  } as Response;
 }
 
 function makeUnreadableFile(name = "cloud.mp3", size = 1024): File {

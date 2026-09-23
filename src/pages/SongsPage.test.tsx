@@ -24,6 +24,7 @@ vi.mock("sonner", () => ({
 }));
 
 import SongsPage from "./SongsPage";
+import { fx } from "@/test/fixtures";
 
 function renderPage() {
   return render(
@@ -61,7 +62,7 @@ describe("SongsPage", () => {
 
   it("renders a song row in the desktop table", async () => {
     apiGet.mockResolvedValue([
-      {
+      fx.song({
         id: "s1",
         partner_id: null,
         processed_filename: "my_song.mp3",
@@ -71,7 +72,7 @@ describe("SongsPage", () => {
         created_at: new Date("2026-01-15").getTime(),
         partner_first_name: null,
         partner_last_name: null,
-      },
+      }),
     ]);
     renderPage();
 
@@ -93,7 +94,7 @@ describe("SongsPage — delete flow", () => {
   it("shows a confirm prompt when the delete button is clicked", async () => {
     const { toast } = await import("sonner");
     apiGet.mockResolvedValue([
-      {
+      fx.song({
         id: "s1",
         partner_id: null,
         processed_filename: "my_song.mp3",
@@ -103,7 +104,7 @@ describe("SongsPage — delete flow", () => {
         created_at: new Date("2026-01-15").getTime(),
         partner_first_name: null,
         partner_last_name: null,
-      },
+      }),
     ]);
     renderPage();
 
@@ -133,7 +134,7 @@ describe("SongsPage — delete flow", () => {
     apiClient.del = apiDel;
 
     apiGet.mockResolvedValue([
-      {
+      fx.song({
         id: "s1",
         partner_id: null,
         processed_filename: "my_song.mp3",
@@ -143,7 +144,7 @@ describe("SongsPage — delete flow", () => {
         created_at: new Date("2026-01-15").getTime(),
         partner_first_name: null,
         partner_last_name: null,
-      },
+      }),
     ]);
     apiDel.mockResolvedValue(undefined);
 
@@ -186,7 +187,7 @@ describe("SongsPage — delete flow", () => {
     apiClient.del = apiDel;
 
     apiGet.mockResolvedValue([
-      {
+      fx.song({
         id: "s1",
         partner_id: null,
         processed_filename: "my_song.mp3",
@@ -196,7 +197,7 @@ describe("SongsPage — delete flow", () => {
         created_at: new Date("2026-01-15").getTime(),
         partner_first_name: null,
         partner_last_name: null,
-      },
+      }),
     ]);
 
     const checkInError = new Error(
@@ -238,7 +239,7 @@ describe("SongsPage — delete flow", () => {
 
   it("hides the confirmation prompt when Cancel is clicked", async () => {
     apiGet.mockResolvedValue([
-      {
+      fx.song({
         id: "s1",
         partner_id: null,
         processed_filename: "my_song.mp3",
@@ -248,7 +249,7 @@ describe("SongsPage — delete flow", () => {
         created_at: new Date("2026-01-15").getTime(),
         partner_first_name: null,
         partner_last_name: null,
-      },
+      }),
     ]);
     renderPage();
 

@@ -1,3 +1,5 @@
+import { checkEndpoint, endpoints } from "@/api/endpoints";
+
 const apiBase = import.meta.env.VITE_API_URL ?? "";
 export const CHUNK_SIZE = 5 * 1024 * 1024;
 export const MAX_FILE_BYTES = 100 * 1024 * 1024;
@@ -101,7 +103,7 @@ export async function uploadSongInChunks({
 
       let res: Response;
       try {
-        res = await fetch(`${apiBase}/v1/songs/upload/chunk`, {
+        res = await fetch(`${apiBase}${endpoints.songs.uploadChunk.path()}`, {
           method: "POST",
           headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
           body: form,
@@ -126,6 +128,9 @@ export async function uploadSongInChunks({
         continue;
       }
       lastErr = null;
+      // The chunk was accepted; hold the response to the catalog's contract.
+      const chunkJson = (await res.json().catch(() => null)) as { data?: unknown } | null;
+      checkEndpoint(endpoints.songs.uploadChunk, chunkJson?.data);
       if (!isLast) {
         onProgress?.({
           stage: "uploading",

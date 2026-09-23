@@ -24,8 +24,9 @@ vi.mock("sonner", () => ({
 
 import EventSubmissionsPage from "./EventSubmissionsPage";
 import { toast } from "sonner";
+import { fx } from "@/test/fixtures";
 
-const EVENT = {
+const EVENT = fx.event({
   id: "ev1",
   name: "Spring Classic",
   start_date: "2026-04-01",
@@ -35,9 +36,9 @@ const EVENT = {
   created_by: "u1",
   created_at: 1,
   updated_at: 1,
-};
+});
 
-const SONG = {
+const SONG = fx.song({
   id: "song1",
   user_id: "u1",
   partner_id: "p1",
@@ -53,38 +54,44 @@ const SONG = {
   is_legacy: false,
   created_at: 1,
   updated_at: 1,
-};
+});
 
-const SONG_SAME_ENTITY = {
+const SONG_SAME_ENTITY = fx.song({
   ...SONG,
   id: "song2",
   display_name: "Second Routine",
   processed_filename: "2026_Classic_SecondRoutine.mp3",
   routine_name: "Second Routine",
-};
+});
 
-const SONG_OTHER_DIVISION = {
+const SONG_OTHER_DIVISION = fx.song({
   ...SONG,
   id: "song3",
   division: "Showcase",
   display_name: "Showcase Routine",
   processed_filename: "2026_Showcase_MyRoutine.mp3",
-};
+});
 
-const LEGACY_SONG = {
+const LEGACY_SONG = fx.song({
   ...SONG,
   id: "legacy1",
   display_name: "Old Routine",
   processed_filename: "[Legacy] Kaiano Levine & Dana Whitfield · Classic · The Open 2025",
   routine_name: "Old Routine",
   is_legacy: true,
-};
+});
 
 function mockApi(songs: unknown[], submissions: unknown[] = []) {
   apiGet.mockImplementation((path: string) => {
     if (path === "/v1/events") return Promise.resolve([EVENT]);
     if (path === "/v1/songs") return Promise.resolve(songs);
-    if (path.startsWith("/v1/event-song-submissions")) return Promise.resolve(submissions);
+    if (path.startsWith("/v1/event-song-submissions")) {
+      return Promise.resolve(
+        submissions.map((s) =>
+          fx.eventSongSubmission(s as Parameters<typeof fx.eventSongSubmission>[0])
+        )
+      );
+    }
     return Promise.resolve([]);
   });
 }

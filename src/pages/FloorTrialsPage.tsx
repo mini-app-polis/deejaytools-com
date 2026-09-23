@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import type { ApiEvent, ApiSession } from "@/schemas";
 import { useApiClient } from "@/api/client";
+import { call, endpoints } from "@/api/endpoints";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -58,8 +59,8 @@ export default function FloorTrialsPage() {
     const fetchData = () => {
       setLoading(true);
       Promise.all([
-        api.get<ApiSession[]>("/v1/sessions"),
-        api.get<ApiEvent[]>("/v1/events"),
+        call(api, endpoints.sessions.list),
+        call(api, endpoints.events.list),
       ])
         .then(([s, e]) => {
           if (cancelled) return;

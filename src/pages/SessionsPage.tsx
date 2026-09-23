@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import type { ApiSession } from "@/schemas";
 import { useApiClient } from "@/api/client";
+import { call, endpoints } from "@/api/endpoints";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -48,8 +49,7 @@ export default function SessionsPage() {
   useEffect(() => {
     let on = true;
     setLoading(true);
-    api
-      .get<ApiSession[]>("/v1/sessions")
+    call(api, endpoints.sessions.list)
       .then((rows) => on && setSessions(rows))
       .catch((e: Error) => on && toast.error(e.message))
       .finally(() => on && setLoading(false));

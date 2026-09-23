@@ -26,6 +26,7 @@ vi.mock("sonner", () => ({
 
 import EventsPage from "./EventsPage";
 import { toast } from "sonner";
+import { fx } from "@/test/fixtures";
 
 // ---------------------------------------------------------------------------
 // Setup + teardown
@@ -48,7 +49,7 @@ function makeEvent(opts: {
   seasonYear?: string;
   timezone?: string;
 }) {
-  return {
+  return fx.event({
     id: opts.id,
     name: opts.name,
     start_date: opts.startDate,
@@ -56,11 +57,11 @@ function makeEvent(opts: {
     status: opts.status,
     season_year: opts.seasonYear ?? "2026",
     timezone: opts.timezone ?? "America/Chicago",
-  };
+  });
 }
 
 function makeSession(opts: { id: string; eventId: string | null; status?: string }) {
-  return {
+  return fx.session({
     id: opts.id,
     event_id: opts.eventId,
     name: "session",
@@ -69,7 +70,7 @@ function makeSession(opts: { id: string; eventId: string | null; status?: string
     checkin_opens_at: 1,
     floor_trial_starts_at: 2,
     floor_trial_ends_at: 3,
-  };
+  });
 }
 
 function renderPage() {

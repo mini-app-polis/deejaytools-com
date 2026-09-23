@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import type { ApiSong } from "@/schemas";
 import { useApiClient } from "@/api/client";
+import { call, endpoints } from "@/api/endpoints";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -27,7 +28,7 @@ export default function SongsPage() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    api.get<ApiSong[]>("/v1/songs")
+    call(api, endpoints.songs.list)
       .then((s) => { if (!cancelled) setSongs(s); })
       .catch((e: Error) => toast.error(e.message))
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -39,7 +40,7 @@ export default function SongsPage() {
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     try {
-      await api.del(`/v1/songs/${id}`);
+      await call(api, endpoints.songs.remove, { params: { id: id } });
       setSongs((prev) => prev.filter((s) => s.id !== id));
       setPendingDeleteId(null);
       toast.success("Song removed.");

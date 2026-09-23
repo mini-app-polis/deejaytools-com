@@ -1,4 +1,6 @@
 import { useCallback, useId, useRef, useState } from "react";
+import { ContractViolation } from "@/api/contract";
+import { checkEndpoint, endpoints } from "@/api/endpoints";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
@@ -118,7 +120,7 @@ export default function FeedbackPage() {
       if (openToContact && contactName.trim()) body.contactName = contactName.trim();
       if (screenshotDataUrl) body.screenshot = screenshotDataUrl;
 
-      const res = await fetch(`${API_BASE}/v1/feedback`, {
+      const res = await fetch(`${API_BASE}${endpoints.feedback.submit.path()}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -138,9 +140,12 @@ export default function FeedbackPage() {
         return;
       }
 
+      checkEndpoint(endpoints.feedback.submit, data.data);
       setSuccess(true);
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err) {
+      setError(
+        err instanceof ContractViolation ? err.message : "Network error. Please try again."
+      );
     } finally {
       setSubmitting(false);
     }

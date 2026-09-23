@@ -11,6 +11,7 @@ import {
   type ApiTestInjection,
 } from "@/schemas";
 import { useApiClient } from "@/api/client";
+import { call, endpoints } from "@/api/endpoints";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import { CLICKABLE_ROW_CLASS } from "@/lib/clickable";
 import { seasonYearFromDateString } from "@/lib/seasonYear";
@@ -248,8 +249,7 @@ export default function AdminPage() {
 
   const loadEvents = useCallback(() => {
     setLoadingEvents(true);
-    api
-      .get<ApiEvent[]>("/v1/events")
+    call(api, endpoints.events.list)
       .then(setEvents)
       .catch((e: Error) => toast.error(e.message))
       .finally(() => setLoadingEvents(false));
@@ -257,8 +257,7 @@ export default function AdminPage() {
 
   const loadSessions = useCallback(() => {
     setLoadingSessions(true);
-    api
-      .get<ApiSession[]>("/v1/sessions")
+    call(api, endpoints.sessions.list)
       .then(setSessions)
       .catch((e: Error) => toast.error(e.message))
       .finally(() => setLoadingSessions(false));
@@ -275,7 +274,7 @@ export default function AdminPage() {
         } else if (eventId) {
           params.set("event_id", eventId);
         }
-        const data = await api.get<ApiRun[]>(`/v1/runs?${params.toString()}`);
+        const data = await call(api, endpoints.runs.list, { params: { query: params.toString() } });
         setRuns(data);
         setRunsHitLimit(data.length === RUNS_FETCH_LIMIT);
         setRunsDivisionFilter(null);
@@ -294,10 +293,7 @@ export default function AdminPage() {
     async (q: string) => {
       setUsersLoading(true);
       try {
-        const path = q
-          ? `/v1/admin/users?q=${encodeURIComponent(q)}`
-          : "/v1/admin/users";
-        const data = await api.get<ApiAdminUser[]>(path);
+        const data = await call(api, endpoints.admin.users, { params: q ? { q } : undefined });
         setUsers(data);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to load users");
@@ -315,9 +311,9 @@ export default function AdminPage() {
         const params = new URLSearchParams();
         if (q) params.set("q", q);
         if (includeDeleted) params.set("include_deleted", "true");
-        const qs = params.toString();
-        const path = qs ? `/v1/admin/songs?${qs}` : "/v1/admin/songs";
-        const data = await api.get<ApiAdminSong[]>(path);
+        const data = await call(api, endpoints.admin.songs, {
+          params: { query: params.toString() || undefined },
+        });
         setAdminSongs(data);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to load songs");
@@ -330,7 +326,7 @@ export default function AdminPage() {
 
   const loadTestCheckins = useCallback(async () => {
     try {
-      const data = await api.get<ApiTestInjection[]>("/v1/admin/checkins/test");
+      const data = await call(api, endpoints.admin.testCheckins);
       setTcData(data);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load test check-ins");
@@ -493,7 +489,7 @@ export default function AdminPage() {
     const id = pendingDeleteEventId;
     setPendingDeleteEventId(null);
     try {
-      await api.del(`/v1/events/${id}`);
+      await call(api, endpoints.events.remove, { params: { id: id } });
       toast.success("Event deleted");
       setEvents((prev) => prev?.filter((e) => e.id !== id) ?? null);
     } catch (e) {
@@ -539,26 +535,26 @@ export default function AdminPage() {
       if (evEditId) {
         // Edit mode — PATCH the existing event and merge the response back
         // into local state so the table updates without a full refetch.
-        const updated = await api.patch<ApiEvent>(`/v1/events/${evEditId}`, {
+        const updated = await call(api, endpoints.events.update, { params: { id: evEditId }, body: {
           name: evName.trim(),
           start_date: evStartDate,
           end_date: evEndDate,
           timezone: evTimezone,
           season_year: trimmedSeason || undefined,
-        });
+        } });
         toast.success("Event updated");
         setEvents((prev) =>
           prev?.map((e) => (e.id === updated.id ? updated : e)) ?? null
         );
       } else {
         // Create mode — POST and prepend.
-        const created = await api.post<ApiEvent>("/v1/events", {
+        const created = await call(api, endpoints.events.create, { body: {
           name: evName.trim(),
           start_date: evStartDate,
           end_date: evEndDate,
           timezone: evTimezone,
           season_year: trimmedSeason || undefined,
-        });
+        } });
         toast.success("Event created");
         setEvents((prev) => (prev ? [created, ...prev] : [created]));
       }
@@ -654,7 +650,7 @@ export default function AdminPage() {
     setPendingDeleteSession(null);
     setSessDeletingId(s.id);
     try {
-      await api.del(`/v1/sessions/${s.id}`);
+      await call(api, endpoints.sessions.remove, { params: { id: s.id } });
       toast.success("Session deleted");
       setSessions((prev) => prev?.filter((x) => x.id !== s.id) ?? null);
     } catch (e) {
@@ -731,7 +727,7 @@ export default function AdminPage() {
         // necessary because the PATCH can succeed while the PUT errors,
         // leaving the row half-updated.
         try {
-          await api.patch(`/v1/sessions/${sessEditId}`, {
+          await call(api, endpoints.sessions.update, { params: { id: sessEditId }, body: {
             event_id: sessEventId,
             name: sessionName,
             date: sessDate,
@@ -740,14 +736,14 @@ export default function AdminPage() {
             floor_trial_ends_at: floorEndsAt,
             active_priority_max: priorityMaxNum,
             active_non_priority_max: nonPriorityMaxNum,
-          });
+          } });
         } catch (err) {
           throw new Error(
             `Failed to update session fields: ${err instanceof Error ? err.message : String(err)}`
           );
         }
         try {
-          await api.put(`/v1/sessions/${sessEditId}/divisions`, { divisions });
+          await call(api, endpoints.sessions.setDivisions, { params: { id: sessEditId }, body: { divisions } });
         } catch (err) {
           throw new Error(
             `Session fields saved, but failed to update divisions: ${err instanceof Error ? err.message : String(err)}`
@@ -755,7 +751,7 @@ export default function AdminPage() {
         }
         toast.success("Session updated");
       } else {
-        await api.post<ApiSession>("/v1/sessions", {
+        await call(api, endpoints.sessions.create, { body: {
           event_id: sessEventId,
           name: sessionName,
           date: sessDate,
@@ -765,7 +761,7 @@ export default function AdminPage() {
           active_priority_max: priorityMaxNum,
           active_non_priority_max: nonPriorityMaxNum,
           divisions,
-        });
+        } });
         toast.success("Session created");
       }
       setSessDialogOpen(false);
@@ -792,20 +788,14 @@ export default function AdminPage() {
     }
     setTcSubmitting(true);
     try {
-      const result = await api.post<{
-        id: string;
-        sessionId: string;
-        divisionName: string;
-        initialQueue: "priority" | "non_priority";
-        pair: { id: string; partner_b_id: string | null; display_name: string };
-      }>("/v1/admin/checkins", {
+      const result = await call(api, endpoints.admin.injectCheckin, { body: {
         sessionId: tcSessionId,
         divisionName: tcDivision,
         leaderFirstName: tcLeaderFirst.trim(),
         leaderLastName: tcLeaderLast.trim(),
         followerFirstName: tcFollowerFirst.trim(),
         followerLastName: tcFollowerLast.trim(),
-      });
+      } });
       toast.success(
         `Checked in to ${result.initialQueue === "priority" ? "priority" : "non-priority"} queue`
       );
@@ -828,7 +818,7 @@ export default function AdminPage() {
     setTcDeleting(true);
     const expectedCount = tcData.length;
     try {
-      await api.del("/v1/admin/checkins/test");
+      await call(api, endpoints.admin.clearTestCheckins);
       toast.success(`Deleted ${expectedCount} check-in${expectedCount === 1 ? "" : "s"}`);
       setTcData([]);
     } catch (err) {
@@ -850,10 +840,7 @@ export default function AdminPage() {
   const setUserRole = async (userId: string, nextRole: "user" | "admin") => {
     setUserRoleSubmitting((prev) => ({ ...prev, [userId]: true }));
     try {
-      const updated = await api.patch<ApiAdminUser>(
-        `/v1/admin/users/${userId}/role`,
-        { role: nextRole }
-      );
+      const updated = await call(api, endpoints.admin.setUserRole, { params: { id: userId }, body: { role: nextRole } });
       setUsers((prev) =>
         prev?.map((u) => (u.id === updated.id ? updated : u)) ?? null
       );

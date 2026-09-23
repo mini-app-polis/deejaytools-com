@@ -1,5 +1,6 @@
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { useEffect, useRef } from "react";
+import { checkEndpoint, endpoints } from "@/api/endpoints";
 import { createLogger } from "@/lib/logger";
 
 // Keyed by Clerk user id. A bare key would survive a sign-out/sign-in in the
@@ -71,7 +72,7 @@ export default function AuthSync() {
           return;
         }
 
-        const res = await fetch(`${base}/v1/auth/sync`, {
+        const res = await fetch(`${base}${endpoints.auth.sync.path()}`, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -93,6 +94,10 @@ export default function AuthSync() {
         // what turned a single transient failure into a session that 401s
         // every request and never retries.
         sessionStorage.setItem(key, "1");
+        // Recorded as synced first: a contract mismatch is a bug to report,
+        // not a reason to re-sync a row that now exists.
+        const json = (await res.json().catch(() => null)) as { data?: unknown } | null;
+        checkEndpoint(endpoints.auth.sync, json?.data);
       } catch (err) {
         logger.error({
           event: "auth_sync_error",

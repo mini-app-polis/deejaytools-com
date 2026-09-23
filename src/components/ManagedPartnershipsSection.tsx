@@ -9,6 +9,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useApiClient } from "@/api/client";
+import { call, endpoints } from "@/api/endpoints";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -60,8 +61,7 @@ export default function ManagedPartnershipsSection() {
 
   const load = () => {
     setLoading(true);
-    api
-      .get<ApiManagedPartnership[]>("/v1/managed-partnerships")
+    call(api, endpoints.managedPartnerships.list)
       .then(setItems)
       .catch((e: Error) => toast.error(e.message))
       .finally(() => setLoading(false));
@@ -92,17 +92,11 @@ export default function ManagedPartnershipsSection() {
     setIsFormSubmitting(true);
     try {
       if (editing) {
-        const updated = await api.patch<ApiManagedPartnership>(
-          `/v1/managed-partnerships/${editing.id}`,
-          values
-        );
+        const updated = await call(api, endpoints.managedPartnerships.update, { params: { id: editing.id }, body: values });
         toast.success("Partnership updated");
         setItems((prev) => prev?.map((x) => (x.id === updated.id ? updated : x)) ?? null);
       } else {
-        const created = await api.post<ApiManagedPartnership>(
-          "/v1/managed-partnerships",
-          values
-        );
+        const created = await call(api, endpoints.managedPartnerships.create, { body: values });
         toast.success("Partnership added");
         setItems((prev) => (prev ? [created, ...prev] : [created]));
       }
@@ -118,7 +112,7 @@ export default function ManagedPartnershipsSection() {
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
-      await api.del(`/v1/managed-partnerships/${deleteTarget.id}`);
+      await call(api, endpoints.managedPartnerships.remove, { params: { id: deleteTarget.id } });
       setItems((prev) => prev?.filter((p) => p.id !== deleteTarget.id) ?? null);
       setDeleteTarget(null);
       toast.success("Partnership removed.");
