@@ -85,6 +85,10 @@ A parallel `security` job delegates to the fleet's shared workflow (`mini-app-po
 
 Runs after `test` and `security` succeed: `pnpm exec semantic-release` with `GITHUB_TOKEN`. `.releaserc.json` updates `CHANGELOG.md`, bumps `package.json` `version` (no npm publish), commits them, and creates a GitHub release. Releasing does not by itself deploy — Pages reacts to the git push.
 
+### `evaluate` job (after `release`)
+
+Calls the fleet's shared `mini-app-polis/.github/.github/workflows/evaluate.yml@v3`, which asks api-kaianolevine-com to run evaluator-cog's conformance check against the released tree (ecosystem-standards CD-031). It needs the `CI_VALIDATOR_API_KEY` secret. It does not wait for findings — it only fails if the request does not land.
+
 ---
 
 ## Environment variables
