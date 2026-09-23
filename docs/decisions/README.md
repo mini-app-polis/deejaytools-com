@@ -1,4 +1,4 @@
-# Architecture Decision Records — deejaytools-com-app
+# Architecture Decision Records — deejaytools-com
 
 This directory contains Architecture Decision Records (ADRs) for the
 React web application. ADRs document significant architectural
