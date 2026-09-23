@@ -388,7 +388,7 @@ export interface Transport {
 
 // Params (or a body) are optional exactly when `void` is one of their
 // allowed values — `void` itself, or e.g. `{ eventId?: string } | void`.
-type Args<P, B> = [void] extends [P]
+export type CallArgs<P, B> = [void] extends [P]
   ? [void] extends [B]
     ? [opts?: { params?: P; body?: B }]
     : [opts: { params?: P; body: B }]
@@ -400,7 +400,7 @@ type Args<P, B> = [void] extends [P]
 export async function call<P, B, R>(
   api: Transport,
   ep: Endpoint<P, B, R>,
-  ...args: Args<P, B>
+  ...args: CallArgs<P, B>
 ): Promise<R> {
   const opts = (args[0] ?? {}) as { params?: P; body?: B };
   const path = ep.path(opts.params as P);

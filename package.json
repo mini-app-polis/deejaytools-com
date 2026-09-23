@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vitest run --passWithNoTests",
-    "test:coverage": "vitest run --coverage --passWithNoTests"
+    "test:coverage": "vitest run --coverage --passWithNoTests",
+    "test:contract": "vitest run --config vitest.contract.config.ts"
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.61.6",

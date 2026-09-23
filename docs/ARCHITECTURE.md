@@ -125,6 +125,7 @@ One default-export component per route. Pages orchestrate fetching, local state,
 | `vite.config.ts` | `@/` alias, API proxy, `VITE_APP_VERSION` injection |
 | `tailwind.config.js` | Theme extension (shadcn color tokens, container, animations) |
 | `vitest.config.ts` | Test runner; default `node` env, jsdom opt-in per file |
+| `vitest.contract.config.ts` | Live contract suite (`pnpm test:contract`) — see §3 |
 
 ---
 
@@ -134,11 +135,12 @@ One default-export component per route. Pages orchestrate fetching, local state,
 
 A React hook that returns a stable object of HTTP helpers: `get`, `post`, `postForm`, `patch`, `put`, `del`. Must be called inside a component (it uses Clerk's `useAuth()`).
 
+Pages never pass it a path directly; they go through the endpoint catalog (below):
+
 ```ts
 const api = useApiClient();
-const sessions = await api.get<ApiSession[]>("/v1/sessions");
-await api.post("/v1/foo", { bar: 1 });
-await api.postForm("/v1/upload", formData);
+const sessions = await call(api, endpoints.sessions.list, { params: { eventId } });
+await call(api, endpoints.partners.create, { body: { first_name, last_name, partner_role } });
 ```
 
 Base URL: `import.meta.env.VITE_API_URL` (empty string in dev → same-origin via Vite proxy).
@@ -173,7 +175,15 @@ Three places use raw `fetch` instead of `useApiClient()`:
 | **`lib/chunkedSongUpload.ts`** | Not a React hook — receives `getToken` as a callback. Builds `FormData` per chunk, implements its own retry/backoff, and must re-fetch a fresh token on each attempt. Cannot call `useApiClient()`. |
 | **`FeedbackPage.tsx`** | **Unauthenticated** endpoint — no Clerk token. Submits JSON to `POST /v1/feedback` for anonymous bug reports. |
 
-For any new authenticated JSON call, use `useApiClient()`. Only bypass it when you have one of the reasons above.
+For any new authenticated JSON call, use `useApiClient()`. Only bypass it when you have one of the reasons above. All three still take their path from the catalog and validate the response with `checkEndpoint()`.
+
+### Endpoint catalog (`api/endpoints.ts`) and response validation (`api/contract.ts`)
+
+Every API call the app makes is declared once in `endpoints.ts`: method, access (`public` / `user` / `admin`), path builder, and the zod schema the response must satisfy. `call(api, endpoints.x.y, { params, body })` builds the path, sends the request and validates the response; no `/v1/` path appears anywhere else in `src/`.
+
+A response that fails its schema is a contract violation. In dev and tests it throws `ContractViolation`; in production it is reported to Sentry (tagged `contract_endpoint`) and the raw data is used, so harmless drift never breaks a page but never goes unnoticed. Unit-test API mocks are built with the `fx.*` factories in `src/test/fixtures.ts`, which parse through the same schemas.
+
+The live contract suite (`src/contract`, `pnpm test:contract`, `.github/workflows/contract.yml`) walks the catalog against the development API with a real Clerk session and fails on any endpoint that is neither exercised nor explicitly skipped. See [ADR-002](decisions/ADR-002-api-contract.md).
 
 ---
 

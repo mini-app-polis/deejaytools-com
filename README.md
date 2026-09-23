@@ -80,6 +80,8 @@ There is no top-level `/partners` route — partner records are managed on My Pr
 
 Pure-function tests run in Node; component tests opt into jsdom per file via `// @vitest-environment jsdom`. See `src/test/setup.ts` for the jsdom-conditional Testing Library setup.
 
+`pnpm test:contract` runs the live contract suite against a development API — every endpoint in `src/api/endpoints.ts`, validated against its schema. It needs `CONTRACT_API_URL`, `CONTRACT_CLERK_SECRET_KEY` (a dev-instance `sk_test_` key) and `CONTRACT_USER_ID` (an admin in that environment), and refuses production. See [ADR-002](docs/decisions/ADR-002-api-contract.md).
+
 ## Observability
 
 Browser Sentry is live in production (`VITE_SENTRY_DSN`, managed in Doppler and synced to Cloudflare Pages); the SDK no-ops locally without a DSN. See [`docs/decisions/ADR-001-browser-observability-stack.md`](docs/decisions/ADR-001-browser-observability-stack.md).
