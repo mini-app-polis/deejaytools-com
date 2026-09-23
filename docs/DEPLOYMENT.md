@@ -28,24 +28,20 @@ Not present:
 
 Build command, output directory, root directory, environment variables, and branch filters are configured in the **Cloudflare Pages dashboard** (and/or an external secrets manager such as Doppler that syncs into Pages).
 
-### TODO — copy from Cloudflare dashboard into this doc
+### Dashboard settings
 
-When you have dashboard access, fill in this block so the repo is the source of truth:
-
-```markdown
-<!-- TODO: Cloudflare Pages settings (from dashboard → project → Settings → Builds & deployments) -->
+These live in the Pages dashboard (Settings → Builds & deployments), so this table is the repo's record of them — update it when the dashboard changes.
 
 | Setting | Value |
 |---------|-------|
-| Production branch | ??? |
+| Production branch | `main` |
 | Root directory | repo root (`/`) |
 | Build command | `pnpm install && pnpm build` |
 | Build output directory | `dist` |
-| Node.js version | ??? |
-| Environment variables (production) | VITE_API_URL, VITE_CLERK_PUBLISHABLE_KEY, VITE_SENTRY_DSN |
-| Preview deployments | enabled/disabled ??? |
-| Custom domain | deejaytools.com / www ??? |
-```
+| Node.js version | 22 (`.nvmrc`) |
+| Environment variables | `VITE_API_URL`, `VITE_CLERK_PUBLISHABLE_KEY`, `VITE_SENTRY_DSN` (Doppler → Pages) |
+| Preview deployments | enabled — `dev` publishes to the preview URL |
+| Custom domain | `deejaytools.com` |
 
 ### SPA routing / deep links
 
@@ -88,6 +84,10 @@ A parallel `security` job delegates to the fleet's shared workflow (`mini-app-po
 ### `release` job (push to `main` only)
 
 Runs after `test` and `security` succeed: `pnpm exec semantic-release` with `GITHUB_TOKEN`. `.releaserc.json` updates `CHANGELOG.md`, bumps `package.json` `version` (no npm publish), commits them, and creates a GitHub release. Releasing does not by itself deploy — Pages reacts to the git push.
+
+### `evaluate` job (after `release`)
+
+Calls the fleet's shared `mini-app-polis/.github/.github/workflows/evaluate.yml@v3`, which asks api-kaianolevine-com to run evaluator-cog's conformance check against the released tree (ecosystem-standards CD-031). It needs the `CI_VALIDATOR_API_KEY` secret. It does not wait for findings — it only fails if the request does not land.
 
 ---
 

@@ -63,3 +63,13 @@ jobs:
         run: pnpm exec semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # CD-031. A release requests its own conformance evaluation through the
+  # fleet's shared workflow, so this repo's findings move with its code
+  # rather than waiting for the next standards or evaluator release.
+  evaluate:
+    needs: release
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    uses: mini-app-polis/.github/.github/workflows/evaluate.yml@v3
+    secrets:
+      api-key: ${{ secrets.CI_VALIDATOR_API_KEY }}
