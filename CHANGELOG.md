@@ -1,3 +1,10 @@
+# [2.5.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.4.0...v2.5.0) (2026-09-23)
+
+
+### Features
+
+* **contract:** add a live contract suite driven by the endpoint catalog ([3a9e050](https://github.com/mini-app-polis/deejaytools-com/commit/3a9e05099edeeee6c52a7e13cbd7601eb0095216))
+
 # [2.4.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.3.0...v2.4.0) (2026-09-23)
 
 
