@@ -25,6 +25,7 @@ vi.mock("sonner", () => ({
 
 import SessionsPage from "./SessionsPage";
 import { toast } from "sonner";
+import { fx } from "@/test/fixtures";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -38,7 +39,7 @@ function makeSession(opts: {
   timezone?: string | null;
 }) {
   const startTs = new Date(opts.startsAt).getTime();
-  return {
+  return fx.session({
     id: opts.id,
     event_id: null as string | null,
     event_timezone: opts.timezone ?? null,
@@ -48,7 +49,7 @@ function makeSession(opts: {
     checkin_opens_at: startTs - 60 * 60 * 1000,
     floor_trial_starts_at: startTs,
     floor_trial_ends_at: startTs + 2 * 60 * 60 * 1000,
-  };
+  });
 }
 
 function renderPage() {

@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { useApiClient } from "@/api/client";
+import { call, endpoints } from "@/api/endpoints";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -113,16 +114,14 @@ export default function MyContentPage() {
 
   const loadSongs = () => {
     setSongsLoading(true);
-    api
-      .get<ApiSong[]>("/v1/songs")
+    call(api, endpoints.songs.list)
       .then(setSongs)
       .catch((e: Error) => toast.error(e.message))
       .finally(() => setSongsLoading(false));
   };
 
   const loadCheckins = () => {
-    api
-      .get<ApiMyCheckin[]>("/v1/checkins/mine")
+    call(api, endpoints.checkins.mine)
       .then(setCheckins)
       .catch((e: Error) => toast.error(e.message));
   };
@@ -130,9 +129,8 @@ export default function MyContentPage() {
   const loadEventsSection = () => {
     setEventsLoading(true);
     Promise.all([
-      api.get<ApiEvent[]>("/v1/events").catch(() => [] as ApiEvent[]),
-      api
-        .get<ApiEventSongSubmission[]>("/v1/event-song-submissions")
+      call(api, endpoints.events.list).catch(() => [] as ApiEvent[]),
+      call(api, endpoints.eventSongSubmissions.list)
         .catch(() => [] as ApiEventSongSubmission[]),
     ])
       .then(([evs, subs]) => {
@@ -143,8 +141,7 @@ export default function MyContentPage() {
   };
 
   const loadActiveSessions = () => {
-    api
-      .get<ApiSession[]>("/v1/sessions")
+    call(api, endpoints.sessions.list)
       .then((all) =>
         setActiveSessions(
           all.filter((s) => s.status === "checkin_open" || s.status === "in_progress")
@@ -156,7 +153,7 @@ export default function MyContentPage() {
   const handleWithdraw = async (checkinId: string) => {
     setWithdrawingId(checkinId);
     try {
-      await api.del(`/v1/checkins/${checkinId}`);
+      await call(api, endpoints.checkins.withdraw, { params: { id: checkinId } });
       setCheckins((prev) => prev?.filter((c) => c.id !== checkinId) ?? null);
       setPendingWithdrawId(null);
       toast.success("Withdrawn from queue.");
@@ -213,7 +210,7 @@ export default function MyContentPage() {
   const handleDeleteSong = async (id: string) => {
     setDeletingSongId(id);
     try {
-      await api.del(`/v1/songs/${id}`);
+      await call(api, endpoints.songs.remove, { params: { id: id } });
       setSongs((prev) => prev.filter((s) => s.id !== id));
       setPendingDeleteSongId(null);
       toast.success("Song removed.");

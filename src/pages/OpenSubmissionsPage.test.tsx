@@ -27,8 +27,9 @@ vi.mock("sonner", () => ({
 }));
 
 import OpenSubmissionsPage from "./OpenSubmissionsPage";
+import { fx } from "@/test/fixtures";
 
-const OPEN_EVENT = {
+const OPEN_EVENT = fx.event({
   id: "open1",
   name: "The Open 2026",
   start_date: "2026-11-26",
@@ -38,11 +39,11 @@ const OPEN_EVENT = {
   created_by: "u1",
   created_at: 1,
   updated_at: 1,
-};
+});
 
 const OTHER_EVENT = { ...OPEN_EVENT, id: "ev1", name: "Spring Classic" };
 
-const SONG = {
+const SONG = fx.song({
   id: "song1",
   user_id: "u1",
   partner_id: "p1",
@@ -58,30 +59,36 @@ const SONG = {
   is_legacy: false,
   created_at: 1,
   updated_at: 1,
-};
+});
 
-const SONG_SHOWCASE = {
+const SONG_SHOWCASE = fx.song({
   ...SONG,
   id: "song3",
   division: "Showcase",
   display_name: "Showcase Routine",
   processed_filename: "2026_Showcase_MyRoutine.mp3",
-};
+});
 
-const LEGACY_SONG = {
+const LEGACY_SONG = fx.song({
   ...SONG,
   id: "legacy1",
   display_name: "Old Routine",
   processed_filename: "2019_Classic_OldRoutine.mp3",
   routine_name: "Old Routine",
   is_legacy: true,
-};
+});
 
 function mockApi(events: unknown[], songs: unknown[] = [SONG], submissions: unknown[] = []) {
   apiGet.mockImplementation((path: string) => {
     if (path === "/v1/events") return Promise.resolve(events);
     if (path === "/v1/songs") return Promise.resolve(songs);
-    if (path.startsWith("/v1/event-song-submissions")) return Promise.resolve(submissions);
+    if (path.startsWith("/v1/event-song-submissions")) {
+      return Promise.resolve(
+        submissions.map((s) =>
+          fx.eventSongSubmission(s as Parameters<typeof fx.eventSongSubmission>[0])
+        )
+      );
+    }
     return Promise.resolve([]);
   });
 }
@@ -247,7 +254,7 @@ describe("OpenSubmissionsPage", () => {
 
   it("posts division and round on submit", async () => {
     mockApi([OPEN_EVENT]);
-    apiPost.mockResolvedValue({});
+    apiPost.mockResolvedValue(fx.eventSongSubmission());
     const user = userEvent.setup();
     renderPage();
 

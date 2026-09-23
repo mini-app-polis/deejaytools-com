@@ -3,12 +3,13 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useApiClient } from "@/api/client";
+import { call, endpoints } from "@/api/endpoints";
 import { Button } from "@/components/ui/button";
 import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DIVISION_GROUPS, type ApiManagedPartnership } from "@/schemas";
+import { DIVISION_GROUPS, type ApiManagedPartnership, type ApiPartner } from "@/schemas";
 import type { AuthMe as MeResponse } from "@/hooks/useAuthMe";
 import {
   MAX_FILE_BYTES,
@@ -22,7 +23,7 @@ const UPLOAD_DIVISION_GROUPS = DIVISION_GROUPS.map((group) =>
   group.filter((d) => !PORTAL_ONLY_DIVISIONS.has(d)).map((d) => ({ value: d, label: d }))
 );
 
-type Partner = { id: string; first_name: string; last_name: string; partner_role: "leader" | "follower" };
+type Partner = Pick<ApiPartner, "id" | "first_name" | "last_name" | "partner_role">;
 
 function formatMB(bytes: number): string { return (bytes / (1024 * 1024)).toFixed(1); }
 function isIOS(): boolean {
@@ -75,12 +76,13 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const partnersPath = onBehalf ? `/v1/admin/users/${onBehalf.userId}/partners` : "/v1/partners";
     Promise.all([
-      api.get<Partner[]>(partnersPath),
-      onBehalf ? Promise.resolve(null) : api.get<MeResponse>("/v1/auth/me"),
+      onBehalf
+        ? call(api, endpoints.admin.userPartners, { params: { id: onBehalf.userId } })
+        : call(api, endpoints.partners.list),
+      onBehalf ? Promise.resolve(null) : call(api, endpoints.auth.me),
       variant === "managed" && !onBehalf
-        ? api.get<ApiManagedPartnership[]>("/v1/managed-partnerships").catch(() => [])
+        ? call(api, endpoints.managedPartnerships.list).catch(() => [])
         : Promise.resolve([] as ApiManagedPartnership[]),
     ])
       .then(([p, m, mp]) => {

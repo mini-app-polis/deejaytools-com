@@ -25,6 +25,7 @@ vi.mock("sonner", () => ({
 }));
 
 import FloorTrialsPage from "./FloorTrialsPage";
+import { fx } from "@/test/fixtures";
 
 // ---------------------------------------------------------------------------
 // Setup + cleanup
@@ -50,7 +51,7 @@ function makeSession(opts: {
   hasActiveCheckin?: boolean;
 }) {
   const startTs = new Date(opts.startsAt).getTime();
-  return {
+  return fx.session({
     id: opts.id,
     event_id: opts.eventId ?? null,
     name: "session-name",
@@ -60,7 +61,7 @@ function makeSession(opts: {
     floor_trial_starts_at: startTs,
     floor_trial_ends_at: startTs + 2 * 60 * 60 * 1000,
     has_active_checkin: opts.hasActiveCheckin ?? false,
-  };
+  });
 }
 
 function renderPage() {
@@ -158,7 +159,7 @@ describe("FloorTrialsPage", () => {
       }
       if (path === "/v1/events") {
         return Promise.resolve([
-          { id: "event-1", name: "GNDC", start_date: TODAY, end_date: TODAY, status: "upcoming" },
+          fx.event({ id: "event-1", name: "GNDC", start_date: TODAY, end_date: TODAY, status: "upcoming" }),
         ]);
       }
       return Promise.resolve([]);
@@ -311,7 +312,7 @@ describe("FloorTrialsPage — check-in flow", () => {
       }
       if (path === "/v1/events") {
         return Promise.resolve([
-          { id: "ev-1", name: "Championship", start_date: TODAY, end_date: TODAY, status: "active", timezone: "America/Chicago" },
+          fx.event({ id: "ev-1", name: "Championship", start_date: TODAY, end_date: TODAY, status: "active", timezone: "America/Chicago" }),
         ]);
       }
       return Promise.resolve([]);
@@ -335,7 +336,7 @@ describe("FloorTrialsPage — check-in flow", () => {
       }
       if (path === "/v1/events") {
         return Promise.resolve([
-          { id: "ev-1", name: "Floor Trial Event", start_date: TODAY, end_date: TODAY, status: "active", timezone: "America/Chicago" },
+          fx.event({ id: "ev-1", name: "Floor Trial Event", start_date: TODAY, end_date: TODAY, status: "active", timezone: "America/Chicago" }),
         ]);
       }
       return Promise.resolve([]);
@@ -408,7 +409,7 @@ describe("FloorTrialsPage — queue state", () => {
       }
       if (path === "/v1/events") {
         return Promise.resolve([
-          { id: "ev-1", name: "Championship", start_date: TODAY, end_date: TODAY, status: "active", timezone: "America/Chicago" },
+          fx.event({ id: "ev-1", name: "Championship", start_date: TODAY, end_date: TODAY, status: "active", timezone: "America/Chicago" }),
         ]);
       }
       return Promise.resolve([]);
@@ -432,7 +433,7 @@ describe("FloorTrialsPage — queue state", () => {
       }
       if (path === "/v1/events") {
         return Promise.resolve([
-          { id: "ev-1", name: "Floor Trial Event", start_date: TODAY, end_date: TODAY, status: "active", timezone: "America/Chicago" },
+          fx.event({ id: "ev-1", name: "Floor Trial Event", start_date: TODAY, end_date: TODAY, status: "active", timezone: "America/Chicago" }),
         ]);
       }
       return Promise.resolve([]);

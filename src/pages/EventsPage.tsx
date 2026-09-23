@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import type { ApiEvent, ApiSession } from "@/schemas";
 import { useApiClient } from "@/api/client";
+import { call, endpoints } from "@/api/endpoints";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -50,8 +51,8 @@ export default function EventsPage() {
   const load = () => {
     setLoading(true);
     Promise.all([
-      api.get<ApiEvent[]>("/v1/events"),
-      api.get<ApiSession[]>("/v1/sessions"),
+      call(api, endpoints.events.list),
+      call(api, endpoints.sessions.list),
     ])
       .then(([evs, sess]) => {
         setEvents(evs);

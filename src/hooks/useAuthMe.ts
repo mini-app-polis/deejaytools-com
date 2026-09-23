@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { ApiAuthMe } from "@/schemas";
 import { useApiClient } from "@/api/client";
+import { call, endpoints } from "@/api/endpoints";
 
 /** Re-exported alias so callers can import `AuthMe` from this module. */
 export type AuthMe = ApiAuthMe;
@@ -20,7 +21,7 @@ export function useAuthMe() {
     }
     setFetching(true);
     try {
-      const row = await api.get<ApiAuthMe>("/v1/auth/me");
+      const row = await call(api, endpoints.auth.me);
       setMe(row);
     } catch (e) {
       setMe(null);

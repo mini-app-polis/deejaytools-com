@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useApiClient } from "@/api/client";
+import { call, endpoints } from "@/api/endpoints";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -48,10 +49,10 @@ export default function MyProfilePage() {
   const onSubmit = form.handleSubmit(async (values) => {
     setIsSubmitting(true);
     try {
-      await api.patch<ApiAuthMe>("/v1/auth/me", {
+      await call(api, endpoints.auth.updateMe, { body: {
         firstName: values.firstName,
         lastName: values.lastName,
-      });
+      } });
       await reload();
       toast.success("Profile updated");
     } catch (e) {

@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import type { ApiEvent, ApiEventDivisionEntities, ApiSession } from "@/schemas";
 import { useApiClient } from "@/api/client";
+import { call, endpoints } from "@/api/endpoints";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -48,8 +49,8 @@ export default function EventDetailPage() {
     if (!id) return;
     setLoading(true);
     Promise.all([
-      api.get<ApiEvent>(`/v1/events/${id}`),
-      api.get<ApiSession[]>(`/v1/sessions?event_id=${encodeURIComponent(id)}`),
+      call(api, endpoints.events.get, { params: { id: id } }),
+      call(api, endpoints.sessions.list, { params: { eventId: id } }),
     ])
       .then(([ev, sess]) => {
         setEvent(ev);
@@ -223,8 +224,7 @@ function EnteredEntities({ eventId, isSignedIn }: { eventId: string; isSignedIn:
     }
     let cancelled = false;
     setLoading(true);
-    api
-      .get<ApiEventDivisionEntities[]>(`/v1/events/${encodeURIComponent(eventId)}/entities`)
+    call(api, endpoints.events.entities, { params: { id: eventId } })
       .then((rows) => {
         if (!cancelled) setDivisions(rows);
       })

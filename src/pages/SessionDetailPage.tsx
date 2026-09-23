@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { SignedIn, SignedOut, SignInButton, useAuth, useUser } from "@clerk/clerk-react";
 import type { ApiSession, ApiQueueEntry, ApiLeadingPair, ApiSong, ApiEventSongSubmission, ApiMyCheckin } from "@/schemas";
 import { useApiClient } from "@/api/client";
+import { call, endpoints } from "@/api/endpoints";
 import { SessionInfoHeader } from "@/components/SessionInfoHeader";
 import { Button } from "@/components/ui/button";
 import { ChoiceGroup } from "@/components/ui/choice-group";
@@ -54,7 +55,7 @@ export default function ApiSessionPage() {
 
   const loadSession = useCallback(() => {
     if (!id) return Promise.resolve(undefined);
-    return api.get<ApiSession>(`/v1/sessions/${id}`).then((s) => {
+    return call(api, endpoints.sessions.get, { params: { id: id } }).then((s) => {
       setSession(s);
       return s;
     });
@@ -63,8 +64,8 @@ export default function ApiSessionPage() {
   const loadQueue = useCallback(async () => {
     if (!id) return;
     const [a, w] = await Promise.all([
-      api.get<ApiQueueEntry[]>(`/v1/queue/${id}/active`),
-      api.get<ApiQueueEntry[]>(`/v1/queue/${id}/waiting`),
+      call(api, endpoints.queue.active, { params: { sessionId: id } }),
+      call(api, endpoints.queue.waiting, { params: { sessionId: id } }),
     ]);
     setActive(a);
     setWaiting(w);
@@ -75,7 +76,7 @@ export default function ApiSessionPage() {
       setMyCheckins([]);
       return;
     }
-    const mine = await api.get<ApiMyCheckin[]>("/v1/checkins/mine");
+    const mine = await call(api, endpoints.checkins.mine);
     setMyCheckins(mine);
   }, [api, isSignedIn]);
 
@@ -93,18 +94,15 @@ export default function ApiSessionPage() {
 
       const submissionsPromise =
         eventId != null
-          ? api
-              .get<ApiEventSongSubmission[]>(
-                `/v1/event-song-submissions?event_id=${encodeURIComponent(eventId)}`
-              )
+          ? call(api, endpoints.eventSongSubmissions.list, { params: { eventId: eventId } })
               .catch(() => null)
           : Promise.resolve(null);
 
       const [p, s, subs, mine] = await Promise.all([
-        api.get<ApiLeadingPair[]>("/v1/partners/leading-pairs"),
-        api.get<ApiSong[]>("/v1/songs"),
+        call(api, endpoints.partners.leadingPairs),
+        call(api, endpoints.songs.list),
         submissionsPromise,
-        api.get<ApiMyCheckin[]>("/v1/checkins/mine"),
+        call(api, endpoints.checkins.mine),
       ]);
       setPairs(p);
       setSongs(s);
@@ -332,14 +330,14 @@ export default function ApiSessionPage() {
       // If the song has a partner but no pair row exists yet, create it transparently
       let pairId: string | null = derivedPair?.id ?? null;
       if (!isManaged && !pairId && selectedSong?.partner_id) {
-        const created = await api.post<{ id: string }>("/v1/pairs/find-or-create", {
+        const created = await call(api, endpoints.pairs.findOrCreate, { body: {
           partner_id: selectedSong.partner_id,
-        });
+        } });
         pairId = created.id;
       }
 
       // Exactly one entity field must be non-null or createCheckinBodySchema rejects the request.
-      await api.post("/v1/checkins", {
+      await call(api, endpoints.checkins.create, { body: {
         sessionId: id,
         divisionName: fDivision,
         entityPairId: !isManaged ? pairId : null,
@@ -348,7 +346,7 @@ export default function ApiSessionPage() {
           : null,
         songId: fSongId,
         notes: fNotes.trim() || undefined,
-      });
+      } });
       toast.success("Checked in");
       setCheckinOpen(false);
       await Promise.all([loadQueue(), loadSession(), loadMyCheckins()]);

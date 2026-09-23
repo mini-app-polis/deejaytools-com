@@ -34,6 +34,7 @@ vi.mock("sonner", () => ({
 
 import { toast } from "sonner";
 import PartnersSection from "./PartnersSection";
+import { fx } from "@/test/fixtures";
 
 beforeEach(() => {
   apiGet.mockReset();
@@ -53,20 +54,20 @@ function renderSection() {
 }
 
 const mockPartners = [
-  {
+  fx.partner({
     id: "p1",
     first_name: "Alice",
     last_name: "Smith",
     partner_role: "follower" as const,
     email: "alice@example.com",
-  },
-  {
+  }),
+  fx.partner({
     id: "p2",
     first_name: "Bob",
     last_name: "Jones",
     partner_role: "leader" as const,
     email: null,
-  },
+  }),
 ];
 
 describe("PartnersSection — list rendering", () => {
@@ -112,13 +113,13 @@ describe("PartnersSection — create partner", () => {
       if (path === "/v1/partners") return Promise.resolve([]);
       return Promise.resolve(undefined);
     });
-    apiPost.mockResolvedValue({
+    apiPost.mockResolvedValue(fx.partner({
       id: "p-new",
       first_name: "Carol",
       last_name: "Lee",
       partner_role: "leader",
       email: null,
-    });
+    }));
 
     const user = userEvent.setup();
     renderSection();
@@ -165,6 +166,7 @@ describe("PartnersSection — delete confirm flow", () => {
         return Promise.resolve({
           song_count: 0,
           has_active_checkin: false,
+          has_checkin_history: false,
         });
       }
       return Promise.resolve(undefined);

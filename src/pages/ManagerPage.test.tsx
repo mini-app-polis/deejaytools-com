@@ -38,6 +38,7 @@ vi.mock("@clerk/clerk-react", () => ({
 }));
 
 import ManagerPage from "./ManagerPage";
+import { fx } from "@/test/fixtures";
 
 function renderPage(path: string = "/manager/active-sessions") {
   return render(
@@ -50,7 +51,7 @@ function renderPage(path: string = "/manager/active-sessions") {
 }
 
 describe("ManagerPage — Event Songs section", () => {
-  const EVENT = {
+  const EVENT = fx.event({
     id: "ev1",
     name: "Spring Classic",
     start_date: "2026-04-01",
@@ -60,7 +61,7 @@ describe("ManagerPage — Event Songs section", () => {
     created_by: "u1",
     created_at: 1,
     updated_at: 1,
-  };
+  });
 
   function mockManagerGets(opts?: {
     events?: unknown[];

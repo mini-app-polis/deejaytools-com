@@ -39,6 +39,7 @@ vi.mock("@clerk/clerk-react", () => ({
 
 import EventDetailPage from "./EventDetailPage";
 import { toast } from "sonner";
+import { fx } from "@/test/fixtures";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -52,14 +53,14 @@ function makeEvent(opts: {
   status?: string;
   timezone?: string;
 }) {
-  return {
+  return fx.event({
     id: opts.id ?? "ev-1",
     name: opts.name ?? "Test Event",
     start_date: opts.startDate ?? "2026-06-01",
     end_date: opts.endDate ?? "2026-06-05",
     status: opts.status ?? "upcoming",
     timezone: opts.timezone ?? "America/Chicago",
-  };
+  });
 }
 
 function makeSession(opts: {
@@ -68,7 +69,7 @@ function makeSession(opts: {
   startsAt?: string;
 }) {
   const startTs = new Date(opts.startsAt ?? "2026-06-03T08:00:00").getTime();
-  return {
+  return fx.session({
     id: opts.id,
     event_id: "ev-1",
     name: "session-name",
@@ -77,7 +78,7 @@ function makeSession(opts: {
     checkin_opens_at: startTs - 60 * 60 * 1000,
     floor_trial_starts_at: startTs,
     floor_trial_ends_at: startTs + 2 * 60 * 60 * 1000,
-  };
+  });
 }
 
 function makeEntity(opts: { key: string; label: string; songs?: number }) {
@@ -194,9 +195,9 @@ describe("EventDetailPage", () => {
     );
   });
 
-  it("shows 'Event not found.' when event resolves to null", async () => {
+  it("shows 'Event not found.' when the event request fails with 404", async () => {
     apiGet.mockImplementation((path: string) => {
-      if (path === "/v1/events/ev-1") return Promise.resolve(null);
+      if (path === "/v1/events/ev-1") return Promise.reject(new Error("Event not found"));
       return Promise.resolve([]);
     });
     renderPage();

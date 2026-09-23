@@ -45,6 +45,7 @@ vi.mock("@clerk/clerk-react", () => ({
 }));
 
 import SessionDetailPage from "./SessionDetailPage";
+import { fx } from "@/test/fixtures";
 
 // ---------------------------------------------------------------------------
 // Fixtures + helpers
@@ -60,7 +61,7 @@ function makeSession(opts: {
   divisions?: { division_name: string; is_priority: boolean }[];
   eventName?: string | null;
 }) {
-  return {
+  return fx.session({
     id: "s1",
     event_id: opts.eventName ? "event-1" : null,
     event_name: opts.eventName ?? null,
@@ -70,11 +71,16 @@ function makeSession(opts: {
     floor_trial_starts_at: new Date(opts.floorTrialStartsAt).getTime(),
     floor_trial_ends_at: new Date(opts.floorTrialEndsAt).getTime(),
     status: "in_progress",
-    divisions: opts.divisions ?? [],
+    divisions: (opts.divisions ?? []).map((d, i) => ({
+      id: `d${i}`,
+      sort_order: i,
+      priority_run_limit: null,
+      ...d,
+    })),
     has_active_checkin: opts.hasActiveCheckin ?? false,
     active_checkin_division: opts.activeCheckinDivision ?? undefined,
     queue_depth: { priority: 0, non_priority: 0, active: 0 },
-  };
+  });
 }
 
 /** Stub the GET calls SessionDetailPage makes. */
@@ -92,7 +98,11 @@ function stubGets(opts: {
     if (path.includes("/active")) return Promise.resolve(opts.active ?? []);
     if (path.includes("/waiting")) return Promise.resolve(opts.waiting ?? []);
     if (path === "/v1/partners/leading-pairs") return Promise.resolve(opts.pairs ?? []);
-    if (path === "/v1/songs") return Promise.resolve(opts.songs ?? []);
+    if (path === "/v1/songs") {
+      return Promise.resolve(
+        (opts.songs ?? []).map((s) => fx.song(s as Parameters<typeof fx.song>[0]))
+      );
+    }
     if (path === "/v1/checkins/mine") return Promise.resolve(opts.myCheckins ?? []);
     if (path.startsWith("/v1/event-song-submissions")) {
       if (opts.eventSubmissions === "reject") {
@@ -112,7 +122,7 @@ function makeMyCheckin(opts: {
   entityManagedPartnershipId?: string | null;
   divisionName?: string;
 }) {
-  return {
+  return fx.myCheckin({
     id: `ci_${opts.queueEntryId ?? "qe1"}`,
     sessionId: opts.sessionId ?? "s1",
     eventName: "GNDC",
@@ -134,7 +144,7 @@ function makeMyCheckin(opts: {
     queuePosition: 1,
     overallPosition: 1,
     runCount: 0,
-  };
+  });
 }
 
 function openCheckinWindowSession(eventName = "GNDC") {
@@ -149,28 +159,28 @@ function openCheckinWindowSession(eventName = "GNDC") {
 }
 
 const sampleSongs = [
-  {
+  fx.song({
     id: "song1",
     processed_filename: "Song One",
     division: "Classic",
     partner_id: null,
-  },
-  {
+  }),
+  fx.song({
     id: "song2",
     processed_filename: "Song Two",
     division: "Classic",
     partner_id: null,
-  },
-  {
+  }),
+  fx.song({
     id: "song3",
     processed_filename: "Song Three",
     division: "Classic",
     partner_id: null,
-  },
+  }),
 ];
 
 function makeSubmission(songId: string) {
-  return {
+  return fx.eventSongSubmission({
     id: `sub_${songId}`,
     event_id: "event-1",
     event_name: "GNDC",
@@ -180,7 +190,7 @@ function makeSubmission(songId: string) {
     song_label: songId,
     division: "Classic",
     created_at: 1,
-  };
+  });
 }
 
 function renderAt(id = "s1") {

@@ -1,14 +1,4 @@
 import type { ErrorEnvelope, SuccessEnvelope } from "common-typescript-utils";
-import type { PartnerRole } from "@/schemas";
-
-/** Partner record from `/v1/partners`. */
-export type Partner = {
-  id: string;
-  first_name: string;
-  last_name: string;
-  partner_role: PartnerRole;
-  email: string | null;
-};
 import { useAuth } from "@clerk/clerk-react";
 import { useCallback, useMemo } from "react";
 import { Sentry } from "@/lib/instrument";
@@ -110,10 +100,10 @@ export function useApiClient() {
   );
 
   const del = useCallback(
-    async (path: string) => {
+    async (path: string): Promise<unknown> => {
       const res = await fetch(`${base}${path}`, await withAuth({ method: "DELETE" }));
-      if (res.status === 204) return;
-      await parseEnvelope<unknown>(res);
+      if (res.status === 204) return undefined;
+      return parseEnvelope<unknown>(res);
     },
     [withAuth]
   );
