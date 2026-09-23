@@ -41,6 +41,27 @@ jobs:
       - run: pnpm test:coverage
       - run: pnpm build
 
+      # The zod schemas are the API contract, and this repo holds one of
+      # two copies (the other is deejaytools-api/src/schemas/index.ts). Both dev
+      # branches must agree before either reaches main: a pull request to
+      # main fails on any difference; a push to dev only warns, since one
+      # side of a contract change always lands first.
+      - name: Schemas match deejaytools-api@dev
+        if: github.event_name == 'pull_request' || github.ref == 'refs/heads/dev'
+        run: |
+          curl -fsSL --retry 3 \
+            "https://raw.githubusercontent.com/mini-app-polis/deejaytools-api/dev/src/schemas/index.ts" \
+            -o "$RUNNER_TEMP/other.ts"
+          # Lines 1-2 are each copy's header naming the other file.
+          if diff -u <(tail -n +3 "$RUNNER_TEMP/other.ts") <(tail -n +3 src/schemas/index.ts); then
+            echo "Schemas match deejaytools-api@dev."
+          elif [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.base_ref }}" = "main" ]; then
+            echo "::error::src/schemas/index.ts differs from deejaytools-api@dev. Land the same change there first."
+            exit 1
+          else
+            echo "::warning::src/schemas/index.ts differs from deejaytools-api@dev. Make the same change there before merging to main."
+          fi
+
   release:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest

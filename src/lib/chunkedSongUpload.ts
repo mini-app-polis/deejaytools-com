@@ -50,13 +50,21 @@ type UploadSongChunksOptions = {
   getToken: () => Promise<string | null>;
   buildFormFields: () => Record<string, string>;
   onProgress?: (update: ChunkUploadProgress) => void;
+  /** Base backoff between chunk retries; attempt n waits n × this. Tests pass 0. */
+  retryDelayMs?: number;
 };
+
+export const RETRY_BASE_DELAY_MS = 1000;
+
+/** How long the finished progress bar stays at 100% before the caller moves on. */
+const FINISH_HOLD_MS = 400;
 
 export async function uploadSongInChunks({
   file,
   getToken,
   buildFormFields,
   onProgress,
+  retryDelayMs = RETRY_BASE_DELAY_MS,
 }: UploadSongChunksOptions): Promise<void> {
   const upfrontFailure = await fileReadFailure(file);
   if (upfrontFailure) throw new Error(upfrontFailure);
@@ -78,7 +86,7 @@ export async function uploadSongInChunks({
 
     let lastErr: Error | null = null;
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-      if (attempt > 0) await new Promise((r) => setTimeout(r, 1000 * attempt));
+      if (attempt > 0) await new Promise((r) => setTimeout(r, retryDelayMs * attempt));
 
       const form = new FormData();
       form.set("chunk", chunk, file.name);
@@ -145,5 +153,5 @@ export async function uploadSongInChunks({
 
   onProgress?.({ stage: "finishing", progress: 95, bytesSent: file.size });
   onProgress?.({ stage: "finishing", progress: 100, bytesSent: file.size });
-  await new Promise((r) => setTimeout(r, 400));
+  await new Promise((r) => setTimeout(r, FINISH_HOLD_MS));
 }

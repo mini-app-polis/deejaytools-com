@@ -13,3 +13,4 @@ This matches ecosystem-standards DOC-005.
 ## Index
 
 - [ADR-001 — Browser observability stack](./ADR-001-browser-observability-stack.md)
+- [ADR-002 — The API contract lives in the web app](./ADR-002-api-contract.md)

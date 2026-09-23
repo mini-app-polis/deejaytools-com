@@ -1,0 +1,60 @@
+name: Contract
+
+# The live contract suite (src/contract): every endpoint in the web app's
+# catalog, called against the development API and validated against the
+# schemas the app relies on. It writes to that API, so it runs one at a
+# time and only ever with a development Clerk key — see
+# src/contract/harness.ts for the guards.
+#
+# Configuration (repository settings → Secrets and variables → Actions):
+#   secret   CONTRACT_CLERK_SECRET_KEY   dev Clerk instance secret key (sk_test_…)
+#   variable CONTRACT_API_URL           dev API base URL
+#   variable CONTRACT_USER_ID           Clerk user id of the test user (an admin in dev)
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 11 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: contract-dev-api
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CONTRACT_API_URL: ${{ vars.CONTRACT_API_URL }}
+      CONTRACT_USER_ID: ${{ vars.CONTRACT_USER_ID }}
+      CONTRACT_CLERK_SECRET_KEY: ${{ secrets.CONTRACT_CLERK_SECRET_KEY }}
+    steps:
+      - name: Check configuration
+        id: config
+        run: |
+          if [ -z "$CONTRACT_API_URL" ] || [ -z "$CONTRACT_USER_ID" ] || [ -z "$CONTRACT_CLERK_SECRET_KEY" ]; then
+            echo "::warning::Contract suite not configured — set CONTRACT_API_URL, CONTRACT_USER_ID and CONTRACT_CLERK_SECRET_KEY."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v7
+        if: steps.config.outputs.ready == 'true'
+      - uses: pnpm/action-setup@v6
+        if: steps.config.outputs.ready == 'true'
+      - uses: actions/setup-node@v7
+        if: steps.config.outputs.ready == 'true'
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - run: pnpm install
+        if: steps.config.outputs.ready == 'true'
+      - run: pnpm test:contract
+        if: steps.config.outputs.ready == 'true'
