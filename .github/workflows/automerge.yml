@@ -6,7 +6,7 @@ name: automerge
 on:
   workflow_run:
     # Every workflow here that runs on pull_request.
-    workflows: [CI, Contract]
+    workflows: [CI]
     types: [completed]
 
 permissions:

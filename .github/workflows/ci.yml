@@ -1,8 +1,13 @@
 name: CI
 
+# Pushes to main and dev, plus pull requests into them. Other branches run
+# only through their pull request (in practice Dependabot's), so each commit
+# is tested once; the automerge workflow acts only on the pull request run.
+# The promotion pull request to main does run again after dev's push: it is
+# the run that enforces the schema check below as a hard failure.
 on:
   push:
-    branches: ["**"]
+    branches: [main, dev]
   pull_request:
     branches: [main, dev]
 
