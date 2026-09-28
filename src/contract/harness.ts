@@ -16,8 +16,16 @@ import { ClerkTestSession } from "./clerk";
 // Configuration and guards
 // ---------------------------------------------------------------------------
 
-/** API hosts the suite must never touch. It creates and deletes data. */
-const FORBIDDEN_HOST_SUFFIXES = ["deejaytools.com"];
+/** The production domain. The suite creates and deletes data, so it never
+ * calls a host under it except the development API below. */
+const PRODUCTION_DOMAIN = "deejaytools.com";
+
+/**
+ * The only hosts under the production domain the suite may call. Anything
+ * else there — the API, the site, a new subdomain — is refused, so adding a
+ * production host never needs a change here to stay safe.
+ */
+const ALLOWED_DEV_HOSTS = ["api-dev.deejaytools.com"];
 
 export interface ContractConfig {
   apiUrl: string;
@@ -36,7 +44,8 @@ function env(name: string): string | undefined {
  * holds, because the suite writes to the API it points at:
  *   1. the Clerk key is a development-instance key (sk_test_), so the token
  *      it mints is one only a development API accepts;
- *   2. the API host is not a production hostname.
+ *   2. the API host is not a production hostname: under deejaytools.com only
+ *      the development API (ALLOWED_DEV_HOSTS) is allowed.
  * A production API would also reject the development token at /auth/sync,
  * before the first write — the third, independent guard.
  */
@@ -58,7 +67,8 @@ export function loadConfig(): ContractConfig {
     );
   }
   const host = new URL(apiUrl!).hostname;
-  if (FORBIDDEN_HOST_SUFFIXES.some((s) => host === s || host.endsWith(`.${s}`))) {
+  const onProductionDomain = host === PRODUCTION_DOMAIN || host.endsWith(`.${PRODUCTION_DOMAIN}`);
+  if (onProductionDomain && !ALLOWED_DEV_HOSTS.includes(host)) {
     throw new Error(`Refusing to run against ${host}: the contract suite writes data.`);
   }
   return { apiUrl: apiUrl!.replace(/\/$/, ""), clerkSecretKey: clerkSecretKey!, userId: userId! };
