@@ -52,7 +52,7 @@ export class ContractViolation extends Error {
  * conforms, and — in report mode only — the raw value when it does not. */
 export function checkResponse<T>(
   endpointId: string,
-  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
+  schema: z.ZodType<T, unknown>,
   data: unknown
 ): T {
   const result = schema.safeParse(data);

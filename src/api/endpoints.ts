@@ -49,7 +49,7 @@ export type Access = "public" | "user" | "admin";
 
 // Loose on the input type: a schema with defaults (e.g. runCount) has an
 // input shape that differs from its output.
-type Schema<T> = z.ZodType<T, z.ZodTypeDef, unknown>;
+type Schema<T> = z.ZodType<T, unknown>;
 
 export interface Endpoint<P, B, R> {
   readonly id: string;
