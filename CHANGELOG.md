@@ -1,3 +1,10 @@
+## [2.5.4](https://github.com/mini-app-polis/deejaytools-com/compare/v2.5.3...v2.5.4) (2026-09-28)
+
+
+### Bug Fixes
+
+* **ci:** smoke-test the Pages preview URL, which the domain's bot protection doesn't block ([bc189f9](https://github.com/mini-app-polis/deejaytools-com/commit/bc189f942672601b9bd0ea69f9db33340192bc6d))
+
 ## [2.5.3](https://github.com/mini-app-polis/deejaytools-com/compare/v2.5.2...v2.5.3) (2026-09-28)
 
 
