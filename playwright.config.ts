@@ -6,7 +6,7 @@ import { defineConfig, devices } from "@playwright/test";
  * behind it. It writes to that API, so it runs one test at a time and only
  * with a development Clerk key — see e2e/env.ts for the guards.
  *
- * Configuration comes from the environment, as in CI (see dev-site.yml):
+ * Configuration comes from the environment, as in CI (see site.yml):
  *   E2E_BASE_URL               the deployed site to test
  *   CLERK_PUBLISHABLE_KEY      that site's Clerk key (pk_test_…)
  *   CLERK_SECRET_KEY           the development instance's secret key
