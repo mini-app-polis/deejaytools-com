@@ -20,7 +20,7 @@
  * Run: pnpm test:contract  (needs CONTRACT_API_URL, CONTRACT_CLERK_SECRET_KEY,
  * CONTRACT_USER_ID; the test user must be an admin in that environment).
  */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { allEndpoints, checkEndpoint, endpoints } from "@/api/endpoints";
 import { ClerkTestSession } from "./clerk";
 import { ApiStatusError, type Client, Ledger, loadConfig, makeClient, sleep, strictContracts } from "./harness";
@@ -30,14 +30,14 @@ const DIVISION = "Classic";
 /** The API's scheduler ticks every 30 s; allow three ticks. */
 const QUEUE_FILL_TIMEOUT_MS = 95_000;
 const QUEUE_POLL_MS = 5_000;
+/** The API answers the last chunk at once and uploads to Drive afterwards. */
+const DRIVE_UPLOAD_TIMEOUT_MS = 60_000;
 
 /**
  * Endpoints this suite deliberately does not call, and why. Each is still
  * covered by the unit fixtures, which are validated against the same schema.
  */
 const NOT_EXERCISED: Record<string, string> = {
-  "songs.uploadChunk": "uploads to Google Drive",
-  "songs.remove": "needs an uploaded song (Google Drive)",
   "checkins.create": "needs an uploaded song submitted to the event (Google Drive)",
   "checkins.withdraw": "needs a check-in, which needs an uploaded song",
   "eventSongSubmissions.create": "enqueues a Google Drive copy",
@@ -49,7 +49,7 @@ const NOT_EXERCISED: Record<string, string> = {
 const PROBE_EXEMPT = new Set([
   // Validates the body before it checks the token, so an empty body is a 400.
   "auth.sync",
-  // Multipart upload; see NOT_EXERCISED.
+  // Multipart; exercised by the song upload test instead.
   "songs.uploadChunk",
   // Public and has a side effect; see NOT_EXERCISED.
   "feedback.submit",
@@ -66,6 +66,7 @@ const state: {
   partnerId?: string;
   teamId?: string;
   managedPartnershipId?: string;
+  songId?: string;
 } = {};
 
 async function waitForActive(sessionId: string): Promise<string> {
@@ -119,10 +120,17 @@ beforeAll(async () => {
       await api.del(endpoints.events.remove.path({ id: e.id })).catch(() => undefined);
     }
   }
+  const songs = await api.get<{ id: string; routine_name: string | null }[]>(endpoints.songs.list.path());
+  for (const s of songs) {
+    if (s.routine_name?.startsWith(RUN_PREFIX)) {
+      await api.del(endpoints.songs.remove.path({ id: s.id })).catch(() => undefined);
+    }
+  }
 }, 60_000);
 
 afterAll(async () => {
   const cleanup: [string, () => Promise<unknown>][] = [
+    ["songs.remove", async () => state.songId && ledger.hit(endpoints.songs.remove, { params: { id: state.songId } })],
     ["admin.clearTestCheckins", () => ledger.hit(endpoints.admin.clearTestCheckins)],
     ["partners.remove", async () => state.partnerId && ledger.hit(endpoints.partners.remove, { params: { id: state.partnerId } })],
     ["teams.remove", async () => state.teamId && ledger.hit(endpoints.teams.remove, { params: { id: state.teamId } })],
@@ -286,6 +294,56 @@ describe("contract", () => {
     await ledger.hit(endpoints.managedPartnerships.remove, { params: { id: mp.id } });
     state.managedPartnershipId = undefined;
   });
+
+  // The one real round trip to Google Drive: the app's own upload code sends
+  // a small MP3, and the API tags it and uploads it to the dev Drive folder
+  // in the background. Deleting the song moves the Drive file into that
+  // folder's _deprecated subfolder, so each run leaves one tiny file there.
+  it("song upload reaches Google Drive", async () => {
+    vi.stubEnv("VITE_API_URL", cfg.apiUrl);
+    const { uploadSongInChunks } = await import("@/lib/chunkedSongUpload");
+    const routineName = `${RUN_PREFIX} ${Date.now()}`;
+    // An empty ID3v2 header passes the API's MP3 check; the rest stands in
+    // for audio frames.
+    const bytes = new Uint8Array([0x49, 0x44, 0x33, 0x04, 0, 0, 0, 0, 0, 0, ...new Uint8Array(4096).fill(0x55)]);
+    await uploadSongInChunks({
+      file: new File([bytes], "contract-suite.mp3", { type: "audio/mpeg" }),
+      getToken: () => session.token(),
+      buildFormFields: () => ({ division: DIVISION, routine_name: routineName }),
+      retryDelayMs: 0,
+    });
+    ledger.mark(endpoints.songs.uploadChunk);
+
+    // The API deletes the song again if the Drive upload fails, so a song
+    // that appears and then vanishes means Drive refused it.
+    let seen = false;
+    const deadline = Date.now() + DRIVE_UPLOAD_TIMEOUT_MS;
+    for (;;) {
+      const song = (await ledger.hit(endpoints.songs.list)).find((s) => s.routine_name === routineName);
+      if (song) {
+        seen = true;
+        state.songId = song.id;
+        if (song.drive_file_id) {
+          expect(song.processed_filename).toMatch(/\.mp3$/);
+          break;
+        }
+      } else if (seen) {
+        throw new Error(
+          "The API removed the uploaded song: its Google Drive upload failed. See song_background_upload_failed in the dev API logs."
+        );
+      }
+      if (Date.now() > deadline) {
+        throw new Error(`The song had no Google Drive file after ${DRIVE_UPLOAD_TIMEOUT_MS / 1000}s.`);
+      }
+      await sleep(2_000);
+    }
+
+    await ledger.hit(endpoints.songs.remove, { params: { id: state.songId! } });
+    const remaining = await ledger.hit(endpoints.songs.list);
+    expect(remaining.some((s) => s.id === state.songId)).toBe(false);
+    state.songId = undefined;
+    vi.unstubAllEnvs();
+  }, 90_000);
 
   it("the user's own lists", async () => {
     await ledger.hit(endpoints.songs.list);
