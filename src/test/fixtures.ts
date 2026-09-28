@@ -30,7 +30,7 @@ import {
  * parses the result, so a fixture that could not come from the API fails
  * here, with the schema's message, instead of as a toast deep in a render.
  */
-function factory<S extends z.ZodTypeAny>(schema: S, defaults: z.input<S>) {
+function factory<S extends z.ZodObject>(schema: S, defaults: z.input<S>) {
   return (overrides: Partial<z.input<S>> = {}): z.output<S> =>
     schema.parse({ ...defaults, ...overrides });
 }

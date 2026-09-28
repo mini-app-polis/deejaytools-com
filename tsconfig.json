@@ -22,7 +22,6 @@
       "vite/client",
       "@testing-library/jest-dom"
     ],
-    "baseUrl": ".",
     "paths": {
       "@/*": [
         "./src/*"
