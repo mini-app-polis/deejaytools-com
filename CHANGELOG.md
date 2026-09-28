@@ -1,3 +1,14 @@
+## [2.5.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.5.0...v2.5.1) (2026-09-28)
+
+
+### Bug Fixes
+
+* **deps:** bump @eslint/js from 9.39.5 to 10.0.1 ([ccadae5](https://github.com/mini-app-polis/deejaytools-com/commit/ccadae52e95e8daba1659c12ad590ed9b81ce683))
+* **deps:** bump @hookform/resolvers from 3.10.0 to 5.4.0 ([9518aa0](https://github.com/mini-app-polis/deejaytools-com/commit/9518aa036959c63958b18dffef7dede739b8d642))
+* **deps:** bump @sentry/react from 10.75.0 to 11.0.0 ([1969621](https://github.com/mini-app-polis/deejaytools-com/commit/1969621da6aff781a5d617b953e5b1015e791907))
+* **deps:** bump the js-minor-and-patch group with 7 updates ([3314530](https://github.com/mini-app-polis/deejaytools-com/commit/3314530759b73a3ddfa579575456effdd663daf6))
+* **sentry:** replace sendDefaultPii with the v11 dataCollection equivalent ([e4af939](https://github.com/mini-app-polis/deejaytools-com/commit/e4af939787f888b348b4c33e0e3fc8d44d0d4042))
+
 # [2.5.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.4.0...v2.5.0) (2026-09-23)
 
 
