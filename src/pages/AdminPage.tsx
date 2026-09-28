@@ -739,14 +739,16 @@ export default function AdminPage() {
           } });
         } catch (err) {
           throw new Error(
-            `Failed to update session fields: ${err instanceof Error ? err.message : String(err)}`
+            `Failed to update session fields: ${err instanceof Error ? err.message : String(err)}`,
+            { cause: err }
           );
         }
         try {
           await call(api, endpoints.sessions.setDivisions, { params: { id: sessEditId }, body: { divisions } });
         } catch (err) {
           throw new Error(
-            `Session fields saved, but failed to update divisions: ${err instanceof Error ? err.message : String(err)}`
+            `Session fields saved, but failed to update divisions: ${err instanceof Error ? err.message : String(err)}`,
+            { cause: err }
           );
         }
         toast.success("Session updated");
