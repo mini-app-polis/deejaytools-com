@@ -13,26 +13,41 @@ name: dev-site
 #   - the bundle points at the dev API, and that API answers /health.
 # Environment variables are baked into the bundle at build time, so a wrong
 # key or API URL in the Pages settings shows up here and nowhere else.
+#
+# Then the end-to-end suite (e2e/, Playwright) runs a real browser against
+# the dev site's branch URL (dev.deejaytools-com.pages.dev), signed in as the
+# contract test user through Clerk's development instance. It shares the
+# contract suite's configuration and concurrency group: both write to the
+# dev API, and must never run at once.
+#
+# It runs on pushes to dev and on the promotion pull request to main, as a
+# gate on the manual merge; on a pull request it tests the pull request's
+# head, which is dev's latest deploy.
 
 on:
   push:
     branches: [dev]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
   checks: read
 
 concurrency:
-  group: dev-site
+  group: dev-site-${{ github.event_name }}
   cancel-in-progress: true
 
 env:
   API: https://api-dev.deejaytools.com
+  SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      publishable-key: ${{ steps.smoke.outputs.publishable-key }}
     steps:
       - name: Wait for Cloudflare Pages to deploy this commit
         id: deploy
@@ -40,28 +55,29 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           for _ in $(seq 1 60); do
-            run=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?check_name=Cloudflare%20Pages" \
+            run=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs?check_name=Cloudflare%20Pages" \
               --jq '.check_runs[0] // {} | "\(.status // "missing") \(.conclusion // "")"')
             read -r status conclusion <<<"$run"
             if [ "$status" = completed ]; then
               if [ "$conclusion" = success ]; then
                 # The check's summary lists the deploy's own preview URL first.
-                url=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?check_name=Cloudflare%20Pages" \
+                url=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs?check_name=Cloudflare%20Pages" \
                   --jq '.check_runs[0].output.summary' | grep -oE 'https://[a-z0-9]+\.deejaytools-com\.pages\.dev' | head -n 1 || true)
                 if [ -z "$url" ]; then echo "::error::The Cloudflare Pages check did not report a preview URL."; exit 1; fi
                 echo "Deployed at $url."
                 echo "site=$url" >> "$GITHUB_OUTPUT"
                 exit 0
               fi
-              echo "::error::The Cloudflare Pages deploy of $GITHUB_SHA concluded '$conclusion'."
+              echo "::error::The Cloudflare Pages deploy of $SHA concluded '$conclusion'."
               exit 1
             fi
             sleep 15
           done
-          echo "::error::No finished Cloudflare Pages deploy for $GITHUB_SHA after 15 minutes."
+          echo "::error::No finished Cloudflare Pages deploy for $SHA after 15 minutes."
           exit 1
 
       - name: Smoke-test the dev site
+        id: smoke
         env:
           SITE: ${{ steps.deploy.outputs.site }}
         run: |
@@ -79,8 +95,45 @@ jobs:
           [ -n "$keys" ] || fail "No Clerk publishable key found in the dev site bundle."
           if grep -q '^pk_live_' <<<"$keys"; then fail "The dev site is built with a production Clerk key (pk_live_)."; fi
           grep -q '^pk_test_' <<<"$keys" || fail "The dev site is not built with a development Clerk key (pk_test_)."
+          # A publishable key is public by design; the e2e job needs it.
+          echo "publishable-key=$(head -n 1 <<<"$keys")" >> "$GITHUB_OUTPUT"
           grep -qF "$API" <<<"$js" || fail "The dev site is not built to call $API."
 
           curl -fsS -o /dev/null --retry 3 "$SITE/events" || fail "A deep link ($SITE/events) did not load."
           curl -fsS -o /dev/null --retry 3 "$API/health" || fail "$API/health did not answer."
           echo "Dev site OK: $asset"
+
+  e2e:
+    needs: smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Shared with the contract suite (contract.yml): both write to the dev API.
+    concurrency:
+      group: contract-dev-api
+      cancel-in-progress: false
+    env:
+      E2E_BASE_URL: https://dev.deejaytools-com.pages.dev
+      CLERK_PUBLISHABLE_KEY: ${{ needs.smoke.outputs.publishable-key }}
+      CLERK_SECRET_KEY: ${{ secrets.CONTRACT_CLERK_SECRET_KEY }}
+      CONTRACT_API_URL: ${{ vars.CONTRACT_API_URL }}
+      CONTRACT_USER_ID: ${{ vars.CONTRACT_USER_ID }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SHA }}
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - run: pnpm install
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

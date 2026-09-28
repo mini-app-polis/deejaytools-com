@@ -13,3 +13,6 @@ coverage
 # loading it. Vitest is supposed to clean these up but doesn't always (e.g. on
 # aborted runs).
 *.timestamp-*.mjs
+# Playwright
+playwright-report/
+test-results/
