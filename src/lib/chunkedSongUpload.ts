@@ -121,7 +121,7 @@ export async function uploadSongInChunks({
         // before blaming the network — and never retry an unreadable file,
         // which is guaranteed to fail again and only delays the real message.
         const readFailure = await fileReadFailure(file);
-        if (readFailure) throw new Error(readFailure);
+        if (readFailure) throw new Error(readFailure, { cause: fetchErr });
         const detail =
           fetchErr instanceof Error ? `${fetchErr.name}: ${fetchErr.message}` : String(fetchErr);
         lastErr = new Error(

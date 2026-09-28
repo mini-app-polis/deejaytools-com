@@ -16,7 +16,22 @@ Sentry.init({
   dsn: import.meta.env.VITE_SENTRY_DSN,
   environment: import.meta.env.MODE,
   enabled: Boolean(import.meta.env.VITE_SENTRY_DSN),
-  sendDefaultPii: false,
+  // v11 removed `sendDefaultPii`, and an unset `dataCollection` now collects
+  // everything. This is Sentry's documented equivalent of the old
+  // `sendDefaultPii: false`, so no user data starts flowing on the upgrade.
+  dataCollection: {
+    userInfo: false,
+    cookies: false,
+    httpHeaders: {
+      request: { deny: ["forwarded", "-ip", "remote-", "via", "-user"] },
+      response: { deny: ["forwarded", "-ip", "remote-", "via", "-user"] },
+    },
+    httpBodies: [],
+    urlQueryParams: { deny: ["forwarded", "-ip", "remote-", "via", "-user"] },
+    genAI: { inputs: false, outputs: false },
+    databaseQueryData: false,
+    graphQL: { document: false, variables: false },
+  },
   // Tag every event with the deployed release. VITE_APP_VERSION is injected
   // at build time by vite.config.ts from the repo-root package.json.
   release: import.meta.env.VITE_APP_VERSION,

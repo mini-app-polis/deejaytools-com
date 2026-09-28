@@ -122,7 +122,7 @@ export default function EventDetailPage() {
 
       <div className="space-y-4">
         <h2 className="text-base font-semibold">
-          Sessions
+          Sessions{" "}
           {sessions !== null && (
             <span className="ml-2 text-sm font-normal text-muted-foreground">
               {formatFloorTrials(trialCounts)}
@@ -256,7 +256,7 @@ function EnteredEntities({ eventId, isSignedIn }: { eventId: string; isSignedIn:
   return (
     <div className="space-y-4">
       <h2 className="text-base font-semibold">
-        Entered
+        Entered{" "}
         {totals !== null && (
           <span className="ml-2 text-sm font-normal text-muted-foreground">
             {countsLabel(totals.entries, totals.songs)}

@@ -770,10 +770,10 @@ export default function ManagerPage() {
                                 )}
                               >
                                 ▶
-                              </span>
+                              </span>{" "}
                               <span className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
                                 {division}
-                              </span>
+                              </span>{" "}
                               <span className="text-xs font-normal text-muted-foreground/70">
                                 {rows.length}
                               </span>
