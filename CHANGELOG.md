@@ -1,3 +1,10 @@
+## [2.5.5](https://github.com/mini-app-polis/deejaytools-com/compare/v2.5.4...v2.5.5) (2026-09-28)
+
+
+### Bug Fixes
+
+* **auth:** tell the user when their email belongs to another account ([c58d2f3](https://github.com/mini-app-polis/deejaytools-com/commit/c58d2f32484793305201a9d490a28ef5aff294ed))
+
 ## [2.5.4](https://github.com/mini-app-polis/deejaytools-com/compare/v2.5.3...v2.5.4) (2026-09-28)
 
 
