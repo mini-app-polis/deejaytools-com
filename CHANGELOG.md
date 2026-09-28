@@ -1,3 +1,11 @@
+## [2.5.2](https://github.com/mini-app-polis/deejaytools-com/compare/v2.5.1...v2.5.2) (2026-09-28)
+
+
+### Bug Fixes
+
+* **deps:** bump @hookform/resolvers in the minor-and-patch group ([5e5272e](https://github.com/mini-app-polis/deejaytools-com/commit/5e5272e2b89edaef093b08fc883683fe477a1b2e))
+* **deps:** upgrade to typescript 6, zod 4 and vitest 5 ([572cf39](https://github.com/mini-app-polis/deejaytools-com/commit/572cf394d0adb61a2de4de26ef39002e594f813f))
+
 ## [2.5.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.5.0...v2.5.1) (2026-09-28)
 
 
