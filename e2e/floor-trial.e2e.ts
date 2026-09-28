@@ -1,5 +1,5 @@
 import { formatSessionTitle } from "../src/lib/sessionFormat";
-import { Api, expect, RUN_ID, signIn, test } from "./fixtures";
+import { Api, expect, expectApiReachable, RUN_ID, signIn, test } from "./fixtures";
 
 /**
  * Floor trial day, through the screens people use: the public session page
@@ -63,6 +63,7 @@ test.afterAll(async () => {
 
 test("the public session page shows everyone in the queue", async ({ page }) => {
   await page.goto(`/sessions/${session.id}`);
+  await expectApiReachable(page);
   await expect(page.getByText(LEADER_A).first()).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText(LEADER_B).first()).toBeVisible({ timeout: 60_000 });
 });

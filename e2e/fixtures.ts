@@ -38,10 +38,33 @@ export class Api {
   }
 }
 
+/**
+ * Fail fast, and say why, when the page cannot call the API — almost always
+ * the API's CORS_ORIGINS not listing the site under test. Without this every
+ * test would time out waiting for data that was never allowed to arrive.
+ */
+export async function expectApiReachable(page: Page): Promise<void> {
+  const { apiUrl, baseUrl } = e2eConfig();
+  const result = await page.evaluate(async (url) => {
+    try {
+      const res = await fetch(`${url}/health`);
+      return `status ${res.status}`;
+    } catch (err) {
+      return `blocked: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }, apiUrl);
+  if (!result.startsWith("status 2")) {
+    throw new Error(
+      `The site cannot call ${apiUrl} (${result}). Add ${new URL(baseUrl).origin} to the API's CORS_ORIGINS.`
+    );
+  }
+}
+
 /** Sign the test user in through Clerk (a Backend-API sign-in token: no
  * password, no verification step), landing on the home page. */
 export async function signIn(page: Page, email: string): Promise<void> {
   await page.goto("/");
+  await expectApiReachable(page);
   await clerk.signIn({ page, emailAddress: email });
 }
 
