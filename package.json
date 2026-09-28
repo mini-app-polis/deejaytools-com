@@ -36,7 +36,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "common-typescript-utils": "^1.2.4",
+    "common-typescript-utils": "^1.2.5",
     "eslint": "^10.11.0",
     "lucide-react": "^1.48.0",
     "react": "^19.3.0",
