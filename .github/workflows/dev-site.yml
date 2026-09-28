@@ -20,27 +20,25 @@ name: dev-site
 # contract suite's configuration and concurrency group: both write to the
 # dev API, and must never run at once.
 #
-# It runs on pushes to dev and on the promotion pull request to main, as a
-# gate on the manual merge; on a pull request it tests the pull request's
-# head, which is dev's latest deploy.
+# It runs on pushes to dev. Not on the promotion pull request to main: its
+# head is dev's latest commit, already tested by the push run, whose result
+# the pull request shows.
 
 on:
   push:
     branches: [dev]
-  pull_request:
-    branches: [main]
 
 permissions:
   contents: read
   checks: read
 
 concurrency:
-  group: dev-site-${{ github.event_name }}
+  group: dev-site
   cancel-in-progress: true
 
 env:
   API: https://api-dev.deejaytools.com
-  SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  SHA: ${{ github.sha }}
 
 jobs:
   smoke:
