@@ -11,6 +11,9 @@ vi.mock("@clerk/clerk-react", () => ({
   useUser: () => userState,
 }));
 
+const toastError = vi.fn();
+vi.mock("sonner", () => ({ toast: { error: (...args: unknown[]) => toastError(...args) } }));
+
 vi.mock("@/lib/logger", () => ({
   createLogger: () => ({ warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() }),
 }));
@@ -31,6 +34,7 @@ beforeEach(() => {
   sessionStorage.clear();
   getToken.mockReset().mockResolvedValue("tok");
   fetchMock.mockReset();
+  toastError.mockReset();
   globalThis.fetch = fetchMock as unknown as typeof fetch;
   userState.user = clerkUser("user_a");
 });
@@ -40,8 +44,35 @@ afterEach(() => vi.restoreAllMocks());
 const ok = () => ({ ok: true, text: async () => "" }) as unknown as Response;
 const fail = (status: number) =>
   ({ ok: false, status, text: async () => "boom" }) as unknown as Response;
+const emailConflict = () =>
+  ({
+    ok: false,
+    status: 409,
+    text: async () =>
+      JSON.stringify({
+        error: {
+          code: "EMAIL_BELONGS_TO_ANOTHER_ACCOUNT",
+          message: "This email address is already linked to a different sign-in.",
+        },
+      }),
+  }) as unknown as Response;
 
 describe("AuthSync", () => {
+  it("tells the user when their email belongs to another account, and stops retrying", async () => {
+    fetchMock.mockResolvedValue(emailConflict());
+    const { rerender } = render(<AuthSync />);
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
+    expect(toastError.mock.calls[0][0]).toBe("This email address is already linked to a different sign-in.");
+
+    // A retry cannot resolve it. Clerk handing over a fresh user object would
+    // normally re-run the sync (up to three attempts); here it must not.
+    userState.user = clerkUser("user_a");
+    rerender(<AuthSync />);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sessionStorage.length).toBe(0);
+  });
+
   it("syncs once and remembers success", async () => {
     fetchMock.mockResolvedValue(ok());
     const { unmount } = render(<AuthSync />);

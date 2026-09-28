@@ -1,5 +1,6 @@
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { checkEndpoint, endpoints } from "@/api/endpoints";
 import { createLogger } from "@/lib/logger";
 
@@ -15,6 +16,11 @@ const sessionKey = (userId: string) => `deejaytools_auth_sync_v1:${userId}`;
 const MAX_ATTEMPTS = 3;
 
 const logger = createLogger("deejaytools-app");
+
+// The API refuses a sign-in whose email already belongs to another account
+// (for example a Clerk account deleted and created again). Retrying cannot
+// fix that; only an organizer moving the account can, so tell the person.
+const EMAIL_CONFLICT = "EMAIL_BELONGS_TO_ANOTHER_ACCOUNT";
 
 export default function AuthSync() {
   const { isLoaded: authLoaded, isSignedIn, getToken } = useAuth();
@@ -82,10 +88,27 @@ export default function AuthSync() {
         });
 
         if (!res.ok) {
+          const text = await res.text();
+          const failure = (() => {
+            try {
+              return (JSON.parse(text) as { error?: { code?: string; message?: string } }).error;
+            } catch {
+              return undefined;
+            }
+          })();
+          if (res.status === 409 && failure?.code === EMAIL_CONFLICT) {
+            attempts.current = MAX_ATTEMPTS;
+            logger.warn({ event: "auth_sync_email_conflict", category: "api" });
+            toast.error(failure.message ?? "This email address is linked to a different sign-in.", {
+              id: EMAIL_CONFLICT,
+              duration: Infinity,
+            });
+            return;
+          }
           logger.error({
             event: "auth_sync_failed",
             category: "api",
-            context: { status: res.status, body: await res.text(), attempt: attempts.current },
+            context: { status: res.status, body: text, attempt: attempts.current },
           });
           return;
         }
