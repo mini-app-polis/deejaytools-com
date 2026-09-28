@@ -22,6 +22,19 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "json"],
+      // A floor, not a target: `pnpm test:coverage` fails if coverage drops
+      // below where it already is. When a change raises it, running the same
+      // command locally rewrites these numbers (rounded down) — commit them,
+      // and the floor has moved up for good. Every API endpoint the app calls
+      // is separately required to be exercised by the live contract suite
+      // (src/contract), and the core journeys by the e2e suite (e2e/).
+      thresholds: {
+        statements: 68,
+        branches: 56,
+        functions: 61,
+        lines: 71,
+        autoUpdate: (next: number) => Math.floor(next),
+      },
     },
   },
 });
