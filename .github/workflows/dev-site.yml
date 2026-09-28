@@ -1,0 +1,73 @@
+name: dev-site
+
+# Smoke-tests dev.deejaytools.com once Cloudflare Pages has deployed a push
+# to dev. Pages builds on its own, outside Actions, and reports through the
+# "Cloudflare Pages" check on the commit; this waits for that check, then
+# makes sure the live site is the build it should be:
+#   - it serves the app, including a deep link (SPA fallback);
+#   - the bundle is built with a development Clerk key (pk_test_), not a
+#     production one — dev signs in against Clerk's development instance;
+#   - the bundle points at the dev API, and that API answers /health.
+# Environment variables are baked into the bundle at build time, so a wrong
+# key or API URL in the Pages settings shows up here and nowhere else.
+
+on:
+  push:
+    branches: [dev]
+
+permissions:
+  contents: read
+  checks: read
+
+concurrency:
+  group: dev-site
+  cancel-in-progress: true
+
+env:
+  SITE: https://dev.deejaytools.com
+  API: https://api-dev.deejaytools.com
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Wait for Cloudflare Pages to deploy this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for _ in $(seq 1 60); do
+            run=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?check_name=Cloudflare%20Pages" \
+              --jq '.check_runs[0] // {} | "\(.status // "missing") \(.conclusion // "")"')
+            read -r status conclusion <<<"$run"
+            if [ "$status" = completed ]; then
+              if [ "$conclusion" = success ]; then echo "Deployed."; exit 0; fi
+              echo "::error::The Cloudflare Pages deploy of $GITHUB_SHA concluded '$conclusion'."
+              exit 1
+            fi
+            sleep 15
+          done
+          echo "::error::No finished Cloudflare Pages deploy for $GITHUB_SHA after 15 minutes."
+          exit 1
+
+      - name: Smoke-test the dev site
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+
+          html=$(curl -fsSL --retry 3 "$SITE/")
+          asset=$(grep -oE '/assets/index-[A-Za-z0-9_-]+\.js' <<<"$html" | head -n 1 || true)
+          [ -n "$asset" ] || fail "$SITE/ did not reference an app bundle."
+          js=$(curl -fsSL --retry 3 "$SITE$asset")
+
+          # Match real keys (prefix plus the encoded instance), not the bare
+          # prefixes Clerk's own code carries for parsing keys.
+          keys=$(grep -oE 'pk_(test|live)_[A-Za-z0-9]{20,}' <<<"$js" | sort -u || true)
+          [ -n "$keys" ] || fail "No Clerk publishable key found in the dev site bundle."
+          if grep -q '^pk_live_' <<<"$keys"; then fail "The dev site is built with a production Clerk key (pk_live_)."; fi
+          grep -q '^pk_test_' <<<"$keys" || fail "The dev site is not built with a development Clerk key (pk_test_)."
+          grep -qF "$API" <<<"$js" || fail "The dev site is not built to call $API."
+
+          curl -fsS -o /dev/null --retry 3 "$SITE/events" || fail "A deep link ($SITE/events) did not load."
+          curl -fsS -o /dev/null --retry 3 "$API/health" || fail "$API/health did not answer."
+          echo "Dev site OK: $asset"

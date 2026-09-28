@@ -10,14 +10,23 @@ name: Contract
 #   secret   CONTRACT_CLERK_SECRET_KEY   dev Clerk instance secret key (sk_test_…)
 #   variable CONTRACT_API_URL           dev API base URL
 #   variable CONTRACT_USER_ID           Clerk user id of the test user (an admin in dev)
+#
+# When it runs — whenever either side of the contract changes:
+#   - a push to dev here: the web app's schemas or catalog changed;
+#   - `dev-api-deployed`: deejaytools-api's dev-deployed workflow sends this
+#     once Railway reports a successful dev deploy, so the suite checks the
+#     API that is actually live rather than the one it replaced;
+#   - a promotion pull request to main, as a gate on the manual merge.
+# A repository_dispatch always runs this file from main, so that run checks
+# out dev explicitly: it is dev's suite that should meet dev's API.
 
 on:
   push:
     branches: [dev]
   pull_request:
     branches: [main]
-  schedule:
-    - cron: "17 11 * * *"
+  repository_dispatch:
+    types: [dev-api-deployed]
   workflow_dispatch:
 
 concurrency:
@@ -47,6 +56,8 @@ jobs:
           fi
       - uses: actions/checkout@v7
         if: steps.config.outputs.ready == 'true'
+        with:
+          ref: ${{ github.event_name == 'repository_dispatch' && 'dev' || '' }}
       - uses: pnpm/action-setup@v6
         if: steps.config.outputs.ready == 'true'
       - uses: actions/setup-node@v7
