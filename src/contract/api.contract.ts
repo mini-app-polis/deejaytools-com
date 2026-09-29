@@ -27,6 +27,7 @@ import { ApiStatusError, type Client, Ledger, loadConfig, makeClient, sleep, str
 
 const RUN_PREFIX = "Contract Suite";
 const DIVISION = "Classic";
+const TIMEZONE = "America/Chicago";
 /** The API's scheduler ticks every 30 s; allow three ticks. */
 const QUEUE_FILL_TIMEOUT_MS = 95_000;
 const QUEUE_POLL_MS = 5_000;
@@ -68,6 +69,21 @@ const state: {
   managedPartnershipId?: string;
   songId?: string;
 } = {};
+
+/**
+ * A calendar date (YYYY-MM-DD) in `timezone`, `offsetDays` from today. The
+ * API checks session times against the event's dates in the event's own
+ * timezone, so dates built in UTC go wrong every evening in Chicago, when
+ * UTC has already reached tomorrow.
+ */
+function dateIn(timezone: string, offsetDays: number): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(Date.now() + offsetDays * 86_400_000));
+}
 
 async function waitForActive(sessionId: string): Promise<string> {
   const deadline = Date.now() + QUEUE_FILL_TIMEOUT_MS;
@@ -205,10 +221,15 @@ describe("contract", () => {
   });
 
   it("events", async () => {
-    const today = new Date().toISOString().slice(0, 10);
-    const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+    // Yesterday through tomorrow: the session opens an hour ago and runs two
+    // hours on, which can cross midnight either way.
     const created = await ledger.hit(endpoints.events.create, {
-      body: { name: `${RUN_PREFIX} ${new Date().toISOString()}`, start_date: today, end_date: tomorrow },
+      body: {
+        name: `${RUN_PREFIX} ${new Date().toISOString()}`,
+        start_date: dateIn(TIMEZONE, -1),
+        end_date: dateIn(TIMEZONE, 1),
+        timezone: TIMEZONE,
+      },
     });
     state.eventId = created.id;
     await ledger.hit(endpoints.events.update, { params: { id: created.id }, body: { name: `${created.name} (updated)` } });

@@ -1,6 +1,8 @@
-name: dev-site
+name: site
 
-# Smoke-tests the dev site once Cloudflare Pages has deployed a push to dev.
+# Smoke-tests the site once Cloudflare Pages has deployed a push to dev or
+# main — the dev site against the dev API and Clerk's development instance,
+# production against the production API and Clerk's production instance.
 # Pages builds on its own, outside Actions, and reports through the
 # "Cloudflare Pages" check on the commit; this waits for that check and
 # tests the deploy's own preview URL (<hash>.deejaytools-com.pages.dev) —
@@ -8,36 +10,42 @@ name: dev-site
 # outside deejaytools.com's bot protection, which turns GitHub's runners
 # away from dev.deejaytools.com with a 403. It makes sure the build:
 #   - it serves the app, including a deep link (SPA fallback);
-#   - the bundle is built with a development Clerk key (pk_test_), not a
-#     production one — dev signs in against Clerk's development instance;
-#   - the bundle points at the dev API, and that API answers /health.
+#   - the bundle is built with the right Clerk key for its environment:
+#     pk_test_ on dev, pk_live_ in production — never the other;
+#   - the bundle points at that environment's API, and the API answers
+#     /health.
+# All of it is read-only, so it is safe against production.
 # Environment variables are baked into the bundle at build time, so a wrong
 # key or API URL in the Pages settings shows up here and nowhere else.
 #
-# Then the end-to-end suite (e2e/, Playwright) runs a real browser against
+# On dev only, the end-to-end suite (e2e/, Playwright) then runs a real
+# browser against
 # the dev site's branch URL (dev.deejaytools-com.pages.dev), signed in as the
 # contract test user through Clerk's development instance. It shares the
 # contract suite's configuration and concurrency group: both write to the
 # dev API, and must never run at once.
 #
-# It runs on pushes to dev. Not on the promotion pull request to main: its
-# head is dev's latest commit, already tested by the push run, whose result
-# the pull request shows.
+# It runs on pushes. Not on the promotion pull request to main: its head is
+# dev's latest commit, already tested by the push run, whose result the pull
+# request shows. semantic-release's own commit to main is marked [skip ci],
+# so a release is checked once, at the merge.
 
 on:
   push:
-    branches: [dev]
+    branches: [dev, main]
 
 permissions:
   contents: read
   checks: read
 
 concurrency:
-  group: dev-site
+  group: site-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  API: https://api-dev.deejaytools.com
+  API: ${{ github.ref == 'refs/heads/main' && 'https://api.deejaytools.com' || 'https://api-dev.deejaytools.com' }}
+  CLERK_KEY: ${{ github.ref == 'refs/heads/main' && 'pk_live_' || 'pk_test_' }}
+  WRONG_CLERK_KEY: ${{ github.ref == 'refs/heads/main' && 'pk_test_' || 'pk_live_' }}
   SHA: ${{ github.sha }}
 
 jobs:
@@ -74,7 +82,7 @@ jobs:
           echo "::error::No finished Cloudflare Pages deploy for $SHA after 15 minutes."
           exit 1
 
-      - name: Smoke-test the dev site
+      - name: Smoke-test the site
         id: smoke
         env:
           SITE: ${{ steps.deploy.outputs.site }}
@@ -90,19 +98,21 @@ jobs:
           # Match real keys (prefix plus the encoded instance), not the bare
           # prefixes Clerk's own code carries for parsing keys.
           keys=$(grep -oE 'pk_(test|live)_[A-Za-z0-9]{20,}' <<<"$js" | sort -u || true)
-          [ -n "$keys" ] || fail "No Clerk publishable key found in the dev site bundle."
-          if grep -q '^pk_live_' <<<"$keys"; then fail "The dev site is built with a production Clerk key (pk_live_)."; fi
-          grep -q '^pk_test_' <<<"$keys" || fail "The dev site is not built with a development Clerk key (pk_test_)."
+          [ -n "$keys" ] || fail "No Clerk publishable key found in the site bundle."
+          if grep -q "^$WRONG_CLERK_KEY" <<<"$keys"; then fail "The site is built with a $WRONG_CLERK_KEY Clerk key; this environment needs $CLERK_KEY."; fi
+          grep -q "^$CLERK_KEY" <<<"$keys" || fail "The site is not built with a $CLERK_KEY Clerk key."
           # A publishable key is public by design; the e2e job needs it.
           echo "publishable-key=$(head -n 1 <<<"$keys")" >> "$GITHUB_OUTPUT"
-          grep -qF "$API" <<<"$js" || fail "The dev site is not built to call $API."
+          grep -qF "$API" <<<"$js" || fail "The site is not built to call $API."
 
           curl -fsS -o /dev/null --retry 3 "$SITE/events" || fail "A deep link ($SITE/events) did not load."
           curl -fsS -o /dev/null --retry 3 "$API/health" || fail "$API/health did not answer."
-          echo "Dev site OK: $asset"
+          echo "Site OK: $asset (calls $API)"
 
   e2e:
     needs: smoke
+    # Writes to the API it runs against, so dev only.
+    if: github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # Shared with the contract suite (contract.yml): both write to the dev API.
