@@ -15,13 +15,30 @@ let api: Api;
 let eventId: string;
 let session: { id: string; floor_trial_starts_at: number };
 
+/**
+ * A calendar date (YYYY-MM-DD) in `timezone`, `offsetDays` from today. The
+ * API checks session times against the event's dates in the event's own
+ * timezone, so dates built in UTC go wrong every evening in Chicago, when
+ * UTC has already reached tomorrow.
+ */
+function dateIn(timezone: string, offsetDays: number): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(Date.now() + offsetDays * 86_400_000));
+}
+
 test.beforeAll(async () => {
   api = await Api.start();
-  const today = new Date().toISOString().slice(0, 10);
+  // Yesterday through tomorrow: the session opens an hour ago and runs two
+  // hours on, which can cross midnight either way.
   const event = await api.call<{ id: string }>("POST", "/v1/events", {
     name: `E2E Suite ${RUN_ID}`,
-    start_date: today,
-    end_date: today,
+    start_date: dateIn(TIMEZONE, -1),
+    end_date: dateIn(TIMEZONE, 1),
+    timezone: TIMEZONE,
   });
   eventId = event.id;
   const now = Date.now();
