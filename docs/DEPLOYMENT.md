@@ -100,6 +100,7 @@ Calls the fleet's shared `mini-app-polis/.github/.github/workflows/evaluate.yml@
 | `VITE_API_URL` | **Yes** | Public API base URL (e.g. `https://api.deejaytools.com` or Railway public URL). |
 | `VITE_CLERK_PUBLISHABLE_KEY` | **Yes** | Clerk publishable key for the production Clerk instance. |
 | `VITE_SENTRY_DSN` | Optional | Browser Sentry; no-op when unset. |
+| `VITE_MAINTENANCE` | Optional | Only the literal string `"1"` replaces the whole app with a maintenance page (no Clerk, no API calls). Build-time: set it, then redeploy; unset it, then redeploy again. |
 
 ### Platform-injected (do not set manually unless debugging)
 

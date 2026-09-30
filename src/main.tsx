@@ -4,6 +4,7 @@ import { Sentry } from "@/lib/instrument";
 import { ClerkProvider } from "@clerk/clerk-react";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import MaintenancePage from "./components/MaintenancePage";
 import App from "./pages/App";
 import "./index.css";
 
@@ -26,8 +27,17 @@ createRoot(container, {
   onRecoverableError: Sentry.reactErrorHandler(),
 }).render(
   <StrictMode>
-    <ClerkProvider publishableKey={key}>
-      <App />
-    </ClerkProvider>
+    {/* Maintenance mode: only the literal "1" (matching the API's
+        DISABLE_SCHEDULER). Compared inline so the build folds it to a
+        constant and drops the branch it doesn't take — a normal build carries
+        no maintenance page, and scripts/check-live.sh in deejaytools-api
+        relies on that. Build-time: set in Cloudflare Pages, then redeploy. */}
+    {import.meta.env.VITE_MAINTENANCE === "1" ? (
+      <MaintenancePage />
+    ) : (
+      <ClerkProvider publishableKey={key}>
+        <App />
+      </ClerkProvider>
+    )}
   </StrictMode>
 );
