@@ -1,3 +1,15 @@
+# [2.6.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.5.5...v2.6.0) (2026-09-30)
+
+
+### Bug Fixes
+
+* drop the maintenance page from normal builds ([86e6203](https://github.com/mini-app-polis/deejaytools-com/commit/86e620308d9b31bcb0c8e6236f4dbb3b08b5ef4b))
+
+
+### Features
+
+* add build-time maintenance mode ([29c9938](https://github.com/mini-app-polis/deejaytools-com/commit/29c9938e1e46f4c069c52dc20f03a9b1724802c9))
+
 ## [2.5.5](https://github.com/mini-app-polis/deejaytools-com/compare/v2.5.4...v2.5.5) (2026-09-28)
 
 
