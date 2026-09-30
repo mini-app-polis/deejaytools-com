@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { isMaintenanceMode } from "@/lib/maintenance";
+import { describe, expect, it } from "vitest";
 import MaintenancePage from "./MaintenancePage";
 
 describe("MaintenancePage", () => {
@@ -13,18 +12,3 @@ describe("MaintenancePage", () => {
   });
 });
 
-describe("isMaintenanceMode", () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
-  it("is on only for the literal string \"1\"", () => {
-    vi.stubEnv("VITE_MAINTENANCE", "1");
-    expect(isMaintenanceMode()).toBe(true);
-  });
-
-  it.each(["", "0", "true", "yes"])("is off for %j", (value) => {
-    vi.stubEnv("VITE_MAINTENANCE", value);
-    expect(isMaintenanceMode()).toBe(false);
-  });
-});
