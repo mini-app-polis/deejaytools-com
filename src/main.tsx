@@ -4,6 +4,8 @@ import { Sentry } from "@/lib/instrument";
 import { ClerkProvider } from "@clerk/clerk-react";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import MaintenancePage from "./components/MaintenancePage";
+import { isMaintenanceMode } from "./lib/maintenance";
 import App from "./pages/App";
 import "./index.css";
 
@@ -26,8 +28,12 @@ createRoot(container, {
   onRecoverableError: Sentry.reactErrorHandler(),
 }).render(
   <StrictMode>
-    <ClerkProvider publishableKey={key}>
-      <App />
-    </ClerkProvider>
+    {isMaintenanceMode() ? (
+      <MaintenancePage />
+    ) : (
+      <ClerkProvider publishableKey={key}>
+        <App />
+      </ClerkProvider>
+    )}
   </StrictMode>
 );
