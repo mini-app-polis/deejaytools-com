@@ -1,3 +1,16 @@
+# [2.7.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.6.0...v2.7.0) (2026-10-03)
+
+
+### Bug Fixes
+
+* **deps:** install semantic-release only in the release job ([d2fee03](https://github.com/mini-app-polis/deejaytools-com/commit/d2fee03c505b935044ee2eed3eed711e70a8c17c))
+* **release:** let Cloudflare Pages build the release commit ([627355a](https://github.com/mini-app-polis/deejaytools-com/commit/627355a63fffafac0f2b112b6cc86739f25da9bf))
+
+
+### Features
+
+* **nav:** show the API version next to the site version ([7d944f9](https://github.com/mini-app-polis/deejaytools-com/commit/7d944f90f42182a862705d1f5f1d7cdba3adcf1a))
+
 # [2.6.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.5.5...v2.6.0) (2026-09-30)
 
 
