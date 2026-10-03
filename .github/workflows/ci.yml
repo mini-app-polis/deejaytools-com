@@ -79,14 +79,25 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
-          cache: "pnpm"
-      - run: pnpm install
+      # semantic-release and its plugins only ever run here, so they are
+      # installed for this step rather than declared in package.json: kept
+      # out of the lockfile, their transitive dependencies (braces,
+      # GHSA-vfj7-8cjw-p6xm, among them) are not part of what the security
+      # scan grades. The app's own dependencies are not needed to release.
       - name: Release
-        run: pnpm exec semantic-release
+        run: >-
+          npx --yes
+          -p semantic-release@25
+          -p @semantic-release/changelog@7
+          -p @semantic-release/commit-analyzer@13
+          -p @semantic-release/git@11
+          -p @semantic-release/github@12
+          -p @semantic-release/npm@13
+          -p @semantic-release/release-notes-generator@14
+          semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

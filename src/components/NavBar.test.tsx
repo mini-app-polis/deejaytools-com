@@ -43,6 +43,12 @@ vi.mock("@/hooks/useAuthMe", () => ({
   }),
 }));
 
+// The API version label; each test sets what GET /version reports.
+let apiVersion: { version: string; commit: string | null } | null = null;
+vi.mock("@/hooks/useApiVersion", () => ({
+  useApiVersion: () => apiVersion,
+}));
+
 import NavBar from "./NavBar";
 
 function renderNav() {
@@ -182,6 +188,56 @@ describe("NavBar — wordmark", () => {
     expect(screen.getByAltText("DeejayTools")).toBeInTheDocument();
     expect(screen.getByText("DeejayTools.com")).toBeInTheDocument();
     expect(screen.getByText(/^v\d/)).toBeInTheDocument();
+  });
+});
+
+describe("NavBar — API version", () => {
+  const originalLocation = window.location;
+
+  afterEach(() => {
+    apiVersion = null;
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: originalLocation,
+    });
+  });
+
+  function setHostname(hostname: string) {
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { ...originalLocation, hostname },
+    });
+  }
+
+  it("is left out until the API reports one", () => {
+    signedIn = false;
+    apiVersion = null;
+    renderNav();
+    expect(screen.queryByText(/api /)).not.toBeInTheDocument();
+  });
+
+  it("shows the API release version in production", () => {
+    signedIn = false;
+    setHostname("deejaytools.com");
+    apiVersion = { version: "1.2.3", commit: "0dc51f0b88b12830c0faacb1f5dfa7ca9a7c35e6" };
+    renderNav();
+    expect(screen.getByText("· api v1.2.3")).toBeInTheDocument();
+  });
+
+  it("shows the API commit on dev hosts", () => {
+    signedIn = false;
+    setHostname("dev.deejaytools.com");
+    apiVersion = { version: "1.0.0", commit: "0dc51f0b88b12830c0faacb1f5dfa7ca9a7c35e6" };
+    renderNav();
+    expect(screen.getByText("· api #0dc51f0")).toBeInTheDocument();
+  });
+
+  it("falls back to the version on dev when the API has no commit", () => {
+    signedIn = false;
+    setHostname("localhost");
+    apiVersion = { version: "1.0.0", commit: null };
+    renderNav();
+    expect(screen.getByText("· api v1.0.0")).toBeInTheDocument();
   });
 });
 
