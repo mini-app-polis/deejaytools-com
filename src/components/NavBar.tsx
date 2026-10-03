@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { isProdHost } from "@/lib/env";
+import { useApiVersion } from "@/hooks/useApiVersion";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import pkg from "../../package.json";
 
@@ -48,6 +49,16 @@ export default function NavBar() {
   // Dev and preview hosts show the commit instead of the semver version: the
   // version only moves on release, so it cannot identify a dev build.
   const showSha = !isProdHost() && buildSha !== "";
+  // The API's version beside the site's, by the same rule: the commit on dev
+  // and preview hosts, the release version in production. Left out until it
+  // loads, and whenever the API cannot say.
+  const api = useApiVersion();
+  const apiShortSha = api?.commit ? api.commit.slice(0, 7) : "";
+  const apiLabel = api
+    ? !isProdHost() && apiShortSha
+      ? `api #${apiShortSha}`
+      : `api v${api.version}`
+    : null;
   const [menuOpen, setMenuOpen] = useState(false);
   const showManagerBar = isAdmin || isManager;
 
@@ -98,6 +109,19 @@ export default function NavBar() {
               >
                 {showSha ? `#${buildSha}` : `v${pkg.version}`}
               </span>
+              {apiLabel && (
+                <span
+                  className="text-[10px] text-muted-foreground"
+                  style={{ fontFamily: "'DM Mono', monospace" }}
+                  title={
+                    apiShortSha
+                      ? `api v${api?.version} · ${apiShortSha}`
+                      : `api v${api?.version}`
+                  }
+                >
+                  · {apiLabel}
+                </span>
+              )}
               {!isProdHost() && (
                 <span className="rounded bg-amber-500/20 text-amber-500 text-[10px] px-1.5 py-0.5 font-medium">
                   DEV
