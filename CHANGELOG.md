@@ -1,3 +1,10 @@
+## [2.7.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.7.0...v2.7.1) (2026-10-05)
+
+
+### Bug Fixes
+
+* **deps:** bump react-hook-form ([3fa94c3](https://github.com/mini-app-polis/deejaytools-com/commit/3fa94c321cc98e32a92b39d5f8664c9a996f9a0d))
+
 # [2.7.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.6.0...v2.7.0) (2026-10-03)
 
 
