@@ -1,3 +1,10 @@
+## [2.7.2](https://github.com/mini-app-polis/deejaytools-com/compare/v2.7.1...v2.7.2) (2026-10-06)
+
+
+### Bug Fixes
+
+* **deps:** override source-map-js to ^1.2.2 for GHSA-68fv-2mgg-jv7q ([b1db4d6](https://github.com/mini-app-polis/deejaytools-com/commit/b1db4d6075e4190693e2fa45e46b335bedf3994f))
+
 ## [2.7.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.7.0...v2.7.1) (2026-10-05)
 
 
