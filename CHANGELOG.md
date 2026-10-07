@@ -1,3 +1,10 @@
+## [2.7.5](https://github.com/mini-app-polis/deejaytools-com/compare/v2.7.4...v2.7.5) (2026-10-07)
+
+
+### Bug Fixes
+
+* let a rejected screenshot be removed, and report the API's deleted count ([c10720d](https://github.com/mini-app-polis/deejaytools-com/commit/c10720d81c8c670ed54aa7d62c918da2f01115a9))
+
 ## [2.7.4](https://github.com/mini-app-polis/deejaytools-com/compare/v2.7.3...v2.7.4) (2026-10-07)
 
 
