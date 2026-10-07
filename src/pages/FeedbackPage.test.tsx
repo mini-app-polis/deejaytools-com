@@ -186,6 +186,26 @@ describe("FeedbackPage", () => {
     expect(screen.queryByText(message)).not.toBeInTheDocument();
   });
 
+  it("lets the user remove a rejected screenshot and submit without one", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ data: null }));
+    const user = userEvent.setup();
+    render(<FeedbackPage />);
+
+    const rejectedInput = screenshotInput();
+    fireEvent.change(rejectedInput, { target: { files: [png("shot.gif", "image/gif")] } });
+    expect(await screen.findByText("Please use PNG or JPEG.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Remove screenshot" }));
+    expect(screen.queryByText("Please use PNG or JPEG.")).not.toBeInTheDocument();
+    // The file input is reset so the same file can be picked again.
+    expect(screenshotInput()).not.toBe(rejectedInput);
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: "Submit feedback" }));
+    await screen.findByRole("heading", { name: /thanks for the feedback/i });
+    expect(postedBody()).not.toHaveProperty("screenshot");
+  });
+
   it("shows the server's error message and keeps the form", async () => {
     fetchMock.mockResolvedValue(
       jsonResponse({ error: { code: "BAD_REQUEST", message: "Subject is too long" } }, 400)

@@ -818,10 +818,9 @@ export default function AdminPage() {
     setPendingDeleteAllTestCheckins(false);
     if (!tcData) return;
     setTcDeleting(true);
-    const expectedCount = tcData.length;
     try {
-      await call(api, endpoints.admin.clearTestCheckins);
-      toast.success(`Deleted ${expectedCount} check-in${expectedCount === 1 ? "" : "s"}`);
+      const { deleted } = await call(api, endpoints.admin.clearTestCheckins);
+      toast.success(`Deleted ${deleted} check-in${deleted === 1 ? "" : "s"}`);
       setTcData([]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Delete failed");
