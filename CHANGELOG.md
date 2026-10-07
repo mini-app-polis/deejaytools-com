@@ -1,3 +1,10 @@
+## [2.7.4](https://github.com/mini-app-polis/deejaytools-com/compare/v2.7.3...v2.7.4) (2026-10-07)
+
+
+### Bug Fixes
+
+* **deps:** bump lucide-react ([ff5aaa2](https://github.com/mini-app-polis/deejaytools-com/commit/ff5aaa259c9409c92978ec20a06b3adbbd21a33b))
+
 ## [2.7.3](https://github.com/mini-app-polis/deejaytools-com/compare/v2.7.2...v2.7.3) (2026-10-06)
 
 
