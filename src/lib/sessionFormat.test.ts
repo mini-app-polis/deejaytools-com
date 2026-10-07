@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { formatSessionTitle, formatTimeOnly } from "./sessionFormat";
+import {
+  formatDateTimeShort,
+  formatSessionTitle,
+  formatTimeOnly,
+  formatTimezoneAbbr,
+} from "./sessionFormat";
 
 // All tests pass an explicit IANA timezone so results are stable regardless of
 // the host machine's locale or timezone setting.
@@ -74,5 +79,47 @@ describe("formatSessionTitle", () => {
     const ts = new Date("2026-04-27T12:00:00Z").getTime();
     expect(() => formatSessionTitle({ floor_trial_starts_at: ts })).not.toThrow();
     expect(() => formatSessionTitle({ floor_trial_starts_at: ts }, null)).not.toThrow();
+  });
+});
+
+describe("formatTimezoneAbbr", () => {
+  it("returns an empty string when no timezone is given", () => {
+    expect(formatTimezoneAbbr(null)).toBe("");
+    expect(formatTimezoneAbbr(undefined)).toBe("");
+    expect(formatTimezoneAbbr("")).toBe("");
+  });
+
+  it("returns the DST-correct abbreviation for the given moment", () => {
+    const summer = new Date("2026-07-01T12:00:00Z").getTime();
+    const winter = new Date("2026-01-15T12:00:00Z").getTime();
+    expect(formatTimezoneAbbr("America/New_York", summer)).toBe("EDT");
+    expect(formatTimezoneAbbr("America/New_York", winter)).toBe("EST");
+  });
+
+  it("defaults to now when no timestamp is passed", () => {
+    expect(["CDT", "CST"]).toContain(formatTimezoneAbbr("America/Chicago"));
+  });
+
+  it("returns the raw identifier when the timezone is invalid", () => {
+    expect(formatTimezoneAbbr("Not/AZone", 0)).toBe("Not/AZone");
+  });
+});
+
+describe("formatDateTimeShort", () => {
+  it("renders 'Mon D at h:mm AM' in the given timezone", () => {
+    // 6:30 AM Eastern (EDT) on May 22 = 10:30 UTC
+    const ts = new Date("2026-05-22T10:30:00Z").getTime();
+    expect(formatDateTimeShort(ts, TZ)).toBe("May 22 at 6:30 AM");
+  });
+
+  it("uses the timezone's date, not UTC's, near midnight", () => {
+    // 01:00 UTC on May 23 is still 9:00 PM on May 22 in New York
+    const ts = new Date("2026-05-23T01:00:00Z").getTime();
+    expect(formatDateTimeShort(ts, TZ)).toBe("May 22 at 9:00 PM");
+  });
+
+  it("falls back gracefully when no timezone is passed (does not throw)", () => {
+    expect(() => formatDateTimeShort(0)).not.toThrow();
+    expect(formatDateTimeShort(0, null)).toContain(" at ");
   });
 });
