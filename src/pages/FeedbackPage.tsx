@@ -365,7 +365,22 @@ export default function FeedbackPage() {
             )}
           </label>
           {screenshotError && (
-            <p className="mt-2 text-xs text-destructive">{screenshotError}</p>
+            <p className="mt-2 text-xs text-destructive">
+              {screenshotError}
+              {!screenshotPreviewUrl && (
+                <>
+                  {" "}
+                  <button
+                    type="button"
+                    onClick={clearScreenshot}
+                    className="underline underline-offset-2 transition hover:text-destructive/80"
+                    aria-label="Remove screenshot"
+                  >
+                    Remove
+                  </button>
+                </>
+              )}
+            </p>
           )}
         </div>
 

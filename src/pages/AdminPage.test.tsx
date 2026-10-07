@@ -1270,6 +1270,21 @@ describe("AdminPage — Test check-in section", () => {
     expect(screen.getByRole("button", { name: "Delete all" })).toBeDisabled();
   });
 
+  it("reports the count the API deleted, not the rows on screen", async () => {
+    // A stale list: the server removed more injections than the page showed.
+    routeGets({ "/v1/admin/checkins/test": [fx.testInjection({ pair_id: "p1" })] });
+    apiDel.mockResolvedValue({ deleted: 3 });
+    const user = userEvent.setup();
+    renderPage("/admin/test-checkin");
+
+    await screen.findByText("Test Leader");
+    await user.click(screen.getByRole("button", { name: "Delete all" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Delete all" }));
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Deleted 3 check-ins"));
+  });
+
   it("keeps the list when deleting all fails", async () => {
     routeGets({ "/v1/admin/checkins/test": [fx.testInjection({ pair_id: "p1" })] });
     apiDel.mockRejectedValue(new Error("nope"));
