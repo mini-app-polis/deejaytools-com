@@ -46,10 +46,14 @@ development token before the first write.
 - A rewrite of the API is done when `pnpm test:contract` passes against it.
 - Adding an endpoint means adding it to the catalog, which the live suite
   then forces to be covered or explicitly skipped.
-- Endpoints that touch Google Drive or send email (song upload and removal,
-  check-in create/withdraw, event song submissions, feedback) are skipped
-  by the live suite and covered only by schema-validated unit fixtures.
+- Endpoints that touch Google Drive are exercised for real against the dev
+  Drive folder: song upload and removal, event song submissions, and check-in
+  create/withdraw, which need a submitted song. The suite waits for the
+  background Drive jobs (the event copy, and trashing on removal) to finish.
+  Only feedback, which sends a real email, is skipped, and it is covered by
+  schema-validated unit fixtures alone.
 - The queue steps depend on the API's scheduler tick (30 s), so the suite
   takes a few minutes and cannot run in parallel with itself.
-- The schema file is still copied between repos; keeping the copies
-  identical is a separate guard.
+- `src/schemas` is the app's own view of the contract. Since the API moved to
+  api-deejaytools (Python), there is no second copy to keep in step; this
+  suite is the only check that the API matches it.

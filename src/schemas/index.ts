@@ -1,5 +1,5 @@
-// API contract schemas and domain helpers. This file is duplicated in
-// deejaytools-api/src/schemas/index.ts — when the contract changes, change both.
+// API contract schemas and domain helpers: the app's view of api-deejaytools'
+// contract. The live contract suite (src/contract) checks the dev API against it.
 import { z } from "zod";
 
 // ---------------------------------------------------------------------------
