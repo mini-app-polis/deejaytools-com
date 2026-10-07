@@ -13,7 +13,7 @@ name: Contract
 #
 # When it runs — whenever either side of the contract changes:
 #   - a push to dev here: the web app's schemas or catalog changed;
-#   - `dev-api-deployed`: deejaytools-api's deployed workflow sends this
+#   - `dev-api-deployed`: api-deejaytools' deployed workflow sends this
 #     once Railway reports a successful dev deploy, so the suite checks the
 #     API that is actually live rather than the one it replaced.
 # Not on the promotion pull request to main: its head is dev's latest

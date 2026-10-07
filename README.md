@@ -2,7 +2,7 @@
 
 Web app for [deejaytools.com](https://deejaytools.com): a West Coast Swing routine and floor-trial management platform.
 
-The API it talks to lives in [`deejaytools-api`](https://github.com/mini-app-polis/deejaytools-api/blob/main/). Domain/contract schemas are kept as a copy in [`src/schemas`](src/schemas/index.ts) (imported as `@/schemas`); the API keeps its own copy, and both must change together when the contract does.
+The API it talks to lives in [`api-deejaytools`](https://github.com/mini-app-polis/api-deejaytools/blob/main/). Domain/contract schemas live in [`src/schemas`](src/schemas/index.ts) (imported as `@/schemas`); the live contract suite checks every API response against them.
 
 Shared generic helpers come from the [`common-typescript-utils`](https://www.npmjs.com/package/common-typescript-utils) package on npm.
 
