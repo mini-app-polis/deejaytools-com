@@ -1,3 +1,11 @@
+## [2.7.7](https://github.com/mini-app-polis/deejaytools-com/compare/v2.7.6...v2.7.7) (2026-10-08)
+
+
+### Bug Fixes
+
+* **api:** inline response envelope types, drop common-typescript-utils ([a01789a](https://github.com/mini-app-polis/deejaytools-com/commit/a01789a515a16a80e1590b0900c8ebc46b7b4254))
+* **deps:** sync lockfile after dropping common-typescript-utils ([c63de6f](https://github.com/mini-app-polis/deejaytools-com/commit/c63de6f35d9d69c8a39f3d4fc975b606d6860420))
+
 ## [2.7.6](https://github.com/mini-app-polis/deejaytools-com/compare/v2.7.5...v2.7.6) (2026-10-08)
 
 
