@@ -87,14 +87,6 @@ Remaining intentional gaps:
 
 ---
 
-## common-typescript-utils versioning
-
-Generic utilities are consumed from the published `common-typescript-utils`
-npm package. When adding or changing shared helpers, coordinate releases there
-and bump the dependency in this repo.
-
----
-
 ## Song upload — Spotify URL field
 
 Store a Spotify playlist/track URL directly on the `Song` model.

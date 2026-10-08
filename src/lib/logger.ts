@@ -1,9 +1,8 @@
 /**
  * Browser-side structured logger.
  *
- * Mirrors the event shape used by common-typescript-utils' Node logger
- * (timestamp, service, level, category, event, context) but writes to
- * console.* under the hood since the npm logger is Node-only.
+ * Structured events (timestamp, service, level, category, event, context)
+ * written to console.* under the hood.
  *
  * logger.error additionally forwards to Sentry — captureException when an
  * Error instance is present in `error`, captureMessage otherwise. This
