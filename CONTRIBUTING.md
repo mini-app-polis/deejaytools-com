@@ -116,7 +116,6 @@ CI does **not** deploy ([`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)).
 | **New page** | `src/pages/<Name>Page.tsx` → route + guard in `src/pages/App.tsx` | Colocated `*.test.tsx` if UI behaviour matters |
 | **Helper** | `src/lib/` or `src/components/` | Pure libs: `*.test.ts` without jsdom |
 | **API contract shape / domain enum** | `src/schemas/index.ts` (import as `@/schemas`) | The app's view of the API contract. The live contract suite (`pnpm test:contract`) checks every response from the dev API against it |
-| **Cross-project generic util** | **[`common-typescript-utils`](https://www.npmjs.com/package/common-typescript-utils)** (external npm), **not** this repo | |
 
 ---
 

@@ -17,7 +17,7 @@ Orientation for a developer who has never opened this codebase. The app is a Vit
 | Toasts | **sonner** | `<Toaster />` in `App.tsx` — not a shadcn toast |
 | Forms | **react-hook-form** + **@hookform/resolvers** | Used where multi-field validation matters |
 | Types | **`@/schemas`** (`src/schemas`) | API contract shapes — a copy kept in step with `deejaytools-api/src/schemas` |
-| Envelopes | **`common-typescript-utils`** | `{ data, meta }` / `{ error }` response typing |
+| Envelopes | **`src/api/envelope.ts`** | `{ data, meta }` / `{ error }` response typing |
 | Observability | **@sentry/react** | Init in `lib/instrument.ts` before React mounts |
 
 **What is intentionally *not* here:**
@@ -157,7 +157,7 @@ There is no refresh logic here — Clerk owns session lifetime.
 
 ### `parseEnvelope()`
 
-Responses are JSON envelopes from `common-typescript-utils`:
+Responses are JSON envelopes, typed in `src/api/envelope.ts`:
 
 - Success: `{ data: T, meta?: … }` → returns `data`
 - Error: `{ error: { message, … } }` → throws `new Error(error.message)`

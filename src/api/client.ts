@@ -1,4 +1,4 @@
-import type { ErrorEnvelope, SuccessEnvelope } from "common-typescript-utils";
+import type { ErrorEnvelope, SuccessEnvelope } from "./envelope";
 import { useAuth } from "@clerk/clerk-react";
 import { useCallback, useMemo } from "react";
 import { Sentry } from "@/lib/instrument";
