@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath, URL } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 
 const rootDir = dirname(fileURLToPath(import.meta.url));
 const api = process.env.VITE_API_URL ?? "http://localhost:3001";
@@ -37,24 +37,34 @@ function commitSha(): string {
   }
 }
 
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
-  resolve: {
-    alias: {
-      "@": fileURLToPath(new URL("./src", import.meta.url)),
-    },
-  },
-  define: {
-    "import.meta.env.VITE_APP_VERSION": JSON.stringify(rootPkg.version),
-    "import.meta.env.VITE_COMMIT_SHA": JSON.stringify(commitSha()),
-  },
-  server: {
-    port: 5173,
-    proxy: {
-      "/v1": {
-        target: api,
-        changeOrigin: true,
+export default defineConfig(({ mode }) => {
+  // Sentry DSN keys are named for their Sentry project (ecosystem-standards
+  // CD-002), so this one is SENTRY_DSN_DEEJAYTOOLS, not VITE_-prefixed. It is
+  // mapped into the bundle here, by name, rather than by widening envPrefix,
+  // which would expose every SENTRY_DSN_* in the build environment. Read from
+  // process env (Doppler / Pages) or a local .env file.
+  const sentryDsn = loadEnv(mode, rootDir, "SENTRY_DSN_").SENTRY_DSN_DEEJAYTOOLS ?? "";
+
+  return {
+    plugins: [react(), tailwindcss()],
+    resolve: {
+      alias: {
+        "@": fileURLToPath(new URL("./src", import.meta.url)),
       },
     },
-  },
+    define: {
+      "import.meta.env.VITE_APP_VERSION": JSON.stringify(rootPkg.version),
+      "import.meta.env.VITE_COMMIT_SHA": JSON.stringify(commitSha()),
+      "import.meta.env.VITE_SENTRY_DSN": JSON.stringify(sentryDsn),
+    },
+    server: {
+      port: 5173,
+      proxy: {
+        "/v1": {
+          target: api,
+          changeOrigin: true,
+        },
+      },
+    },
+  };
 });
