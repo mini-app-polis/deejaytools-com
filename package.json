@@ -54,14 +54,14 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@clerk/testing": "^2.2.40",
+    "@clerk/testing": "^2.2.41",
     "@playwright/test": "^1.63.0",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.6.7",
-    "@vitest/coverage-v8": "^5.0.1",
+    "@vitest/coverage-v8": "^5.0.3",
     "jsdom": "^30.1.1",
-    "vitest": "^5.0.1"
+    "vitest": "^5.0.3"
   },
   "pnpm": {
     "_comment": [
