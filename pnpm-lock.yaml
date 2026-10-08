@@ -85,9 +85,6 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
-      common-typescript-utils:
-        specifier: ^1.2.5
-        version: 1.2.5
       eslint:
         specifier: ^10.11.0
         version: 10.11.0(jiti@2.7.0)
@@ -1485,9 +1482,6 @@ packages:
   clsx@2.1.1:
     resolution: {integrity: sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==}
     engines: {node: '>=6'}
-
-  common-typescript-utils@1.2.5:
-    resolution: {integrity: sha512-mDQ+RUG7bFb7H0Y7aCBJTj2+nSf6evcmxYZBwDRrKGuZI8tZTp1MySA6Iw+bZCtVHrTBXHEZyH0louJzNQl5dw==}
 
   cookie@1.1.1:
     resolution: {integrity: sha512-ei8Aos7ja0weRpFzJnEA9UHJ/7XQmqglbRwnf2ATjcB9Wq874VKH9kfjjirM6UhU2/E5fFYadylyhFldcqSidQ==}
@@ -3494,10 +3488,6 @@ snapshots:
       clsx: 2.1.1
 
   clsx@2.1.1: {}
-
-  common-typescript-utils@1.2.5:
-    dependencies:
-      zod: 4.6.5
 
   cookie@1.1.1: {}
 
