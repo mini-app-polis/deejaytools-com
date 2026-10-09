@@ -1,3 +1,10 @@
+## [2.7.8](https://github.com/mini-app-polis/deejaytools-com/compare/v2.7.7...v2.7.8) (2026-10-09)
+
+
+### Bug Fixes
+
+* **observability:** read Sentry DSN from SENTRY_DSN_DEEJAYTOOLS ([459111a](https://github.com/mini-app-polis/deejaytools-com/commit/459111abdc2d4bb6f720e780ff2dfb9b1823da8f))
+
 ## [2.7.7](https://github.com/mini-app-polis/deejaytools-com/compare/v2.7.6...v2.7.7) (2026-10-08)
 
 
