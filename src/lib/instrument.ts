@@ -7,7 +7,8 @@
  * deejaytools-api src/instrument.ts, loaded via `node --import` before app.ts;
  * the React app uses @sentry/react initialised here.
  *
- * No-op when VITE_SENTRY_DSN is unset — local development does not send
+ * No-op when SENTRY_DSN_DEEJAYTOOLS is unset (vite.config.ts maps it into
+ * the bundle as import.meta.env.VITE_SENTRY_DSN) — local development does not send
  * events. The `enabled` flag mirrors the API-side pattern.
  */
 import * as Sentry from "@sentry/react";

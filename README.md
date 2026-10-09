@@ -72,7 +72,7 @@ There is no top-level `/partners` route — partner records are managed on My Pr
 
 ## Environment
 
-`VITE_API_URL` (defaults to dev proxy target `http://localhost:3001`), `VITE_CLERK_PUBLISHABLE_KEY`, `VITE_SENTRY_DSN` (optional). See `.env.example`.
+`VITE_API_URL` (defaults to dev proxy target `http://localhost:3001`), `VITE_CLERK_PUBLISHABLE_KEY`, `SENTRY_DSN_DEEJAYTOOLS` (optional). See `.env.example`.
 
 ## Testing
 
@@ -82,7 +82,7 @@ Pure-function tests run in Node; component tests opt into jsdom per file via `//
 
 ## Observability
 
-Browser Sentry is live in production (`VITE_SENTRY_DSN`, managed in Doppler and synced to Cloudflare Pages); the SDK no-ops locally without a DSN. See [`docs/decisions/ADR-001-browser-observability-stack.md`](docs/decisions/ADR-001-browser-observability-stack.md).
+Browser Sentry is live in production (`SENTRY_DSN_DEEJAYTOOLS`, managed in Doppler and synced to Cloudflare Pages); the SDK no-ops locally without a DSN. See [`docs/decisions/ADR-001-browser-observability-stack.md`](docs/decisions/ADR-001-browser-observability-stack.md).
 
 ## Docs
 

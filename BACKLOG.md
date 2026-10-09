@@ -124,7 +124,7 @@ preserved as an operational reference for anyone tuning the setup.
 - **API: live.** `SENTRY_DSN` is set in Doppler `prd` (syncs to
   Railway). `app.onError` calls `Sentry.captureException` on every
   unhandled exception.
-- **Frontend: live.** `VITE_SENTRY_DSN` is set in Doppler `prd`
+- **Frontend: live.** `SENTRY_DSN_DEEJAYTOOLS` is set in Doppler `prd`
   (syncs to Cloudflare Pages). `src/lib/instrument.ts`
   initializes `@sentry/react`, and `src/main.tsx` wires React 19
   error hooks (`onUncaughtError`, `onCaughtError`, `onRecoverableError`)

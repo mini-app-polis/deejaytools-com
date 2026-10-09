@@ -39,7 +39,7 @@ These live in the Pages dashboard (Settings → Builds & deployments), so this t
 | Build command | `pnpm install && pnpm build` |
 | Build output directory | `dist` |
 | Node.js version | 22 (`.nvmrc`) |
-| Environment variables | `VITE_API_URL`, `VITE_CLERK_PUBLISHABLE_KEY`, `VITE_SENTRY_DSN` (Doppler → Pages) |
+| Environment variables | `VITE_API_URL`, `VITE_CLERK_PUBLISHABLE_KEY`, `SENTRY_DSN_DEEJAYTOOLS` (Doppler → Pages) |
 | Preview deployments | enabled — `dev` publishes to the preview URL |
 | Custom domain | `deejaytools.com` |
 
@@ -99,7 +99,7 @@ Calls the fleet's shared `mini-app-polis/.github/.github/workflows/evaluate.yml@
 |----------|----------|-------|
 | `VITE_API_URL` | **Yes** | Public API base URL (e.g. `https://api.deejaytools.com` or Railway public URL). |
 | `VITE_CLERK_PUBLISHABLE_KEY` | **Yes** | Clerk publishable key for the production Clerk instance. |
-| `VITE_SENTRY_DSN` | Optional | Browser Sentry; no-op when unset. |
+| `SENTRY_DSN_DEEJAYTOOLS` | Optional | Browser Sentry; no-op when unset. |
 | `VITE_MAINTENANCE` | Optional | Only the literal string `"1"` replaces the whole app with a maintenance page (no Clerk, no API calls). Build-time: set it, then redeploy; unset it, then redeploy again. |
 
 ### Platform-injected (do not set manually unless debugging)
@@ -115,7 +115,7 @@ Calls the fleet's shared `mini-app-polis/.github/.github/workflows/evaluate.yml@
 
 Deploy the API first (see the [`deejaytools-api` runbook](https://github.com/mini-app-polis/deejaytools-api/blob/main/docs/DEPLOYMENT.md)) and note its public URL. Then:
 
-1. **Cloudflare Pages project** — Connect this repo; root directory `/`, build command `pnpm install && pnpm build`, output `dist`; set `VITE_API_URL` to the API URL, `VITE_CLERK_PUBLISHABLE_KEY`, optional `VITE_SENTRY_DSN`.
+1. **Cloudflare Pages project** — Connect this repo; root directory `/`, build command `pnpm install && pnpm build`, output `dist`; set `VITE_API_URL` to the API URL, `VITE_CLERK_PUBLISHABLE_KEY`, optional `SENTRY_DSN_DEEJAYTOOLS`.
 2. **CORS** — Add the Pages URL (and custom domain) to the API's `CORS_ORIGINS` on Railway.
 3. **Clerk** — Add the production frontend URL to Clerk allowed origins / redirect URLs.
 4. **Smoke test** — Open the Pages URL, sign in, confirm `AuthSync` (`POST /v1/auth/sync`) succeeds, load an authenticated page, upload a small test song if Drive is configured.
