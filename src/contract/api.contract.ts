@@ -409,24 +409,23 @@ describe("contract", () => {
     });
     ledger.mark(endpoints.songs.uploadChunk);
 
-    // The API deletes the song again if the Drive upload fails, so a song
-    // that appears and then vanishes means Drive refused it.
-    let seen = false;
+    // The API commits the song row before it answers the last chunk, so the
+    // song is listed from the first poll on. It deletes the song again if the
+    // Drive upload fails — often before that first poll — so a song missing
+    // at any point means Drive refused it.
     const deadline = Date.now() + DRIVE_UPLOAD_TIMEOUT_MS;
     for (;;) {
       const song = (await ledger.hit(endpoints.songs.list)).find((s) => s.routine_name === routineName);
-      if (song) {
-        seen = true;
-        state.songId = song.id;
-        if (song.drive_file_id) {
-          expect(song.processed_filename).toMatch(/\.mp3$/);
-          expect(song.partner_id).toBe(partnerId);
-          break;
-        }
-      } else if (seen) {
+      if (!song) {
         throw new Error(
           "The API removed the uploaded song: its Google Drive upload failed. See song_background_upload_failed in the dev API logs."
         );
+      }
+      state.songId = song.id;
+      if (song.drive_file_id) {
+        expect(song.processed_filename).toMatch(/\.mp3$/);
+        expect(song.partner_id).toBe(partnerId);
+        break;
       }
       if (Date.now() > deadline) {
         throw new Error(`The song had no Google Drive file after ${DRIVE_UPLOAD_TIMEOUT_MS / 1000}s.`);
