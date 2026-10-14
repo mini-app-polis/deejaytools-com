@@ -23,11 +23,11 @@ The API it talks to lives in [`api-deejaytools`](https://github.com/mini-app-pol
 
 ```bash
 pnpm install
-cp .env.example .env.local   # fill in VITE_CLERK_PUBLISHABLE_KEY; VITE_API_URL defaults to http://localhost:3001
-pnpm dev                     # http://localhost:5173 — proxies /v1 to VITE_API_URL
+cp .env.example .env.local   # fill in DEEJAYTOOLS_CLERK_PUBLISHABLE_KEY; DEEJAYTOOLS_API_DEV unset means the local API at http://localhost:3001
+pnpm dev                     # http://localhost:5173 — proxies /v1 to DEEJAYTOOLS_API_DEV (default http://localhost:3001)
 ```
 
-Run the API locally from [`deejaytools-api`](https://github.com/mini-app-polis/deejaytools-api/blob/main/), or point `VITE_API_URL` at a deployed instance.
+Run the API locally from [`deejaytools-api`](https://github.com/mini-app-polis/deejaytools-api/blob/main/), or point `DEEJAYTOOLS_API_DEV` at a deployed instance.
 
 ```bash
 pnpm build          # production build to dist/
@@ -72,7 +72,7 @@ There is no top-level `/partners` route — partner records are managed on My Pr
 
 ## Environment
 
-`VITE_API_URL` (defaults to dev proxy target `http://localhost:3001`), `VITE_CLERK_PUBLISHABLE_KEY`, `SENTRY_DSN_DEEJAYTOOLS` (optional). See `.env.example`.
+`DEEJAYTOOLS_API` / `DEEJAYTOOLS_API_DEV` (production-branch builds / everything else; unset locally means the dev proxy to `http://localhost:3001`), `DEEJAYTOOLS_CLERK_PUBLISHABLE_KEY`, `SENTRY_DSN_DEEJAYTOOLS` (optional). See `.env.example`.
 
 ## Testing
 

@@ -143,7 +143,7 @@ const sessions = await call(api, endpoints.sessions.list, { params: { eventId } 
 await call(api, endpoints.partners.create, { body: { first_name, last_name, partner_role } });
 ```
 
-Base URL: `import.meta.env.VITE_API_URL` (empty string in dev → same-origin via Vite proxy).
+Base URL: `import.meta.env.VITE_API_URL`, injected at build from `DEEJAYTOOLS_API` (production branch) or `DEEJAYTOOLS_API_DEV` (empty string → same-origin via Vite proxy).
 
 ### `withAuth()`
 

@@ -10,10 +10,10 @@ How to work in this repo. Details live in the README and docs linked below — t
 ```bash
 pnpm install
 cp .env.example .env.local
-# Fill VITE_CLERK_PUBLISHABLE_KEY at minimum
+# Fill DEEJAYTOOLS_CLERK_PUBLISHABLE_KEY at minimum
 ```
 
-- **Run:** `pnpm dev` (port 5173). The Vite dev server proxies `/v1` to `VITE_API_URL` (default `http://localhost:3001`) — run the API from [`deejaytools-api`](https://github.com/mini-app-polis/deejaytools-api/blob/main/) or point `VITE_API_URL` at a deployed one.
+- **Run:** `pnpm dev` (port 5173). The Vite dev server proxies `/v1` to `DEEJAYTOOLS_API_DEV` (default `http://localhost:3001`) — run the API from [`deejaytools-api`](https://github.com/mini-app-polis/deejaytools-api/blob/main/) or point `DEEJAYTOOLS_API_DEV` at a deployed one.
 
 Structure and conventions: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 Deploy and ops: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).

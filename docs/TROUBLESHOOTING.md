@@ -53,15 +53,15 @@ For deployment topology and env var checklists, see [`DEPLOYMENT.md`](./DEPLOYME
 
 ---
 
-## `VITE_CLERK_PUBLISHABLE_KEY is required`
+## `DEEJAYTOOLS_CLERK_PUBLISHABLE_KEY is required`
 
 **Symptom:** Blank page; browser console shows uncaught error at startup from `src/main.tsx`.
 
-**Cause:** Production build was deployed without `VITE_CLERK_PUBLISHABLE_KEY`. Vite inlines env vars at **build time** — setting the variable after build does nothing.
+**Cause:** Production build was deployed without `DEEJAYTOOLS_CLERK_PUBLISHABLE_KEY`. Vite inlines env vars at **build time** — setting the variable after build does nothing.
 
 **Fix:**
 
-1. Add `VITE_CLERK_PUBLISHABLE_KEY` in Cloudflare Pages → Settings → Environment variables (Production **and** Preview if you use previews).
+1. Add `DEEJAYTOOLS_CLERK_PUBLISHABLE_KEY` in Cloudflare Pages → Settings → Environment variables (Production **and** Preview if you use previews).
 2. **Trigger a new build** (retry deployment or push a commit).
 3. Verify locally: copy `.env.example` to `.env.local` and set the key before `pnpm dev`.
 
@@ -113,7 +113,7 @@ For deployment topology and env var checklists, see [`DEPLOYMENT.md`](./DEPLOYME
 
 1. Find the process: `lsof -i :3001` (macOS/Linux).
 2. Stop it: `kill <PID>` or stop the other terminal session.
-3. Or set a different `PORT` in `deejaytools-api/.env` and point `VITE_API_URL` / Vite proxy at the new port.
+3. Or set a different `PORT` in `deejaytools-api/.env` and point `DEEJAYTOOLS_API_DEV` / Vite proxy at the new port.
 
 Production on Railway uses the injected `PORT` — this error is almost always local dev.
 
@@ -264,7 +264,7 @@ and still returns success — **by design**, invisible to the user.
 
 1. Set `CORS_ORIGINS` to a comma-separated list including every frontend origin (production domain, `www`, Cloudflare preview URLs if needed).
 2. Redeploy API.
-3. Ensure `VITE_API_URL` points at the same API host the browser calls.
+3. Ensure `DEEJAYTOOLS_API` (or `DEEJAYTOOLS_API_DEV` on previews) points at the same API host the browser calls.
 
 ---
 
