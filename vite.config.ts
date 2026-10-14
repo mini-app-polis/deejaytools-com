@@ -7,7 +7,6 @@ import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv } from "vite";
 
 const rootDir = dirname(fileURLToPath(import.meta.url));
-const api = process.env.VITE_API_URL ?? "http://localhost:3001";
 
 // Read the repo-root package.json so we can stamp the bundle with the
 // version semantic-release bumps on each release. Surfaces in the browser
@@ -44,6 +43,23 @@ export default defineConfig(({ mode }) => {
   // which would expose every SENTRY_DSN_* in the build environment. Read from
   // process env (Doppler / Pages) or a local .env file.
   const sentryDsn = loadEnv(mode, rootDir, "SENTRY_DSN_").SENTRY_DSN_DEEJAYTOOLS ?? "";
+  // The API base URL, by its Doppler names: DEEJAYTOOLS_API for builds of the
+  // production branch, DEEJAYTOOLS_API_DEV for every other build (Pages
+  // previews) and for local runs. Unset locally means same-origin, through
+  // the dev-server proxy below.
+  const apiEnv = loadEnv(mode, rootDir, "DEEJAYTOOLS_API");
+  const onProductionBranch = process.env.CF_PAGES_BRANCH === "main";
+  // Without a trailing slash: callers append "/v1/…", and a doubled slash
+  // ("//v1/…") is refused by the API's edge rules.
+  const apiUrl = (onProductionBranch ? apiEnv.DEEJAYTOOLS_API : apiEnv.DEEJAYTOOLS_API_DEV)?.replace(/\/+$/, "");
+  const proxyTarget = apiEnv.DEEJAYTOOLS_API_DEV || "http://localhost:3001";
+
+  // Like the Sentry DSN, the Clerk publishable key keeps its Doppler name,
+  // DEEJAYTOOLS_CLERK_PUBLISHABLE_KEY, and is mapped in by name. Widening
+  // envPrefix to DEEJAYTOOLS_ would also bundle DEEJAYTOOLS_CLERK_SECRET_KEY
+  // if it were ever in the build environment.
+  const clerkPublishableKey =
+    loadEnv(mode, rootDir, "DEEJAYTOOLS_CLERK_PUBLISHABLE_KEY").DEEJAYTOOLS_CLERK_PUBLISHABLE_KEY ?? "";
 
   return {
     plugins: [react(), tailwindcss()],
@@ -56,12 +72,14 @@ export default defineConfig(({ mode }) => {
       "import.meta.env.VITE_APP_VERSION": JSON.stringify(rootPkg.version),
       "import.meta.env.VITE_COMMIT_SHA": JSON.stringify(commitSha()),
       "import.meta.env.VITE_SENTRY_DSN": JSON.stringify(sentryDsn),
+      "import.meta.env.VITE_CLERK_PUBLISHABLE_KEY": JSON.stringify(clerkPublishableKey),
+      "import.meta.env.VITE_API_URL": JSON.stringify(apiUrl ?? ""),
     },
     server: {
       port: 5173,
       proxy: {
         "/v1": {
-          target: api,
+          target: proxyTarget,
           changeOrigin: true,
         },
       },
