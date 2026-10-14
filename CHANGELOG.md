@@ -1,3 +1,11 @@
+## [2.7.10](https://github.com/mini-app-polis/deejaytools-com/compare/v2.7.9...v2.7.10) (2026-10-14)
+
+
+### Bug Fixes
+
+* **build:** read the API URL, Clerk key and Sentry DSN by their Doppler names ([5e2748b](https://github.com/mini-app-polis/deejaytools-com/commit/5e2748b810bfb99769c3dc56261fcad09c6273d0))
+* **build:** read the Clerk publishable key by its Doppler name ([995e2ca](https://github.com/mini-app-polis/deejaytools-com/commit/995e2ca98e5bf4e65ec8251e8e771651e29ed496))
+
 ## [2.7.9](https://github.com/mini-app-polis/deejaytools-com/compare/v2.7.8...v2.7.9) (2026-10-11)
 
 
