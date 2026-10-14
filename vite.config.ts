@@ -49,7 +49,9 @@ export default defineConfig(({ mode }) => {
   // the dev-server proxy below.
   const apiEnv = loadEnv(mode, rootDir, "DEEJAYTOOLS_API");
   const onProductionBranch = process.env.CF_PAGES_BRANCH === "main";
-  const apiUrl = onProductionBranch ? apiEnv.DEEJAYTOOLS_API : apiEnv.DEEJAYTOOLS_API_DEV;
+  // Without a trailing slash: callers append "/v1/…", and a doubled slash
+  // ("//v1/…") is refused by the API's edge rules.
+  const apiUrl = (onProductionBranch ? apiEnv.DEEJAYTOOLS_API : apiEnv.DEEJAYTOOLS_API_DEV)?.replace(/\/+$/, "");
   const proxyTarget = apiEnv.DEEJAYTOOLS_API_DEV || "http://localhost:3001";
 
   // Like the Sentry DSN, the Clerk publishable key keeps its Doppler name,
