@@ -8,15 +8,15 @@ Orientation for a developer who has never opened this codebase. The app is a Vit
 
 | Layer | Choice | Notes |
 |-------|--------|-------|
-| Bundler | **Vite 6** | Dev server on `:5173`; proxies `/v1` → API (`vite.config.ts`) |
+| Bundler | **Vite 8** | Dev server on `:5173`; proxies `/v1` → API (`vite.config.ts`) |
 | UI | **React 19** | StrictMode; Sentry error hooks on `createRoot` |
 | Routing | **React Router 7** | `BrowserRouter` in `App.tsx` |
-| Styling | **Tailwind CSS 3** | CSS variables for theme tokens; `tailwindcss-animate` |
+| Styling | **Tailwind CSS 4** (`@tailwindcss/vite`) | CSS variables for theme tokens; `tw-animate-css` |
 | Auth | **Clerk** (`@clerk/clerk-react`) | JWT via `getToken()`; `ClerkProvider` in `main.tsx` |
 | Components | **shadcn/ui** | Radix primitives + Tailwind; config in `components.json` |
 | Toasts | **sonner** | `<Toaster />` in `App.tsx` — not a shadcn toast |
 | Forms | **react-hook-form** + **@hookform/resolvers** | Used where multi-field validation matters |
-| Types | **`@/schemas`** (`src/schemas`) | API contract shapes — a copy kept in step with `deejaytools-api/src/schemas` |
+| Types | **`@/schemas`** (`src/schemas`) | API contract shapes — the app's own view of api-deejaytools' contract |
 | Envelopes | **`src/api/envelope.ts`** | `{ data, meta }` / `{ error }` response typing |
 | Observability | **@sentry/react** | Init in `lib/instrument.ts` before React mounts |
 
@@ -37,7 +37,7 @@ src/
 ├── components/    Shared UI, guards, layout, domain sections
 │   ├── help/      HelpLayout, HelpSection, HelpStillStuck, helpTopics
 │   └── manager/   ManagerGuideSection (manager ops guide tab)
-├── hooks/         Cross-cutting React hooks (auth profile today)
+├── hooks/         Cross-cutting React hooks (auth profile, API version)
 ├── lib/           Pure helpers — no React, safe to import anywhere
 ├── pages/         Route-level screens (+ colocated *.test.tsx)
 │   └── help/      Seven /how-it-works/* topic pages
@@ -70,6 +70,7 @@ One default-export component per route. Pages orchestrate fetching, local state,
 | `SongsPage.tsx` | `/songs` (legacy) |
 | `AddSongPage.tsx` | `/songs/add` |
 | `EventSubmissionsPage.tsx` | `/event-submissions` |
+| `OpenSubmissionsPage.tsx` | `/open-submissions` |
 | `SessionsPage.tsx` | `/sessions` |
 | `SessionDetailPage.tsx` | `/sessions/:id` |
 | `EventsPage.tsx` | `/events` |
@@ -102,6 +103,7 @@ One default-export component per route. Pages orchestrate fetching, local state,
 | File | Purpose |
 |------|---------|
 | `useAuthMe.ts` | Fetches `/v1/auth/me`, exposes `me`, `loading`, `isAdmin`, `isManager` |
+| `useApiVersion.ts` | Fetches the API's public `GET /version` once (shown in the nav) |
 
 ### `lib/` modules
 
@@ -123,7 +125,6 @@ One default-export component per route. Pages orchestrate fetching, local state,
 |------|------|
 | `components.json` | shadcn generator config + path aliases |
 | `vite.config.ts` | `@/` alias, API proxy, `VITE_APP_VERSION` injection |
-| `tailwind.config.js` | Theme extension (shadcn color tokens, container, animations) |
 | `vitest.config.ts` | Test runner; default `node` env, jsdom opt-in per file |
 | `vitest.contract.config.ts` | Live contract suite (`pnpm test:contract`) — see §3 |
 
@@ -167,15 +168,16 @@ Responses are JSON envelopes, typed in `src/api/envelope.ts`:
 
 ### Call sites that bypass the client
 
-Three places use raw `fetch` instead of `useApiClient()`:
+Four places use raw `fetch` instead of `useApiClient()`:
 
 | Location | Why |
 |----------|-----|
 | **`AuthSync.tsx`** | Runs as a side-effect component; could use the client, but intentionally uses raw `fetch` with an explicit token from `getToken()` and does not need envelope parsing for its fire-and-forget sync POST. Failures are logged, not surfaced to UI. |
 | **`lib/chunkedSongUpload.ts`** | Not a React hook — receives `getToken` as a callback. Builds `FormData` per chunk, implements its own retry/backoff, and must re-fetch a fresh token on each attempt. Cannot call `useApiClient()`. |
 | **`FeedbackPage.tsx`** | **Unauthenticated** endpoint — no Clerk token. Submits JSON to `POST /v1/feedback` for anonymous bug reports. |
+| **`hooks/useApiVersion.ts`** | `GET /version` is public, unversioned and not in the envelope, so it is not in the catalog. |
 
-For any new authenticated JSON call, use `useApiClient()`. Only bypass it when you have one of the reasons above. All three still take their path from the catalog and validate the response with `checkEndpoint()`.
+For any new authenticated JSON call, use `useApiClient()`. Only bypass it when you have one of the reasons above. `AuthSync`, the chunk uploader and `FeedbackPage` still take their path from the catalog and validate the response with `checkEndpoint()`.
 
 ### Endpoint catalog (`api/endpoints.ts`) and response validation (`api/contract.ts`)
 
@@ -212,6 +214,7 @@ Defined in `pages/App.tsx`. Pattern: public landing **outside** `Layout`; everyt
 | `/songs` | `RequireAuth` | `SongsPage` | Legacy |
 | `/songs/add` | `RequireAuth` | `AddSongPage` | |
 | `/event-submissions` | `RequireAuth` | `EventSubmissionsPage` | |
+| `/open-submissions` | `RequireAuth` | `OpenSubmissionsPage` | The Open's submission page |
 | `/sessions` | `RequireAuth` | `SessionsPage` | |
 | `/sessions/:id` | — | `SessionDetailPage` | Public read; check-in UI hidden when signed out |
 | `/events` | — | `EventsPage` | Public; lists active + upcoming only |
@@ -338,7 +341,7 @@ Used by `SongUploadForm` (and manager “upload for” flows). Bypasses the API 
 | Condition | Message |
 |-----------|---------|
 | No token from Clerk | `Your session expired. Please sign in again and retry the upload.` |
-| Network failure | `Network error (<ErrorName>: <message>) — check your connection and try again.` |
+| Network failure | `Upload failed (<ErrorName>: <message>) — the connection may have dropped. Retrying…` |
 | HTTP error with JSON body | Server's `error.message` |
 | HTTP **401** with JSON body | Same as above — server's `error.message` (aborts immediately, no retry) |
 | HTTP error without parseable body | `Upload failed (<status>)` |
@@ -551,4 +554,4 @@ Config is in `components.json`; output goes to `src/components/ui/`. Import via 
 | Upload pipeline | `lib/chunkedSongUpload.ts`, `components/SongUploadForm.tsx` |
 | Tests setup | `vitest.config.ts`, `test/setup.ts` |
 
-For API shapes, auth rules, and endpoint details, see [`API.md`](https://github.com/mini-app-polis/deejaytools-api/blob/main/docs/API.md) and [`AUTHENTICATION.md`](https://github.com/mini-app-polis/deejaytools-api/blob/main/docs/AUTHENTICATION.md) in `deejaytools-api`.
+For API shapes, auth rules, and endpoint details, see the [`api-deejaytools` README](https://github.com/mini-app-polis/api-deejaytools/blob/main/README.md) (every route and the scope it requires) and the API's own OpenAPI docs at `/docs`.

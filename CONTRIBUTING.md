@@ -13,7 +13,7 @@ cp .env.example .env.local
 # Fill DEEJAYTOOLS_CLERK_PUBLISHABLE_KEY at minimum
 ```
 
-- **Run:** `pnpm dev` (port 5173). The Vite dev server proxies `/v1` to `DEEJAYTOOLS_API_DEV` (default `http://localhost:3001`) — run the API from [`deejaytools-api`](https://github.com/mini-app-polis/deejaytools-api/blob/main/) or point `DEEJAYTOOLS_API_DEV` at a deployed one.
+- **Run:** `pnpm dev` (port 5173). The Vite dev server proxies `/v1` to `DEEJAYTOOLS_API_DEV` (default `http://localhost:3001`) — run the API from [`api-deejaytools`](https://github.com/mini-app-polis/api-deejaytools/blob/main/) or point `DEEJAYTOOLS_API_DEV` at a deployed one.
 
 Structure and conventions: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 Deploy and ops: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).
@@ -95,7 +95,7 @@ Automatically on release:
 
 ## CI verify pipeline
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push and PR. Reproduce a failure locally in **the same order**:
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on pushes to `main` and `dev` and on PRs into them. Reproduce a failure locally in **the same order**:
 
 | CI step | Local equivalent |
 |---------|------------------|
@@ -161,7 +161,7 @@ Add the new file to the **Index** section of `docs/decisions/README.md`.
 
 ## Pull requests
 
-- Target **`main`**. Ensure the verify pipeline passes locally before pushing.
+- Target **`dev`**; the promote workflow keeps the `dev` → `main` PR that releases. Ensure the verify pipeline passes locally before pushing.
 - One logical change per PR when possible; link related issues if any.
 - For release-visible work, use `feat:` / `fix:` prefixes so semantic-release can version correctly.
 

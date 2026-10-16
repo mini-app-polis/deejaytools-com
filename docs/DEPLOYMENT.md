@@ -1,6 +1,6 @@
 # Deployment
 
-How the deejaytools.com web app is built, released, and served from **Cloudflare Pages**. The API lives in [`deejaytools-api`](https://github.com/mini-app-polis/deejaytools-api/blob/main/docs/DEPLOYMENT.md) and deploys separately to Railway.
+How the deejaytools.com web app is built, released, and served from **Cloudflare Pages**. The API lives in [`api-deejaytools`](https://github.com/mini-app-polis/api-deejaytools/blob/main/README.md) and deploys separately to Railway.
 
 ---
 
@@ -9,7 +9,7 @@ How the deejaytools.com web app is built, released, and served from **Cloudflare
 | Surface | Host | What deploys it |
 |---------|------|-----------------|
 | **Web app** (this repo) | Cloudflare Pages | Cloudflare's GitHub integration watches this repo and builds/deploys the frontend |
-| **API** ([`deejaytools-api`](https://github.com/mini-app-polis/deejaytools-api/blob/main/)) | Railway | Railway's GitHub integration watches that repo |
+| **API** ([`api-deejaytools`](https://github.com/mini-app-polis/api-deejaytools/blob/main/)) | Railway | Railway's GitHub integration watches that repo |
 
 **GitHub Actions does not deploy anything.** `ci.yml` runs verify (typecheck, lint, tests, build) and semantic-release on `main`.
 
@@ -70,7 +70,7 @@ Without it, frontend errors group under an unknown release in Sentry.
 
 File: `.github/workflows/ci.yml`
 
-### `test` job (every push, and PRs to `main`/`dev`)
+### `test` job (pushes to `main`/`dev`, and PRs into them)
 
 1. checkout (`fetch-depth: 0`) → pnpm setup → Node **22** (pnpm cache)
 2. `pnpm install`
@@ -83,7 +83,7 @@ A parallel `security` job delegates to the fleet's shared workflow (`mini-app-po
 
 ### `release` job (push to `main` only)
 
-Runs after `test` and `security` succeed: `pnpm exec semantic-release` with `GITHUB_TOKEN`. `.releaserc.json` updates `CHANGELOG.md`, bumps `package.json` `version` (no npm publish), commits them, and creates a GitHub release. Releasing does not by itself deploy — Pages reacts to the git push.
+Runs after `test` and `security` succeed: `npx` runs semantic-release and its plugins (installed for that step, not in `package.json`) with `GITHUB_TOKEN`. `.releaserc.json` updates `CHANGELOG.md`, bumps `package.json` `version` (no npm publish), commits them, and creates a GitHub release. Releasing does not by itself deploy — Pages reacts to the git push.
 
 ### `evaluate` job (after `release`)
 
@@ -114,10 +114,10 @@ Calls the fleet's shared `mini-app-polis/.github/.github/workflows/evaluate.yml@
 
 ## First deploy to a new environment (runbook)
 
-Deploy the API first (see the [`deejaytools-api` runbook](https://github.com/mini-app-polis/deejaytools-api/blob/main/docs/DEPLOYMENT.md)) and note its public URL. Then:
+Deploy the API first (see [`api-deejaytools`' README](https://github.com/mini-app-polis/api-deejaytools/blob/main/README.md#deployment)) and note its public URL. Then:
 
 1. **Cloudflare Pages project** — Connect this repo; root directory `/`, build command `pnpm install && pnpm build`, output `dist`; set `DEEJAYTOOLS_API` (Production) and `DEEJAYTOOLS_API_DEV` (Preview) to the API URLs, `DEEJAYTOOLS_CLERK_PUBLISHABLE_KEY`, optional `SENTRY_DSN_DEEJAYTOOLS`.
-2. **CORS** — Add the Pages URL (and custom domain) to the API's `CORS_ORIGINS` on Railway.
+2. **CORS** — Add the Pages URL (and custom domain) to the API's `DEEJAYTOOLS_CORS_ORIGINS` (shared Doppler config).
 3. **Clerk** — Add the production frontend URL to Clerk allowed origins / redirect URLs.
 4. **Smoke test** — Open the Pages URL, sign in, confirm `AuthSync` (`POST /v1/auth/sync`) succeeds, load an authenticated page, upload a small test song if Drive is configured.
 
@@ -126,4 +126,4 @@ Deploy the API first (see the [`deejaytools-api` runbook](https://github.com/min
 ## Related docs
 
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — frontend structure
-- [`deejaytools-api` DEPLOYMENT.md](https://github.com/mini-app-polis/deejaytools-api/blob/main/docs/DEPLOYMENT.md) — Railway side, migrations, API env vars
+- [`api-deejaytools` README](https://github.com/mini-app-polis/api-deejaytools/blob/main/README.md) — Railway side, migrations, API env vars
