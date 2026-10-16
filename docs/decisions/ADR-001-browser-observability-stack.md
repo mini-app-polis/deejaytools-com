@@ -6,6 +6,12 @@ Date: 2026-04-24
 
 Accepted
 
+> **Note (2026-10):** `common-typescript-utils` has since been retired, so
+> the browser-compatible shared logger anticipated under Consequences will
+> not arrive: `src/lib/logger.ts` is the logger. The API is now
+> api-deejaytools (Python, Sentry's Python SDK), not the `@sentry/node`
+> service this record compares against.
+
 ## Context
 
 ecosystem-standards CD-002 / CD-010 require all production services to

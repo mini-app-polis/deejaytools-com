@@ -27,7 +27,7 @@ cp .env.example .env.local   # fill in DEEJAYTOOLS_CLERK_PUBLISHABLE_KEY; DEEJAY
 pnpm dev                     # http://localhost:5173 — proxies /v1 to DEEJAYTOOLS_API_DEV (default http://localhost:3001)
 ```
 
-Run the API locally from [`deejaytools-api`](https://github.com/mini-app-polis/deejaytools-api/blob/main/), or point `DEEJAYTOOLS_API_DEV` at a deployed instance.
+Run the API locally from [`api-deejaytools`](https://github.com/mini-app-polis/api-deejaytools/blob/main/), or point `DEEJAYTOOLS_API_DEV` at a deployed instance.
 
 ```bash
 pnpm build          # production build to dist/
@@ -60,15 +60,16 @@ pnpm test:coverage  # with coverage
 | `/songs` | Legacy "My Songs" page | RequireAuth |
 | `/songs/add` | Upload song (standard + special) | RequireAuth |
 | `/event-submissions` | Submit songs to events | RequireAuth |
+| `/open-submissions` | Submit songs to The Open | RequireAuth |
 | `/sessions` | Session list | RequireAuth |
-| `/events` | Event list | RequireAuth |
-| `/events/:id` | Event detail | RequireAuth |
+| `/events` | Event list | public |
+| `/events/:id` | Event detail | public read; entity roster signed-in only |
 | `/admin` | Redirects to `/admin/events` | AdminGuard |
 | `/admin/:section` | Admin dashboard (events, sessions, run history, songs, users, test checkin, …) | AdminGuard |
 | `/manager` | Redirects to `/manager/active-sessions` | ManagerGuard |
 | `/manager/:section` | Manager tools (active sessions, event songs, upload-for, checkin-for, guide) | ManagerGuard |
 
-There is no top-level `/partners` route — partner records are managed on My Profile (`/my-profile`). Help content about partners lives at `/how-it-works/partners`. `/songs`, `/sessions`, `/events`, and `/events/:id` are reachable but absent from all navigation (legacy/deep links).
+There is no top-level `/partners` route — partner records are managed on My Profile (`/my-profile`). Help content about partners lives at `/how-it-works/partners`. `/songs` and `/sessions` are reachable but absent from all navigation (legacy/deep links); `/events` is in the public nav.
 
 ## Environment
 

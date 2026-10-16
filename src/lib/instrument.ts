@@ -3,9 +3,8 @@
  * any application code, so init runs before React mounts.
  *
  * Rationale and ecosystem fit: ecosystem-standards CD-002 / CD-010 Layer 3
- * (unhandled-exception capture). The API uses @sentry/node initialised in
- * deejaytools-api src/instrument.ts, loaded via `node --import` before app.ts;
- * the React app uses @sentry/react initialised here.
+ * (unhandled-exception capture). The API (api-deejaytools) uses Sentry's
+ * Python SDK; the React app uses @sentry/react initialised here.
  *
  * No-op when SENTRY_DSN_DEEJAYTOOLS is unset (vite.config.ts maps it into
  * the bundle as import.meta.env.VITE_SENTRY_DSN) — local development does not send

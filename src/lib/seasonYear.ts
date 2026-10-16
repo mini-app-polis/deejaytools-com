@@ -1,4 +1,4 @@
-/** Keep in sync with deejaytools-api src/lib/seasonYear.ts — UI default for event season year. */
+/** Keep in sync with _SEASON_ROLLOVER_MONTH in api-deejaytools services/song_builds.py — UI default for event season year. */
 export const SEASON_ROLLOVER_MONTH = 10;
 
 export function seasonYearFromDateString(dateStr: string): string {

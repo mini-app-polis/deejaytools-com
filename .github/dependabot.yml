@@ -12,20 +12,15 @@
 # unprefixed subject both trips VER-001 and cuts no release — the fix
 # would land on main and never reach the registry.
 #
-# Version updates arrive as at most three pull requests per ecosystem,
+# Version updates arrive as at most two pull requests per ecosystem,
 # because a failing bump is easiest to fix when it is not tangled with
 # unrelated ones:
-#   - `commons`: the fleet's own shared packages, every update type,
-#     majors included. We always want the latest commons, so they are
-#     exempt from the cooldown below.
 #   - `majors`: every third-party major in one pull request. Majors are
 #     what break tests; keeping them together and apart from routine bumps
 #     means routine bumps never wait on a migration. If one major is hard,
 #     `@dependabot ignore <dependency> major version` on the pull request
 #     drops it and lets the rest through.
 #   - `minor-and-patch`: everything else.
-# Dependabot puts a dependency in the first group that matches, which is
-# why `commons` is listed first.
 #
 # Dependabot checks once a week, on Sunday. The cooldown holds third-party
 # releases until they are a week old, so a release that gets yanked in its
@@ -58,11 +53,8 @@ updates:
       day: "sunday"
     cooldown:
       default-days: 7
-      exclude: ["common-typescript-utils"]
     open-pull-requests-limit: 5
     groups:
-      commons:
-        patterns: ["common-typescript-utils"]
       majors:
         patterns: ["*"]
         update-types: ["major"]
