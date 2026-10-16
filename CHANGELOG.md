@@ -1,3 +1,10 @@
+## [2.7.12](https://github.com/mini-app-polis/deejaytools-com/compare/v2.7.11...v2.7.12) (2026-10-16)
+
+
+### Bug Fixes
+
+* **ci:** follow a newer branch deploy when Pages skips this commit's build ([2d8bce6](https://github.com/mini-app-polis/deejaytools-com/commit/2d8bce612be032aeab7af520e8279adc2609ce29))
+
 ## [2.7.11](https://github.com/mini-app-polis/deejaytools-com/compare/v2.7.10...v2.7.11) (2026-10-16)
 
 
