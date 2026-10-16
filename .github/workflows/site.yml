@@ -27,8 +27,12 @@ name: site
 #
 # It runs on pushes. Not on the promotion pull request to main: its head is
 # dev's latest commit, already tested by the push run, whose result the pull
-# request shows. semantic-release's own commit to main is marked [skip ci],
-# so a release is checked once, at the merge.
+# request shows. semantic-release's own commit to main is marked
+# [skip actions], so a release is checked once, at the merge. Pages builds
+# only the newest commit on a branch, so the release commit, pushed seconds
+# behind the merge, can take the merge's build; when the branch moves past
+# this commit, the run follows it and tests that deploy, which contains this
+# commit.
 
 on:
   push:
@@ -60,26 +64,42 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          commit=$SHA
+          check() {
+            gh api "repos/$GITHUB_REPOSITORY/commits/$commit/check-runs?check_name=Cloudflare%20Pages" --jq "$1"
+          }
+          # True when the branch has moved past $commit to a newer commit
+          # that contains it, left in $head.
+          moved_on() {
+            head=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_REF_NAME" --jq .sha)
+            [ "$head" != "$commit" ] \
+              && [ "$(gh api "repos/$GITHUB_REPOSITORY/compare/$commit...$head" --jq .status)" = ahead ]
+          }
           for _ in $(seq 1 60); do
-            run=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs?check_name=Cloudflare%20Pages" \
-              --jq '.check_runs[0] // {} | "\(.status // "missing") \(.conclusion // "")"')
-            read -r status conclusion <<<"$run"
+            read -r status conclusion <<<"$(check '.check_runs[0] // {} | "\(.status // "missing") \(.conclusion // "")"')"
+            if [ "$status" = completed ] && [ "$conclusion" = success ]; then
+              # The check's summary lists the deploy's own preview URL
+              # first, before the branch alias.
+              url=$(check '.check_runs[0].output.summary' | grep -oE 'https://[a-z0-9]+\.deejaytools-com\.pages\.dev' | head -n 1 || true)
+              if [ -z "$url" ]; then echo "::error::The Cloudflare Pages check did not report a preview URL."; exit 1; fi
+              echo "Deployed at $url."
+              echo "site=$url" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            # Pages may never finish this commit's build once a newer commit
+            # lands on the branch; that commit's deploy contains this one.
+            if moved_on; then
+              echo "$GITHUB_REF_NAME moved on to $head, which contains $commit; following its deploy."
+              commit=$head
+              continue
+            fi
             if [ "$status" = completed ]; then
-              if [ "$conclusion" = success ]; then
-                # The check's summary lists the deploy's own preview URL first.
-                url=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs?check_name=Cloudflare%20Pages" \
-                  --jq '.check_runs[0].output.summary' | grep -oE 'https://[a-z0-9]+\.deejaytools-com\.pages\.dev' | head -n 1 || true)
-                if [ -z "$url" ]; then echo "::error::The Cloudflare Pages check did not report a preview URL."; exit 1; fi
-                echo "Deployed at $url."
-                echo "site=$url" >> "$GITHUB_OUTPUT"
-                exit 0
-              fi
-              echo "::error::The Cloudflare Pages deploy of $SHA concluded '$conclusion'."
+              echo "::error::The Cloudflare Pages deploy of $commit concluded '$conclusion'."
               exit 1
             fi
             sleep 15
           done
-          echo "::error::No finished Cloudflare Pages deploy for $SHA after 15 minutes."
+          echo "::error::No finished Cloudflare Pages deploy for $commit after 15 minutes."
           exit 1
 
       - name: Smoke-test the site
