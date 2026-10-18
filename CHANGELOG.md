@@ -1,3 +1,10 @@
+## [2.7.13](https://github.com/mini-app-polis/deejaytools-com/compare/v2.7.12...v2.7.13) (2026-10-18)
+
+
+### Bug Fixes
+
+* **deps:** bump the minor-and-patch group with 2 updates ([8d8b2ec](https://github.com/mini-app-polis/deejaytools-com/commit/8d8b2ec7ec6c2faeadc5879754b6c4393e6580c4))
+
 ## [2.7.12](https://github.com/mini-app-polis/deejaytools-com/compare/v2.7.11...v2.7.12) (2026-10-16)
 
 
