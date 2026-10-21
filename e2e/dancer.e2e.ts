@@ -207,10 +207,12 @@ test("a dancer uploads a song, enters it, checks in, sees their place, and withd
     await page.getByRole("button", { name: "Submit", exact: true }).click();
     await expect(page.getByText(`Song added to ${EVENT_NAME}.`)).toBeVisible();
     // The submission row naming the song and holding its own Remove button.
+    // Submissions show the API's structured label ("Partnership Division Year
+    // Routine vNN"), not the processed filename, so match on the routine.
     await expect(
       page
         .locator("div")
-        .filter({ hasText: label })
+        .filter({ hasText: ROUTINE })
         .filter({ has: page.getByRole("button", { name: "Remove", exact: true }) })
         .last()
     ).toBeVisible();
