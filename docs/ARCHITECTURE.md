@@ -69,7 +69,7 @@ One default-export component per route. Pages orchestrate fetching, local state,
 | `MyProfilePage.tsx` | `/my-profile` |
 | `SongsPage.tsx` | `/songs` (legacy) |
 | `AddSongPage.tsx` | `/songs/add` |
-| `EventSubmissionsPage.tsx` | `/event-submissions` |
+| `EventSubmissionsPage.tsx` | `/event-submissions`, `/event-submissions/:eventId` |
 | `OpenSubmissionsPage.tsx` | `/open-submissions` |
 | `SessionsPage.tsx` | `/sessions` |
 | `SessionDetailPage.tsx` | `/sessions/:id` |
@@ -213,7 +213,8 @@ Defined in `pages/App.tsx`. Pattern: public landing **outside** `Layout`; everyt
 | `/my-profile` | `RequireAuth` | `MyProfilePage` | |
 | `/songs` | `RequireAuth` | `SongsPage` | Legacy |
 | `/songs/add` | `RequireAuth` | `AddSongPage` | |
-| `/event-submissions` | `RequireAuth` | `EventSubmissionsPage` | |
+| `/event-submissions` | `RequireAuth` | `EventSubmissionsPage` | Event picker; choosing one opens its page |
+| `/event-submissions/:eventId` | `RequireAuth` | `EventSubmissionsPage` | Add/remove songs for one event; The Open redirects to `/open-submissions` |
 | `/open-submissions` | `RequireAuth` | `OpenSubmissionsPage` | The Open's submission page |
 | `/sessions` | `RequireAuth` | `SessionsPage` | |
 | `/sessions/:id` | — | `SessionDetailPage` | Public read; check-in UI hidden when signed out |

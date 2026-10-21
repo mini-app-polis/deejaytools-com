@@ -1,7 +1,7 @@
 import type { ApiEvent, ApiEventSongSubmission, ApiSong } from "@/schemas";
 import { OPEN_EVENT_LABEL, isOpenEvent } from "@/schemas";
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useApiClient } from "@/api/client";
 import { call, endpoints } from "@/api/endpoints";
@@ -38,14 +38,21 @@ function eventOptionLabel(e: ApiEvent): string {
   return `${e.name} · ${e.start_date}`;
 }
 
+/**
+ * Two modes, keyed off the URL:
+ * - `/event-submissions` — pick an event; choosing one navigates to its page.
+ * - `/event-submissions/:eventId` — add and remove your songs for that one event.
+ */
 export default function EventSubmissionsPage() {
   const api = useApiClient();
+  const navigate = useNavigate();
+  const { eventId: routeEventId } = useParams<{ eventId: string }>();
+  const selectedEventId = routeEventId ?? "";
 
   const [events, setEvents] = useState<ApiEvent[]>([]);
   const [songs, setSongs] = useState<ApiSong[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [selectedEventId, setSelectedEventId] = useState("");
   const [submissions, setSubmissions] = useState<ApiEventSongSubmission[]>([]);
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
   const [busySongId, setBusySongId] = useState<string | null>(null);
@@ -59,9 +66,9 @@ export default function EventSubmissionsPage() {
     ])
       .then(([evs, songRows]) => {
         if (cancelled) return;
-        // The Open never accepts songs here — it has its own submission page,
-        // so it is filtered out of this list and pointed to by the banner below.
-        setEvents(evs.filter((e) => e.status !== "completed" && !isOpenEvent(e.name)));
+        // The Open is kept here so a direct link to it can redirect to its own
+        // page; it is filtered out of the picker below.
+        setEvents(evs.filter((e) => e.status !== "completed"));
         setSongs(songRows);
       })
       .finally(() => {
@@ -91,6 +98,15 @@ export default function EventSubmissionsPage() {
       cancelled = true;
     };
   }, [api, selectedEventId]);
+
+  // The Open never accepts songs here — it has its own submission page,
+  // so it is left out of the picker and pointed to by the banner below.
+  const pickerEvents = useMemo(() => events.filter((e) => !isOpenEvent(e.name)), [events]);
+
+  const selectedEvent = useMemo(
+    () => events.find((e) => e.id === selectedEventId),
+    [events, selectedEventId]
+  );
 
   const submissionBySongId = useMemo(() => {
     const map = new Map<string, ApiEventSongSubmission>();
@@ -154,6 +170,181 @@ export default function EventSubmissionsPage() {
     );
   }
 
+  if (routeEventId) {
+    if (!selectedEvent) {
+      return (
+        <div className="space-y-6">
+          <div>
+            <Button variant="ghost" size="sm" className="px-0 mb-2" asChild>
+              <Link to="/my-content">← Back to My Content</Link>
+            </Button>
+            <h1 className="page-title text-2xl">Event submissions</h1>
+          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Event not open for submissions</CardTitle>
+              <CardDescription>
+                This event doesn&apos;t exist or has already finished.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button size="sm" asChild>
+                <Link to="/event-submissions">Choose another event</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+    if (isOpenEvent(selectedEvent.name)) {
+      return <Navigate to="/open-submissions" replace />;
+    }
+    return (
+      <div className="space-y-6">
+        <div>
+          <Button variant="ghost" size="sm" className="px-0 mb-2" asChild>
+            <Link to="/my-content">← Back to My Content</Link>
+          </Button>
+          <h1 className="page-title text-2xl">{selectedEvent.name}</h1>
+          <p className="text-sm text-muted-foreground">{selectedEvent.start_date}</p>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Your songs for this event</CardTitle>
+            <CardDescription>
+              Add or remove songs from your library for this event.{" "}
+              <Link
+                to="/how-it-works/submitting-music#event-submission-required"
+                className="text-primary hover:underline"
+              >
+                About event submissions →
+              </Link>
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {songs.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                You have no songs yet.{" "}
+                <Link to="/songs/add" className="underline">
+                  Add a song
+                </Link>{" "}
+                first.
+              </p>
+            )}
+
+            {songs.length > 0 && eligibleSongs.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Your songs are all legacy catalog rows. They were imported without an audio file, so
+                they can&apos;t be submitted to an event.{" "}
+                <Link to="/songs/add" className="underline">
+                  Upload the routine as a new song
+                </Link>{" "}
+                first.
+              </p>
+            )}
+
+            {eligibleSongs.length > 0 && (
+              <div className={`space-y-3${submissionsLoading ? " opacity-60" : ""}`}>
+                {eligibleSongs.map((song) => {
+                  const existing = submissionBySongId.get(song.id);
+                  const blockedBySongId = existing ? null : filledSlots.get(slotKeyForSong(song));
+                  const blocked = !!blockedBySongId && blockedBySongId !== song.id;
+                  const blockingSong = blockedBySongId
+                    ? songs.find((s) => s.id === blockedBySongId)
+                    : undefined;
+                  const busy = busySongId === song.id;
+                  return (
+                    <div
+                      key={song.id}
+                      className="flex items-start justify-between gap-3 rounded-lg border px-4 py-3"
+                    >
+                      <div className="min-w-0 space-y-0.5">
+                        <p className="font-medium text-sm break-all">{songLabel(song)}</p>
+                        {song.division && (
+                          <p className="text-xs text-muted-foreground">Division {song.division}</p>
+                        )}
+                        {blocked && (
+                          <p className="text-xs text-muted-foreground">
+                            Already submitted for this division:{" "}
+                            {blockingSong ? songLabel(blockingSong) : "another song"}. Remove it first
+                            to submit this one.
+                          </p>
+                        )}
+                      </div>
+                      {existing ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="shrink-0 border-destructive/50 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                          disabled={busy || submissionsLoading}
+                          onClick={() => void handleRemove(existing)}
+                        >
+                          {busy ? "Removing…" : "Remove"}
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="shrink-0"
+                          disabled={busy || submissionsLoading || blocked}
+                          onClick={() => void handleAdd(song.id)}
+                        >
+                          {busy ? "Adding…" : "Add"}
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {orphanedSubmissions.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Submitted songs that are no longer in your library. They still count against this
+                  event, so remove them if they should not be entered.
+                </p>
+                {orphanedSubmissions.map((sub) => (
+                  <div
+                    key={sub.id}
+                    className="flex items-start justify-between gap-3 rounded-lg border px-4 py-3"
+                  >
+                    <div className="min-w-0 space-y-0.5">
+                      <p className="font-medium text-sm break-all">{sub.song_label}</p>
+                      {sub.division && (
+                        <p className="text-xs text-muted-foreground">Division {sub.division}</p>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0 border-destructive/50 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                      disabled={busySongId === sub.song_id || submissionsLoading}
+                      onClick={() => void handleRemove(sub)}
+                    >
+                      {busySongId === sub.song_id ? "Removing…" : "Remove"}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {hiddenLegacyCount > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {hiddenLegacyCount} legacy {hiddenLegacyCount === 1 ? "song is" : "songs are"} hidden.
+                Legacy catalog rows have no uploaded audio file and can&apos;t be submitted to an
+                event.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -192,147 +383,27 @@ export default function EventSubmissionsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {events.length === 0 ? (
+          {pickerEvents.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No upcoming events are available right now.
             </p>
           ) : (
             <div className="space-y-2">
               <Label htmlFor="event-submissions-event">Event</Label>
-              <Select value={selectedEventId || undefined} onValueChange={setSelectedEventId}>
+              <Select onValueChange={(id) => navigate(`/event-submissions/${id}`)}>
                 <SelectTrigger id="event-submissions-event">
                   <SelectValue placeholder="Select an event" />
                 </SelectTrigger>
                 <SelectContent>
-                  {events.map((e) => (
+                  {pickerEvents.map((e) => (
                     <SelectItem key={e.id} value={e.id}>
                       {eventOptionLabel(e)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-sm text-muted-foreground">Select an event to manage submissions.</p>
             </div>
-          )}
-
-          {!selectedEventId && events.length > 0 && (
-            <p className="text-sm text-muted-foreground">Select an event to manage submissions.</p>
-          )}
-
-          {selectedEventId && songs.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              You have no songs yet.{" "}
-              <Link to="/songs/add" className="underline">
-                Add a song
-              </Link>{" "}
-              first.
-            </p>
-          )}
-
-          {selectedEventId && songs.length > 0 && eligibleSongs.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              Your songs are all legacy catalog rows. They were imported without an audio file, so
-              they can&apos;t be submitted to an event.{" "}
-              <Link to="/songs/add" className="underline">
-                Upload the routine as a new song
-              </Link>{" "}
-              first.
-            </p>
-          )}
-
-          {selectedEventId && eligibleSongs.length > 0 && (
-            <div className={`space-y-3${submissionsLoading ? " opacity-60" : ""}`}>
-              {eligibleSongs.map((song) => {
-                const existing = submissionBySongId.get(song.id);
-                const blockedBySongId = existing ? null : filledSlots.get(slotKeyForSong(song));
-                const blocked = !!blockedBySongId && blockedBySongId !== song.id;
-                const blockingSong = blockedBySongId
-                  ? songs.find((s) => s.id === blockedBySongId)
-                  : undefined;
-                const busy = busySongId === song.id;
-                return (
-                  <div
-                    key={song.id}
-                    className="flex items-start justify-between gap-3 rounded-lg border px-4 py-3"
-                  >
-                    <div className="min-w-0 space-y-0.5">
-                      <p className="font-medium text-sm break-all">{songLabel(song)}</p>
-                      {song.division && (
-                        <p className="text-xs text-muted-foreground">Division {song.division}</p>
-                      )}
-                      {blocked && (
-                        <p className="text-xs text-muted-foreground">
-                          Already submitted for this division:{" "}
-                          {blockingSong ? songLabel(blockingSong) : "another song"}. Remove it first
-                          to submit this one.
-                        </p>
-                      )}
-                    </div>
-                    {existing ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="shrink-0 border-destructive/50 text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                        disabled={busy || submissionsLoading}
-                        onClick={() => void handleRemove(existing)}
-                      >
-                        {busy ? "Removing…" : "Remove"}
-                      </Button>
-                    ) : (
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="shrink-0"
-                        disabled={busy || submissionsLoading || blocked}
-                        onClick={() => void handleAdd(song.id)}
-                      >
-                        {busy ? "Adding…" : "Add"}
-                      </Button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {selectedEventId && orphanedSubmissions.length > 0 && (
-            <div className="space-y-3">
-              <p className="text-xs text-muted-foreground">
-                Submitted songs that are no longer in your library. They still count against this
-                event, so remove them if they should not be entered.
-              </p>
-              {orphanedSubmissions.map((sub) => (
-                <div
-                  key={sub.id}
-                  className="flex items-start justify-between gap-3 rounded-lg border px-4 py-3"
-                >
-                  <div className="min-w-0 space-y-0.5">
-                    <p className="font-medium text-sm break-all">{sub.song_label}</p>
-                    {sub.division && (
-                      <p className="text-xs text-muted-foreground">Division {sub.division}</p>
-                    )}
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="shrink-0 border-destructive/50 text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                    disabled={busySongId === sub.song_id || submissionsLoading}
-                    onClick={() => void handleRemove(sub)}
-                  >
-                    {busySongId === sub.song_id ? "Removing…" : "Remove"}
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {selectedEventId && hiddenLegacyCount > 0 && (
-            <p className="text-xs text-muted-foreground">
-              {hiddenLegacyCount} legacy {hiddenLegacyCount === 1 ? "song is" : "songs are"} hidden.
-              Legacy catalog rows have no uploaded audio file and can&apos;t be submitted to an
-              event.
-            </p>
           )}
         </CardContent>
       </Card>

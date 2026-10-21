@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiGet = vi.fn();
@@ -101,10 +101,14 @@ async function selectEvent(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await screen.findByRole("option", { name: /spring classic/i }));
 }
 
-function renderPage() {
+function renderPage(path = "/event-submissions") {
   return render(
-    <MemoryRouter>
-      <EventSubmissionsPage />
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/event-submissions" element={<EventSubmissionsPage />} />
+        <Route path="/event-submissions/:eventId" element={<EventSubmissionsPage />} />
+        <Route path="/open-submissions" element={<p>Open submissions page</p>} />
+      </Routes>
     </MemoryRouter>
   );
 }
@@ -194,6 +198,42 @@ describe("EventSubmissionsPage", () => {
     await user.click(screen.getByRole("combobox", { name: /event/i }));
     expect(await screen.findByRole("option", { name: /spring classic/i })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: /the open/i })).not.toBeInTheDocument();
+  });
+
+  it("opens straight to an event's songs from its own URL, with no picker", async () => {
+    mockApi([SONG], [{ id: "sub1", event_id: "ev1", song_id: "song1", created_at: 1 }]);
+    renderPage("/event-submissions/ev1");
+
+    expect(await screen.findByRole("heading", { name: "Spring Classic" })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: /event/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^remove$/i })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(apiGet).toHaveBeenCalledWith(
+        expect.stringMatching(/\/v1\/event-song-submissions\?event_id=ev1/)
+      );
+    });
+  });
+
+  it("redirects The Open's event URL to its dedicated page", async () => {
+    const openEvent = { ...EVENT, id: "open1", name: "The Open 2026" };
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events") return Promise.resolve([EVENT, openEvent]);
+      return Promise.resolve([]);
+    });
+    renderPage("/event-submissions/open1");
+
+    expect(await screen.findByText("Open submissions page")).toBeInTheDocument();
+  });
+
+  it("says an unknown or finished event is not open for submissions", async () => {
+    mockApi([SONG]);
+    renderPage("/event-submissions/nope");
+
+    expect(await screen.findByText(/event not open for submissions/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /choose another event/i })).toHaveAttribute(
+      "href",
+      "/event-submissions"
+    );
   });
 
   it("still renders events and songs when event-song-submissions rejects", async () => {

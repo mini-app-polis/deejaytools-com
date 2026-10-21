@@ -452,6 +452,10 @@ describe("MyContentPage — events and sessions details", () => {
     expect(await screen.findByText("Live Fest")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Go to event" })).toHaveAttribute("href", "/events/act");
     expect(screen.getAllByRole("link", { name: "Go to event" })).toHaveLength(1);
+    const editHrefs = screen
+      .getAllByRole("link", { name: "Edit songs" })
+      .map((l) => l.getAttribute("href"));
+    expect(editHrefs.sort()).toEqual(["/event-submissions/act", "/event-submissions/ev1"]);
     expect(screen.getByText("Spring Song").parentElement).toHaveTextContent("Spring Song · Classic");
     expect(screen.getByText("Live Song").parentElement).toHaveTextContent(/^Live Song$/);
     expect(screen.queryByText("Old Fest")).not.toBeInTheDocument();
