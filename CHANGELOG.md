@@ -1,3 +1,10 @@
+# [2.10.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.9.0...v2.10.0) (2026-10-21)
+
+
+### Features
+
+* **submissions:** use one submission form for every event, including The Open ([9ab7e7e](https://github.com/mini-app-polis/deejaytools-com/commit/9ab7e7e39b896e880e9e71e4e0772f6768974413))
+
 # [2.9.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.8.0...v2.9.0) (2026-10-21)
 
 
