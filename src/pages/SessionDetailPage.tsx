@@ -598,7 +598,7 @@ export default function ApiSessionPage() {
                   Why? →
                 </Link>
               </div>
-              <Button type="button" variant="ghost" size="sm" onClick={closeCheckin}>
+              <Button type="button" variant="ghost" size="sm" aria-label="Close" onClick={closeCheckin}>
                 ✕
               </Button>
             </div>
@@ -690,8 +690,9 @@ export default function ApiSessionPage() {
 
               {/* Notes */}
               <div>
-                <label className={FIELD_LABEL_CLASS}>Notes (optional)</label>
+                <label htmlFor="checkin-notes" className={FIELD_LABEL_CLASS}>Notes (optional)</label>
                 <textarea
+                  id="checkin-notes"
                   className={FIELD_INPUT_CLASS}
                   rows={2}
                   value={fNotes}

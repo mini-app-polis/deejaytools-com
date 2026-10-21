@@ -92,15 +92,27 @@ test("the main pages pass an automated accessibility scan", async ({ page }) => 
     ["/admin/events", h1],
   ];
 
+  // Dialogs that only exist once opened: scanned open, so their fields are
+  // checked too.
+  const dialogs: [string, string, string][] = [
+    ["/admin/events", "New Event", "New event"],
+    ["/admin/sessions", "New Session", "New session"],
+  ];
+
   const findings: Finding[] = [];
-  const scan = async (path: string, ready: (p: Page) => Locator) => {
-    await test.step(`scan ${path}`, async () => {
+  const scan = async (path: string, ready: (p: Page) => Locator, opens?: [string, string]) => {
+    const label = opens ? `${path} (${opens[1]} dialog)` : path;
+    await test.step(`scan ${label}`, async () => {
       await page.goto(path);
       await expect(ready(page)).toBeVisible();
+      if (opens) {
+        await page.getByRole("button", { name: opens[0], exact: true }).click();
+        await expect(page.getByRole("dialog", { name: opens[1] })).toBeVisible();
+      }
       const result = await new AxeBuilder({ page }).withTags(TAGS).analyze();
       for (const v of result.violations) {
         findings.push({
-          page: path,
+          page: label,
           rule: v.id,
           impact: v.impact,
           help: v.help,
@@ -114,6 +126,7 @@ test("the main pages pass an automated accessibility scan", async ({ page }) => 
   for (const [path, ready] of pages) await scan(path, ready);
   await signIn(page, api.session.user.email);
   for (const [path, ready] of signedIn) await scan(path, ready);
+  for (const [path, button, dialog] of dialogs) await scan(path, h1, [button, dialog]);
 
   await test.info().attach("accessibility-findings.json", {
     body: JSON.stringify(findings, null, 2),
