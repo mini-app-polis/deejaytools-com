@@ -36,7 +36,7 @@ const ENTRIES: TroubleEntry[] = [
     steps: (
       <>
         Note the check-in time on the session card on{" "}
-        <Link to="/floor-trials" className="text-primary hover:underline">
+        <Link to="/floor-trials" className="text-primary underline underline-offset-2">
           Floor Trials
         </Link>
         . Come back when that time arrives — there is no penalty for trying early.
@@ -58,7 +58,7 @@ const ENTRIES: TroubleEntry[] = [
       <>
         You cannot check in to this session anymore. If you still need a run, ask at the deejay booth
         or watch for another session on{" "}
-        <Link to="/floor-trials" className="text-primary hover:underline">
+        <Link to="/floor-trials" className="text-primary underline underline-offset-2">
           Floor Trials
         </Link>
         .
@@ -79,12 +79,12 @@ const ENTRIES: TroubleEntry[] = [
     ),
     steps: (
       <>
-        <Link to="/my-content#checkins" className="text-primary hover:underline">
+        <Link to="/my-content#checkins" className="text-primary underline underline-offset-2">
           My Content → Check-ins
         </Link>{" "}
         → <strong>Withdraw from queue</strong>, then check in again if you still need a run. Or use a
         different partnership (solo vs couple, or a different partner). See{" "}
-        <Link to="/how-it-works/checking-in" className="text-primary hover:underline">
+        <Link to="/how-it-works/checking-in" className="text-primary underline underline-offset-2">
           Checking in
         </Link>
         .
@@ -106,7 +106,7 @@ const ENTRIES: TroubleEntry[] = [
     steps: (
       <>
         Pick a different song (different partnership), or withdraw your current entry on{" "}
-        <Link to="/my-content#checkins" className="text-primary hover:underline">
+        <Link to="/my-content#checkins" className="text-primary underline underline-offset-2">
           My Content → Check-ins
         </Link>{" "}
         first (visible once you have a live queue entry).
@@ -128,11 +128,11 @@ const ENTRIES: TroubleEntry[] = [
     steps: (
       <>
         Go to{" "}
-        <Link to="/event-submissions" className="text-primary hover:underline">
+        <Link to="/event-submissions" className="text-primary underline underline-offset-2">
           Event submissions
         </Link>
         , choose the event, and add the song. Then return to the session page and check in. See{" "}
-        <Link to="/how-it-works/submitting-music#event-submission-required" className="text-primary hover:underline">
+        <Link to="/how-it-works/submitting-music#event-submission-required" className="text-primary underline underline-offset-2">
           Uploading vs event submission
         </Link>
         .
@@ -194,7 +194,7 @@ const ENTRIES: TroubleEntry[] = [
     steps: (
       <>
         Export or compress your audio to under 100 MB (MP3, WAV, FLAC, or M4A), then upload again at{" "}
-        <Link to="/songs/add" className="text-primary hover:underline">
+        <Link to="/songs/add" className="text-primary underline underline-offset-2">
           Add Song
         </Link>
         .
@@ -217,7 +217,7 @@ const ENTRIES: TroubleEntry[] = [
     steps: (
       <>
         Export or compress your audio further, then upload again at{" "}
-        <Link to="/songs/add" className="text-primary hover:underline">
+        <Link to="/songs/add" className="text-primary underline underline-offset-2">
           Add Song
         </Link>
         .
@@ -239,7 +239,7 @@ const ENTRIES: TroubleEntry[] = [
     steps: (
       <>
         Re-export from your DAW or converter as MP3, WAV, FLAC, or M4A. See{" "}
-        <Link to="/how-it-works/submitting-music" className="text-primary hover:underline">
+        <Link to="/how-it-works/submitting-music" className="text-primary underline underline-offset-2">
           Submitting your music
         </Link>
         .
@@ -259,7 +259,7 @@ const ENTRIES: TroubleEntry[] = [
     steps: (
       <>
         Sign in again, then start the upload from the beginning on{" "}
-        <Link to="/songs/add" className="text-primary hover:underline">
+        <Link to="/songs/add" className="text-primary underline underline-offset-2">
           Add Song
         </Link>
         .
@@ -299,11 +299,11 @@ const ENTRIES: TroubleEntry[] = [
     steps: (
       <>
         Open{" "}
-        <Link to="/my-profile" className="text-primary hover:underline">
+        <Link to="/my-profile" className="text-primary underline underline-offset-2">
           My Profile
         </Link>
         , fill in first and last name, save, then return to{" "}
-        <Link to="/songs/add" className="text-primary hover:underline">
+        <Link to="/songs/add" className="text-primary underline underline-offset-2">
           Add Song
         </Link>
         .
@@ -324,11 +324,11 @@ const ENTRIES: TroubleEntry[] = [
     steps: (
       <>
         Add a partner on{" "}
-        <Link to="/my-profile" className="text-primary hover:underline">
+        <Link to="/my-profile" className="text-primary underline underline-offset-2">
           My Profile
         </Link>
         , or use{" "}
-        <Link to="/songs/add" className="text-primary hover:underline">
+        <Link to="/songs/add" className="text-primary underline underline-offset-2">
           Teams, Cabaret, Other
         </Link>{" "}
         if you are uploading for a special division.
@@ -348,7 +348,7 @@ const ENTRIES: TroubleEntry[] = [
     steps: (
       <>
         Create a team on{" "}
-        <Link to="/my-profile" className="text-primary hover:underline">
+        <Link to="/my-profile" className="text-primary underline underline-offset-2">
           My Profile
         </Link>
         , then return to Add Song → Teams, Cabaret, Other.
@@ -371,12 +371,12 @@ const ENTRIES: TroubleEntry[] = [
     ),
     steps: (
       <>
-        <Link to="/my-content#checkins" className="text-primary hover:underline">
+        <Link to="/my-content#checkins" className="text-primary underline underline-offset-2">
           My Content → Check-ins
         </Link>{" "}
         → withdraw the active entry, or wait until the run finishes. Then try removing the partner
         again on{" "}
-        <Link to="/my-profile" className="text-primary hover:underline">
+        <Link to="/my-profile" className="text-primary underline underline-offset-2">
           My Profile
         </Link>
         .
@@ -398,7 +398,7 @@ const ENTRIES: TroubleEntry[] = [
     steps: (
       <>
         If you still want them off your list, confirm delete on{" "}
-        <Link to="/my-profile" className="text-primary hover:underline">
+        <Link to="/my-profile" className="text-primary underline underline-offset-2">
           My Profile
         </Link>
         .
@@ -421,7 +421,7 @@ const ENTRIES: TroubleEntry[] = [
       <>
         If you delete, those songs remain but lose this partner link. Upload again with a different
         partner if needed. See{" "}
-        <Link to="/how-it-works/partners" className="text-primary hover:underline">
+        <Link to="/how-it-works/partners" className="text-primary underline underline-offset-2">
           Partners &amp; teams
         </Link>
         .
@@ -446,7 +446,7 @@ const ENTRIES: TroubleEntry[] = [
     steps: (
       <>
         Open any page inside the main app (for example{" "}
-        <Link to="/my-content" className="text-primary hover:underline">
+        <Link to="/my-content" className="text-primary underline underline-offset-2">
           My Content
         </Link>
         ) — not the landing page alone — so account sync can run. Reload the page once. AuthSync runs
@@ -472,7 +472,7 @@ const ENTRIES: TroubleEntry[] = [
     steps: (
       <>
         Submit the song to the event on{" "}
-        <Link to="/event-submissions" className="text-primary hover:underline">
+        <Link to="/event-submissions" className="text-primary underline underline-offset-2">
           Event submissions
         </Link>
         , then reopen the session check-in form.
@@ -493,7 +493,7 @@ const ENTRIES: TroubleEntry[] = [
     steps: (
       <>
         Wait for the next refresh, or reload the page. Read{" "}
-        <Link to="/how-it-works/the-queue" className="text-primary hover:underline">
+        <Link to="/how-it-works/the-queue" className="text-primary underline underline-offset-2">
           Watching the queue
         </Link>{" "}
         for caps and the Standard-waits-for-Priority rule.
@@ -514,7 +514,7 @@ const ENTRIES: TroubleEntry[] = [
     steps: (
       <>
         Open the full session list at{" "}
-        <Link to="/sessions" className="text-primary hover:underline">
+        <Link to="/sessions" className="text-primary underline underline-offset-2">
           Sessions
         </Link>{" "}
         (requires sign-in).
@@ -536,7 +536,7 @@ const ENTRIES: TroubleEntry[] = [
     steps: (
       <>
         Upload the routine again at{" "}
-        <Link to="/songs/add" className="text-primary hover:underline">
+        <Link to="/songs/add" className="text-primary underline underline-offset-2">
           Add Song
         </Link>
         , submit it to the event, then check in.
@@ -558,7 +558,7 @@ const ENTRIES: TroubleEntry[] = [
     steps: (
       <>
         This is expected, not a bug. Details in{" "}
-        <Link to="/how-it-works/the-queue" className="text-primary hover:underline">
+        <Link to="/how-it-works/the-queue" className="text-primary underline underline-offset-2">
           Watching the queue
         </Link>
         .

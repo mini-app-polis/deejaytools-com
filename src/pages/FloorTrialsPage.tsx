@@ -105,7 +105,7 @@ export default function FloorTrialsPage() {
           Upcoming and active sessions, sorted by start time. Check-in opening
           times vary by session — tap a session to check in or watch its
           queue.{" "}
-          <Link to="/how-it-works" className="text-primary hover:underline">
+          <Link to="/how-it-works" className="text-primary underline underline-offset-2">
             How this works →
           </Link>
         </p>
@@ -114,7 +114,7 @@ export default function FloorTrialsPage() {
       {todaySessions.length === 0 ? (
         <p className="text-sm text-muted-foreground py-8 text-center">
           No upcoming sessions right now.{" "}
-          <Link to="/how-it-works/floor-trials" className="text-primary hover:underline">
+          <Link to="/how-it-works/floor-trials" className="text-primary underline underline-offset-2">
             Learn when sessions appear →
           </Link>
         </p>

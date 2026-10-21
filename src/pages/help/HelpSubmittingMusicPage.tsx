@@ -36,7 +36,7 @@ export default function HelpSubmittingMusicPage() {
           <HelpSubheading>Before you can upload</HelpSubheading>
           <p>
             Your name is required — it is captured when you sign up and you can change it on{" "}
-            <Link to="/my-profile" className="text-primary hover:underline">My Profile</Link>.
+            <Link to="/my-profile" className="text-primary underline underline-offset-2">My Profile</Link>.
             If it is missing, the upload still goes through but your user id may appear in the
             processed filename instead of your name.
           </p>
@@ -48,7 +48,7 @@ export default function HelpSubmittingMusicPage() {
 
           <HelpSubheading>Three upload modes</HelpSubheading>
           <p>
-            On <Link to="/songs/add" className="text-primary hover:underline">Add a song</Link> you pick
+            On <Link to="/songs/add" className="text-primary underline underline-offset-2">Add a song</Link> you pick
             one of three cards at the top:
           </p>
           <ul className="list-disc pl-5 space-y-2">
@@ -136,7 +136,7 @@ export default function HelpSubmittingMusicPage() {
             </li>
           </ul>
           <p>
-            On <Link to="/my-content#songs" className="text-primary hover:underline">My Content → Songs</Link>{" "}
+            On <Link to="/my-content#songs" className="text-primary underline underline-offset-2">My Content → Songs</Link>{" "}
             you see the <strong className="text-foreground">processed filename</strong> (what the deejay
             works from) and, below it,{" "}
             <strong className="text-foreground">Uploaded: &lt;your original filename&gt;</strong> so you
@@ -171,7 +171,7 @@ export default function HelpSubmittingMusicPage() {
         <HelpSection section={CONFIRMING}>
           <p>
             After you&apos;ve submitted, confirm the deejay actually has your file by checking{" "}
-            <Link to="/my-content#songs" className="text-primary hover:underline">
+            <Link to="/my-content#songs" className="text-primary underline underline-offset-2">
               My Content → Songs
             </Link>{" "}
             — it lists every song you&apos;ve uploaded through this site under your account. If your
@@ -187,7 +187,7 @@ export default function HelpSubmittingMusicPage() {
           <p>
             If a routine you submitted in a previous season isn&apos;t in My Content with a playable file,
             upload it again at{" "}
-            <Link to="/songs/add" className="text-primary hover:underline">
+            <Link to="/songs/add" className="text-primary underline underline-offset-2">
               Add a song
             </Link>
             .
@@ -202,7 +202,7 @@ export default function HelpSubmittingMusicPage() {
               uploading a song does not enter it into the competition event
             </strong>
             . Before you can check in with a song at a floor trial, you must also add it to that event on{" "}
-            <Link to="/event-submissions" className="text-primary hover:underline">
+            <Link to="/event-submissions" className="text-primary underline underline-offset-2">
               Event submissions
             </Link>
             .

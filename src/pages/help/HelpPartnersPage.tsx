@@ -26,7 +26,7 @@ export default function HelpPartnersPage() {
       <div className="space-y-12">
         <p className="text-sm text-foreground/75 leading-relaxed">
           DeejayTools uses three different ways to describe who is dancing. They all live on{" "}
-          <Link to="/my-profile" className="text-primary hover:underline">My Profile</Link>.
+          <Link to="/my-profile" className="text-primary underline underline-offset-2">My Profile</Link>.
         </p>
 
         <HelpSection section={PARTNER}>
@@ -66,7 +66,7 @@ export default function HelpPartnersPage() {
           <p>
             A <strong className="text-foreground">team</strong> is a named group you create on My
             Profile. Teams are used when you upload through{" "}
-            <Link to="/songs/add" className="text-primary hover:underline">Add a song → Teams, Cabaret, Other</Link>{" "}
+            <Link to="/songs/add" className="text-primary underline underline-offset-2">Add a song → Teams, Cabaret, Other</Link>{" "}
             for the <strong className="text-foreground">Teams</strong> division only. Cabaret and Other
             use a free-text group name instead of a team picker.
           </p>

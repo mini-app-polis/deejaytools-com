@@ -614,7 +614,7 @@ export default function ApiSessionPage() {
                   .{" "}
                   <Link
                     to="/how-it-works/troubleshooting"
-                    className="text-xs text-muted-foreground hover:underline"
+                    className="text-xs text-muted-foreground underline underline-offset-2"
                   >
                     Why? →
                   </Link>

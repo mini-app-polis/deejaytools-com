@@ -519,7 +519,7 @@ export default function ManagerPage() {
                                 {row.divisionName} · {renderSongLabel(row)}
                               </p>
                               {filename && (
-                                <p className="text-xs text-muted-foreground/70 break-all font-mono">
+                                <p className="text-xs text-muted-foreground break-all font-mono">
                                   {filename}
                                 </p>
                               )}
@@ -587,7 +587,7 @@ export default function ManagerPage() {
                                   {row.divisionName} · {renderSongLabel(row)}
                                 </p>
                                 {filename && (
-                                  <p className="text-xs text-muted-foreground/70 break-all font-mono">
+                                  <p className="text-xs text-muted-foreground break-all font-mono">
                                     {filename}
                                   </p>
                                 )}
@@ -645,7 +645,7 @@ export default function ManagerPage() {
                                   {row.divisionName} · {renderSongLabel(row)}
                                 </p>
                                 {filename && (
-                                  <p className="text-xs text-muted-foreground/70 break-all font-mono">
+                                  <p className="text-xs text-muted-foreground break-all font-mono">
                                     {filename}
                                   </p>
                                 )}
@@ -774,7 +774,7 @@ export default function ManagerPage() {
                               <span className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
                                 {division}
                               </span>{" "}
-                              <span className="text-xs font-normal text-muted-foreground/70">
+                              <span className="text-xs font-normal text-muted-foreground">
                                 {rows.length}
                               </span>
                             </button>

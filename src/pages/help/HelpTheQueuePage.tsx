@@ -132,7 +132,7 @@ export default function HelpTheQueuePage() {
         </p>
         <p>
           For check-in prerequisites, see{" "}
-          <Link to="/how-it-works/checking-in" className="text-primary hover:underline">
+          <Link to="/how-it-works/checking-in" className="text-primary underline underline-offset-2">
             Checking in
           </Link>
           .

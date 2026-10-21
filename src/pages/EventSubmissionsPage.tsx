@@ -131,7 +131,7 @@ function EventPicker() {
             Choose an upcoming event, then add songs from your library.{" "}
             <Link
               to="/how-it-works/submitting-music#event-submission-required"
-              className="text-primary hover:underline"
+              className="text-primary underline underline-offset-2"
             >
               About event submissions →
             </Link>
@@ -336,7 +336,7 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
               : "Choose a song and division below."}{" "}
             <Link
               to="/how-it-works/submitting-music#event-submission-required"
-              className="text-primary hover:underline"
+              className="text-primary underline underline-offset-2"
             >
               About event submissions →
             </Link>

@@ -65,7 +65,7 @@ export default function HelpLayout({
             Guide
           </Badge>
           <span
-            className="text-[10px] font-medium tracking-[0.18em] uppercase text-primary/60 tabular-nums"
+            className="text-[10px] font-medium tracking-[0.18em] uppercase text-primary/80 tabular-nums"
             style={{ fontFamily: "'DM Mono', monospace" }}
           >
             {topic.eyebrow}

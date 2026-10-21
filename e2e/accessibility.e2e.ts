@@ -86,8 +86,7 @@ test("the main pages pass an automated accessibility scan", async ({ page }) => 
     ["/my-profile", h1],
     ["/event-submissions", h1],
     [`/event-submissions/${eventId}`, h1],
-    // The session page has no h1; its Check in button marks it loaded.
-    [`/sessions/${sessionId}`, (p) => p.getByRole("button", { name: "Check in", exact: true }).first()],
+    [`/sessions/${sessionId}`, h1],
     ["/manager/active-sessions", h1],
     ["/manager/checkin-for", h1],
     ["/admin/events", h1],

@@ -41,7 +41,7 @@ export default function HelpCheckingInPage() {
           <li>
             <strong className="text-foreground">Song submitted to the event</strong> — for sessions
             that belong to an event only. See{" "}
-            <Link to="/how-it-works/submitting-music#event-submission-required" className="text-primary hover:underline">
+            <Link to="/how-it-works/submitting-music#event-submission-required" className="text-primary underline underline-offset-2">
               uploading vs event submission
             </Link>
             .
@@ -54,7 +54,7 @@ export default function HelpCheckingInPage() {
         <HelpSubheading>The check-in form</HelpSubheading>
         <p>
           Check-in is the action that puts you in the queue. Each session page on{" "}
-          <Link to="/floor-trials" className="text-primary hover:underline">
+          <Link to="/floor-trials" className="text-primary underline underline-offset-2">
             Floor Trials
           </Link>{" "}
           has its own check-in form — tap <strong className="text-foreground">Check in</strong> at the
@@ -90,7 +90,7 @@ export default function HelpCheckingInPage() {
           The system assigns priority or standard from your division, how many completed runs you
           already have in that division this session, and any event-wide limits. You cannot pick a
           queue. See{" "}
-          <Link to="/how-it-works/the-queue" className="text-primary hover:underline">
+          <Link to="/how-it-works/the-queue" className="text-primary underline underline-offset-2">
             Watching the queue
           </Link>{" "}
           for how that works.
@@ -113,7 +113,7 @@ export default function HelpCheckingInPage() {
         <HelpSubheading>Withdrawing</HelpSubheading>
         <p>
           To leave the queue, go to{" "}
-          <Link to="/my-content#checkins" className="text-primary hover:underline">
+          <Link to="/my-content#checkins" className="text-primary underline underline-offset-2">
             My Content → Check-ins
           </Link>{" "}
           (that section appears once you&apos;re checked in somewhere) and use{" "}

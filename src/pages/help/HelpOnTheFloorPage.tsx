@@ -136,7 +136,7 @@ export default function HelpOnTheFloorPage() {
               <strong className="text-foreground">Patience:</strong> a lot of things happen during a
               floor trial block. The check-in order is the order people checked in — it&apos;s not a
               guarantee of when you&apos;ll run. See{" "}
-              <Link to="/how-it-works/the-queue" className="text-primary hover:underline">
+              <Link to="/how-it-works/the-queue" className="text-primary underline underline-offset-2">
                 Watching the queue
               </Link>{" "}
               for how priority is decided.
