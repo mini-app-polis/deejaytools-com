@@ -31,5 +31,14 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    // Dancers check in from their phones: their journey runs again on a
+    // phone-sized screen. Pixel 7 is Chromium, so no other browser to install.
+    {
+      name: "mobile",
+      use: { ...devices["Pixel 7"] },
+      testMatch: ["**/dancer.e2e.ts", "**/sign-in.e2e.ts"],
+    },
+  ],
 });

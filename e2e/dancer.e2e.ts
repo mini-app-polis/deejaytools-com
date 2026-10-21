@@ -1,5 +1,5 @@
 import { e2eConfig } from "./env";
-import { Api, expect, RUN_ID, signIn, test } from "./fixtures";
+import { Api, dateIn, expect, RUN_ID, signIn, silentWav, test, waitForSongBuild, type Song } from "./fixtures";
 
 /**
  * A dancer's floor trial day, through the screens they use: upload a song on
@@ -27,9 +27,6 @@ const OPEN_EVENT_NAME = `${OPEN_PREFIX} ${RUN_ID}`;
 const ROUTINE = `${PREFIX} ${RUN_ID}`;
 const PARTNER_FIRST = "E2E";
 const PARTNER_LAST = `Dancer${RUN_ID}`;
-/** The API answers the last chunk at once and builds the song (tag, Drive
- * upload) afterwards. */
-const BUILD_TIMEOUT_MS = 60_000;
 
 let api: Api;
 let eventId: string | undefined;
@@ -37,53 +34,6 @@ let openEventId: string | undefined;
 let sessionId: string;
 let partnerId: string | undefined;
 let songId: string | undefined;
-
-/**
- * A calendar date (YYYY-MM-DD) in `timezone`, `offsetDays` from today. The
- * API checks session times against the event's dates in the event's own
- * timezone, so dates built in UTC go wrong every evening in Chicago, when
- * UTC has already reached tomorrow.
- */
-function dateIn(timezone: string, offsetDays: number): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(Date.now() + offsetDays * 86_400_000));
-}
-
-/**
- * A tenth of a second of silence as a WAV file (8 kHz, mono, 8-bit), built
- * here so the test needs no fixture on disk. The API recognises WAV by its
- * RIFF/WAVE header and tags it before the Drive upload, so the header has to
- * be a real one; the contract suite's upload already covers MP3.
- */
-function silentWav(): Buffer {
-  const samples = 800;
-  const wav = Buffer.alloc(44 + samples, 0x80); // 0x80 is silence at 8 bits
-  wav.write("RIFF", 0, "ascii");
-  wav.writeUInt32LE(36 + samples, 4);
-  wav.write("WAVE", 8, "ascii");
-  wav.write("fmt ", 12, "ascii");
-  wav.writeUInt32LE(16, 16); // fmt chunk size
-  wav.writeUInt16LE(1, 20); // PCM
-  wav.writeUInt16LE(1, 22); // mono
-  wav.writeUInt32LE(8000, 24); // sample rate
-  wav.writeUInt32LE(8000, 28); // byte rate
-  wav.writeUInt16LE(1, 32); // block align
-  wav.writeUInt16LE(8, 34); // bits per sample
-  wav.write("data", 36, "ascii");
-  wav.writeUInt32LE(samples, 40);
-  return wav;
-}
-
-interface Song {
-  id: string;
-  routine_name: string | null;
-  processed_filename: string | null;
-  drive_file_id: string | null;
-}
 
 /** Remove what an earlier run of this file left behind: events first (they
  * take their sessions, check-ins and song submissions), then the songs those
@@ -195,18 +145,9 @@ test("a dancer uploads a song, enters it, checks in, sees their place, withdraws
   // appears and then vanishes means Drive refused it.
   let label = "";
   await test.step("the API builds the song and uploads it to Google Drive", async () => {
-    const deadline = Date.now() + BUILD_TIMEOUT_MS;
-    for (;;) {
-      const song = (await api.call<Song[]>("GET", "/v1/songs")).find((s) => s.routine_name === ROUTINE);
-      if (song) songId = song.id;
-      else if (songId) throw new Error("The API removed the uploaded song: its build or Google Drive upload failed.");
-      if (song?.drive_file_id && song.processed_filename) {
-        label = song.processed_filename;
-        break;
-      }
-      if (Date.now() > deadline) throw new Error(`The song had no Google Drive file after ${BUILD_TIMEOUT_MS / 1000}s.`);
-      await page.waitForTimeout(2_000);
-    }
+    const song = await waitForSongBuild(api, page, ROUTINE);
+    songId = song.id;
+    label = song.processed_filename!;
     expect(label).toMatch(/\.wav$/);
   });
 
