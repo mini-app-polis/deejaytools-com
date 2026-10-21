@@ -105,6 +105,9 @@ test("the main pages pass an automated accessibility scan", async ({ page }) => 
     await test.step(`scan ${label}`, async () => {
       await page.goto(path);
       await expect(ready(page)).toBeVisible();
+      // Pages dim their content (opacity-60) while they load; scanning then
+      // measures the dimmed text. Wait for it to settle.
+      await expect(page.locator(".opacity-60")).toHaveCount(0);
       if (opens) {
         await page.getByRole("button", { name: opens[0], exact: true }).click();
         await expect(page.getByRole("dialog", { name: opens[1] })).toBeVisible();

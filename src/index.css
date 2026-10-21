@@ -3,10 +3,10 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
-/* The app never toggles this class today (it's permanently dark, see
- * `color-scheme: dark` below), but `dark:` variants are used in a handful of
- * components — keep the v3 class-based strategy so they mean the same thing
- * if a `.dark` toggle is ever added. */
+/* The app is permanently dark (see `color-scheme: dark` below), and
+ * index.html sets `class="dark"` on <html> so the `dark:` variants in the
+ * components apply: their light-mode shades fail contrast on these
+ * backgrounds. Class-based, so a light/dark toggle could be added later. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
