@@ -1,3 +1,11 @@
+# [2.9.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.8.0...v2.9.0) (2026-10-21)
+
+
+### Features
+
+* **sessions:** link 'Submit songs to this event' straight to the session's event page ([75789d9](https://github.com/mini-app-polis/deejaytools-com/commit/75789d9ee539eb4055f970f9bd964909fb6dbd6f))
+* **submissions:** add per-event song submission page with Edit songs link from My Content ([a7d4fe0](https://github.com/mini-app-polis/deejaytools-com/commit/a7d4fe05c574086f7a1380268689120a0ce6dd78))
+
 # [2.8.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.7.13...v2.8.0) (2026-10-21)
 
 
