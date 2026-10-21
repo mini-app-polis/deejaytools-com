@@ -154,7 +154,9 @@ test("a dancer uploads a song, enters it, checks in, sees their place, withdraws
   await test.step("enter the song in the event", async () => {
     await page.goto("/event-submissions");
     await page.getByRole("combobox", { name: "Event" }).click();
-    await page.getByRole("option", { name: EVENT_NAME }).click();
+    // Anchored: option names match on substrings, and the test Open event's
+    // name ("The Open E2E Dancer …") contains this one.
+    await page.getByRole("option", { name: new RegExp(`^${EVENT_NAME} · `) }).click();
     // Choosing the event opens its page: pick the song, whose own division
     // fills the Division field, and submit it.
     await expect(page.getByRole("heading", { name: EVENT_NAME })).toBeVisible();
@@ -250,7 +252,7 @@ test("a dancer uploads a song, enters it, checks in, sees their place, withdraws
     // The event card naming the event and holding its own Edit songs link.
     const card = page
       .locator("div")
-      .filter({ hasText: EVENT_NAME })
+      .filter({ hasText: EVENT_NAME, hasNotText: OPEN_EVENT_NAME })
       .filter({ has: page.getByRole("link", { name: "Edit songs", exact: true }) })
       .last();
     await card.getByRole("link", { name: "Edit songs", exact: true }).click();
