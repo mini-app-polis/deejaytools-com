@@ -1,3 +1,10 @@
+# [2.11.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.10.0...v2.11.0) (2026-10-21)
+
+
+### Features
+
+* **my-content:** add a Submit to The Open shortcut while The Open is accepting songs ([729e35e](https://github.com/mini-app-polis/deejaytools-com/commit/729e35e551a99865d8c64be2007026dbc8c43236))
+
 # [2.10.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.9.0...v2.10.0) (2026-10-21)
 
 
