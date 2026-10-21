@@ -23,8 +23,7 @@ import MyProfilePage from "./MyProfilePage";
 import SessionDetailPage from "./SessionDetailPage";
 import SessionsPage from "./SessionsPage";
 import AddSongPage from "./AddSongPage";
-import EventSubmissionsPage from "./EventSubmissionsPage";
-import OpenSubmissionsPage from "./OpenSubmissionsPage";
+import EventSubmissionsPage, { OpenSubmissionsRedirect } from "./EventSubmissionsPage";
 import SongsPage from "./SongsPage";
 import FeedbackPage from "./FeedbackPage";
 
@@ -106,13 +105,12 @@ export default function App() {
               </RequireAuth>
             }
           />
-          {/* The Open has its own submission page. /event-submissions filters The
-              Open out of its event list and links here instead. */}
+          {/* Old link for The Open's submission page; forwards to its event page. */}
           <Route
             path="open-submissions"
             element={
               <RequireAuth>
-                <OpenSubmissionsPage />
+                <OpenSubmissionsRedirect />
               </RequireAuth>
             }
           />

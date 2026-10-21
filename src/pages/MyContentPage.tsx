@@ -5,7 +5,6 @@ import type {
   ApiSession,
   ApiSong,
 } from "@/schemas";
-import { isOpenEvent } from "@/schemas";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { toast } from "sonner";
@@ -421,15 +420,7 @@ export default function MyContentPage() {
                         </Button>
                       )}
                       <Button asChild size="sm" className="w-full sm:w-auto">
-                        <Link
-                          to={
-                            isOpenEvent(event.name)
-                              ? "/open-submissions"
-                              : `/event-submissions/${event.id}`
-                          }
-                        >
-                          Edit songs
-                        </Link>
+                        <Link to={`/event-submissions/${event.id}`}>Edit songs</Link>
                       </Button>
                     </div>
                   </div>

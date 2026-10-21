@@ -154,20 +154,16 @@ export type PartnerRole = z.infer<typeof PartnerRoleSchema>;
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// "The Open" — dedicated submission path
+// "The Open"
 // ---------------------------------------------------------------------------
-
-/** Display name used in copy that points people at the dedicated Open page. */
-export const OPEN_EVENT_LABEL = "The Open";
 
 /**
  * Does this event name refer to "The Open"?
  *
- * The Open never accepts songs through the generic event-submissions page —
- * it routes to its own dedicated submission page instead, and its submissions
- * take a distinct Drive filename convention. Every consumer that needs to make
- * that distinction goes through this one predicate, so the rule lives in
- * exactly one place.
+ * The Open is the one event where a Classic entry may choose its round(s),
+ * and its submissions take a distinct Drive filename convention. Every
+ * consumer that needs to make that distinction goes through this one
+ * predicate, so the rule lives in exactly one place.
  *
  * The name is lowercased and stripped of everything that is not a letter or
  * digit, then must START WITH "theopen". That covers "The Open", "theopen",
@@ -176,7 +172,7 @@ export const OPEN_EVENT_LABEL = "The Open";
  * Two deliberate choices:
  *
  * - A bare leading "Open" does NOT match. It used to, which meant an unrelated
- *   "Open Practice Night" was rerouted to the Open submission page.
+ *   "Open Practice Night" was treated as The Open.
  * - startsWith, not includes. Normalization removes spaces, so `includes`
  *   matches across word boundaries — "Breathe Open Air" becomes
  *   "breatheopenair", which contains "theopen".

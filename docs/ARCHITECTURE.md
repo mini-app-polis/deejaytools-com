@@ -69,8 +69,7 @@ One default-export component per route. Pages orchestrate fetching, local state,
 | `MyProfilePage.tsx` | `/my-profile` |
 | `SongsPage.tsx` | `/songs` (legacy) |
 | `AddSongPage.tsx` | `/songs/add` |
-| `EventSubmissionsPage.tsx` | `/event-submissions`, `/event-submissions/:eventId` |
-| `OpenSubmissionsPage.tsx` | `/open-submissions` |
+| `EventSubmissionsPage.tsx` | `/event-submissions`, `/event-submissions/:eventId`, `/open-submissions` (redirect) |
 | `SessionsPage.tsx` | `/sessions` |
 | `SessionDetailPage.tsx` | `/sessions/:id` |
 | `EventsPage.tsx` | `/events` |
@@ -214,8 +213,8 @@ Defined in `pages/App.tsx`. Pattern: public landing **outside** `Layout`; everyt
 | `/songs` | `RequireAuth` | `SongsPage` | Legacy |
 | `/songs/add` | `RequireAuth` | `AddSongPage` | |
 | `/event-submissions` | `RequireAuth` | `EventSubmissionsPage` | Event picker; choosing one opens its page |
-| `/event-submissions/:eventId` | `RequireAuth` | `EventSubmissionsPage` | Add/remove songs for one event; The Open redirects to `/open-submissions` |
-| `/open-submissions` | `RequireAuth` | `OpenSubmissionsPage` | The Open's submission page |
+| `/event-submissions/:eventId` | `RequireAuth` | `EventSubmissionsPage` | Submit and remove songs for one event: song, division override, and round (Classic at The Open only) |
+| `/open-submissions` | `RequireAuth` | `OpenSubmissionsRedirect` | Old link: forwards to The Open's event page, or the picker |
 | `/sessions` | `RequireAuth` | `SessionsPage` | |
 | `/sessions/:id` | — | `SessionDetailPage` | Public read; check-in UI hidden when signed out |
 | `/events` | — | `EventsPage` | Public; lists active + upcoming only |

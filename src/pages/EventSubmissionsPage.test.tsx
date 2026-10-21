@@ -4,6 +4,10 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const toastMocks = vi.hoisted(() => ({
+  error: vi.fn(),
+  success: vi.fn(),
+}));
 const apiGet = vi.fn();
 const apiPost = vi.fn();
 const apiDel = vi.fn();
@@ -19,11 +23,10 @@ vi.mock("@/api/client", () => ({
 }));
 
 vi.mock("sonner", () => ({
-  toast: { error: vi.fn(), success: vi.fn() },
+  toast: toastMocks,
 }));
 
-import EventSubmissionsPage from "./EventSubmissionsPage";
-import { toast } from "sonner";
+import EventSubmissionsPage, { OpenSubmissionsRedirect } from "./EventSubmissionsPage";
 import { fx } from "@/test/fixtures";
 
 const EVENT = fx.event({
@@ -36,6 +39,14 @@ const EVENT = fx.event({
   created_by: "u1",
   created_at: 1,
   updated_at: 1,
+});
+
+const OPEN_EVENT = fx.event({
+  ...EVENT,
+  id: "open1",
+  name: "The Open 2026",
+  start_date: "2026-11-26",
+  end_date: "2026-11-29",
 });
 
 const SONG = fx.song({
@@ -56,15 +67,7 @@ const SONG = fx.song({
   updated_at: 1,
 });
 
-const SONG_SAME_ENTITY = fx.song({
-  ...SONG,
-  id: "song2",
-  display_name: "Second Routine",
-  processed_filename: "2026_Classic_SecondRoutine.mp3",
-  routine_name: "Second Routine",
-});
-
-const SONG_OTHER_DIVISION = fx.song({
+const SONG_SHOWCASE = fx.song({
   ...SONG,
   id: "song3",
   division: "Showcase",
@@ -76,14 +79,14 @@ const LEGACY_SONG = fx.song({
   ...SONG,
   id: "legacy1",
   display_name: "Old Routine",
-  processed_filename: "[Legacy] Kaiano Levine & Dana Whitfield · Classic · The Open 2025",
+  processed_filename: "2019_Classic_OldRoutine.mp3",
   routine_name: "Old Routine",
   is_legacy: true,
 });
 
-function mockApi(songs: unknown[], submissions: unknown[] = []) {
+function mockApi(events: unknown[], songs: unknown[] = [SONG], submissions: unknown[] = []) {
   apiGet.mockImplementation((path: string) => {
-    if (path === "/v1/events") return Promise.resolve([EVENT]);
+    if (path === "/v1/events") return Promise.resolve(events);
     if (path === "/v1/songs") return Promise.resolve(songs);
     if (path.startsWith("/v1/event-song-submissions")) {
       return Promise.resolve(
@@ -96,117 +99,48 @@ function mockApi(songs: unknown[], submissions: unknown[] = []) {
   });
 }
 
-async function selectEvent(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(await screen.findByRole("combobox", { name: /event/i }));
-  await user.click(await screen.findByRole("option", { name: /spring classic/i }));
-}
-
-function renderPage(path = "/event-submissions") {
+function renderAt(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/event-submissions" element={<EventSubmissionsPage />} />
         <Route path="/event-submissions/:eventId" element={<EventSubmissionsPage />} />
-        <Route path="/open-submissions" element={<p>Open submissions page</p>} />
+        <Route path="/open-submissions" element={<OpenSubmissionsRedirect />} />
       </Routes>
     </MemoryRouter>
   );
 }
 
-describe("EventSubmissionsPage", () => {
-  beforeEach(() => {
-    apiGet.mockReset();
-    apiPost.mockReset();
-    apiDel.mockReset();
-    vi.mocked(toast.error).mockClear();
-    vi.mocked(toast.success).mockClear();
-  });
+async function pickSong(user: ReturnType<typeof userEvent.setup>, name: RegExp) {
+  await user.click(await screen.findByRole("combobox", { name: /song/i }));
+  await user.click(await screen.findByRole("option", { name }));
+}
 
-  it("renders available events and loads submissions when one is selected", async () => {
-    apiGet.mockImplementation((path: string) => {
-      if (path === "/v1/events") return Promise.resolve([EVENT]);
-      if (path === "/v1/songs") return Promise.resolve([SONG]);
-      if (path.startsWith("/v1/event-song-submissions")) return Promise.resolve([]);
-      return Promise.resolve([]);
-    });
+async function pickDivision(user: ReturnType<typeof userEvent.setup>, name: RegExp) {
+  await user.click(await screen.findByRole("combobox", { name: /division/i }));
+  await user.click(await screen.findByRole("option", { name }));
+}
 
+beforeEach(() => {
+  apiGet.mockReset();
+  apiPost.mockReset();
+  apiDel.mockReset();
+  toastMocks.error.mockReset();
+  toastMocks.success.mockReset();
+});
+
+describe("EventSubmissionsPage — picker", () => {
+  it("lists every upcoming event, The Open included, and opens the chosen one", async () => {
+    mockApi([EVENT, OPEN_EVENT, { ...EVENT, id: "done", name: "Old Fest", status: "completed" }]);
     const user = userEvent.setup();
-    renderPage();
+    renderAt("/event-submissions");
 
-    await waitFor(() => {
-      expect(screen.getByRole("combobox", { name: /event/i })).toBeInTheDocument();
-    });
-    expect(screen.getByText(/select an event to manage submissions/i)).toBeInTheDocument();
-
-    await user.click(screen.getByRole("combobox", { name: /event/i }));
-    await user.click(await screen.findByRole("option", { name: /spring classic/i }));
-
-    await waitFor(() => {
-      expect(apiGet).toHaveBeenCalledWith(
-        expect.stringMatching(/\/v1\/event-song-submissions\?event_id=ev1/)
-      );
-    });
-
-    expect(await screen.findByText(/2026_Classic_MyRoutine\.mp3/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^add$/i })).toBeInTheDocument();
-  });
-
-  it("posts a submission on Add and surfaces toast.error on 501", async () => {
-    apiGet.mockImplementation((path: string) => {
-      if (path === "/v1/events") return Promise.resolve([EVENT]);
-      if (path === "/v1/songs") return Promise.resolve([SONG]);
-      if (path.startsWith("/v1/event-song-submissions")) return Promise.resolve([]);
-      return Promise.resolve([]);
-    });
-    apiPost.mockRejectedValue(new Error("DB stub pending — not yet implemented"));
-
-    const user = userEvent.setup();
-    renderPage();
-
-    await waitFor(() => {
-      expect(screen.getByRole("combobox", { name: /event/i })).toBeInTheDocument();
-    });
-    await user.click(screen.getByRole("combobox", { name: /event/i }));
-    await user.click(await screen.findByRole("option", { name: /spring classic/i }));
-
-    await user.click(await screen.findByRole("button", { name: /^add$/i }));
-
-    await waitFor(() => {
-      expect(apiPost).toHaveBeenCalledWith("/v1/event-song-submissions", {
-        event_id: "ev1",
-        song_id: "song1",
-      });
-    });
-    expect(toast.error).toHaveBeenCalledWith("DB stub pending — not yet implemented");
-  });
-
-  it("hides The Open from the picker and links to its dedicated page", async () => {
-    const openEvent = { ...EVENT, id: "open1", name: "The Open 2026" };
-    apiGet.mockImplementation((path: string) => {
-      if (path === "/v1/events") return Promise.resolve([EVENT, openEvent]);
-      if (path === "/v1/songs") return Promise.resolve([SONG]);
-      if (path.startsWith("/v1/event-song-submissions")) return Promise.resolve([]);
-      return Promise.resolve([]);
-    });
-
-    const user = userEvent.setup();
-    renderPage();
-
-    const link = await screen.findByRole("link", { name: /go to the open submissions/i });
-    expect(link).toHaveAttribute("href", "/open-submissions");
-
-    await user.click(screen.getByRole("combobox", { name: /event/i }));
-    expect(await screen.findByRole("option", { name: /spring classic/i })).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: /the open/i })).not.toBeInTheDocument();
-  });
-
-  it("opens straight to an event's songs from its own URL, with no picker", async () => {
-    mockApi([SONG], [{ id: "sub1", event_id: "ev1", song_id: "song1", created_at: 1 }]);
-    renderPage("/event-submissions/ev1");
+    await user.click(await screen.findByRole("combobox", { name: /event/i }));
+    expect(await screen.findByRole("option", { name: /the open 2026/i })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /old fest/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("option", { name: /spring classic/i }));
 
     expect(await screen.findByRole("heading", { name: "Spring Classic" })).toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: /event/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^remove$/i })).toBeInTheDocument();
     await waitFor(() => {
       expect(apiGet).toHaveBeenCalledWith(
         expect.stringMatching(/\/v1\/event-song-submissions\?event_id=ev1/)
@@ -214,20 +148,17 @@ describe("EventSubmissionsPage", () => {
     });
   });
 
-  it("redirects The Open's event URL to its dedicated page", async () => {
-    const openEvent = { ...EVENT, id: "open1", name: "The Open 2026" };
-    apiGet.mockImplementation((path: string) => {
-      if (path === "/v1/events") return Promise.resolve([EVENT, openEvent]);
-      return Promise.resolve([]);
-    });
-    renderPage("/event-submissions/open1");
-
-    expect(await screen.findByText("Open submissions page")).toBeInTheDocument();
+  it("says when no events are available", async () => {
+    mockApi([]);
+    renderAt("/event-submissions");
+    expect(await screen.findByText(/no upcoming events are available/i)).toBeInTheDocument();
   });
+});
 
+describe("EventSubmissionsPage — event page", () => {
   it("says an unknown or finished event is not open for submissions", async () => {
-    mockApi([SONG]);
-    renderPage("/event-submissions/nope");
+    mockApi([EVENT]);
+    renderAt("/event-submissions/nope");
 
     expect(await screen.findByText(/event not open for submissions/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /choose another event/i })).toHaveAttribute(
@@ -236,147 +167,250 @@ describe("EventSubmissionsPage", () => {
     );
   });
 
-  it("still renders events and songs when event-song-submissions rejects", async () => {
-    apiGet.mockImplementation((path: string) => {
-      if (path === "/v1/events") return Promise.resolve([EVENT]);
-      if (path === "/v1/songs") return Promise.resolve([SONG]);
-      if (path.startsWith("/v1/event-song-submissions")) {
-        return Promise.reject(new Error("not found"));
-      }
-      return Promise.resolve([]);
-    });
-
+  it("selecting a song defaults the division to the song's", async () => {
+    mockApi([EVENT], [SONG]);
     const user = userEvent.setup();
-    renderPage();
+    renderAt("/event-submissions/ev1");
+
+    await pickSong(user, /2026_Classic_MyRoutine/);
+    await user.click(await screen.findByRole("combobox", { name: /division/i }));
+    expect(await screen.findByRole("option", { name: /^Classic$/ })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+  });
+
+  it("never shows the round control outside The Open, even for Classic", async () => {
+    mockApi([EVENT], [SONG]);
+    const user = userEvent.setup();
+    renderAt("/event-submissions/ev1");
+
+    await pickSong(user, /2026_Classic_MyRoutine/);
+    expect(screen.queryByRole("radio", { name: /prelims & finals/i })).not.toBeInTheDocument();
+  });
+
+  it("posts the chosen division and no round for a regular event", async () => {
+    mockApi([EVENT], [SONG]);
+    apiPost.mockResolvedValue(fx.eventSongSubmission());
+    const user = userEvent.setup();
+    renderAt("/event-submissions/ev1");
+
+    await pickSong(user, /2026_Classic_MyRoutine/);
+    await pickDivision(user, /^Showcase$/);
+    await user.click(screen.getByRole("button", { name: /^submit$/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole("combobox", { name: /event/i })).toBeInTheDocument();
+      expect(apiPost).toHaveBeenCalledWith("/v1/event-song-submissions", {
+        event_id: "ev1",
+        song_id: "song1",
+        division: "Showcase",
+      });
     });
+    expect(toastMocks.success).toHaveBeenCalledWith("Song added to Spring Classic.");
+  });
 
-    await user.click(screen.getByRole("combobox", { name: /event/i }));
-    await user.click(await screen.findByRole("option", { name: /spring classic/i }));
+  it("surfaces a 409 as an error toast and keeps the form filled", async () => {
+    mockApi([EVENT]);
+    apiPost.mockRejectedValue(new Error("This entity already has a song submitted for Classic."));
+    const user = userEvent.setup();
+    renderAt("/event-submissions/ev1");
 
-    expect(await screen.findByText(/2026_Classic_MyRoutine\.mp3/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^add$/i })).toBeInTheDocument();
+    await pickSong(user, /2026_Classic_MyRoutine/);
+    await user.click(await screen.findByRole("button", { name: /^submit$/i }));
+
+    await waitFor(() => {
+      expect(toastMocks.error).toHaveBeenCalledWith(
+        "This entity already has a song submitted for Classic."
+      );
+    });
+    expect(await screen.findByRole("combobox", { name: /song/i })).toHaveTextContent(
+      /2026_Classic_MyRoutine/
+    );
+    expect(apiPost).toHaveBeenCalledTimes(1);
   });
 
   it("hides legacy songs and says how many were hidden", async () => {
-    mockApi([SONG, LEGACY_SONG]);
+    mockApi([EVENT], [SONG, LEGACY_SONG]);
     const user = userEvent.setup();
-    renderPage();
-    await selectEvent(user);
+    renderAt("/event-submissions/ev1");
 
-    expect(await screen.findByText(/2026_Classic_MyRoutine\.mp3/)).toBeInTheDocument();
-    expect(screen.queryByText(/\[Legacy\]/)).not.toBeInTheDocument();
+    await user.click(await screen.findByRole("combobox", { name: /song/i }));
+    expect(await screen.findByRole("option", { name: /2026_Classic_MyRoutine/ })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /2019_Classic_OldRoutine/ })).not.toBeInTheDocument();
     expect(screen.getByText(/1 legacy song is hidden/i)).toBeInTheDocument();
   });
 
-  it("keeps a legacy song visible when it is already submitted, so it can be removed", async () => {
-    mockApi([LEGACY_SONG], [{ id: "sub1", event_id: "ev1", song_id: "legacy1", created_at: 1 }]);
-    const user = userEvent.setup();
-    renderPage();
-    await selectEvent(user);
-
-    expect(await screen.findByText(/\[Legacy\]/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^remove$/i })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^add$/i })).not.toBeInTheDocument();
-    expect(screen.queryByText(/legacy song is hidden/i)).not.toBeInTheDocument();
-  });
-
   it("shows a legacy-only empty state instead of the generic no-songs message", async () => {
-    mockApi([LEGACY_SONG]);
-    const user = userEvent.setup();
-    renderPage();
-    await selectEvent(user);
+    mockApi([EVENT], [LEGACY_SONG]);
+    renderAt("/event-submissions/ev1");
 
     expect(await screen.findByText(/all legacy catalog rows/i)).toBeInTheDocument();
     expect(screen.queryByText(/you have no songs yet/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^add$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: /song/i })).not.toBeInTheDocument();
   });
 
-  it("disables Add for a second song in the same entity and division slot", async () => {
+  it("lists existing submissions with Remove and leaves them out of the song picker", async () => {
     mockApi(
-      [SONG, SONG_SAME_ENTITY],
-      [{ id: "sub1", event_id: "ev1", song_id: "song1", created_at: 1 }]
-    );
-    const user = userEvent.setup();
-    renderPage();
-    await selectEvent(user);
-
-    expect(await screen.findByText(/2026_Classic_SecondRoutine\.mp3/)).toBeInTheDocument();
-    expect(screen.getByText(/already submitted for this division/i)).toBeInTheDocument();
-    const addButtons = screen.getAllByRole("button", { name: /^add$/i });
-    expect(addButtons).toHaveLength(1);
-    expect(addButtons[0]).toBeDisabled();
-    expect(screen.getByRole("button", { name: /^remove$/i })).toBeEnabled();
-  });
-
-  it("still allows Add for the same entity in another division", async () => {
-    mockApi(
-      [SONG, SONG_OTHER_DIVISION],
-      [{ id: "sub1", event_id: "ev1", song_id: "song1", created_at: 1 }]
-    );
-    const user = userEvent.setup();
-    renderPage();
-    await selectEvent(user);
-
-    expect(await screen.findByText(/2026_Showcase_MyRoutine\.mp3/)).toBeInTheDocument();
-    expect(screen.queryByText(/already submitted for this division/i)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^add$/i })).toBeEnabled();
-  });
-
-  it("renders orphaned submissions with a working Remove when the song is gone", async () => {
-    mockApi(
-      [SONG],
-      [
-        {
-          id: "orphan_sub",
-          event_id: "ev1",
-          song_id: "missing_song",
-          song_label: "2025_Classic_GoneRoutine.mp3",
-          division: "Classic",
-          created_at: 1,
-        },
-      ]
+      [EVENT],
+      [SONG, SONG_SHOWCASE],
+      [{ id: "sub1", event_id: "ev1", song_id: "song1", song_label: "2026_Classic_MyRoutine.mp3", division: "Classic", created_at: 1 }]
     );
     apiDel.mockResolvedValue(undefined);
     const user = userEvent.setup();
-    renderPage();
-    await selectEvent(user);
+    renderAt("/event-submissions/ev1");
 
-    expect(
-      await screen.findByText(/submitted songs that are no longer in your library/i)
-    ).toBeInTheDocument();
-    expect(screen.getByText(/2025_Classic_GoneRoutine\.mp3/)).toBeInTheDocument();
-    expect(screen.getAllByText(/Division Classic/).length).toBeGreaterThanOrEqual(1);
+    expect(await screen.findByText("Your submissions")).toBeInTheDocument();
+    expect(screen.getByText("Division Classic")).toBeInTheDocument();
+
+    await user.click(await screen.findByRole("combobox", { name: /song/i }));
+    expect(await screen.findByRole("option", { name: /2026_Showcase_MyRoutine/ })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /2026_Classic_MyRoutine/ })).not.toBeInTheDocument();
+    await user.keyboard("{Escape}");
 
     await user.click(screen.getByRole("button", { name: /^remove$/i }));
     await waitFor(() => {
-      expect(apiDel).toHaveBeenCalledWith("/v1/event-song-submissions/orphan_sub");
+      expect(apiDel).toHaveBeenCalledWith("/v1/event-song-submissions/sub1");
     });
   });
 
-  it("does not render the orphaned block when every submission has a song", async () => {
+  it("flags a submission whose song is no longer in the library, and lets it be removed", async () => {
     mockApi(
+      [EVENT],
+      [SONG],
+      [{ id: "orphan_sub", event_id: "ev1", song_id: "missing_song", song_label: "2025_Classic_GoneRoutine.mp3", division: "Classic", created_at: 1 }]
+    );
+    renderAt("/event-submissions/ev1");
+
+    expect(await screen.findByText(/2025_Classic_GoneRoutine\.mp3/)).toBeInTheDocument();
+    expect(screen.getByText(/no longer in your library/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^remove$/i })).toBeInTheDocument();
+  });
+
+  it("says when every song is already submitted", async () => {
+    mockApi(
+      [EVENT],
+      [SONG],
+      [{ id: "sub1", event_id: "ev1", song_id: "song1", created_at: 1 }]
+    );
+    renderAt("/event-submissions/ev1");
+
+    expect(await screen.findByText(/every song in your library is already submitted/i)).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: /song/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("EventSubmissionsPage — The Open", () => {
+  it("shows the round control only for Classic and defaults to Prelims & Finals", async () => {
+    mockApi([OPEN_EVENT], [SONG]);
+    const user = userEvent.setup();
+    renderAt("/event-submissions/open1");
+
+    await pickSong(user, /2026_Classic_MyRoutine/);
+    expect(await screen.findByRole("radio", { name: /prelims & finals/i })).toHaveAttribute(
+      "aria-checked",
+      "true"
+    );
+    expect(screen.getByRole("radio", { name: /prelims only/i })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /finals only/i })).toBeInTheDocument();
+
+    await pickDivision(user, /^Showcase$/);
+    expect(screen.queryByRole("radio", { name: /prelims & finals/i })).not.toBeInTheDocument();
+  });
+
+  it("re-derives division from the new song when the song changes", async () => {
+    mockApi([OPEN_EVENT], [SONG, SONG_SHOWCASE]);
+    const user = userEvent.setup();
+    renderAt("/event-submissions/open1");
+
+    await pickSong(user, /2026_Classic_MyRoutine/);
+    await pickDivision(user, /^Showcase$/);
+    await pickSong(user, /2026_Showcase_MyRoutine/);
+    await pickSong(user, /2026_Classic_MyRoutine/);
+
+    await user.click(await screen.findByRole("combobox", { name: /division/i }));
+    // Override must not stick after a song change — Classic song re-derives Classic.
+    expect(await screen.findByRole("option", { name: /^Classic$/ })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+    await user.keyboard("{Escape}");
+    expect(await screen.findByRole("radio", { name: /prelims & finals/i })).toBeInTheDocument();
+  });
+
+  it("resets round to Prelims & Finals when the song changes", async () => {
+    mockApi([OPEN_EVENT], [SONG, SONG_SHOWCASE]);
+    const user = userEvent.setup();
+    renderAt("/event-submissions/open1");
+
+    await pickSong(user, /2026_Classic_MyRoutine/);
+    await user.click(await screen.findByRole("radio", { name: /finals only/i }));
+    expect(screen.getByRole("radio", { name: /finals only/i })).toHaveAttribute(
+      "aria-checked",
+      "true"
+    );
+
+    await pickSong(user, /2026_Showcase_MyRoutine/);
+    await pickSong(user, /2026_Classic_MyRoutine/);
+
+    expect(await screen.findByRole("radio", { name: /prelims & finals/i })).toHaveAttribute(
+      "aria-checked",
+      "true"
+    );
+  });
+
+  it("posts division and round on submit", async () => {
+    mockApi([OPEN_EVENT]);
+    apiPost.mockResolvedValue(fx.eventSongSubmission());
+    const user = userEvent.setup();
+    renderAt("/event-submissions/open1");
+
+    await pickSong(user, /2026_Classic_MyRoutine/);
+    await user.click(await screen.findByRole("radio", { name: /prelims only/i }));
+    await user.click(await screen.findByRole("button", { name: /^submit$/i }));
+
+    await waitFor(() => {
+      expect(apiPost).toHaveBeenCalledWith("/v1/event-song-submissions", {
+        event_id: "open1",
+        song_id: "song1",
+        division: "Classic",
+        round: "prelims_only",
+      });
+    });
+  });
+
+  it("lists an existing Classic submission with its round", async () => {
+    mockApi(
+      [OPEN_EVENT],
       [SONG],
       [
         {
           id: "sub1",
-          event_id: "ev1",
+          event_id: "open1",
           song_id: "song1",
           song_label: "2026_Classic_MyRoutine.mp3",
           division: "Classic",
+          round: "finals_only",
           created_at: 1,
         },
       ]
     );
-    const user = userEvent.setup();
-    renderPage();
-    await selectEvent(user);
+    renderAt("/event-submissions/open1");
 
-    expect(await screen.findByRole("button", { name: /^remove$/i })).toBeInTheDocument();
-    expect(
-      screen.queryByText(/submitted songs that are no longer in your library/i)
-    ).not.toBeInTheDocument();
+    expect(await screen.findByText(/finals only/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^remove$/i })).toBeInTheDocument();
+  });
+});
+
+describe("OpenSubmissionsRedirect", () => {
+  it("forwards to The Open's event page when exactly one is open", async () => {
+    mockApi([EVENT, OPEN_EVENT]);
+    renderAt("/open-submissions");
+    expect(await screen.findByRole("heading", { name: "The Open 2026" })).toBeInTheDocument();
+  });
+
+  it("forwards to the picker when none or several are open", async () => {
+    mockApi([EVENT, OPEN_EVENT, { ...OPEN_EVENT, id: "open2", name: "The Open 2027" }]);
+    renderAt("/open-submissions");
+    expect(await screen.findByRole("combobox", { name: /event/i })).toBeInTheDocument();
   });
 });

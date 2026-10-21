@@ -60,8 +60,8 @@ pnpm test:coverage  # with coverage
 | `/songs` | Legacy "My Songs" page | RequireAuth |
 | `/songs/add` | Upload song (standard + special) | RequireAuth |
 | `/event-submissions` | Pick an event to submit songs to | RequireAuth |
-| `/event-submissions/:eventId` | Add/remove songs for one event | RequireAuth |
-| `/open-submissions` | Submit songs to The Open | RequireAuth |
+| `/event-submissions/:eventId` | Submit/remove songs for one event | RequireAuth |
+| `/open-submissions` | Redirects to The Open's event page | RequireAuth |
 | `/sessions` | Session list | RequireAuth |
 | `/events` | Event list | public |
 | `/events/:id` | Event detail | public read; entity roster signed-in only |
