@@ -412,7 +412,7 @@ export default function MyContentPage() {
                       ))}
                     </ul>
                     <div className="flex flex-col sm:flex-row gap-2 pt-1">
-                      <Button asChild size="sm" variant="outline" className="w-full sm:w-auto">
+                      <Button asChild size="sm" className="w-full sm:w-auto">
                         <Link
                           to={
                             isOpenEvent(event.name)
