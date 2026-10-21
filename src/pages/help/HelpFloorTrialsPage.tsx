@@ -27,7 +27,7 @@ export default function HelpFloorTrialsPage() {
           Before you can check in, you must{" "}
           <Link
             to="/how-it-works/submitting-music#event-submission-required"
-            className="text-primary hover:underline"
+            className="text-primary underline underline-offset-2"
           >
             submit your song to the event
           </Link>

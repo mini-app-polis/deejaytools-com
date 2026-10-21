@@ -233,7 +233,7 @@ export default function FeedbackPage() {
             onChange={(e) => setSubject(e.target.value)}
             required
             maxLength={255}
-            className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
             placeholder="Short summary"
           />
         </div>
@@ -252,7 +252,7 @@ export default function FeedbackPage() {
             onChange={(e) => setMessage(e.target.value)}
             required
             rows={5}
-            className="w-full resize-y rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full resize-y rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
             placeholder="Details, steps to reproduce, ideas…"
           />
         </div>
@@ -283,7 +283,7 @@ export default function FeedbackPage() {
                   className="mb-1.5 block text-xs font-medium text-muted-foreground"
                 >
                   Your name{" "}
-                  <span className="font-normal text-muted-foreground/60">(optional)</span>
+                  <span className="font-normal text-muted-foreground">(optional)</span>
                 </label>
                 <input
                   id="feedback-contact-name"
@@ -291,7 +291,7 @@ export default function FeedbackPage() {
                   value={contactName}
                   onChange={(e) => setContactName(e.target.value)}
                   maxLength={255}
-                  className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
                   placeholder="How should we address you?"
                 />
               </div>
@@ -307,7 +307,7 @@ export default function FeedbackPage() {
                   type="email"
                   value={contactEmail}
                   onChange={(e) => setContactEmail(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
                   placeholder="you@example.com"
                 />
               </div>
@@ -341,7 +341,7 @@ export default function FeedbackPage() {
                   Attach a screenshot{" "}
                   <span className="text-muted-foreground">(optional · PNG or JPG · max 2 MB)</span>
                 </span>
-                <span className="text-xs text-muted-foreground/60">drag and drop or click</span>
+                <span className="text-xs text-muted-foreground">drag and drop or click</span>
               </>
             ) : (
               <div className="relative w-full">

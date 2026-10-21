@@ -348,7 +348,7 @@ export default function MyContentPage() {
                         </p>
                       )}
                       {ci.songProcessedFilename && (
-                        <p className="font-mono text-xs text-muted-foreground/70 truncate">
+                        <p className="font-mono text-xs text-muted-foreground truncate">
                           {ci.songProcessedFilename}
                         </p>
                       )}
@@ -361,7 +361,7 @@ export default function MyContentPage() {
                     <div className="pt-2 border-t border-border/40 mt-1">
                       <Button
                         type="button" size="sm" variant="outline"
-                        className="border-destructive/50 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                        className="border-destructive/50 text-destructive hover:bg-destructive-strong hover:text-destructive-foreground"
                         onClick={() => setPendingWithdrawId(ci.id)}
                       >
                         Withdraw from queue
@@ -489,7 +489,7 @@ export default function MyContentPage() {
                     </p>
                   </div>
                   {s.original_filename?.trim() && (
-                    <p className="font-mono text-xs text-muted-foreground/80 leading-snug break-all">
+                    <p className="font-mono text-xs text-muted-foreground leading-snug break-all">
                       <span className="text-muted-foreground text-xs not-italic">Uploaded: </span>
                       {s.original_filename}
                     </p>

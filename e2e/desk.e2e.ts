@@ -80,7 +80,7 @@ test.beforeAll(async () => {
   const now = Date.now();
   // No Active slots: the scheduler never moves anyone on, so the standard
   // queue holds still while the manager works it.
-  session = await api.call("POST", "/v1/sessions", {
+  session = await api.call<typeof session>("POST", "/v1/sessions", {
     event_id: eventId,
     name: EVENT_NAME,
     checkin_opens_at: now - 3_600_000,

@@ -29,7 +29,7 @@ test.beforeAll(async () => {
   const now = Date.now();
   // Under way already, with one slot per queue, so the API's scheduler moves
   // the first check-in to Active on its next tick.
-  session = await api.call("POST", "/v1/sessions", {
+  session = await api.call<typeof session>("POST", "/v1/sessions", {
     event_id: eventId,
     name: `E2E ${RUN_ID}`,
     checkin_opens_at: now - 3_600_000,

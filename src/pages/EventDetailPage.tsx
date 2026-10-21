@@ -306,7 +306,7 @@ function EnteredEntities({ eventId, isSignedIn }: { eventId: string; isSignedIn:
                     <span className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
                       {division}
                     </span>
-                    <span className="text-xs font-normal text-muted-foreground/70">
+                    <span className="text-xs font-normal text-muted-foreground">
                       {countsLabel(
                         entities.length,
                         entities.reduce((n, e) => n + e.song_count, 0)

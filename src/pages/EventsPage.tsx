@@ -92,7 +92,7 @@ export default function EventsPage() {
         <p className="text-sm text-muted-foreground mt-1">
           Everything current and upcoming on the platform — tap an event to see its
           sessions and who has music in.{" "}
-          <Link to="/how-it-works" className="text-primary hover:underline">
+          <Link to="/how-it-works" className="text-primary underline underline-offset-2">
             How this works →
           </Link>
         </p>

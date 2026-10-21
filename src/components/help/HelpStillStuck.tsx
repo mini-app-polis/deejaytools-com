@@ -4,11 +4,11 @@ export default function HelpStillStuck() {
   return (
     <p className="text-sm text-muted-foreground pt-6 border-t border-white/[0.07]">
       Browse{" "}
-      <Link to="/how-it-works/troubleshooting" className="text-primary hover:underline">
+      <Link to="/how-it-works/troubleshooting" className="text-primary underline underline-offset-2">
         Troubleshooting
       </Link>{" "}
       for common error messages, or{" "}
-      <Link to="/feedback" className="text-primary hover:underline">
+      <Link to="/feedback" className="text-primary underline underline-offset-2">
         send us a message
       </Link>{" "}
       — include what you were trying to do and the exact text you saw.

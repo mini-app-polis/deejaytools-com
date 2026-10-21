@@ -1385,7 +1385,7 @@ export default function AdminPage() {
                     <button
                       type="button"
                       onClick={clearRunsFilters}
-                      className="text-primary hover:underline text-xs"
+                      className="text-primary underline underline-offset-2 text-xs"
                     >
                       Clear all filters
                     </button>

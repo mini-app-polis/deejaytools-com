@@ -171,7 +171,7 @@ function CardSurface({ card }: { card: CardDef }) {
   return (
     <>
       <p
-        className="text-[10px] font-medium tracking-[0.18em] uppercase text-primary/60 mb-3"
+        className="text-[10px] font-medium tracking-[0.18em] uppercase text-primary/80 mb-3"
         style={{ fontFamily: "'DM Mono', monospace" }}
       >
         {card.eyebrow}
@@ -183,7 +183,7 @@ function CardSurface({ card }: { card: CardDef }) {
         {card.body}
       </p>
       <p
-        className="mt-4 text-xs text-muted-foreground/60 transition-colors group-hover:text-primary"
+        className="mt-4 text-xs text-muted-foreground transition-colors group-hover:text-primary"
         style={{ fontFamily: "'DM Mono', monospace" }}
       >
         → open
@@ -196,7 +196,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-3 mb-6">
       <span
-        className="text-[10px] font-medium tracking-[0.18em] uppercase text-primary/60 shrink-0"
+        className="text-[10px] font-medium tracking-[0.18em] uppercase text-primary/80 shrink-0"
         style={{ fontFamily: "'DM Mono', monospace" }}
       >
         {children}

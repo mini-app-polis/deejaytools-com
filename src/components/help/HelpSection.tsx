@@ -17,7 +17,7 @@ export function HelpSection({
     <section id={section.id} className="scroll-mt-24">
       <div className="flex items-baseline gap-3 mb-4">
         <span
-          className="text-xs text-primary/60 tabular-nums"
+          className="text-xs text-primary/80 tabular-nums"
           style={{ fontFamily: "'DM Mono', monospace" }}
         >
           {section.eyebrow}

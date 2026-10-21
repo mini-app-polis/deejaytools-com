@@ -9,15 +9,15 @@ import { Api, dateIn, expect, RUN_ID, signIn, test } from "./fixtures";
  * missing labels and names, contrast, ARIA misuse, landmark and list
  * structure — not everything a person with a screen reader would meet.
  *
- * Report-only until the first findings are fixed: every violation is listed
- * in the run's annotations and attached as JSON, and the test passes. Set
- * A11Y_ENFORCE=1 to fail on any violation instead.
+ * Any violation fails the test. Every one is listed in the run's log and
+ * annotations and attached as JSON. A11Y_REPORT_ONLY=1 reports without
+ * failing, for a run that needs to land while a finding is being fixed.
  */
 const TIMEZONE = "America/Chicago";
 const PREFIX = "E2E A11y";
 const NAME = `${PREFIX} ${RUN_ID}`;
 const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
-const ENFORCE = process.env.A11Y_ENFORCE === "1";
+const ENFORCE = process.env.A11Y_REPORT_ONLY !== "1";
 
 let api: Api;
 let eventId: string | undefined;
@@ -86,8 +86,7 @@ test("the main pages pass an automated accessibility scan", async ({ page }) => 
     ["/my-profile", h1],
     ["/event-submissions", h1],
     [`/event-submissions/${eventId}`, h1],
-    // The session page has no h1; its Check in button marks it loaded.
-    [`/sessions/${sessionId}`, (p) => p.getByRole("button", { name: "Check in", exact: true }).first()],
+    [`/sessions/${sessionId}`, h1],
     ["/manager/active-sessions", h1],
     ["/manager/checkin-for", h1],
     ["/admin/events", h1],

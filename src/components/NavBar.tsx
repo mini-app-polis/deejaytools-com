@@ -245,7 +245,7 @@ export default function NavBar() {
             <SignedIn>
               {showManagerBar && (
                 <>
-                  <div className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/80">
+                  <div className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     Manager
                   </div>
                   {MANAGER_ITEMS.map((item) => (
@@ -257,7 +257,7 @@ export default function NavBar() {
               )}
               {isAdmin && (
                 <>
-                  <div className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/80">
+                  <div className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     Superuser
                   </div>
                   {SUPERUSER_ITEMS.map((item) => (

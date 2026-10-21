@@ -19,7 +19,7 @@ export class Api {
     return new Api(cfg.apiUrl, await ClerkTestSession.start(cfg.secretKey, cfg.userId));
   }
 
-  async call<T = any>(method: string, path: string, body?: unknown): Promise<T> {
+  async call<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
     const res = await fetch(`${this.apiUrl}${path}`, {
       method,
       headers: {

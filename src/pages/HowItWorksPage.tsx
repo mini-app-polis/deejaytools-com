@@ -45,7 +45,7 @@ export default function HowItWorksPage() {
           second. See{" "}
           <Link
             to="/how-it-works/submitting-music#event-submission-required"
-            className="text-primary hover:underline"
+            className="text-primary underline underline-offset-2"
           >
             uploading vs event submission
           </Link>
@@ -61,7 +61,7 @@ export default function HowItWorksPage() {
               className="block h-full rounded-xl border border-white/[0.07] bg-card/40 p-5 transition-colors hover:border-primary/40"
             >
               <span
-                className="block text-[10px] font-medium tracking-[0.18em] uppercase text-primary/60 tabular-nums mb-2"
+                className="block text-[10px] font-medium tracking-[0.18em] uppercase text-primary/80 tabular-nums mb-2"
                 style={{ fontFamily: "'DM Mono', monospace" }}
               >
                 {topic.eyebrow}

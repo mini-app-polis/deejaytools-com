@@ -28,12 +28,16 @@
   --secondary-foreground: hsl(210 20% 78%);
 
   --muted: hsl(240 8% 16%);
-  --muted-foreground: hsl(215 12% 52%);
+  --muted-foreground: hsl(215 12% 58%);
 
   --accent: hsl(240 8% 18%);
   --accent-foreground: hsl(210 25% 94%);
 
-  --destructive: hsl(0 72% 51%);
+  /* Two reds: --destructive is light enough to read as text on the dark
+   * surfaces; --destructive-strong is dark enough for light text on a red
+   * fill (buttons, badges). Both clear WCAG AA. */
+  --destructive: hsl(0 84% 66%);
+  --destructive-strong: hsl(0 72% 45%);
   --destructive-foreground: hsl(210 25% 94%);
 
   --border: hsl(240 8% 18%);
@@ -66,6 +70,7 @@
   --color-accent-foreground: var(--accent-foreground);
 
   --color-destructive: var(--destructive);
+  --color-destructive-strong: var(--destructive-strong);
   --color-destructive-foreground: var(--destructive-foreground);
 
   --color-border: var(--border);
