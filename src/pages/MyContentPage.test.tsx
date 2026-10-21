@@ -139,6 +139,31 @@ describe("MyContentPage — Events section", () => {
     expect(screen.getByText(/2026_Classic_MyRoutine\.mp3/)).toBeInTheDocument();
   });
 
+  it("links straight to The Open's page while it is accepting songs", async () => {
+    const open = fx.event({ id: "open1", name: "The Open 2026", status: "upcoming" });
+    apiGet.mockImplementation((path: string) =>
+      path === "/v1/events" ? Promise.resolve([EVENT, open]) : defaultApiGet(path)
+    );
+    renderPage();
+
+    expect(await screen.findByRole("link", { name: "Submit to The Open" })).toHaveAttribute(
+      "href",
+      "/event-submissions/open1"
+    );
+  });
+
+  it("hides the Open shortcut when The Open is not accepting songs", async () => {
+    const open = fx.event({ id: "open1", name: "The Open 2026", status: "completed" });
+    apiGet.mockImplementation((path: string) =>
+      path === "/v1/events" ? Promise.resolve([EVENT, open]) : defaultApiGet(path)
+    );
+    renderPage();
+
+    // The events section has finished loading once its empty state shows.
+    expect(await screen.findByText(/haven't added songs to any events yet/i)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Submit to The Open" })).not.toBeInTheDocument();
+  });
+
   it("still renders Check-ins and Songs when event-song-submissions rejects", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/event-song-submissions") {

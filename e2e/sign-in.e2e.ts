@@ -25,3 +25,10 @@ test("a signed-in user reaches My Content, with sync and profile loading cleanly
     await api.end();
   }
 });
+
+test("a signed-out visitor is sent home from pages that need an account", async ({ page }) => {
+  for (const path of ["/my-content", "/event-submissions"]) {
+    await page.goto(path);
+    await expect(page).toHaveURL(/\/$/);
+  }
+});

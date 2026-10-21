@@ -1,5 +1,5 @@
 import { formatSessionTitle } from "../src/lib/sessionFormat";
-import { Api, expect, expectApiReachable, RUN_ID, signIn, test } from "./fixtures";
+import { Api, dateIn, expect, expectApiReachable, RUN_ID, signIn, test } from "./fixtures";
 
 /**
  * Floor trial day, through the screens people use: the public session page
@@ -14,21 +14,6 @@ const LEADER_B = `E2E${RUN_ID}B`;
 let api: Api;
 let eventId: string;
 let session: { id: string; floor_trial_starts_at: number };
-
-/**
- * A calendar date (YYYY-MM-DD) in `timezone`, `offsetDays` from today. The
- * API checks session times against the event's dates in the event's own
- * timezone, so dates built in UTC go wrong every evening in Chicago, when
- * UTC has already reached tomorrow.
- */
-function dateIn(timezone: string, offsetDays: number): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(Date.now() + offsetDays * 86_400_000));
-}
 
 test.beforeAll(async () => {
   api = await Api.start();
