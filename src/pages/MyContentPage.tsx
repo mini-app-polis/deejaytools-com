@@ -393,7 +393,10 @@ export default function MyContentPage() {
               {eventsWithSongs.map((event) => {
                 const subs = submissionsByEventId.get(event.id) ?? [];
                 return (
-                  <div key={event.id} className="rounded-lg border px-4 py-3 text-sm space-y-2">
+                  <div
+                    key={event.id}
+                    className="rounded-lg border-2 border-primary/40 bg-card px-4 py-3 text-sm space-y-2 shadow-sm"
+                  >
                     <div className="flex items-start justify-between gap-2 flex-wrap">
                       <div className="min-w-0">
                         <p className="font-medium">{event.name}</p>
@@ -401,7 +404,7 @@ export default function MyContentPage() {
                       </div>
                       {eventStatusBadge(event.status)}
                     </div>
-                    <ul className="space-y-1 border-t border-border/40 pt-2">
+                    <ul className="space-y-1 border-t border-border pt-2">
                       {subs.map((s) => (
                         <li key={s.id} className="text-sm">
                           <span className="font-medium">{s.song_label}</span>
@@ -411,7 +414,12 @@ export default function MyContentPage() {
                         </li>
                       ))}
                     </ul>
-                    <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                    <div className="flex flex-col sm:flex-row sm:justify-end gap-2 pt-1">
+                      {event.status === "active" && (
+                        <Button asChild size="sm" className="w-full sm:w-auto">
+                          <Link to={`/events/${event.id}`}>Go to event</Link>
+                        </Button>
+                      )}
                       <Button asChild size="sm" className="w-full sm:w-auto">
                         <Link
                           to={
@@ -423,11 +431,6 @@ export default function MyContentPage() {
                           Edit songs
                         </Link>
                       </Button>
-                      {event.status === "active" && (
-                        <Button asChild size="sm" className="w-full sm:w-auto">
-                          <Link to={`/events/${event.id}`}>Go to event</Link>
-                        </Button>
-                      )}
                     </div>
                   </div>
                 );
