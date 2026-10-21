@@ -98,6 +98,14 @@ export default function App() {
               </RequireAuth>
             }
           />
+          <Route
+            path="event-submissions/:eventId"
+            element={
+              <RequireAuth>
+                <EventSubmissionsPage />
+              </RequireAuth>
+            }
+          />
           {/* The Open has its own submission page. /event-submissions filters The
               Open out of its event list and links here instead. */}
           <Route

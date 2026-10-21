@@ -59,7 +59,8 @@ pnpm test:coverage  # with coverage
 | `/my-profile` | Profile, partners, teams, managed partnerships | RequireAuth |
 | `/songs` | Legacy "My Songs" page | RequireAuth |
 | `/songs/add` | Upload song (standard + special) | RequireAuth |
-| `/event-submissions` | Submit songs to events | RequireAuth |
+| `/event-submissions` | Pick an event to submit songs to | RequireAuth |
+| `/event-submissions/:eventId` | Add/remove songs for one event | RequireAuth |
 | `/open-submissions` | Submit songs to The Open | RequireAuth |
 | `/sessions` | Session list | RequireAuth |
 | `/events` | Event list | public |
