@@ -5,7 +5,9 @@ import { Api, expect, RUN_ID, signIn, test } from "./fixtures";
  * A dancer's floor trial day, through the screens they use: upload a song on
  * Add Song, enter it in the event on Event submissions, check in on the
  * session page, see their place in line there and on the public queue, then
- * withdraw from My Content and see the entry gone.
+ * withdraw from My Content and see the entry gone. Then, with the same song:
+ * reach the event's page from My Content and take the song back out, and
+ * enter it in The Open choosing a round, which only The Open allows.
  *
  * Only what an organizer would have done beforehand is set up through the
  * API as the test user (an admin): the event, its session, and a partner to
@@ -19,6 +21,9 @@ const TIMEZONE = "America/Chicago";
  * be swept by the next. */
 const PREFIX = "E2E Dancer";
 const EVENT_NAME = `${PREFIX} ${RUN_ID}`;
+/** The API and site treat an event as The Open by a name that starts with it. */
+const OPEN_PREFIX = `The Open ${PREFIX}`;
+const OPEN_EVENT_NAME = `${OPEN_PREFIX} ${RUN_ID}`;
 const ROUTINE = `${PREFIX} ${RUN_ID}`;
 const PARTNER_FIRST = "E2E";
 const PARTNER_LAST = `Dancer${RUN_ID}`;
@@ -28,6 +33,7 @@ const BUILD_TIMEOUT_MS = 60_000;
 
 let api: Api;
 let eventId: string | undefined;
+let openEventId: string | undefined;
 let sessionId: string;
 let partnerId: string | undefined;
 let songId: string | undefined;
@@ -86,7 +92,8 @@ async function sweep(): Promise<void> {
   const me = await api.call<{ id: string }>("GET", "/v1/auth/me");
   const events = await api.call<{ id: string; name: string; created_by: string }[]>("GET", "/v1/events");
   for (const e of events) {
-    if (e.name.startsWith(`${PREFIX} `) && e.created_by === me.id) {
+    const ours = e.name.startsWith(`${PREFIX} `) || e.name.startsWith(`${OPEN_PREFIX} `);
+    if (ours && e.created_by === me.id) {
       await api.call("DELETE", `/v1/events/${e.id}`).catch(() => undefined);
     }
   }
@@ -128,6 +135,14 @@ test.beforeAll(async () => {
     divisions: [{ division_name: DIVISION, is_priority: false }],
   });
   sessionId = session.id;
+  // A month out, so it is upcoming and accepting songs; it needs no session.
+  const openEvent = await api.call<{ id: string }>("POST", "/v1/events", {
+    name: OPEN_EVENT_NAME,
+    start_date: dateIn(TIMEZONE, 30),
+    end_date: dateIn(TIMEZONE, 32),
+    timezone: TIMEZONE,
+  });
+  openEventId = openEvent.id;
   const partner = await api.call<{ id: string }>("POST", "/v1/partners", {
     first_name: PARTNER_FIRST,
     last_name: PARTNER_LAST,
@@ -144,12 +159,13 @@ test.afterAll(async () => {
   // Drive file is trashed too), and last the partner, whose pair no longer
   // has check-ins and so is deleted with it rather than kept.
   if (eventId) await api.call("DELETE", `/v1/events/${eventId}`).catch(() => undefined);
+  if (openEventId) await api.call("DELETE", `/v1/events/${openEventId}`).catch(() => undefined);
   if (songId) await api.call("DELETE", `/v1/songs/${songId}`).catch(() => undefined);
   if (partnerId) await api.call("DELETE", `/v1/partners/${partnerId}`).catch(() => undefined);
   await api.end();
 });
 
-test("a dancer uploads a song, enters it, checks in, sees their place, and withdraws", async ({ page, browser }) => {
+test("a dancer uploads a song, enters it, checks in, sees their place, withdraws, and manages submissions", async ({ page, browser }) => {
   test.setTimeout(240_000);
   await signIn(page, api.session.user.email);
 
@@ -278,4 +294,68 @@ test("a dancer uploads a song, enters it, checks in, sees their place, and withd
 
   const mine = await api.call<{ sessionId: string }[]>("GET", "/v1/checkins/mine");
   expect(mine.filter((c) => c.sessionId === sessionId)).toEqual([]);
+
+  // The submission row naming the song and holding its own Remove button.
+  // Submissions show the API's structured label, so match on the routine.
+  const submissionRow = () =>
+    page
+      .locator("div")
+      .filter({ hasText: ROUTINE })
+      .filter({ has: page.getByRole("button", { name: "Remove", exact: true }) })
+      .last();
+
+  await test.step("My Content's Edit songs opens the event's submission page", async () => {
+    await page.goto("/my-content");
+    // The event card naming the event and holding its own Edit songs link.
+    const card = page
+      .locator("div")
+      .filter({ hasText: EVENT_NAME })
+      .filter({ has: page.getByRole("link", { name: "Edit songs", exact: true }) })
+      .last();
+    await card.getByRole("link", { name: "Edit songs", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/event-submissions/${eventId}$`));
+    await expect(page.getByRole("heading", { name: EVENT_NAME })).toBeVisible();
+  });
+
+  await test.step("take the song back out of the event", async () => {
+    await submissionRow().getByRole("button", { name: "Remove", exact: true }).click();
+    await expect(page.getByText(`Song removed from ${EVENT_NAME}.`)).toBeVisible();
+    await expect(submissionRow()).toHaveCount(0);
+    // Back in the picker, ready to enter again.
+    await page.getByRole("combobox", { name: "Song", exact: true }).click();
+    await expect(page.getByRole("option", { name: label, exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    const left = await api.call<unknown[]>(
+      "GET",
+      `/v1/event-song-submissions?event_id=${encodeURIComponent(eventId!)}`
+    );
+    expect(left).toEqual([]);
+  });
+
+  await test.step("My Content offers a shortcut to The Open", async () => {
+    await page.goto("/my-content");
+    // Another Open event on dev sends the shortcut to the picker instead.
+    await expect(page.getByRole("link", { name: "Submit to The Open", exact: true })).toHaveAttribute(
+      "href",
+      new RegExp(`^/(event-submissions/${openEventId}|open-submissions)$`)
+    );
+  });
+
+  await test.step("enter the song in The Open for prelims only", async () => {
+    await page.goto(`/event-submissions/${openEventId}`);
+    await expect(page.getByRole("heading", { name: OPEN_EVENT_NAME })).toBeVisible();
+    await page.getByRole("combobox", { name: "Song", exact: true }).click();
+    await page.getByRole("option", { name: label, exact: true }).click();
+    // Classic at The Open may split its rounds; the choice starts at both.
+    await expect(page.getByRole("radio", { name: "Prelims & Finals" })).toHaveAttribute("aria-checked", "true");
+    await page.getByRole("radio", { name: "Prelims Only" }).click();
+    await page.getByRole("button", { name: "Submit", exact: true }).click();
+    await expect(page.getByText(`Song added to ${OPEN_EVENT_NAME}.`)).toBeVisible();
+    await expect(submissionRow()).toContainText(`Division ${DIVISION} · Prelims only`);
+    const entered = await api.call<{ song_id: string; division: string | null; round: string }[]>(
+      "GET",
+      `/v1/event-song-submissions?event_id=${encodeURIComponent(openEventId!)}`
+    );
+    expect(entered).toEqual([expect.objectContaining({ song_id: songId, division: DIVISION, round: "prelims_only" })]);
+  });
 });
