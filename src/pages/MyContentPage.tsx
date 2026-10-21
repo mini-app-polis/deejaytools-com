@@ -361,7 +361,7 @@ export default function MyContentPage() {
                     <div className="pt-2 border-t border-border/40 mt-1">
                       <Button
                         type="button" size="sm" variant="outline"
-                        className="border-destructive/50 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                        className="border-destructive/50 text-destructive hover:bg-destructive-strong hover:text-destructive-foreground"
                         onClick={() => setPendingWithdrawId(ci.id)}
                       >
                         Withdraw from queue
