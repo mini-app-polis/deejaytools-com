@@ -26,8 +26,8 @@ export default function HelpSubmittingMusicPage() {
             file picker: &ldquo;MP3, WAV, FLAC, or M4A — max 100 MB&rdquo;.
           </p>
           <p>
-            The server checks your file by its <strong className="text-foreground">actual contents</strong>{" "}
-            (magic bytes), not the filename or what your browser reports. Renaming a non-audio file to{" "}
+            DeejayTools checks what is <strong className="text-foreground">actually inside</strong>{" "}
+            your file, not its name. Renaming a non-audio file to{" "}
             <code className="px-1 rounded bg-muted/30 text-foreground">.mp3</code> will not work — you
             will see: &ldquo;That file doesn&apos;t look like a supported audio format. Please upload an
             MP3, WAV, FLAC, or M4A.&rdquo;
@@ -37,8 +37,8 @@ export default function HelpSubmittingMusicPage() {
           <p>
             Your name is required — it is captured when you sign up and you can change it on{" "}
             <Link to="/my-profile" className="text-primary underline underline-offset-2">My Profile</Link>.
-            If it is missing, the upload still goes through but your user id may appear in the
-            processed filename instead of your name.
+            If it is missing, the upload still goes through, but your file won&apos;t be named after
+            you.
           </p>
           <p>
             For <strong className="text-foreground">Upload for myself</strong>, the Upload button is
@@ -76,8 +76,8 @@ export default function HelpSubmittingMusicPage() {
             placeholder shows examples:{" "}
             <code className="px-1 rounded bg-muted/30 text-foreground">98%, -2%, v3, 2026-02-01</code>.
             Use whatever helps <em>you</em> tell versions apart — tempo tweak, mix date, practice take
-            number. It becomes part of the processed filename the deejay sees in Drive (see below).
-            Non-alphanumeric characters are stripped from the descriptor in the filename —{" "}
+            number. It becomes part of your song&apos;s file name (see below), which keeps only
+            letters and numbers —{" "}
             <code className="px-1 rounded bg-muted/30 text-foreground">98%</code> becomes{" "}
             <code className="px-1 rounded bg-muted/30 text-foreground">98</code>,{" "}
             <code className="px-1 rounded bg-muted/30 text-foreground">-2%</code> becomes{" "}
@@ -97,42 +97,31 @@ export default function HelpSubmittingMusicPage() {
 
           <HelpSubheading>What happens after you upload</HelpSubheading>
           <p>
-            After all chunks arrive, the server processes your file in the background (you get a success
-            message before Drive finishes). It:
+            DeejayTools then finishes your file in the background — you see the success message
+            before it is done. It:
           </p>
           <ul className="list-disc pl-5 space-y-2">
             <li>
               <strong className="text-foreground">Renames the file</strong> to a standard pattern:
-              leader and follower names (PascalCase segments joined with underscores), then division,
-              season year, routine name, descriptor, and version — for example{" "}
+              leader and follower names, then division, season year, routine name, descriptor, and
+              version — for example{" "}
               <code className="px-1 rounded bg-muted/30 text-foreground break-all">
                 KaianoLevine_LibbyWooton_Classic_2026_MyRoutine_98_v01.mp3
               </code>
               . The <strong className="text-foreground">leader&apos;s name comes first</strong> in
               every division except <strong className="text-foreground">ProAm FollowerAm</strong>,
-              where the amateur follower is listed first — the server decides from each
-              partner&apos;s role.
+              where the amateur follower is listed first, based on the roles on your partner
+              record.
             </li>
             <li>
-              <strong className="text-foreground">Tags the audio</strong> — title becomes{" "}
-              &ldquo;Leader &amp; Follower&rdquo; (or &ldquo;Follower &amp; Leader&rdquo; for ProAm
-              FollowerAm when both names are present), artist becomes{" "}
-              &ldquo;Division | Routine name&rdquo; joined with &ldquo; | &rdquo;, and the season
-              year is written to the file&apos;s native year tag (not the artist string).
+              <strong className="text-foreground">Labels the audio</strong> with your names,
+              division, routine name, and season, so the deejay&apos;s player shows who is up.
             </li>
             <li>
-              <strong className="text-foreground">Uploads to Google Drive</strong> under{" "}
-              <code className="px-1 rounded bg-muted/30 text-foreground">
-                &lt;season year&gt;/&lt;division&gt;/
-              </code>{" "}
-              using the processed filename. No event folder exists yet — when you later submit the
-              song to an event, a separate copy job places a copy under{" "}
-              <code className="px-1 rounded bg-muted/30 text-foreground">
-                &lt;season year&gt;/Events/&lt;event&gt;/&lt;division&gt;/
-              </code>
-              . Read access is shared with your account email and, for partner uploads, your
-              partner&apos;s email if you entered one on their partner record. Managed-partnership
-              uploads share with the uploader only.
+              <strong className="text-foreground">Saves it to the deejay&apos;s Google Drive</strong>,
+              and gives the event a copy once you submit the song to it. The file is shared with
+              your email and, for partner uploads, your partner&apos;s email if you entered one on
+              their partner record. Managed-partnership uploads are shared with you only.
             </li>
           </ul>
           <p>
@@ -140,7 +129,7 @@ export default function HelpSubmittingMusicPage() {
             you see the <strong className="text-foreground">processed filename</strong> (what the deejay
             works from) and, below it,{" "}
             <strong className="text-foreground">Uploaded: &lt;your original filename&gt;</strong> so you
-            can match the row to the file you picked on your phone or laptop. The{" "}
+            can match the song to the file you picked on your phone or laptop. The{" "}
             <strong className="text-foreground">Open in Google Drive</strong> button lets you preview
             playback in your own Drive — useful to confirm levels and that the right cut uploaded.
           </p>
@@ -149,21 +138,20 @@ export default function HelpSubmittingMusicPage() {
           <p>While uploading, the bar moves through three stages:</p>
           <ul className="list-disc pl-5 space-y-2">
             <li>
-              <strong className="text-foreground">Uploading…</strong> — sending 5 MB chunks, with MB
-              sent vs total shown.
+              <strong className="text-foreground">Uploading…</strong> — sending your file, with how
+              much has been sent so far.
             </li>
             <li>
               <strong className="text-foreground">Processing your file… this may take a moment</strong> —
-              the last chunk is on the server being assembled and validated.
+              your file is being checked.
             </li>
             <li>
               <strong className="text-foreground">Saving…</strong> — finishing up before success.
             </li>
           </ul>
           <p>
-            Each chunk is tried up to <strong className="text-foreground">3 times</strong> automatically
-            (with a short wait between attempts) if the network hiccups. If your Clerk session expires
-            mid-upload, you will see exactly: &ldquo;Your session expired. Please sign in again and retry
+            If your connection drops briefly, the upload retries on its own. If your sign-in expires
+            partway through, you will see: &ldquo;Your session expired. Please sign in again and retry
             the upload.&rdquo; Sign in and start the upload again from the beginning.
           </p>
         </HelpSection>
@@ -179,7 +167,8 @@ export default function HelpSubmittingMusicPage() {
             should re-upload before the floor trial starts.
           </p>
           <p>
-            Some older routines may appear in My Content as imported legacy catalog rows. They show a
+            Some older routines brought over from our previous catalog appear in My Content without
+            an audio file. They show a
             disabled <strong className="text-foreground">Legacy Song</strong> button with the tooltip
             &ldquo;This song was imported from the legacy catalog and has no uploaded audio file.&rdquo;
             These entries have no audio and cannot be used to check in.

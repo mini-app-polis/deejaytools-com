@@ -72,9 +72,8 @@ const ENTRIES: TroubleEntry[] = [
     heading: "You're already in the queue for this session.",
     meaning: (
       <>
-        This partnership (or solo entry) already has a live queue spot in this session. The server
-        message is &ldquo;This entity already has a live queue entry in this session&rdquo; — the app
-        shows this shorter version in a toast after you submit.
+        This partnership (or solo entry) already has a spot in this session&apos;s queue. You can
+        only be in line once per partnership at a time.
       </>
     ),
     steps: (
@@ -90,7 +89,7 @@ const ENTRIES: TroubleEntry[] = [
         .
       </>
     ),
-    keywords: "already in the queue for this session entity live entry",
+    keywords: "already in the queue for this session live entry",
   },
   {
     id: "partnership-in-queue-form",
@@ -166,8 +165,7 @@ const ENTRIES: TroubleEntry[] = [
     heading: "Division not configured for this session",
     meaning: (
       <>
-        The division you submitted is not set up for this session on the server. This usually means
-        the division name does not match any row in the session&apos;s division list.
+        The division you picked isn&apos;t one of the divisions set up for this session.
       </>
     ),
     steps: (
@@ -186,9 +184,8 @@ const ENTRIES: TroubleEntry[] = [
     heading: "That file is too large. Please choose an audio file under 100 MB.",
     meaning: (
       <>
-        The browser blocks the upload before any chunks are sent when the file is over{" "}
-        <strong className="text-foreground">100 MB</strong>. This is separate from the server-side
-        assembled-file cap below.
+        The upload stops before anything is sent when the file is over{" "}
+        <strong className="text-foreground">100 MB</strong>.
       </>
     ),
     steps: (
@@ -200,7 +197,7 @@ const ENTRIES: TroubleEntry[] = [
         .
       </>
     ),
-    keywords: "that file is too large please choose an audio file under 100 mb browser",
+    keywords: "that file is too large please choose an audio file under 100 mb",
   },
   {
     id: "file-100mb-server",
@@ -208,10 +205,8 @@ const ENTRIES: TroubleEntry[] = [
     heading: "File exceeds 100 MB limit",
     meaning: (
       <>
-        After all chunks arrive, the server assembles the file and rejects it if the assembled size
-        exceeds <strong className="text-foreground">110 MB</strong>. The error message still reads{" "}
-        &ldquo;File exceeds 100 MB limit.&rdquo; This can happen even when the original file was
-        under the browser&apos;s 100 MB gate.
+        The file was too large once it finished uploading. This can happen with files very close
+        to the <strong className="text-foreground">100 MB</strong> limit.
       </>
     ),
     steps: (
@@ -223,7 +218,7 @@ const ENTRIES: TroubleEntry[] = [
         .
       </>
     ),
-    keywords: "file exceeds 100 mb limit assembled server",
+    keywords: "file exceeds 100 mb limit",
   },
   {
     id: "unsupported-format",
@@ -232,7 +227,7 @@ const ENTRIES: TroubleEntry[] = [
       "That file doesn't look like a supported audio format. Please upload an MP3, WAV, FLAC, or M4A.",
     meaning: (
       <>
-        The server checked the file contents (magic bytes), not the filename. Renaming a non-audio
+        DeejayTools checks what is actually inside the file, not its name. Renaming a non-audio
         file will not help.
       </>
     ),
@@ -245,7 +240,7 @@ const ENTRIES: TroubleEntry[] = [
         .
       </>
     ),
-    keywords: "doesn't look like a supported audio format mp3 wav flac m4a magic bytes",
+    keywords: "doesn't look like a supported audio format mp3 wav flac m4a",
   },
   {
     id: "session-expired-upload",
@@ -253,7 +248,8 @@ const ENTRIES: TroubleEntry[] = [
     heading: "Your session expired. Please sign in again and retry the upload.",
     meaning: (
       <>
-        Your sign-in token expired while chunks were uploading. The upload cannot resume mid-file.
+        Your sign-in expired partway through the upload, and an upload can&apos;t pick up where it
+        left off.
       </>
     ),
     steps: (
@@ -273,9 +269,9 @@ const ENTRIES: TroubleEntry[] = [
     heading: "Network error (…) — check your connection and try again.",
     meaning: (
       <>
-        A chunk failed to reach the server (connection drop, timeout, or offline). The parentheses
-        contain technical detail from the browser. Each chunk is tried up to three times before
-        showing this.
+        Part of your upload couldn&apos;t get through — the connection dropped, timed out, or went
+        offline. The upload retries on its own a few times before showing this; the text in
+        parentheses is detail from your browser.
       </>
     ),
     steps: (
@@ -284,7 +280,7 @@ const ENTRIES: TroubleEntry[] = [
         venue networks, try a different connection or ask at the booth.
       </>
     ),
-    keywords: "network error check your connection try again upload chunk",
+    keywords: "network error check your connection try again upload",
   },
   {
     id: "name-required-upload",
@@ -434,13 +430,11 @@ const ENTRIES: TroubleEntry[] = [
   {
     id: "user-not-synced",
     group: "Signing in and accounts",
-    heading: "Call POST /v1/auth/sync first",
+    heading: "We're still setting up your account. Reload the page, or sign out and back in.",
     meaning: (
       <>
-        You are signed in with Clerk, but DeejayTools does not have your account row yet — the site
-        has not finished setting up your profile. API calls return this message (code{" "}
-        <code className="px-1 rounded bg-muted/30 text-foreground">USER_NOT_SYNCED</code>) and it
-        often appears as a toast when a page tries to load your data.
+        You&apos;re signed in, but DeejayTools hasn&apos;t finished setting up your account yet, so
+        pages can&apos;t load your data.
       </>
     ),
     steps: (
@@ -449,13 +443,11 @@ const ENTRIES: TroubleEntry[] = [
         <Link to="/my-content" className="text-primary underline underline-offset-2">
           My Content
         </Link>
-        ) — not the landing page alone — so account sync can run. Reload the page once. AuthSync runs
-        once per browser session; a reload helps if{" "}
-        <code className="px-1 rounded bg-muted/30 text-foreground">sessionStorage</code> was cleared.
-        If it persists, sign out and sign back in.
+        ), not just the home page, and reload it once. If it keeps happening, sign out and sign back
+        in.
       </>
     ),
-    keywords: "call post auth sync first user_not_synced signed in account setup",
+    keywords: "still setting up your account reload sign out signed in",
   },
 
   // ── Looks broken ─────────────────────────────────────────────────────────
@@ -528,7 +520,7 @@ const ENTRIES: TroubleEntry[] = [
     heading: "My legacy song has no play button",
     meaning: (
       <>
-        Legacy catalog rows were imported without an audio file. The button shows{" "}
+        Older songs brought over from the previous catalog have no audio file. The button shows{" "}
         <strong>Legacy Song</strong> with tooltip &ldquo;This song was imported from the legacy
         catalog and has no uploaded audio file.&rdquo;
       </>

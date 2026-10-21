@@ -244,7 +244,7 @@ describe("EventSubmissionsPage — event page", () => {
     mockApi([EVENT], [LEGACY_SONG]);
     renderAt("/event-submissions/ev1");
 
-    expect(await screen.findByText(/all legacy catalog rows/i)).toBeInTheDocument();
+    expect(await screen.findByText(/came over from the old catalog without an audio file/i)).toBeInTheDocument();
     expect(screen.queryByText(/you have no songs yet/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: /song/i })).not.toBeInTheDocument();
   });

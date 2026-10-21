@@ -98,16 +98,16 @@ export default function HelpCheckingInPage() {
 
         <HelpSubheading>One queue spot per partnership (with an exception)</HelpSubheading>
         <p>
-          For a given stored partnership record (your account linked to one partner roster entry),
-          you can only have <strong className="text-foreground">one live queue entry</strong> in a
-          session at a time. If you try again, the form warns: &ldquo;This partnership is already in
+          Each partnership — you with one partner from your roster — can only have{" "}
+          <strong className="text-foreground">one spot in the queue</strong> in a session at a
+          time. If you try again, the form warns: &ldquo;This partnership is already in
           the queue. Pick a different song or withdraw your current entry first.&rdquo; After submit,
           you may also see: &ldquo;You&apos;re already in the queue for this session.&rdquo;
         </p>
         <p>
-          You <em>can</em> be in the queue more than once in the same session if the entries are
-          different partnership records — for example you uploaded as the leader with Partner A and
-          again as the follower with Partner B — because each direction is a separate stored pair.
+          You <em>can</em> be in the queue more than once in the same session with different
+          partnerships — for example as the leader with Partner A and as the follower with
+          Partner B.
         </p>
 
         <HelpSubheading>Withdrawing</HelpSubheading>

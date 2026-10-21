@@ -5,11 +5,22 @@ import { Sentry } from "@/lib/instrument";
 
 const base = import.meta.env.VITE_API_URL ?? "";
 
+/**
+ * Plain-language replacements for API errors whose own message is written
+ * for developers. Every other error keeps the API's message, which is
+ * written for the person using the site.
+ */
+const FRIENDLY_MESSAGES: Record<string, string> = {
+  USER_NOT_SYNCED: "We're still setting up your account. Reload the page, or sign out and back in.",
+};
+
 async function parseEnvelope<T>(res: Response): Promise<T> {
   const json = (await res.json()) as SuccessEnvelope<T> | ErrorEnvelope;
   if (!res.ok || "error" in json) {
     const msg =
-      "error" in json ? json.error.message : `Request failed: ${res.status}`;
+      "error" in json
+        ? FRIENDLY_MESSAGES[json.error.code] ?? json.error.message
+        : `Request failed: ${res.status}`;
     const err = new Error(msg);
     // 4xx are expected (validation, auth, not-found) — no need to track.
     // 5xx are unexpected server failures: forward to Sentry so they surface

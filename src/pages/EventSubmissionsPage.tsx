@@ -355,8 +355,8 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
 
           {songs.length > 0 && eligibleSongs.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              Your songs are all legacy catalog rows. They were imported without an audio file, so
-              they can&apos;t be submitted to an event.{" "}
+              All your songs came over from the old catalog without an audio file, so they
+              can&apos;t be submitted to an event.{" "}
               <Link to="/songs/add" className="underline">
                 Upload the routine as a new song
               </Link>{" "}
@@ -482,7 +482,7 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
           {hiddenLegacyCount > 0 && (
             <p className="text-xs text-muted-foreground">
               {hiddenLegacyCount} legacy {hiddenLegacyCount === 1 ? "song is" : "songs are"} hidden.
-              Legacy catalog rows have no uploaded audio file and can&apos;t be submitted to an
+              Songs from the old catalog have no audio file and can&apos;t be submitted to an
               event.
             </p>
           )}

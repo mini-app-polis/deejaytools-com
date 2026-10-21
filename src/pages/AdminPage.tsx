@@ -1586,8 +1586,8 @@ export default function AdminPage() {
         {/* ── Test Checkin tab ── */}
         <TabsContent value="test-checkin" className="mt-4 space-y-4">
           <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-            Creates throwaway user/partner/pair rows and uses a placeholder song.
-            Skips the check-in time window. Each submission adds one entry to the selected session's queue.
+            Adds made-up test dancers with a placeholder song, ignoring the check-in window. Each
+            submission adds one entry to the selected session&apos;s queue.
           </div>
           <form onSubmit={submitTestCheckin} className="space-y-4 max-w-lg">
             <div>
@@ -1869,7 +1869,7 @@ export default function AdminPage() {
                 <>
                   <span className="font-medium">{formatSessionTitle(pendingDeleteSession, pendingDeleteSession.event_timezone)}</span>
                   <br />
-                  This will cascade-delete every check-in, queue entry, run, and division row attached to it. This cannot be undone.
+                  This deletes the session and everything in it — its check-ins, queue, and run history. This cannot be undone.
                 </>
               )}
             </DialogDescription>

@@ -86,14 +86,6 @@ export default function HelpPartnersPage() {
             as your personal couple entry. Withdraw from My Content if you need to leave the queue.
           </p>
         </HelpSection>
-
-        <HelpSubheading>Pairs (support conversations only)</HelpSubheading>
-        <p>
-          The word <strong className="text-foreground">pair</strong> never appears in the
-          competitor-facing UI, but support docs and the deejay may use it. A pair is created
-          automatically the first time you check in with a given partner — it links your account to
-          that partner record for queue purposes. You do not create or edit pairs yourself.
-        </p>
       </div>
     </HelpLayout>
   );

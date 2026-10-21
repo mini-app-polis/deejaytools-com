@@ -34,8 +34,8 @@ export default function ManagerGuideSection() {
             <strong>Timezone matters.</strong> Session start times, check-in windows, and floor-trial
             end times on competitor and manager session pages are displayed in the{" "}
             <strong>event&apos;s</strong> timezone, not the viewer&apos;s browser timezone. Pick the
-            venue&apos;s zone before creating sessions. Admin list timestamps (Run History run times,
-            Songs created_at) use your browser&apos;s local timezone instead.
+            venue&apos;s zone before creating sessions. Times in the Admin lists (Run History run
+            times, song upload dates) use your browser&apos;s local timezone instead.
           </p>
         </div>
 
@@ -115,8 +115,8 @@ export default function ManagerGuideSection() {
           <p className="mt-1">
             The delete confirmation warns:{" "}
             <em>
-              This will cascade-delete every check-in, queue entry, run, and division row attached
-              to it. This cannot be undone.
+              This deletes the session and everything in it — its check-ins, queue, and run
+              history. This cannot be undone.
             </em>
           </p>
           <p className="mt-2">Use only to remove a session created in error — not mid-trial.</p>
@@ -169,8 +169,8 @@ export default function ManagerGuideSection() {
           <p className="mt-1">Available on Active entries (and Move down / Withdraw on waiting queues):</p>
           <ul className="mt-2">
             <li>
-              <strong>Run complete</strong> — Removes the entry from Active, compacts positions,
-              <strong> records a run</strong>, and auto-refills Active from waiting queues.
+              <strong>Run complete</strong> — Takes the entry off Active,
+              <strong> records a run</strong>, and moves the next waiting dancer up.
               Recording the run consumes the dancer&apos;s priority allowance for that division.
               This is the <strong>only</strong> action that counts as a run.
             </li>
@@ -180,8 +180,7 @@ export default function ManagerGuideSection() {
             </li>
             <li>
               <strong>Move down</strong> — Swaps with the next position <strong>within the same
-              queue only</strong> (Active, Priority, or Standard). Hidden on the last row. Errors if
-              already at the bottom.
+              queue only</strong> (Active, Priority, or Standard). Not shown on the last entry.
             </li>
             <li>
               <strong>Withdraw</strong> — Removes the entry from whichever queue it is in. Does{" "}
@@ -240,8 +239,8 @@ export default function ManagerGuideSection() {
           <li>
             <Link to="/admin/songs">Songs</Link> — Search plus year/division filters.{" "}
             <strong>Legacy</strong> badge = imported from the old catalog, no audio file (cannot
-            check in with it). <strong>deleted</strong> badge = soft-deleted; toggle Show deleted to
-            find it.
+            check in with it). <strong>deleted</strong> badge = a song the dancer deleted; it is
+            hidden unless you turn on Show deleted.
           </li>
           <li>
             <Link to="/admin/users">Users</Link> — Grant or revoke admin. You cannot change your own
@@ -250,12 +249,11 @@ export default function ManagerGuideSection() {
           <li>
             <Link to="/admin/test-checkin">Test Checkin</Link> —{" "}
             <span className="text-amber-600 dark:text-amber-400">
-              Creates throwaway user/partner/pair rows and uses a placeholder song. Skips the
-              check-in time window. Each submission adds one entry to the selected session&apos;s
-              queue.
+              Adds made-up test dancers with a placeholder song, ignoring the check-in window. Each
+              submission adds one entry to the selected session&apos;s queue.
             </span>{" "}
             Do <strong>not</strong> use on a live production session during a real event. Use{" "}
-            <strong>Delete all</strong> to clean up test rows when finished experimenting.
+            <strong>Delete all</strong> to remove the test entries when you&apos;re done.
           </li>
         </ul>
       </Section>
@@ -263,10 +261,10 @@ export default function ManagerGuideSection() {
       <Section title="Known limitations">
         <ul>
           <li>
-            <strong>Event-level priority run limit</strong> (<code>event_division_run_limits</code>)
-            is enforced by the server but has no UI to set or view. If a dancer is unexpectedly in
-            Standard and the session-level priority run limit is not the cause, an event-level cap
-            set directly in the database may be why.
+            <strong>Event-wide priority run limits</strong> apply but can&apos;t be set or viewed in
+            the app yet. If a dancer is unexpectedly in Standard and the session&apos;s priority run
+            limit doesn&apos;t explain it, an event-wide limit may be why — ask the site
+            administrator to check.
           </li>
           <li>
             <strong>No rollback for Run complete.</strong> Once the deejay records a completed run, it

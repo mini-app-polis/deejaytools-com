@@ -131,7 +131,7 @@ export default function SongsPage() {
                 {partnerName && (
                   <span>
                     <span className="text-muted-foreground text-xs">
-                      {s.partner_kind && s.partner_kind !== "partner" ? "Entity " : "Partner "}
+                      {s.partner_kind && s.partner_kind !== "partner" ? "Entered as " : "Partner "}
                     </span>
                     {partnerName}
                   </span>
