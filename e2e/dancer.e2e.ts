@@ -198,19 +198,21 @@ test("a dancer uploads a song, enters it, checks in, sees their place, and withd
     await page.goto("/event-submissions");
     await page.getByRole("combobox", { name: "Event" }).click();
     await page.getByRole("option", { name: EVENT_NAME }).click();
-    // The row holding the song's name and its own Add button: the innermost
-    // element that has both.
-    const row = page
-      .locator("div")
-      .filter({ hasText: label })
-      .filter({ has: page.getByRole("button", { name: "Add", exact: true }) })
-      .last();
-    await row.getByRole("button", { name: "Add", exact: true }).click();
-    await expect(page.getByText("Song added to event.")).toBeVisible();
+    // Choosing the event opens its page: pick the song, whose own division
+    // fills the Division field, and submit it.
+    await expect(page.getByRole("heading", { name: EVENT_NAME })).toBeVisible();
+    await page.getByRole("combobox", { name: "Song", exact: true }).click();
+    await page.getByRole("option", { name: label, exact: true }).click();
+    await expect(page.getByRole("combobox", { name: "Division", exact: true })).toContainText(DIVISION);
+    await page.getByRole("button", { name: "Submit", exact: true }).click();
+    await expect(page.getByText(`Song added to ${EVENT_NAME}.`)).toBeVisible();
+    // The submission row naming the song and holding its own Remove button.
+    // Submissions show the API's structured label ("Partnership Division Year
+    // Routine vNN"), not the processed filename, so match on the routine.
     await expect(
       page
         .locator("div")
-        .filter({ hasText: label })
+        .filter({ hasText: ROUTINE })
         .filter({ has: page.getByRole("button", { name: "Remove", exact: true }) })
         .last()
     ).toBeVisible();

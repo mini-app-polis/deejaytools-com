@@ -717,21 +717,6 @@ describe("SessionDetailPage — check-in song selector", () => {
     expect(screen.getAllByRole("button", { name: /^check in$/i })[0]).toBeDisabled();
   });
 
-  it("points the add-to-event link at The Open's page for an Open session", async () => {
-    signedIn = true;
-    stubGets({
-      session: openCheckinWindowSession("The Open 2026"),
-      songs: sampleSongs,
-      eventSubmissions: [],
-    });
-    renderAt();
-
-    const submitLinks = await screen.findAllByRole("link", { name: /submit songs to this event/i });
-    for (const link of submitLinks) {
-      expect(link).toHaveAttribute("href", "/open-submissions");
-    }
-  });
-
   it("sends entityManagedPartnershipId when checking in with a managed-partnership song", async () => {
     signedIn = true;
     apiPost.mockResolvedValue({});

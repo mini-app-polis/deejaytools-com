@@ -127,16 +127,11 @@ const ENTRIES: TroubleEntry[] = [
     ),
     steps: (
       <>
-        For most events, go to{" "}
+        Go to{" "}
         <Link to="/event-submissions" className="text-primary hover:underline">
           Event submissions
         </Link>
-        . For <strong>The Open</strong>, use{" "}
-        <Link to="/open-submissions" className="text-primary hover:underline">
-          The Open submissions
-        </Link>{" "}
-        instead — The Open does not appear on the generic Event submissions page. Add the song to the
-        correct event, then return to the session page and check in. See{" "}
+        , choose the event, and add the song. Then return to the session page and check in. See{" "}
         <Link to="/how-it-works/submitting-music#event-submission-required" className="text-primary hover:underline">
           Uploading vs event submission
         </Link>
@@ -476,13 +471,9 @@ const ENTRIES: TroubleEntry[] = [
     ),
     steps: (
       <>
-        For most events, submit the song on{" "}
+        Submit the song to the event on{" "}
         <Link to="/event-submissions" className="text-primary hover:underline">
           Event submissions
-        </Link>
-        . For <strong>The Open</strong>, use{" "}
-        <Link to="/open-submissions" className="text-primary hover:underline">
-          The Open submissions
         </Link>
         , then reopen the session check-in form.
       </>
