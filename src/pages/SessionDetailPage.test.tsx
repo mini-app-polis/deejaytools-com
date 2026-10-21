@@ -708,11 +708,28 @@ describe("SessionDetailPage — check-in song selector", () => {
       ).toBeGreaterThan(0);
     });
 
-    expect(screen.getAllByRole("link", { name: /submit songs to this event/i }).length).toBeGreaterThan(
-      0
-    );
+    const submitLinks = screen.getAllByRole("link", { name: /submit songs to this event/i });
+    expect(submitLinks.length).toBeGreaterThan(0);
+    for (const link of submitLinks) {
+      expect(link).toHaveAttribute("href", "/event-submissions/event-1");
+    }
     expect(screen.queryByRole("radiogroup", { name: /^song$/i })).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /^check in$/i })[0]).toBeDisabled();
+  });
+
+  it("points the add-to-event link at The Open's page for an Open session", async () => {
+    signedIn = true;
+    stubGets({
+      session: openCheckinWindowSession("The Open 2026"),
+      songs: sampleSongs,
+      eventSubmissions: [],
+    });
+    renderAt();
+
+    const submitLinks = await screen.findAllByRole("link", { name: /submit songs to this event/i });
+    for (const link of submitLinks) {
+      expect(link).toHaveAttribute("href", "/open-submissions");
+    }
   });
 
   it("sends entityManagedPartnershipId when checking in with a managed-partnership song", async () => {
