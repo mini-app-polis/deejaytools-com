@@ -1,6 +1,6 @@
 {
   "name": "deejaytools-com",
-  "version": "2.7.13",
+  "version": "2.8.0",
   "private": true,
   "packageManager": "pnpm@9.0.0",
   "engines": {

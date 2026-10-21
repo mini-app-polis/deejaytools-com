@@ -1,3 +1,10 @@
+# [2.8.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.7.13...v2.8.0) (2026-10-21)
+
+
+### Features
+
+* **submissions:** add per-event song submission page with Edit songs link from My Content ([c198cd5](https://github.com/mini-app-polis/deejaytools-com/commit/c198cd5c65d4d717c17d50a2b659e94e8c08664a))
+
 ## [2.7.13](https://github.com/mini-app-polis/deejaytools-com/compare/v2.7.12...v2.7.13) (2026-10-18)
 
 
