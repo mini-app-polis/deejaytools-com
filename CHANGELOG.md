@@ -1,3 +1,11 @@
+## [2.11.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.11.0...v2.11.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* **a11y:** split the red into text and fill shades that both pass WCAG AA, and enforce the scan ([3028223](https://github.com/mini-app-polis/deejaytools-com/commit/3028223aa89b1f7b58dcfb8274896e65170e32a5))
+* **a11y:** underline links in text and raise muted text contrast to WCAG AA ([45d140b](https://github.com/mini-app-polis/deejaytools-com/commit/45d140b570936a4262e9aa2cec0e8c291c734b75))
+
 # [2.11.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.10.0...v2.11.0) (2026-10-21)
 
 
