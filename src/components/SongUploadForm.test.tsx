@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -23,7 +23,17 @@ vi.mock("@clerk/clerk-react", () => ({
   useAuth: () => ({ getToken: vi.fn() }),
 }));
 
+// The chunk loop has its own tests (chunkedSongUpload.test, AddSongPage.test);
+// here it is a stand-in that records what the form asks it to send.
+const uploadSongInChunks = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/chunkedSongUpload", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/chunkedSongUpload")>()),
+  uploadSongInChunks,
+}));
+
 import SongUploadForm from "./SongUploadForm";
+import { MAX_FILE_BYTES } from "@/lib/chunkedSongUpload";
+import { toast } from "sonner";
 import { fx } from "@/test/fixtures";
 
 const EXPECTED_UPLOAD_DIVISIONS = [
@@ -98,5 +108,149 @@ describe("SongUploadForm division pills", () => {
     for (const row of rows) {
       expect(row.querySelectorAll('[role="radio"]').length).toBeGreaterThan(0);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Submitting
+// ---------------------------------------------------------------------------
+
+function audioFile(size?: number): File {
+  const file = new File([new Uint8Array(1024 * 1024)], "routine.mp3", { type: "audio/mpeg" });
+  if (size !== undefined) Object.defineProperty(file, "size", { value: size });
+  return file;
+}
+
+function chooseFile(file: File) {
+  fireEvent.change(screen.getByLabelText(/audio file/i), { target: { files: [file] } });
+}
+
+function chooseDivision(name: string) {
+  fireEvent.click(screen.getByRole("radio", { name }));
+}
+
+function submit() {
+  fireEvent.submit(screen.getByLabelText(/audio file/i).closest("form")!);
+}
+
+describe("SongUploadForm — checks before uploading", () => {
+  beforeEach(() => {
+    uploadSongInChunks.mockReset();
+    vi.mocked(toast.error).mockClear();
+    mockLoadedSelfForm();
+  });
+
+  it("asks for a file first", async () => {
+    renderForm();
+    await screen.findByLabelText(/audio file/i);
+    submit();
+    expect(toast.error).toHaveBeenCalledWith("Please select an audio file.");
+    expect(uploadSongInChunks).not.toHaveBeenCalled();
+  });
+
+  it("refuses a file over the size limit", async () => {
+    renderForm();
+    await screen.findByLabelText(/audio file/i);
+    chooseFile(audioFile(MAX_FILE_BYTES + 1));
+    chooseDivision("Classic");
+    submit();
+    expect(toast.error).toHaveBeenCalledWith(
+      "That file is too large. Please choose an audio file under 100 MB."
+    );
+    expect(uploadSongInChunks).not.toHaveBeenCalled();
+  });
+
+  it("asks for a division", async () => {
+    renderForm();
+    await screen.findByLabelText(/audio file/i);
+    chooseFile(audioFile());
+    submit();
+    expect(toast.error).toHaveBeenCalledWith("Please select a division.");
+    expect(uploadSongInChunks).not.toHaveBeenCalled();
+  });
+});
+
+describe("SongUploadForm — uploading", () => {
+  beforeEach(() => {
+    uploadSongInChunks.mockReset();
+    vi.mocked(toast.error).mockClear();
+    vi.mocked(toast.success).mockClear();
+  });
+
+  it("uploads on a dancer's behalf with their partner, then resets the form", async () => {
+    apiGet.mockImplementation((path: string) =>
+      Promise.resolve(
+        path === "/v1/admin/users/u9/partners"
+          ? [fx.partner({ id: "p9", first_name: "Sam", last_name: "Hart", partner_role: "follower" })]
+          : []
+      )
+    );
+    uploadSongInChunks.mockResolvedValue(undefined);
+    const onUploaded = vi.fn();
+    render(
+      <MemoryRouter>
+        <SongUploadForm
+          variant="self"
+          onBehalf={{ userId: "u9", label: "Dana Fox (dana@example.com)" }}
+          onUploaded={onUploaded}
+        />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText(/Uploading as:/)).toHaveTextContent("Dana Fox (dana@example.com)");
+    expect(apiGet).toHaveBeenCalledWith("/v1/admin/users/u9/partners");
+    expect(apiGet).not.toHaveBeenCalledWith("/v1/auth/me");
+
+    chooseFile(audioFile());
+    chooseDivision("Showcase");
+    fireEvent.change(screen.getByLabelText(/routine \/ song name/i), { target: { value: "  Night Moves " } });
+    submit();
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Song uploaded successfully."));
+    const [{ buildFormFields }] = uploadSongInChunks.mock.calls[0]!;
+    expect(buildFormFields()).toEqual({
+      division: "Showcase",
+      routine_name: "Night Moves",
+      personal_descriptor: "",
+      partner_id: "p9",
+      on_behalf_of_user_id: "u9",
+    });
+    expect(onUploaded).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText(/routine \/ song name/i)).toHaveValue("");
+  });
+
+  it("shows progress while uploading", async () => {
+    mockLoadedSelfForm();
+    let finish!: () => void;
+    uploadSongInChunks.mockImplementation(({ onProgress }) => {
+      onProgress({ stage: "uploading", progress: 50, bytesSent: 512 * 1024 });
+      return new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+    });
+    renderForm();
+    await screen.findByLabelText(/audio file/i);
+    chooseFile(audioFile());
+    chooseDivision("Classic");
+    submit();
+
+    expect(await screen.findByText("Uploading… 0.5 of 1.0 MB")).toBeInTheDocument();
+    expect(screen.getByText("50%")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Uploading…" })).toBeDisabled();
+    finish();
+    await waitFor(() => expect(screen.queryByText("50%")).not.toBeInTheDocument());
+  });
+
+  it("reports a failed upload and lets the dancer try again", async () => {
+    mockLoadedSelfForm();
+    uploadSongInChunks.mockRejectedValue(new Error("Upload session expired"));
+    renderForm();
+    await screen.findByLabelText(/audio file/i);
+    chooseFile(audioFile());
+    chooseDivision("Classic");
+    submit();
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Upload session expired"));
+    expect(screen.getByRole("button", { name: "Upload song" })).toBeEnabled();
   });
 });

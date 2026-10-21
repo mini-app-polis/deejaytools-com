@@ -45,6 +45,7 @@ vi.mock("@clerk/clerk-react", () => ({
 }));
 
 import SessionDetailPage from "./SessionDetailPage";
+import { toast } from "sonner";
 import { fx } from "@/test/fixtures";
 
 // ---------------------------------------------------------------------------
@@ -871,5 +872,130 @@ describe("SessionDetailPage — check-in song selector", () => {
       .getAllByRole("button", { name: /^check in$/i })
       .find((button) => button.getAttribute("type") === "submit");
     expect(submitButton).toBeDisabled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Submitting a check-in
+// ---------------------------------------------------------------------------
+
+const partnerSong = {
+  id: "song_pair",
+  processed_filename: "Partner Routine",
+  division: "Classic",
+  partner_id: "partner_1",
+  managed_partnership_id: null,
+};
+
+/** Open the check-in form and pick a song by its label. */
+async function openFormAndPick(song: RegExp) {
+  await waitFor(() => {
+    expect(screen.getAllByRole("button", { name: /^check in$/i }).length).toBeGreaterThan(0);
+  });
+  fireEvent.click(screen.getAllByRole("button", { name: /^check in$/i })[0]!);
+  await waitFor(() => {
+    expect(screen.getByRole("radiogroup", { name: /^song$/i })).toBeInTheDocument();
+  });
+  fireEvent.click(screen.getByRole("radio", { name: song }));
+}
+
+function submitForm() {
+  const submit = screen
+    .getAllByRole("button", { name: /^check in$/i })
+    .find((b) => b.getAttribute("type") === "submit");
+  fireEvent.click(submit!);
+}
+
+describe("SessionDetailPage — submitting a check-in", () => {
+  it("creates the pair first when the song's partner has none yet, and sends trimmed notes", async () => {
+    signedIn = true;
+    apiPost.mockReset();
+    apiPost.mockImplementation((path: string) =>
+      Promise.resolve(path === "/v1/pairs/find-or-create" ? { id: "pair_new" } : {})
+    );
+    stubGets({
+      session: openCheckinWindowSession(),
+      songs: [partnerSong],
+      pairs: [],
+      eventSubmissions: [makeSubmission("song_pair")],
+    });
+    renderAt();
+
+    await openFormAndPick(/Partner Routine/i);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "  late arrival  " } });
+    submitForm();
+
+    await waitFor(() => {
+      expect(apiPost).toHaveBeenCalledWith("/v1/checkins", {
+        sessionId: "s1",
+        divisionName: "Classic",
+        entityPairId: "pair_new",
+        entityManagedPartnershipId: null,
+        songId: "song_pair",
+        notes: "late arrival",
+      });
+    });
+    expect(apiPost).toHaveBeenCalledWith("/v1/pairs/find-or-create", { partner_id: "partner_1" });
+  });
+
+  it.each([
+    ["Entity already has a live check-in in this session", "You're already in the queue for this session."],
+    ["Check-in window closed", "Check-in window closed"],
+  ])("reports a refused check-in (%s)", async (apiMessage, shown) => {
+    signedIn = true;
+    apiPost.mockReset();
+    apiPost.mockRejectedValue(new Error(apiMessage));
+    vi.mocked(toast.error).mockClear();
+    stubGets({
+      session: openCheckinWindowSession(),
+      songs: [partnerSong],
+      pairs: [{ id: "pair_1", display_name: "User One & Partner A", partner_b_id: "partner_1" }],
+      eventSubmissions: [makeSubmission("song_pair")],
+    });
+    renderAt();
+
+    await openFormAndPick(/Partner Routine/i);
+    submitForm();
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(shown);
+    });
+    // The form stays open so the dancer can try again.
+    expect(screen.getByRole("radiogroup", { name: /^song$/i })).toBeInTheDocument();
+  });
+
+  it("leaves the division for the dancer to pick when the song's is not run in this session", async () => {
+    signedIn = true;
+    apiPost.mockReset();
+    vi.mocked(toast.error).mockClear();
+    stubGets({
+      session: openCheckinWindowSession(),
+      songs: [{ ...partnerSong, division: "Showcase" }],
+      pairs: [{ id: "pair_1", display_name: "User One & Partner A", partner_b_id: "partner_1" }],
+      eventSubmissions: [makeSubmission("song_pair")],
+    });
+    renderAt();
+
+    await openFormAndPick(/Partner Routine/i);
+    const division = screen.getByRole("radiogroup", { name: /^division$/i });
+    expect(within(division).getByRole("radio", { name: "Classic" })).toHaveAttribute("aria-checked", "false");
+    submitForm();
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("Pick a division");
+    });
+    expect(apiPost).not.toHaveBeenCalled();
+  });
+});
+
+describe("SessionDetailPage — loading", () => {
+  it("reports a failure to load and says the session was not found", async () => {
+    signedIn = true;
+    vi.mocked(toast.error).mockClear();
+    apiGet.mockImplementation(() => Promise.reject(new Error("Session not found")));
+    renderAt();
+
+    expect(await screen.findByText("Session not found.")).toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledWith("Session not found");
   });
 });
