@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { SignedIn, SignedOut, SignInButton, useAuth, useUser } from "@clerk/clerk-react";
 import type { ApiSession, ApiQueueEntry, ApiLeadingPair, ApiSong, ApiEventSongSubmission, ApiMyCheckin } from "@/schemas";
+import { isOpenEvent } from "@/schemas";
 import { useApiClient } from "@/api/client";
 import { call, endpoints } from "@/api/endpoints";
 import { SessionInfoHeader } from "@/components/SessionInfoHeader";
@@ -162,6 +163,14 @@ export default function ApiSessionPage() {
 
   const noEventSongs =
     !!session?.event_id && eventSubmissions !== null && checkinSongs.length === 0;
+
+  // Where "Submit songs to this event" goes: this session's event page, or
+  // The Open's dedicated page, falling back to the picker for event-less sessions.
+  const submitSongsHref = !session?.event_id
+    ? "/event-submissions"
+    : isOpenEvent(session.event_name)
+      ? "/open-submissions"
+      : `/event-submissions/${session.event_id}`;
 
   // Derived check-in context from the selected song
   const selectedSong = useMemo(
@@ -427,7 +436,7 @@ export default function ApiSessionPage() {
           ) : !canCheckIn && checkinWindowOpen && noEventSongs ? (
             <p className="text-sm text-muted-foreground">
               You haven&apos;t added any songs to this event yet.{" "}
-              <Link to="/event-submissions" className="underline">
+              <Link to={submitSongsHref} className="underline">
                 Submit songs to this event
               </Link>
               .
@@ -602,7 +611,7 @@ export default function ApiSessionPage() {
               {noEventSongs ? (
                 <p className="text-sm text-muted-foreground">
                   You haven&apos;t added any songs to this event yet.{" "}
-                  <Link to="/event-submissions" className="underline">
+                  <Link to={submitSongsHref} className="underline">
                     Submit songs to this event
                   </Link>
                   .{" "}
