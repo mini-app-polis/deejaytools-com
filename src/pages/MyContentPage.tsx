@@ -5,6 +5,7 @@ import type {
   ApiSession,
   ApiSong,
 } from "@/schemas";
+import { isOpenEvent } from "@/schemas";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { toast } from "sonner";
@@ -192,6 +193,14 @@ export default function MyContentPage() {
     [sortedAvailableEvents, submissionsByEventId]
   );
 
+  // A shortcut to The Open's submission page while it is accepting songs. With
+  // more than one Open event, /open-submissions forwards to the picker.
+  const openSubmissionsHref = useMemo(() => {
+    const open = availableEvents.filter((e) => isOpenEvent(e.name));
+    if (open.length === 0) return null;
+    return open.length === 1 ? `/event-submissions/${open[0].id}` : "/open-submissions";
+  }, [availableEvents]);
+
   const eventNameById = useMemo(
     () => new Map(availableEvents.map((e) => [e.id, e.name])),
     [availableEvents]
@@ -372,9 +381,16 @@ export default function MyContentPage() {
           <h2 id="events" className="font-semibold scroll-mt-24">
             Events
           </h2>
-          <Button size="sm" asChild>
-            <Link to="/event-submissions">Submit songs</Link>
-          </Button>
+          <div className="flex flex-wrap justify-end gap-2">
+            {openSubmissionsHref && (
+              <Button size="sm" asChild>
+                <Link to={openSubmissionsHref}>Submit to The Open</Link>
+              </Button>
+            )}
+            <Button size="sm" asChild>
+              <Link to="/event-submissions">Submit songs</Link>
+            </Button>
+          </div>
         </div>
         <div className="p-4 space-y-3">
           {eventsLoading ? (
