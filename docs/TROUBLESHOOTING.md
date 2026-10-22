@@ -144,24 +144,24 @@ Production on Railway uses the injected `PORT`, so this error is almost always l
 drive_work_skipped: Google Drive is not configured; song builds and Drive jobs stay queued
 ```
 
-**Cause:** One or more of `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`, `GOOGLE_DRIVE_PARENT_FOLDER_ID` is missing or empty. The scheduler then skips song builds and Drive jobs rather than failing them, so nothing burns its retries. A Drive call made anyway fails with `Google Drive environment variables are not configured`.
+**Cause:** `GOOGLE_CREDENTIALS_JSON` or `GOOGLE_DRIVE_PARENT_FOLDER_ID` is missing or empty, or `GOOGLE_CREDENTIALS_JSON` is not a key file with both `client_email` and `private_key`. The scheduler then skips song builds and Drive jobs rather than failing them, so nothing burns its retries. A Drive call made anyway fails with `Google Drive environment variables are not configured`.
 
 **Fix:**
 
-1. Set all three in Doppler (see api-deejaytools' `.env.example`).
+1. Set both in Doppler (see api-deejaytools' `.env.example`). `GOOGLE_CREDENTIALS_JSON` is the fleet's one service-account key file, the same value the cogs read.
 2. Redeploy. Queued builds and jobs run on the next scheduler passes; nothing needs re-uploading.
 
 ---
 
-## Google private key / `\n` escaping
+## Google service-account key file
 
 **Symptom:** Drive auth fails at runtime with PEM / key-parsing errors; song builds fail (`song_background_upload_failed song=<id>: …`).
 
-**Cause:** `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` was pasted without its line breaks, or real newlines were stripped by the secrets UI.
+**Cause:** `GOOGLE_CREDENTIALS_JSON` holds something other than the JSON key file Google issued: a bare PEM, an edited file, or a key that was since deleted in Google Cloud.
 
 **Fix:**
 
-1. Store the key with literal `\n` sequences for line breaks. api-deejaytools `services/drive.py` turns each literal backslash-n into a newline before use.
+1. Paste the whole downloaded key file. Either form of the private key's line breaks works: `\n` escapes as Google writes them, or real newlines as Doppler may store them.
 2. Redeploy. Builds kept for retry pick up again on their own; any that gave up can be requeued (api-deejaytools OPERATIONS.md, "Retrying failed song builds").
 
 ---
@@ -174,7 +174,7 @@ drive_work_skipped: Google Drive is not configured; song builds and Drive jobs s
 
 **Fix:**
 
-1. In Google Drive, share `GOOGLE_DRIVE_PARENT_FOLDER_ID` with `GOOGLE_SERVICE_ACCOUNT_EMAIL` as **Editor** (or Content manager on shared drives).
+1. In Google Drive, share `GOOGLE_DRIVE_PARENT_FOLDER_ID` with the service account (the key file's `client_email`) as **Editor** (or Content manager on shared drives).
 2. Re-upload songs that were removed (below); requeue builds that gave up (api-deejaytools OPERATIONS.md).
 
 ---
@@ -289,17 +289,17 @@ Related refusals from the same route: `Chunk exceeds 10 MB limit` (one chunk; th
 
 **Symptom:** User sees success on `/feedback`; API returns **201**; nothing in inbox.
 
-**Cause:** No Brevo key. The API reads `DEEJAYTOOLS_BREVO_API_KEY`, falling back to the legacy `BREVO_API_KEY` only when the prefixed one is unset or empty. Without either it logs:
+**Cause:** No Brevo key. The API reads `BREVO_API_KEY`, the fleet's one Brevo key. Without it it logs:
 
 ```
-feedback DEEJAYTOOLS_BREVO_API_KEY not set; skipping transactional email
+feedback BREVO_API_KEY not set; skipping transactional email
 ```
 
 and still returns success, by design. The Discord `activity` post for that feedback says the message was not kept; it is the only sign the feedback arrived.
 
 **Fix:**
 
-1. Set `DEEJAYTOOLS_BREVO_API_KEY` in Doppler (Brevo → SMTP & API → API Keys). Do not rely on the unprefixed `BREVO_API_KEY`: in the shared config that name belongs to api-kaianolevine-com's Brevo account.
+1. Set `BREVO_API_KEY` in Doppler (Brevo → SMTP & API → API Keys).
 2. Redeploy.
 3. Submit test feedback.
 
