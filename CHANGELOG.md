@@ -1,3 +1,10 @@
+## [2.11.2](https://github.com/mini-app-polis/deejaytools-com/compare/v2.11.1...v2.11.2) (2026-10-22)
+
+
+### Bug Fixes
+
+* **a11y:** turn on the dark colour variants and scan pages only once they've loaded ([05ccd87](https://github.com/mini-app-polis/deejaytools-com/commit/05ccd870cff705cb514327839868bba044c65374))
+
 ## [2.11.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.11.0...v2.11.1) (2026-10-21)
 
 
