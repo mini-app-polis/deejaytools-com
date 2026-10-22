@@ -100,7 +100,7 @@ export default function HelpTheQueuePage() {
         <p>
           The <strong className="text-foreground">#</strong> on each row is your{" "}
           <strong className="text-foreground">overall line position</strong>, not &ldquo;3rd in
-          Priority.&rdquo; Active rows are #1, #2, …; Priority continues numbering after Active (e.g. if
+          Priority.&rdquo; Active entries are #1, #2, …; Priority continues numbering after Active (e.g. if
           2 are Active, Priority #1 shows as <strong className="text-foreground">#3</strong>); Standard
           continues after Priority. When you are checked in, the session page also shows your status as{" "}
           <strong className="text-foreground">#N in queue</strong> near the Check in button.

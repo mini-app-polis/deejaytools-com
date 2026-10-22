@@ -96,6 +96,19 @@ describe("useApiClient.get", () => {
     await expect(result.current.get("/v1/foo")).rejects.toThrow("Bad input");
   });
 
+  it("replaces the developer-facing not-synced message with a plain one", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(
+        { error: { code: "USER_NOT_SYNCED", message: "Call POST /v1/auth/sync first" } },
+        { status: 401 }
+      )
+    );
+    const { result } = renderHook(() => useApiClient());
+    await expect(result.current.get("/v1/foo")).rejects.toThrow(
+      "We're still setting up your account. Reload the page, or sign out and back in."
+    );
+  });
+
   it("throws a generic 'Request failed: <status>' when the server doesn't return an envelope", async () => {
     // res.ok === false but body is not an error envelope (no `error` key).
     fetchMock.mockResolvedValue(jsonResponse({ unexpected: true }, { status: 500 }));

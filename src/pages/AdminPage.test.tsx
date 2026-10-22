@@ -465,7 +465,7 @@ describe("AdminPage — Events section", () => {
     await user.click(await screen.findByRole("button", { name: "Edit" }));
     expect(screen.queryByText("event detail page")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Edit event" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "✕" }));
+    await user.click(screen.getByRole("button", { name: "Close" }));
 
     await user.click(screen.getByText("Swing Fling"));
     expect(await screen.findByText("event detail page")).toBeInTheDocument();
@@ -862,7 +862,7 @@ describe("AdminPage — Sessions section", () => {
     await user.click(await screen.findByRole("button", { name: "Delete" }));
     const dialog = await screen.findByRole("dialog");
     expect(dialog).toHaveTextContent(SESS_OPEN_TITLE);
-    expect(dialog).toHaveTextContent(/cascade-delete every check-in/);
+    expect(dialog).toHaveTextContent(/deletes the session and everything in it/);
     await user.click(within(dialog).getByRole("button", { name: "Delete" }));
 
     await waitFor(() => expect(apiDel).toHaveBeenCalledWith("/v1/sessions/s1"));

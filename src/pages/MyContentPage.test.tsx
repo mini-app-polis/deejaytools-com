@@ -416,7 +416,7 @@ describe("MyContentPage — Songs section", () => {
     const legacyBtn = screen.getByRole("button", { name: "Legacy Song" });
     expect(legacyBtn).toBeDisabled();
     const legacyCard = legacyBtn.closest("div.rounded-lg")!;
-    expect(legacyCard).toHaveTextContent("Entity Team Rocket");
+    expect(legacyCard).toHaveTextContent("Entered as Team Rocket");
     expect(legacyCard).toHaveTextContent("—");
   });
 

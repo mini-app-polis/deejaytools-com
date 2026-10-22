@@ -1586,8 +1586,8 @@ export default function AdminPage() {
         {/* ── Test Checkin tab ── */}
         <TabsContent value="test-checkin" className="mt-4 space-y-4">
           <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-            Creates throwaway user/partner/pair rows and uses a placeholder song.
-            Skips the check-in time window. Each submission adds one entry to the selected session's queue.
+            Adds made-up test dancers with a placeholder song, ignoring the check-in window. Each
+            submission adds one entry to the selected session&apos;s queue.
           </div>
           <form onSubmit={submitTestCheckin} className="space-y-4 max-w-lg">
             <div>
@@ -1616,25 +1616,25 @@ export default function AdminPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={FIELD_LABEL_CLASS}>Leader first name</label>
-                <input className={FIELD_INPUT_CLASS} value={tcLeaderFirst}
+                <label htmlFor="tc-leader-first-name" className={FIELD_LABEL_CLASS}>Leader first name</label>
+                <input id="tc-leader-first-name" className={FIELD_INPUT_CLASS} value={tcLeaderFirst}
                   onChange={(e) => setTcLeaderFirst(e.target.value)} />
               </div>
               <div>
-                <label className={FIELD_LABEL_CLASS}>Leader last name</label>
-                <input className={FIELD_INPUT_CLASS} value={tcLeaderLast}
+                <label htmlFor="tc-leader-last-name" className={FIELD_LABEL_CLASS}>Leader last name</label>
+                <input id="tc-leader-last-name" className={FIELD_INPUT_CLASS} value={tcLeaderLast}
                   onChange={(e) => setTcLeaderLast(e.target.value)} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={FIELD_LABEL_CLASS}>Follower first name</label>
-                <input className={FIELD_INPUT_CLASS} value={tcFollowerFirst}
+                <label htmlFor="tc-follower-first-name" className={FIELD_LABEL_CLASS}>Follower first name</label>
+                <input id="tc-follower-first-name" className={FIELD_INPUT_CLASS} value={tcFollowerFirst}
                   onChange={(e) => setTcFollowerFirst(e.target.value)} />
               </div>
               <div>
-                <label className={FIELD_LABEL_CLASS}>Follower last name</label>
-                <input className={FIELD_INPUT_CLASS} value={tcFollowerLast}
+                <label htmlFor="tc-follower-last-name" className={FIELD_LABEL_CLASS}>Follower last name</label>
+                <input id="tc-follower-last-name" className={FIELD_INPUT_CLASS} value={tcFollowerLast}
                   onChange={(e) => setTcFollowerLast(e.target.value)} />
               </div>
             </div>
@@ -1869,7 +1869,7 @@ export default function AdminPage() {
                 <>
                   <span className="font-medium">{formatSessionTitle(pendingDeleteSession, pendingDeleteSession.event_timezone)}</span>
                   <br />
-                  This will cascade-delete every check-in, queue entry, run, and division row attached to it. This cannot be undone.
+                  This deletes the session and everything in it — its check-ins, queue, and run history. This cannot be undone.
                 </>
               )}
             </DialogDescription>
@@ -1888,6 +1888,9 @@ export default function AdminPage() {
           onClick={() => setEvDialogOpen(false)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ev-dialog-title"
             className="rounded-t-2xl sm:rounded-lg border bg-background p-6 shadow-lg w-full sm:max-w-md space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
@@ -1895,13 +1898,13 @@ export default function AdminPage() {
               <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
             </div>
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">{evEditId ? "Edit event" : "New event"}</h2>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setEvDialogOpen(false)}>✕</Button>
+              <h2 id="ev-dialog-title" className="text-lg font-semibold">{evEditId ? "Edit event" : "New event"}</h2>
+              <Button type="button" variant="ghost" size="sm" aria-label="Close" onClick={() => setEvDialogOpen(false)}>✕</Button>
             </div>
             <form onSubmit={submitEventDialog} className="space-y-4">
               <div>
-                <label className={FIELD_LABEL_CLASS}>Name</label>
-                <input
+                <label htmlFor="ev-name" className={FIELD_LABEL_CLASS}>Name</label>
+                <input id="ev-name"
                   className={FIELD_INPUT_CLASS}
                   value={evName}
                   onChange={(e) => setEvName(e.target.value)}
@@ -1910,8 +1913,8 @@ export default function AdminPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className={FIELD_LABEL_CLASS}>Start date</label>
-                  <input
+                  <label htmlFor="ev-start-date" className={FIELD_LABEL_CLASS}>Start date</label>
+                  <input id="ev-start-date"
                     type="date"
                     className={FIELD_INPUT_CLASS}
                     value={evStartDate}
@@ -1927,8 +1930,8 @@ export default function AdminPage() {
                   />
                 </div>
                 <div>
-                  <label className={FIELD_LABEL_CLASS}>End date</label>
-                  <input
+                  <label htmlFor="ev-end-date" className={FIELD_LABEL_CLASS}>End date</label>
+                  <input id="ev-end-date"
                     type="date"
                     className={FIELD_INPUT_CLASS}
                     value={evEndDate}
@@ -1939,8 +1942,8 @@ export default function AdminPage() {
                 </div>
               </div>
               <div>
-                <label className={FIELD_LABEL_CLASS}>Season year</label>
-                <input
+                <label htmlFor="ev-season-year" className={FIELD_LABEL_CLASS}>Season year</label>
+                <input id="ev-season-year"
                   className={FIELD_INPUT_CLASS}
                   inputMode="numeric"
                   pattern="\d{4}"
@@ -1956,8 +1959,8 @@ export default function AdminPage() {
                 </p>
               </div>
               <div>
-                <label className={FIELD_LABEL_CLASS}>Timezone</label>
-                <select
+                <label htmlFor="ev-timezone" className={FIELD_LABEL_CLASS}>Timezone</label>
+                <select id="ev-timezone"
                   className={FIELD_INPUT_CLASS}
                   value={evTimezone}
                   onChange={(e) => setEvTimezone(e.target.value)}
@@ -2009,6 +2012,9 @@ export default function AdminPage() {
           onClick={() => setSessDialogOpen(false)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sess-dialog-title"
             className="rounded-t-2xl sm:rounded-lg border bg-background p-6 shadow-lg w-full sm:max-w-lg max-h-[92vh] overflow-y-auto space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
@@ -2016,13 +2022,13 @@ export default function AdminPage() {
               <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
             </div>
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">{sessEditId ? "Edit session" : "New session"}</h2>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setSessDialogOpen(false)}>✕</Button>
+              <h2 id="sess-dialog-title" className="text-lg font-semibold">{sessEditId ? "Edit session" : "New session"}</h2>
+              <Button type="button" variant="ghost" size="sm" aria-label="Close" onClick={() => setSessDialogOpen(false)}>✕</Button>
             </div>
             <form onSubmit={submitSessionDialog} className="space-y-4">
               <div>
-                <label className={FIELD_LABEL_CLASS}>Event</label>
-                <select
+                <label htmlFor="sess-event" className={FIELD_LABEL_CLASS}>Event</label>
+                <select id="sess-event"
                   className={FIELD_INPUT_CLASS}
                   value={sessEventId}
                   onChange={(e) => {
@@ -2039,8 +2045,8 @@ export default function AdminPage() {
                 </select>
               </div>
               <div>
-                <label className={FIELD_LABEL_CLASS}>Date</label>
-                <input
+                <label htmlFor="sess-date" className={FIELD_LABEL_CLASS}>Date</label>
+                <input id="sess-date"
                   type="date"
                   className={FIELD_INPUT_CLASS}
                   value={sessDate}
@@ -2049,7 +2055,7 @@ export default function AdminPage() {
                 />
               </div>
               <div>
-                <label className={FIELD_LABEL_CLASS}>
+                <label htmlFor="sess-start-time" className={FIELD_LABEL_CLASS}>
                   Start time
                   {sessEventId && events?.find((ev) => ev.id === sessEventId)?.timezone && (
                     <span className="ml-1.5 font-normal text-muted-foreground">
@@ -2066,7 +2072,7 @@ export default function AdminPage() {
                     </span>
                   )}
                 </label>
-                <input
+                <input id="sess-start-time"
                   type="time"
                   className={FIELD_INPUT_CLASS}
                   value={sessStartTime}
@@ -2076,8 +2082,8 @@ export default function AdminPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className={FIELD_LABEL_CLASS}>Check-in opens</label>
-                  <select
+                  <label htmlFor="sess-checkin-opens" className={FIELD_LABEL_CLASS}>Check-in opens</label>
+                  <select id="sess-checkin-opens"
                     className={FIELD_INPUT_CLASS}
                     value={sessCheckinOffsetMins}
                     onChange={(e) => setSessCheckinOffsetMins(e.target.value)}
@@ -2092,8 +2098,8 @@ export default function AdminPage() {
                   </select>
                 </div>
                 <div>
-                  <label className={FIELD_LABEL_CLASS}>Floor trial duration</label>
-                  <select
+                  <label htmlFor="sess-duration" className={FIELD_LABEL_CLASS}>Floor trial duration</label>
+                  <select id="sess-duration"
                     className={FIELD_INPUT_CLASS}
                     value={sessDurationMins}
                     onChange={(e) => setSessDurationMins(e.target.value)}
@@ -2112,8 +2118,8 @@ export default function AdminPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className={FIELD_LABEL_CLASS}>Active cap (priority)</label>
-                  <input
+                  <label htmlFor="sess-priority-max" className={FIELD_LABEL_CLASS}>Active cap (priority)</label>
+                  <input id="sess-priority-max"
                     type="number"
                     min={0}
                     className={FIELD_INPUT_CLASS}
@@ -2122,8 +2128,8 @@ export default function AdminPage() {
                   />
                 </div>
                 <div>
-                  <label className={FIELD_LABEL_CLASS}>Active cap (non-priority)</label>
-                  <input
+                  <label htmlFor="sess-non-priority-max" className={FIELD_LABEL_CLASS}>Active cap (non-priority)</label>
+                  <input id="sess-non-priority-max"
                     type="number"
                     min={0}
                     className={FIELD_INPUT_CLASS}
@@ -2133,8 +2139,8 @@ export default function AdminPage() {
                 </div>
               </div>
               <div>
-                <label className={FIELD_LABEL_CLASS}>Priority run limit</label>
-                <input
+                <label htmlFor="sess-priority-run-limit" className={FIELD_LABEL_CLASS}>Priority run limit</label>
+                <input id="sess-priority-run-limit"
                   type="number"
                   min={0}
                   className={FIELD_INPUT_CLASS}
