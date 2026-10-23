@@ -2,7 +2,7 @@
  * Configuration for the end-to-end suite, with the same guards as the live
  * contract suite (src/contract/harness.ts): it creates and deletes data, so
  * it only runs with a development Clerk key, and never against a production
- * host.
+ * host. The names are listed in .env.example.
  */
 const PRODUCTION_DOMAIN = "deejaytools.com";
 const ALLOWED_DEV_HOSTS = ["api-dev.deejaytools.com"];

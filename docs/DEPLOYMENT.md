@@ -93,15 +93,15 @@ Calls the fleet's shared `mini-app-polis/.github/.github/workflows/evaluate.yml@
 
 ## Environment variables
 
+Every variable this repository reads, for the app, the contract suite and
+the end-to-end suite, is listed in [`.env.example`](../.env.example).
+
 ### Cloudflare Pages — set in Pages dashboard (or Doppler → Pages sync)
 
-| Variable | Required | Notes |
-|----------|----------|-------|
-| `DEEJAYTOOLS_API` | **Yes** (Production) | Public API base URL for production-branch builds, e.g. `https://api.deejaytools.com`. |
-| `DEEJAYTOOLS_API_DEV` | **Yes** (Preview) | API base URL for every other build, e.g. `https://api-dev.deejaytools.com`. |
-| `DEEJAYTOOLS_CLERK_PUBLISHABLE_KEY` | **Yes** | Clerk publishable key for the production Clerk instance. |
-| `SENTRY_DSN_DEEJAYTOOLS` | Optional | Browser Sentry; no-op when unset. |
-| `VITE_MAINTENANCE` | Optional | Only the literal string `"1"` replaces the whole app with a maintenance page (no Clerk, no API calls). Build-time: set it, then redeploy; unset it, then redeploy again. |
+The app's variables are build-time: Vite maps them into the bundle, so a
+change needs a redeploy. The production Pages environment needs
+`DEEJAYTOOLS_API`; the preview environment `DEEJAYTOOLS_API_DEV`. Unsetting
+`VITE_MAINTENANCE` also needs a redeploy.
 
 ### Platform-injected (do not set manually unless debugging)
 
