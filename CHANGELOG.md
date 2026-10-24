@@ -1,3 +1,11 @@
+## [2.11.3](https://github.com/mini-app-polis/deejaytools-com/compare/v2.11.2...v2.11.3) (2026-10-24)
+
+
+### Bug Fixes
+
+* **deps:** patch zod ([34e5a0b](https://github.com/mini-app-polis/deejaytools-com/commit/34e5a0b4e63325411708fd1481c45cffcc72cac1))
+* **songs:** show the API's partnership_label on song labels ([833f6af](https://github.com/mini-app-polis/deejaytools-com/commit/833f6afb418eb9807b98bd4ee6e9c83fb3e94574))
+
 ## [2.11.2](https://github.com/mini-app-polis/deejaytools-com/compare/v2.11.1...v2.11.2) (2026-10-22)
 
 
