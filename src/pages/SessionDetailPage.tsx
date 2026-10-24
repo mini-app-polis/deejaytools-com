@@ -11,7 +11,6 @@ import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDateTimeShort } from "@/lib/sessionFormat";
-import { songPartnershipLabel } from "@/lib/entityLabel";
 
 /**
  * Best human-readable label for a song, never falling back to the raw
@@ -647,7 +646,7 @@ export default function ApiSessionPage() {
                     <span className="text-muted-foreground w-16 shrink-0 pt-px">Partner</span>
                     <span className="font-medium">
                       {isManaged || !isSolo
-                        ? songPartnershipLabel(selectedSong, user?.fullName ?? undefined) ?? "—"
+                        ? selectedSong.partnership_label?.trim() || "—"
                         : <span className="text-muted-foreground italic">Solo</span>}
                     </span>
                   </div>

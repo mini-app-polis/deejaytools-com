@@ -312,6 +312,13 @@ export const ApiSongSchema = z.object({
   managed_leader_last_name: z.string().nullable().optional(),
   managed_follower_first_name: z.string().nullable().optional(),
   managed_follower_last_name: z.string().nullable().optional(),
+  /**
+   * Who the song is for, ready to show: leader first (the amateur first in
+   * ProAm FollowerAm), a team or placeholder by its own name, a managed
+   * couple's leader & follower. Null when the song has no partner and no
+   * managed partnership. The API orders it; the site never re-composes it.
+   */
+  partnership_label: z.string().nullable().optional(),
 });
 export type ApiSong = z.infer<typeof ApiSongSchema>;
 

@@ -906,6 +906,24 @@ function submitForm() {
   fireEvent.click(submit!);
 }
 
+describe("SessionDetailPage — the check-in confirmation", () => {
+  it("names the partnership as the API ordered it, leader first", async () => {
+    signedIn = true;
+    stubGets({
+      session: openCheckinWindowSession(),
+      songs: [{ ...partnerSong, partnership_label: "Fabio Zanardelli & Amelie Gruber" }],
+      pairs: [],
+      eventSubmissions: [makeSubmission("song_pair")],
+    });
+    renderAt();
+
+    await openFormAndPick(/Partner Routine/i);
+
+    const line = (await screen.findByText("Partner", { selector: "span" })).parentElement!;
+    expect(line).toHaveTextContent("Fabio Zanardelli & Amelie Gruber");
+  });
+});
+
 describe("SessionDetailPage — submitting a check-in", () => {
   it("creates the pair first when the song's partner has none yet, and sends trimmed notes", async () => {
     signedIn = true;

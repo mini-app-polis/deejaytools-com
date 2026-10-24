@@ -23,7 +23,6 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { compareEventChrono } from "@/lib/chronoSort";
-import { songPartnershipLabel } from "@/lib/entityLabel";
 import { formatSessionTitle, formatTimeOnly } from "@/lib/sessionFormat";
 
 function eventStatusBadge(status: string) {
@@ -470,7 +469,7 @@ export default function MyContentPage() {
               </p>
             )}
             {songs.map((s) => {
-              const partnerName = songPartnershipLabel(s);
+              const partnerName = s.partnership_label?.trim() || null;
               const driveUrl = s.drive_file_id
                 ? `https://drive.google.com/file/d/${s.drive_file_id}/view`
                 : null;
@@ -503,9 +502,7 @@ export default function MyContentPage() {
                     )}
                     {partnerName && (
                       <span>
-                        <span className="text-muted-foreground text-xs">
-                          {s.partner_kind && s.partner_kind !== "partner" ? "Entered as " : "Partner "}
-                        </span>
+                        <span className="text-muted-foreground text-xs">Entered as </span>
                         {partnerName}
                       </span>
                     )}
