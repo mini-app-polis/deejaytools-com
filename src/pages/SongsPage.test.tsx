@@ -84,6 +84,28 @@ describe("SongsPage", () => {
     expect(screen.getAllByText("The Open 2025").length).toBeGreaterThan(0);
     expect(screen.getAllByText("98%").length).toBeGreaterThan(0);
   });
+
+  it("shows the API's partnership label as sent, leader first", async () => {
+    apiGet.mockResolvedValue([
+      fx.song({
+        id: "s1",
+        processed_filename: "fabio_amelie.mp3",
+        partner_id: "p1",
+        partner_first_name: "Fabio",
+        partner_last_name: "Zanardelli",
+        partner_kind: "partner",
+        partnership_label: "Fabio Zanardelli & Amelie Gruber",
+      }),
+      fx.song({ id: "s2", processed_filename: "alone.mp3" }),
+    ]);
+    renderPage();
+
+    const card = (await screen.findByText("fabio_amelie.mp3")).closest("div.rounded-lg")!;
+    expect(card).toHaveTextContent("Entered as Fabio Zanardelli & Amelie Gruber");
+    // A song with no partnership has no label to show.
+    const alone = screen.getByText("alone.mp3").closest("div.rounded-lg")!;
+    expect(alone).not.toHaveTextContent("Entered as");
+  });
 });
 
 describe("SongsPage — delete flow", () => {

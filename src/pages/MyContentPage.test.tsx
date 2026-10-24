@@ -382,6 +382,7 @@ describe("MyContentPage — Songs section", () => {
     partner_first_name: "Bo",
     partner_last_name: "Kim",
     partner_kind: "partner",
+    partnership_label: "Ann Lee & Bo Kim",
   });
   const LEGACY = fx.song({
     id: "song-legacy",
@@ -390,6 +391,7 @@ describe("MyContentPage — Songs section", () => {
     partner_id: "p2",
     partner_first_name: "Team Rocket",
     partner_kind: "team",
+    partnership_label: "Team Rocket",
   });
 
   it("shows an empty state with a link to add a song", async () => {
@@ -405,7 +407,7 @@ describe("MyContentPage — Songs section", () => {
     const card = (await screen.findByText("Ann_Bo_Classic_2026.mp3")).closest("div.rounded-lg")!;
     expect(card).toHaveTextContent("Uploaded: my mix final.mp3");
     expect(card).toHaveTextContent("Division Classic");
-    expect(card).toHaveTextContent("Partner Bo Kim");
+    expect(card).toHaveTextContent("Entered as Ann Lee & Bo Kim");
     expect(card).toHaveTextContent("Routine Fever");
     expect(card).toHaveTextContent("Descriptor v3");
     expect(
@@ -418,6 +420,15 @@ describe("MyContentPage — Songs section", () => {
     const legacyCard = legacyBtn.closest("div.rounded-lg")!;
     expect(legacyCard).toHaveTextContent("Entered as Team Rocket");
     expect(legacyCard).toHaveTextContent("—");
+  });
+
+  it("shows no partnership line for a song the API sent no label for", async () => {
+    const alone = fx.song({ id: "song-alone", processed_filename: "alone.mp3" });
+    withGets({ "/v1/songs": [alone] });
+    renderPage();
+
+    const card = (await screen.findByText("alone.mp3")).closest("div.rounded-lg")!;
+    expect(card).not.toHaveTextContent("Entered as");
   });
 
   it("deletes a song after confirming", async () => {

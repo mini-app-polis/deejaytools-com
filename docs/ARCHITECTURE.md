@@ -111,7 +111,6 @@ One default-export component per route. Pages orchestrate fetching, local state,
 | `chronoSort.ts` | Bucketed chronological sort for sessions/events (active → upcoming → past) |
 | `chunkedSongUpload.ts` | 5 MB chunked POST to `/v1/songs/upload/chunk` with retries |
 | `clickable.ts` | Shared Tailwind class strings for clickable cards and table rows |
-| `entityLabel.ts` | “Owner & Partner” display labels; handles placeholder partner kinds |
 | `env.ts` | `isProdHost()` — true on `deejaytools.com` / `www.deejaytools.com` |
 | `instrument.ts` | Sentry browser init (no-op without `SENTRY_DSN_DEEJAYTOOLS`) |
 | `logger.ts` | Structured console logger; `error` also forwards to Sentry |

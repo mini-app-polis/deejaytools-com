@@ -14,7 +14,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { songPartnershipLabel } from "@/lib/entityLabel";
 
 export default function SongsPage() {
   const api = useApiClient();
@@ -110,7 +109,7 @@ export default function SongsPage() {
           </p>
         )}
         {songs.map((s) => {
-          const partnerName = songPartnershipLabel(s);
+          const partnerName = s.partnership_label?.trim() || null;
           return (
             <div key={s.id} className="rounded-lg border-2 border-primary/40 bg-card p-4 space-y-2 shadow-sm">
               <div className="flex items-start justify-between gap-2">
@@ -130,9 +129,7 @@ export default function SongsPage() {
                 )}
                 {partnerName && (
                   <span>
-                    <span className="text-muted-foreground text-xs">
-                      {s.partner_kind && s.partner_kind !== "partner" ? "Entered as " : "Partner "}
-                    </span>
+                    <span className="text-muted-foreground text-xs">Entered as </span>
                     {partnerName}
                   </span>
                 )}
