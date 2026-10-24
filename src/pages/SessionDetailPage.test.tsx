@@ -922,6 +922,46 @@ describe("SessionDetailPage — the check-in confirmation", () => {
     const line = (await screen.findByText("Partner", { selector: "span" })).parentElement!;
     expect(line).toHaveTextContent("Fabio Zanardelli & Amelie Gruber");
   });
+
+  it("shows a dash when the API sent no partnership label", async () => {
+    signedIn = true;
+    stubGets({
+      session: openCheckinWindowSession(),
+      songs: [partnerSong],
+      pairs: [],
+      eventSubmissions: [makeSubmission("song_pair")],
+    });
+    renderAt();
+
+    await openFormAndPick(/Partner Routine/i);
+
+    const line = (await screen.findByText("Partner", { selector: "span" })).parentElement!;
+    expect(line).toHaveTextContent("—");
+  });
+
+  it("says Solo for a song with no partner or managed partnership", async () => {
+    signedIn = true;
+    stubGets({
+      session: openCheckinWindowSession(),
+      songs: [
+        {
+          id: "song_solo",
+          processed_filename: "Solo Routine",
+          division: "Classic",
+          partner_id: null,
+          managed_partnership_id: null,
+        },
+      ],
+      pairs: [],
+      eventSubmissions: [makeSubmission("song_solo")],
+    });
+    renderAt();
+
+    await openFormAndPick(/Solo Routine/i);
+
+    const line = (await screen.findByText("Partner", { selector: "span" })).parentElement!;
+    expect(line).toHaveTextContent("Solo");
+  });
 });
 
 describe("SessionDetailPage — submitting a check-in", () => {

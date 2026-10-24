@@ -422,6 +422,15 @@ describe("MyContentPage — Songs section", () => {
     expect(legacyCard).toHaveTextContent("—");
   });
 
+  it("shows no partnership line for a song the API sent no label for", async () => {
+    const alone = fx.song({ id: "song-alone", processed_filename: "alone.mp3" });
+    withGets({ "/v1/songs": [alone] });
+    renderPage();
+
+    const card = (await screen.findByText("alone.mp3")).closest("div.rounded-lg")!;
+    expect(card).not.toHaveTextContent("Entered as");
+  });
+
   it("deletes a song after confirming", async () => {
     withGets({ "/v1/songs": [UPLOADED] });
     apiDel.mockResolvedValue(undefined);
