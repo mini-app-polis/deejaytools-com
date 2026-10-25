@@ -1,3 +1,10 @@
+## [2.11.6](https://github.com/mini-app-polis/deejaytools-com/compare/v2.11.5...v2.11.6) (2026-10-25)
+
+
+### Bug Fixes
+
+* **app:** separate song label pieces with dashes ([73127be](https://github.com/mini-app-polis/deejaytools-com/commit/73127bed379e5d97e89267c7676902e60694d05d))
+
 ## [2.11.5](https://github.com/mini-app-polis/deejaytools-com/compare/v2.11.4...v2.11.5) (2026-10-25)
 
 
