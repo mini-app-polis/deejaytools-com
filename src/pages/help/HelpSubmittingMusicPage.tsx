@@ -114,6 +114,12 @@ export default function HelpSubmittingMusicPage() {
               record.
             </li>
             <li>
+              <strong className="text-foreground">Uses the season year, not the calendar year.</strong>{" "}
+              Seasons run from October 1 to September 30, so a song uploaded from October onward
+              carries the next year: one uploaded in October 2026 is labelled 2027. The year only
+              appears in the Drive filename and folders; DeejayTools doesn&apos;t show it on your songs.
+            </li>
+            <li>
               <strong className="text-foreground">Labels the audio</strong> with your names,
               division, routine name, and season, so the deejay&apos;s player shows who is up.
             </li>
