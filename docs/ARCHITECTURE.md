@@ -183,7 +183,7 @@ Every API call the app makes is declared once in `endpoints.ts`: method, access 
 
 A response that fails its schema is a contract violation. In dev and tests it throws `ContractViolation`; in production it is reported to Sentry (tagged `contract_endpoint`) and the raw data is used, so harmless drift never breaks a page but never goes unnoticed. Unit-test API mocks are built with the `fx.*` factories in `src/test/fixtures.ts`, which parse through the same schemas.
 
-The live contract suite (`src/contract`, `pnpm test:contract`, `.github/workflows/contract.yml`) walks the catalog against the development API with a real Clerk session and fails on any endpoint that is neither exercised nor explicitly skipped. See [ADR-002](decisions/ADR-002-api-contract.md).
+The live contract suite (`src/contract`, `pnpm test:contract`, `.github/workflows/contract.yml`) walks the catalog against the development API with a real Clerk session and fails on any endpoint that is neither exercised nor explicitly skipped. See [ADR-0002](decisions/ADR-0002-api-contract.md).
 
 ---
 

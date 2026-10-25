@@ -7,10 +7,11 @@ left out of the initial build and need to come back.
 
 ## Recently completed
 
-- **ADR-004 floor-trial queue model.** Schema, helpers, routes, and
+- **api-deejaytools ADR-0005 floor-trial queue model.** Schema, helpers, routes, and
   frontend updated. Replaces the original `floor_slots` design with
   three queues, audit trail, and run-history tables. See
-  `deejaytools-api/docs/decisions/ADR-004-floor-trial-queue-model.md`.
+  `api-deejaytools/docs/decisions/ADR-0005-floor-trial-queue-model.md`
+  (made in deejaytools-api, since ported).
 - **Two-step queue compaction.** Queue compaction moves rows to
   sentinel positions before settling them at their final values, to
   avoid unique-index conflicts during concurrent withdraw/promote/
