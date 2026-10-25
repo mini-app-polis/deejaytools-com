@@ -1,4 +1,4 @@
-# ADR-001. Browser observability stack
+# ADR-0001. Browser observability stack
 
 Date: 2026-04-24
 
