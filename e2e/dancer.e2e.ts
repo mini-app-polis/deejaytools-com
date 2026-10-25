@@ -1,3 +1,4 @@
+import { songLabel } from "../src/lib/songLabel";
 import { e2eConfig } from "./env";
 import { Api, dateIn, expect, RUN_ID, signIn, silentWav, test, waitForSongBuild, type Song } from "./fixtures";
 
@@ -138,17 +139,19 @@ test("a dancer uploads a song, enters it, checks in, sees their place, withdraws
     await expect(page.getByText("Song uploaded successfully.")).toBeVisible({ timeout: 30_000 });
   });
 
-  // The pages name a song by its processed filename once the API has built
-  // it, and by its routine name until then. Waiting for the build makes the
-  // name the test looks for stable, and gives the event copy a file to copy.
+  // The pages name a song by its pieces, and the version only arrives with
+  // the build. Waiting for the build makes the name the test looks for
+  // stable, and gives the event copy a file to copy.
   // The API removes the song again if the build fails, so a song that
   // appears and then vanishes means Drive refused it.
   let label = "";
   await test.step("the API builds the song and uploads it to Google Drive", async () => {
     const song = await waitForSongBuild(api, page, ROUTINE);
     songId = song.id;
-    label = song.processed_filename!;
-    expect(label).toMatch(/\.wav$/);
+    expect(song.processed_filename).toMatch(/\.wav$/);
+    label = songLabel(song);
+    expect(label).toContain(ROUTINE);
+    expect(label).not.toMatch(/\b20\d\d\b/);
   });
 
   await test.step("enter the song in the event", async () => {
@@ -166,8 +169,8 @@ test("a dancer uploads a song, enters it, checks in, sees their place, withdraws
     await page.getByRole("button", { name: "Submit", exact: true }).click();
     await expect(page.getByText(`Song added to ${EVENT_NAME}.`)).toBeVisible();
     // The submission row naming the song and holding its own Remove button.
-    // Submissions show the API's structured label ("Partnership Division Year
-    // Routine vNN"), not the processed filename, so match on the routine.
+    // Submissions show the API's structured label ("Partnership Division
+    // Routine vNN"), so match on the routine.
     await expect(
       page
         .locator("div")

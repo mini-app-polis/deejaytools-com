@@ -111,6 +111,8 @@ export function silentWav(): Buffer {
 export interface Song {
   id: string;
   routine_name: string | null;
+  division: string | null;
+  partnership_label?: string | null;
   processed_filename: string | null;
   drive_file_id: string | null;
 }
