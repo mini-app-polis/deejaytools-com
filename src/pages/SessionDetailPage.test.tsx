@@ -162,19 +162,19 @@ function openCheckinWindowSession(eventName = "GNDC") {
 const sampleSongs = [
   fx.song({
     id: "song1",
-    processed_filename: "Song One",
+    routine_name: "Song One",
     division: "Classic",
     partner_id: null,
   }),
   fx.song({
     id: "song2",
-    processed_filename: "Song Two",
+    routine_name: "Song Two",
     division: "Classic",
     partner_id: null,
   }),
   fx.song({
     id: "song3",
-    processed_filename: "Song Three",
+    routine_name: "Song Three",
     division: "Classic",
     partner_id: null,
   }),
@@ -660,9 +660,9 @@ describe("SessionDetailPage — check-in song selector", () => {
       .getAllByRole("radio")
       .map((radio) => radio.textContent);
 
-    expect(labels).toContain("Song One");
-    expect(labels).toContain("Song Two");
-    expect(labels).not.toContain("Song Three");
+    expect(labels).toContain("Classic Song One");
+    expect(labels).toContain("Classic Song Two");
+    expect(labels).not.toContain("Classic Song Three");
   });
 
   it("falls back to all songs when event submissions cannot be loaded", async () => {
@@ -689,9 +689,9 @@ describe("SessionDetailPage — check-in song selector", () => {
       .getAllByRole("radio")
       .map((radio) => radio.textContent);
 
-    expect(labels).toContain("Song One");
-    expect(labels).toContain("Song Two");
-    expect(labels).toContain("Song Three");
+    expect(labels).toContain("Classic Song One");
+    expect(labels).toContain("Classic Song Two");
+    expect(labels).toContain("Classic Song Three");
   });
 
   it("shows an add-to-event message when no songs are submitted", async () => {
@@ -726,7 +726,7 @@ describe("SessionDetailPage — check-in song selector", () => {
       songs: [
         {
           id: "song_mp",
-          processed_filename: "Managed Routine",
+          routine_name: "Managed Routine",
           division: "Classic",
           partner_id: null,
           managed_partnership_id: "mp_1",
@@ -774,7 +774,7 @@ describe("SessionDetailPage — check-in song selector", () => {
       songs: [
         {
           id: "song_pair",
-          processed_filename: "Partner Routine",
+          routine_name: "Partner Routine",
           division: "Classic",
           partner_id: "partner_1",
           managed_partnership_id: null,
@@ -841,7 +841,7 @@ describe("SessionDetailPage — check-in song selector", () => {
       songs: [
         {
           id: "song_team",
-          processed_filename: "Team Routine",
+          routine_name: "Team Routine",
           division: "Teams",
           partner_id: "partner_team",
           managed_partnership_id: null,
@@ -881,7 +881,7 @@ describe("SessionDetailPage — check-in song selector", () => {
 
 const partnerSong = {
   id: "song_pair",
-  processed_filename: "Partner Routine",
+  routine_name: "Partner Routine",
   division: "Classic",
   partner_id: "partner_1",
   managed_partnership_id: null,
@@ -946,7 +946,7 @@ describe("SessionDetailPage — the check-in confirmation", () => {
       songs: [
         {
           id: "song_solo",
-          processed_filename: "Solo Routine",
+          routine_name: "Solo Routine",
           division: "Classic",
           partner_id: null,
           managed_partnership_id: null,

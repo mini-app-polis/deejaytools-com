@@ -305,7 +305,8 @@ describe("MyContentPage — Check-ins section", () => {
     expect(screen.getByText("Showcase")).toBeInTheDocument();
     expect(screen.getByText("Ann & Bo")).toBeInTheDocument();
     expect(screen.getByText("Fever")).toBeInTheDocument();
-    expect(screen.getByText("Ann_Bo_Showcase_2026.mp3")).toBeInTheDocument();
+    // The filename carries the season year, which dancers are not shown.
+    expect(screen.queryByText("Ann_Bo_Showcase_2026.mp3")).not.toBeInTheDocument();
     expect(screen.getByText("Note: Lift at the end")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /learn more/i })).toHaveAttribute(
       "href",
@@ -372,7 +373,7 @@ describe("MyContentPage — Songs section", () => {
 
   const UPLOADED = fx.song({
     id: "song-up",
-    processed_filename: "Ann_Bo_Classic_2026.mp3",
+    processed_filename: "AnnLee_BoKim_Classic_2027_Fever_V3_v02.mp3",
     original_filename: "my mix final.mp3",
     drive_file_id: "drive123",
     division: "Classic",
@@ -404,7 +405,10 @@ describe("MyContentPage — Songs section", () => {
     withGets({ "/v1/songs": [UPLOADED, LEGACY] });
     renderPage();
 
-    const card = (await screen.findByText("Ann_Bo_Classic_2026.mp3")).closest("div.rounded-lg")!;
+    const card = (await screen.findByText("Ann Lee & Bo Kim Classic Fever v02")).closest(
+      "div.rounded-lg"
+    )!;
+    expect(card).not.toHaveTextContent("2027");
     expect(card).toHaveTextContent("Uploaded: my mix final.mp3");
     expect(card).toHaveTextContent("Division Classic");
     expect(card).toHaveTextContent("Entered as Ann Lee & Bo Kim");
@@ -419,7 +423,7 @@ describe("MyContentPage — Songs section", () => {
     expect(legacyBtn).toBeDisabled();
     const legacyCard = legacyBtn.closest("div.rounded-lg")!;
     expect(legacyCard).toHaveTextContent("Entered as Team Rocket");
-    expect(legacyCard).toHaveTextContent("—");
+    expect(within(legacyCard as HTMLElement).getByText("Team Rocket", { selector: "p" })).toBeInTheDocument();
   });
 
   it("shows no partnership line for a song the API sent no label for", async () => {
@@ -427,7 +431,7 @@ describe("MyContentPage — Songs section", () => {
     withGets({ "/v1/songs": [alone] });
     renderPage();
 
-    const card = (await screen.findByText("alone.mp3")).closest("div.rounded-lg")!;
+    const card = (await screen.findByText("Untitled song")).closest("div.rounded-lg")!;
     expect(card).not.toHaveTextContent("Entered as");
   });
 
@@ -439,7 +443,7 @@ describe("MyContentPage — Songs section", () => {
 
     await user.click(await screen.findByRole("button", { name: "Delete" }));
     const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveTextContent("This will permanently remove Ann_Bo_Classic_2026.mp3");
+    expect(dialog).toHaveTextContent("This will permanently remove Ann Lee & Bo Kim Classic Fever v02.");
     await user.click(within(dialog).getByRole("button", { name: "Delete" }));
 
     await waitFor(() => expect(apiDel).toHaveBeenCalledWith("/v1/songs/song-up"));
@@ -448,7 +452,7 @@ describe("MyContentPage — Songs section", () => {
   });
 
   it("keeps the song when deletion fails, with a generic prompt for an unnamed song", async () => {
-    withGets({ "/v1/songs": [LEGACY] });
+    withGets({ "/v1/songs": [{ ...LEGACY, partnership_label: null }] });
     apiDel.mockRejectedValue(new Error("Song is checked in"));
     const user = userEvent.setup();
     renderPage();

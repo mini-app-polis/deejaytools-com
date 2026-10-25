@@ -172,7 +172,7 @@ describe("EventSubmissionsPage — event page", () => {
     const user = userEvent.setup();
     renderAt("/event-submissions/ev1");
 
-    await pickSong(user, /2026_Classic_MyRoutine/);
+    await pickSong(user, /Classic My Routine/);
     await user.click(await screen.findByRole("combobox", { name: /division/i }));
     expect(await screen.findByRole("option", { name: /^Classic$/ })).toHaveAttribute(
       "aria-selected",
@@ -185,7 +185,7 @@ describe("EventSubmissionsPage — event page", () => {
     const user = userEvent.setup();
     renderAt("/event-submissions/ev1");
 
-    await pickSong(user, /2026_Classic_MyRoutine/);
+    await pickSong(user, /Classic My Routine/);
     expect(screen.queryByRole("radio", { name: /prelims & finals/i })).not.toBeInTheDocument();
   });
 
@@ -195,7 +195,7 @@ describe("EventSubmissionsPage — event page", () => {
     const user = userEvent.setup();
     renderAt("/event-submissions/ev1");
 
-    await pickSong(user, /2026_Classic_MyRoutine/);
+    await pickSong(user, /Classic My Routine/);
     await pickDivision(user, /^Showcase$/);
     await user.click(screen.getByRole("button", { name: /^submit$/i }));
 
@@ -215,7 +215,7 @@ describe("EventSubmissionsPage — event page", () => {
     const user = userEvent.setup();
     renderAt("/event-submissions/ev1");
 
-    await pickSong(user, /2026_Classic_MyRoutine/);
+    await pickSong(user, /Classic My Routine/);
     await user.click(await screen.findByRole("button", { name: /^submit$/i }));
 
     await waitFor(() => {
@@ -224,7 +224,7 @@ describe("EventSubmissionsPage — event page", () => {
       );
     });
     expect(await screen.findByRole("combobox", { name: /song/i })).toHaveTextContent(
-      /2026_Classic_MyRoutine/
+      /Classic My Routine/
     );
     expect(apiPost).toHaveBeenCalledTimes(1);
   });
@@ -235,8 +235,8 @@ describe("EventSubmissionsPage — event page", () => {
     renderAt("/event-submissions/ev1");
 
     await user.click(await screen.findByRole("combobox", { name: /song/i }));
-    expect(await screen.findByRole("option", { name: /2026_Classic_MyRoutine/ })).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: /2019_Classic_OldRoutine/ })).not.toBeInTheDocument();
+    expect(await screen.findByRole("option", { name: /Classic My Routine/ })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /Classic Old Routine/ })).not.toBeInTheDocument();
     expect(screen.getByText(/1 legacy song is hidden/i)).toBeInTheDocument();
   });
 
@@ -263,8 +263,8 @@ describe("EventSubmissionsPage — event page", () => {
     expect(screen.getByText("Division Classic")).toBeInTheDocument();
 
     await user.click(await screen.findByRole("combobox", { name: /song/i }));
-    expect(await screen.findByRole("option", { name: /2026_Showcase_MyRoutine/ })).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: /2026_Classic_MyRoutine/ })).not.toBeInTheDocument();
+    expect(await screen.findByRole("option", { name: /Showcase My Routine/ })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /Classic My Routine/ })).not.toBeInTheDocument();
     await user.keyboard("{Escape}");
 
     await user.click(screen.getByRole("button", { name: /^remove$/i }));
@@ -305,7 +305,7 @@ describe("EventSubmissionsPage — The Open", () => {
     const user = userEvent.setup();
     renderAt("/event-submissions/open1");
 
-    await pickSong(user, /2026_Classic_MyRoutine/);
+    await pickSong(user, /Classic My Routine/);
     expect(await screen.findByRole("radio", { name: /prelims & finals/i })).toHaveAttribute(
       "aria-checked",
       "true"
@@ -322,10 +322,10 @@ describe("EventSubmissionsPage — The Open", () => {
     const user = userEvent.setup();
     renderAt("/event-submissions/open1");
 
-    await pickSong(user, /2026_Classic_MyRoutine/);
+    await pickSong(user, /Classic My Routine/);
     await pickDivision(user, /^Showcase$/);
-    await pickSong(user, /2026_Showcase_MyRoutine/);
-    await pickSong(user, /2026_Classic_MyRoutine/);
+    await pickSong(user, /Showcase My Routine/);
+    await pickSong(user, /Classic My Routine/);
 
     await user.click(await screen.findByRole("combobox", { name: /division/i }));
     // Override must not stick after a song change — Classic song re-derives Classic.
@@ -342,15 +342,15 @@ describe("EventSubmissionsPage — The Open", () => {
     const user = userEvent.setup();
     renderAt("/event-submissions/open1");
 
-    await pickSong(user, /2026_Classic_MyRoutine/);
+    await pickSong(user, /Classic My Routine/);
     await user.click(await screen.findByRole("radio", { name: /finals only/i }));
     expect(screen.getByRole("radio", { name: /finals only/i })).toHaveAttribute(
       "aria-checked",
       "true"
     );
 
-    await pickSong(user, /2026_Showcase_MyRoutine/);
-    await pickSong(user, /2026_Classic_MyRoutine/);
+    await pickSong(user, /Showcase My Routine/);
+    await pickSong(user, /Classic My Routine/);
 
     expect(await screen.findByRole("radio", { name: /prelims & finals/i })).toHaveAttribute(
       "aria-checked",
@@ -364,7 +364,7 @@ describe("EventSubmissionsPage — The Open", () => {
     const user = userEvent.setup();
     renderAt("/event-submissions/open1");
 
-    await pickSong(user, /2026_Classic_MyRoutine/);
+    await pickSong(user, /Classic My Routine/);
     await user.click(await screen.findByRole("radio", { name: /prelims only/i }));
     await user.click(await screen.findByRole("button", { name: /^submit$/i }));
 

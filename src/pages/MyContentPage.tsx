@@ -6,6 +6,7 @@ import type {
   ApiSong,
 } from "@/schemas";
 import { isOpenEvent } from "@/schemas";
+import { songLabel, songPieces } from "@/lib/songLabel";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { toast } from "sonner";
@@ -346,11 +347,6 @@ export default function MyContentPage() {
                           {ci.songDisplayName}
                         </p>
                       )}
-                      {ci.songProcessedFilename && (
-                        <p className="font-mono text-xs text-muted-foreground truncate">
-                          {ci.songProcessedFilename}
-                        </p>
-                      )}
                       {ci.notes && (
                         <p className="text-muted-foreground italic">Note: {ci.notes}</p>
                       )}
@@ -480,8 +476,8 @@ export default function MyContentPage() {
               return (
                 <div key={s.id} className="rounded-lg border-2 border-primary/40 bg-card p-4 space-y-2 shadow-sm">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="font-mono text-sm leading-snug break-all flex-1">
-                      {s.processed_filename?.trim() ? s.processed_filename : "—"}
+                    <p className="font-medium text-sm leading-snug break-words flex-1">
+                      {songLabel(s)}
                     </p>
                     <p className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
                       {new Date(s.created_at).toLocaleDateString()}
@@ -617,8 +613,8 @@ export default function MyContentPage() {
               <DialogHeader>
                 <DialogTitle>Delete this song?</DialogTitle>
                 <DialogDescription>
-                  {pendingSong?.processed_filename?.trim()
-                    ? <>This will permanently remove <span className="font-mono break-all">{pendingSong.processed_filename}</span>. This cannot be undone.</>
+                  {pendingSong && songPieces(pendingSong)
+                    ? <>This will permanently remove <span className="font-medium break-words">{songPieces(pendingSong)}</span>. This cannot be undone.</>
                     : "This will permanently remove the song. This cannot be undone."
                   }
                 </DialogDescription>

@@ -11,18 +11,7 @@ import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDateTimeShort } from "@/lib/sessionFormat";
-
-/**
- * Best human-readable label for a song, never falling back to the raw
- * original filename (which is meaningless noise in the UI).
- * Priority: processed filename → routine name → division → "Untitled song"
- */
-function songLabel(s: ApiSong): string {
-  if (s.processed_filename?.trim()) return s.processed_filename.trim();
-  if (s.routine_name?.trim()) return s.routine_name.trim();
-  if (s.division?.trim()) return `${s.division.trim()} song`;
-  return "Untitled song";
-}
+import { songLabel } from "@/lib/songLabel";
 
 const FIELD_INPUT_CLASS =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";

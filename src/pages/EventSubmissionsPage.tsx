@@ -30,21 +30,13 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { partitionSubmittableSongs } from "@/lib/submittableSongs";
+import { songLabel } from "@/lib/songLabel";
 
 const ROUND_OPTIONS: { value: SubmissionRound; label: string }[] = [
   { value: "prelims_and_finals", label: "Prelims & Finals" },
   { value: "prelims_only", label: "Prelims Only" },
   { value: "finals_only", label: "Finals Only" },
 ];
-
-function songLabel(s: ApiSong): string {
-  return (
-    s.processed_filename?.trim() ||
-    s.display_name?.trim() ||
-    s.routine_name?.trim() ||
-    "Untitled song"
-  );
-}
 
 function roundDisplayLabel(round: SubmissionRound): string {
   switch (round) {
