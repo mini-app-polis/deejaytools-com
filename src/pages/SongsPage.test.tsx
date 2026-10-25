@@ -78,7 +78,7 @@ describe("SongsPage", () => {
 
     // Mobile card + desktop table both render the same data, so use getAllByText.
     await waitFor(() =>
-      expect(screen.getAllByText("Classic The Open 2025").length).toBeGreaterThan(0)
+      expect(screen.getAllByText("Classic - The Open 2025").length).toBeGreaterThan(0)
     );
     expect(screen.getAllByText("Classic").length).toBeGreaterThan(0);
     expect(screen.getAllByText("The Open 2025").length).toBeGreaterThan(0);
@@ -132,7 +132,7 @@ describe("SongsPage — delete flow", () => {
 
     // Wait for the song to render.
     await waitFor(() =>
-      expect(screen.getAllByText("Classic The Open 2025").length).toBeGreaterThan(0)
+      expect(screen.getAllByText("Classic - The Open 2025").length).toBeGreaterThan(0)
     );
 
     // Find and click the Delete button on the desktop table (it's hidden on mobile by default).
@@ -174,7 +174,7 @@ describe("SongsPage — delete flow", () => {
 
     // Wait for the song to render.
     await waitFor(() =>
-      expect(screen.getAllByText("Classic The Open 2025").length).toBeGreaterThan(0)
+      expect(screen.getAllByText("Classic - The Open 2025").length).toBeGreaterThan(0)
     );
 
     // Click the Delete button.
@@ -197,7 +197,7 @@ describe("SongsPage — delete flow", () => {
     });
 
     // The song filename should no longer be in the document.
-    expect(screen.queryByText("Classic The Open 2025")).not.toBeInTheDocument();
+    expect(screen.queryByText("Classic - The Open 2025")).not.toBeInTheDocument();
 
     // apiDel should have been called with the correct path.
     expect(apiDel).toHaveBeenCalledWith("/v1/songs/s1");
@@ -231,7 +231,7 @@ describe("SongsPage — delete flow", () => {
 
     // Wait for the song to render.
     await waitFor(() =>
-      expect(screen.getAllByText("Classic The Open 2025").length).toBeGreaterThan(0)
+      expect(screen.getAllByText("Classic - The Open 2025").length).toBeGreaterThan(0)
     );
 
     // Click the Delete button.
@@ -256,7 +256,7 @@ describe("SongsPage — delete flow", () => {
     });
 
     // The song should still be in the list.
-    expect(screen.getAllByText("Classic The Open 2025").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Classic - The Open 2025").length).toBeGreaterThan(0);
   });
 
   it("hides the confirmation prompt when Cancel is clicked", async () => {
@@ -277,7 +277,7 @@ describe("SongsPage — delete flow", () => {
 
     // Wait for the song to render.
     await waitFor(() =>
-      expect(screen.getAllByText("Classic The Open 2025").length).toBeGreaterThan(0)
+      expect(screen.getAllByText("Classic - The Open 2025").length).toBeGreaterThan(0)
     );
 
     // Click the Delete button.
