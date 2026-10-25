@@ -1,3 +1,10 @@
+## [2.11.5](https://github.com/mini-app-polis/deejaytools-com/compare/v2.11.4...v2.11.5) (2026-10-25)
+
+
+### Bug Fixes
+
+* **app:** show songs by their pieces without the season year ([a0d021d](https://github.com/mini-app-polis/deejaytools-com/commit/a0d021df28d0034715d8769fcbd5fe5ef76eebbf))
+
 ## [2.11.4](https://github.com/mini-app-polis/deejaytools-com/compare/v2.11.3...v2.11.4) (2026-10-25)
 
 
