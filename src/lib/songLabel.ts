@@ -7,6 +7,9 @@ export type LabelledSong = Pick<
   "partnership_label" | "division" | "routine_name" | "processed_filename"
 >;
 
+/** Between the label's pieces; matches the API's dancer submission label. */
+const SEPARATOR = " - ";
+
 const VERSION = /_v([0-9]+)(?:\.[^.]*)?$/;
 
 /** The `vNN` a processed filename carries ("..._v03.mp3" → "v03"). */
@@ -16,7 +19,7 @@ export function songVersion(processedFilename: string | null | undefined): strin
 }
 
 /**
- * A song as dancers see it: "Partnership Division Routine vNN", the same
+ * A song as dancers see it: "Partnership - Division - Routine - vNN", the same
  * pieces as the API's dancer-facing submission label.
  *
  * Built from the song's fields, never from the processed filename, and
@@ -37,5 +40,5 @@ export function songPieces(s: LabelledSong): string {
     songVersion(s.processed_filename),
   ]
     .filter(Boolean)
-    .join(" ");
+    .join(SEPARATOR);
 }

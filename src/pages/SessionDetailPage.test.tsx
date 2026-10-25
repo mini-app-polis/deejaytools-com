@@ -660,9 +660,9 @@ describe("SessionDetailPage — check-in song selector", () => {
       .getAllByRole("radio")
       .map((radio) => radio.textContent);
 
-    expect(labels).toContain("Classic Song One");
-    expect(labels).toContain("Classic Song Two");
-    expect(labels).not.toContain("Classic Song Three");
+    expect(labels).toContain("Classic - Song One");
+    expect(labels).toContain("Classic - Song Two");
+    expect(labels).not.toContain("Classic - Song Three");
   });
 
   it("falls back to all songs when event submissions cannot be loaded", async () => {
@@ -689,9 +689,9 @@ describe("SessionDetailPage — check-in song selector", () => {
       .getAllByRole("radio")
       .map((radio) => radio.textContent);
 
-    expect(labels).toContain("Classic Song One");
-    expect(labels).toContain("Classic Song Two");
-    expect(labels).toContain("Classic Song Three");
+    expect(labels).toContain("Classic - Song One");
+    expect(labels).toContain("Classic - Song Two");
+    expect(labels).toContain("Classic - Song Three");
   });
 
   it("shows an add-to-event message when no songs are submitted", async () => {

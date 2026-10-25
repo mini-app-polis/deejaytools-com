@@ -10,7 +10,7 @@ const SONG = {
 
 describe("songLabel", () => {
   it("names a song by its pieces, without the season year", () => {
-    expect(songLabel(SONG)).toBe("Ann Lee & Bo Kim Classic Fever v03");
+    expect(songLabel(SONG)).toBe("Ann Lee & Bo Kim - Classic - Fever - v03");
   });
 
   it("drops missing pieces", () => {

@@ -405,7 +405,7 @@ describe("MyContentPage — Songs section", () => {
     withGets({ "/v1/songs": [UPLOADED, LEGACY] });
     renderPage();
 
-    const card = (await screen.findByText("Ann Lee & Bo Kim Classic Fever v02")).closest(
+    const card = (await screen.findByText("Ann Lee & Bo Kim - Classic - Fever - v02")).closest(
       "div.rounded-lg"
     )!;
     expect(card).not.toHaveTextContent("2027");
@@ -443,7 +443,7 @@ describe("MyContentPage — Songs section", () => {
 
     await user.click(await screen.findByRole("button", { name: "Delete" }));
     const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveTextContent("This will permanently remove Ann Lee & Bo Kim Classic Fever v02.");
+    expect(dialog).toHaveTextContent("This will permanently remove Ann Lee & Bo Kim - Classic - Fever - v02.");
     await user.click(within(dialog).getByRole("button", { name: "Delete" }));
 
     await waitFor(() => expect(apiDel).toHaveBeenCalledWith("/v1/songs/song-up"));
