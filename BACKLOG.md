@@ -12,17 +12,13 @@ left out of the initial build and need to come back.
   three queues, audit trail, and run-history tables. See
   `api-deejaytools/docs/decisions/ADR-0005-floor-trial-queue-model.md`
   (made in deejaytools-api, since ported).
-- **Two-step queue compaction.** Queue compaction moves rows to
-  sentinel positions before settling them at their final values, to
-  avoid unique-index conflicts during concurrent withdraw/promote/
-  complete operations. Now in api-deejaytools `queue/compaction.py`.
 - **Comprehensive error logging.** Every API route handler that maps an
   exception to a 4xx/5xx response logs the underlying error with a
   route-specific event name (`queue_withdraw_failed`,
   `checkin_create_failed`, `admin_checkin_inject_failed`, etc.) so
   production failures are debuggable without losing the user-facing
   status. The current list is in
-  [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md#useful-log-events).
+  api-deejaytools' [`docs/TROUBLESHOOTING.md`](https://github.com/mini-app-polis/api-deejaytools/blob/main/docs/TROUBLESHOOTING.md#useful-log-events).
 - **Frontend test suite.** This repo now has Vitest set up with
   pure-function tests (Node env) and component tests (jsdom env)
   covering the api client, auth hooks, route guards, NavBar, and the
@@ -31,12 +27,6 @@ left out of the initial build and need to come back.
 - **Public-readable session detail.** Visitors can browse Floor Trials
   and individual session pages without signing in; the check-in form
   is replaced with a "Sign in to check in" CTA when unauthenticated.
-- **In-process session scheduler.** api-deejaytools'
-  `services/scheduler.py` advances session statuses, auto-fills the
-  active queue, and runs song builds and Drive jobs on a repeating timer
-  (default 30 s via `TICK_INTERVAL_MS`). `GET /internal/tick`
-  (`routers/internal.py`) is a manual operator override, not a Railway
-  cron job.
 - **Sentry release tagging (frontend).** The app injects
   `VITE_APP_VERSION` via `vite.config.ts` and passes it to
   `Sentry.init` in `src/lib/instrument.ts`.
