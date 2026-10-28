@@ -45,8 +45,12 @@ export type SongUploadFormProps = {
   /** "self" = partner upload; "managed" = upload for a managed partnership. */
   variant: "self" | "managed";
   /** When set, an admin uploads on behalf of this existing user (variant must be "self").
-      Loads the target user's partners and sends on_behalf_of_user_id. */
-  onBehalf?: { userId: string; label: string };
+      Loads the target user's partners and sends on_behalf_of_user_id.
+      With `eventId`, an event's staff upload for a dancer at that event: the
+      upload carries event_id, which the API authorizes the delegation on, and
+      the dancer's partners are not loaded (that lookup is admin-only), so the
+      song is the dancer's own, with no partner. */
+  onBehalf?: { userId: string; label: string; eventId?: string };
   /** Optional callback after a successful upload (e.g. to keep the picked user). */
   onUploaded?: () => void;
 };
@@ -72,13 +76,16 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
   const [uploadStage, setUploadStage] = useState<UploadStage>("idle");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadBytesSent, setUploadBytesSent] = useState(0);
+  const staffOnBehalf = Boolean(onBehalf?.eventId);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     Promise.all([
       onBehalf
-        ? call(api, endpoints.admin.userPartners, { params: { id: onBehalf.userId } })
+        ? onBehalf.eventId
+          ? Promise.resolve([] as Partner[])
+          : call(api, endpoints.admin.userPartners, { params: { id: onBehalf.userId } })
         : call(api, endpoints.partners.list),
       onBehalf ? Promise.resolve(null) : call(api, endpoints.auth.me),
       variant === "managed" && !onBehalf
@@ -96,7 +103,7 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
       .catch((e: Error) => toast.error(e.message))
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [api, variant, onBehalf?.userId]);
+  }, [api, variant, onBehalf?.userId, onBehalf?.eventId]);
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,7 +114,7 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
     }
     if (!division) { toast.error("Please select a division."); return; }
     if (variant === "self") {
-      if (!selectedPartnerId) {
+      if (!selectedPartnerId && !staffOnBehalf) {
         toast.error("Please select a partner.");
         return;
       }
@@ -135,6 +142,7 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
             fields.managed_partnership_id = selectedManagedPartnershipId;
           }
           if (onBehalf) fields.on_behalf_of_user_id = onBehalf.userId;
+          if (onBehalf?.eventId) fields.event_id = onBehalf.eventId;
           return fields;
         },
         onProgress: ({ stage, progress, bytesSent }) => {
@@ -176,7 +184,8 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
   const hasFullName = Boolean(me?.first_name?.trim() && me?.last_name?.trim());
   const selectedManaged = managedPartnerships.find((p) => p.id === selectedManagedPartnershipId) ?? null;
   const managedSubmitDisabled = isSubmitting || managedPartnerships.length === 0 || !selectedManagedPartnershipId;
-  const selfSubmitDisabled = isSubmitting || partners.length === 0 || !selectedPartnerId;
+  const selfSubmitDisabled =
+    isSubmitting || (!staffOnBehalf && (partners.length === 0 || !selectedPartnerId));
 
   return (
     <form onSubmit={(e) => void handleUpload(e)} className="space-y-4">
@@ -201,7 +210,12 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
       ) : null}
 
       {/* Entity selector */}
-      {variant === "self" ? (
+      {staffOnBehalf ? (
+        <p className="text-sm text-muted-foreground">
+          The song is uploaded as the dancer&apos;s own, with no partner: their partner list is open to
+          admins only.
+        </p>
+      ) : variant === "self" ? (
         <div className="space-y-2">
           <Label>Partner</Label>
           {partners.length > 0 && (

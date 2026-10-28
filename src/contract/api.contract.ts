@@ -22,6 +22,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { allEndpoints, checkEndpoint, endpoints } from "@/api/endpoints";
+import { SessionStatusSchema } from "@/schemas";
 import { ClerkTestSession } from "./clerk";
 import { ApiStatusError, type Client, Ledger, loadConfig, makeClient, sleep, strictContracts } from "./harness";
 
@@ -259,7 +260,13 @@ afterAll(async () => {
 describe("access", () => {
   it("rejects every non-public endpoint without a token, with the error envelope", async () => {
     const anon = makeClient(cfg.apiUrl, null);
-    const params = { id: "contract-probe", sessionId: "contract-probe", eventId: "contract-probe" };
+    const params = {
+      id: "contract-probe",
+      sessionId: "contract-probe",
+      eventId: "contract-probe",
+      userId: "contract-probe",
+      role: "coordinator",
+    };
     const wrong: string[] = [];
     for (const ep of allEndpoints()) {
       if (PROBE_EXEMPT.has(ep.id)) continue;
@@ -340,6 +347,9 @@ describe("contract", () => {
     const forEvent = await ledger.hit(endpoints.sessions.list, { params: { eventId: state.eventId! } });
     expect(forEvent.map((s) => s.id)).toContain(created.id);
     await ledger.hit(endpoints.sessions.list);
+    // Re-asserting the status the session already has changes nothing the
+    // later tests depend on.
+    await ledger.hit(endpoints.sessions.setStatus, { params: { id: created.id }, body: { status: SessionStatusSchema.parse(got.status) } });
   });
 
   it("partners and pairs", async () => {
@@ -541,6 +551,23 @@ describe("contract", () => {
     await ledger.hit(endpoints.admin.userEventSongSubmissions, { params: { id: me.id, eventId: state.eventId! } });
     await ledger.hit(endpoints.admin.songs);
     await ledger.hit(endpoints.admin.eventSongSubmissions, { params: { eventId: state.eventId! } });
+  });
+
+  // The per-event staff routes, as an admin (who holds their scopes on every
+  // event) calls them. Coordinator is granted to the test user itself: it
+  // carries no Drive folder share, so nothing is queued.
+  it("event staff", async () => {
+    const me = await ledger.hit(endpoints.auth.me);
+    const eventId = state.eventId!;
+    await ledger.hit(endpoints.events.songSubmissions, { params: { id: eventId } });
+    const granted = await ledger.hit(endpoints.events.grantStaff, { params: { id: eventId, userId: me.id, role: "coordinator" } });
+    expect(granted).toMatchObject({ event_id: eventId, user_id: me.id, role: "coordinator" });
+    const staff = await ledger.hit(endpoints.events.staff, { params: { id: eventId } });
+    expect(staff.some((s) => s.user_id === me.id && s.role === "coordinator")).toBe(true);
+    const withRole = await ledger.hit(endpoints.auth.me);
+    expect(withRole.event_roles).toContainEqual({ event_id: eventId, role: "coordinator" });
+    await ledger.hit(endpoints.events.revokeStaff, { params: { id: eventId, userId: me.id, role: "coordinator" } });
+    expect((await ledger.hit(endpoints.events.staff, { params: { id: eventId } })).some((s) => s.user_id === me.id)).toBe(false);
   });
 
   it("queue", async () => {

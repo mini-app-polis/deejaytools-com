@@ -66,6 +66,21 @@ describe("AdminGuard", () => {
     expect(screen.getByText("landing page")).toBeInTheDocument();
   });
 
+  it("redirects event staff: a coordinator, DJ or event manager is not an admin", () => {
+    for (const role of ["coordinator", "dj", "event-manager"]) {
+      mockState = {
+        me: { id: "u1", role: "user" },
+        loading: false,
+        isAdmin: false,
+        eventRoles: [{ event_id: "ev-1", role }],
+      } as typeof mockState;
+      const { unmount } = renderAt();
+      expect(screen.queryByText("admin content")).toBeNull();
+      expect(screen.getByText("landing page")).toBeInTheDocument();
+      unmount();
+    }
+  });
+
   it("renders the wrapped children when the user is an admin", () => {
     mockState = {
       me: { id: "admin-1", role: "admin" },

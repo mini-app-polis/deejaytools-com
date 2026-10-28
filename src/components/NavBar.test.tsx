@@ -31,6 +31,7 @@ vi.mock("@clerk/clerk-react", () => ({
 // Drive useAuthMe via mutable flags.
 let isAdmin = false;
 let isManager = false;
+let eventRoles: { event_id: string; role: "coordinator" | "dj" | "event-manager" }[] = [];
 vi.mock("@/hooks/useAuthMe", () => ({
   useAuthMe: () => ({
     me: signedIn
@@ -40,8 +41,20 @@ vi.mock("@/hooks/useAuthMe", () => ({
     reload: vi.fn(),
     isAdmin,
     isManager,
+    eventRoles: signedIn ? eventRoles : [],
   }),
 }));
+
+// The caller's staff events, as useStaffEvents joins them to the events list.
+let staffEvents: { eventId: string; role: "coordinator" | "dj" | "event-manager"; event: { name: string } | null }[] = [];
+vi.mock("@/hooks/useStaffEvents", () => ({
+  useStaffEvents: () => ({ items: signedIn ? staffEvents : [], loading: false }),
+}));
+
+afterEach(() => {
+  eventRoles = [];
+  staffEvents = [];
+});
 
 // The API version label; each test sets what GET /version reports.
 let apiVersion: { version: string; commit: string | null } | null = null;
@@ -273,5 +286,77 @@ describe("NavBar — environment badge", () => {
     setHostname("deejaytools.com");
     renderNav();
     expect(screen.queryByText("DEV")).toBeNull();
+  });
+});
+
+describe("NavBar — event staff", () => {
+  function signInAsStaff(roles: typeof eventRoles, events: typeof staffEvents) {
+    signedIn = true;
+    isAdmin = false;
+    isManager = false;
+    eventRoles = roles;
+    staffEvents = events;
+  }
+
+  it("shows no My events entry or Event staff bar to a user with no event roles", () => {
+    signInAsStaff([], []);
+    renderNav();
+    expect(screen.queryByRole("link", { name: /^my events$/i })).toBeNull();
+    expect(screen.queryByText("Event staff")).toBeNull();
+  });
+
+  it("shows a coordinator My events and a coordinator entry for their event, and no admin links", () => {
+    signInAsStaff(
+      [{ event_id: "ev-1", role: "coordinator" }],
+      [{ eventId: "ev-1", role: "coordinator", event: { name: "Spring Swing" } }]
+    );
+    renderNav();
+    expect(screen.getByRole("link", { name: /^my events$/i })).toHaveAttribute("href", "/my-events");
+    expect(screen.getByText("Event staff")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Spring Swing · Coordinator" })).toHaveAttribute(
+      "href",
+      "/events/ev-1/coordinator"
+    );
+    expect(screen.queryByText("Superuser")).toBeNull();
+    expect(screen.queryByText("Manager")).toBeNull();
+    const hrefs = screen.getAllByRole("link").map((l) => l.getAttribute("href") ?? "");
+    expect(hrefs.some((h) => h.startsWith("/admin"))).toBe(false);
+  });
+
+  it("shows a DJ entry linking to the DJ portal", () => {
+    signInAsStaff(
+      [{ event_id: "ev-2", role: "dj" }],
+      [{ eventId: "ev-2", role: "dj", event: { name: "Fall Fling" } }]
+    );
+    renderNav();
+    expect(screen.getByRole("link", { name: "Fall Fling · DJ" })).toHaveAttribute("href", "/events/ev-2/dj");
+    const hrefs = screen.getAllByRole("link").map((l) => l.getAttribute("href") ?? "");
+    expect(hrefs.some((h) => h.startsWith("/admin"))).toBe(false);
+  });
+
+  it("shows an event-manager entry linking to the manage portal", () => {
+    signInAsStaff(
+      [{ event_id: "ev-3", role: "event-manager" }],
+      [{ eventId: "ev-3", role: "event-manager", event: { name: "Winter Ball" } }]
+    );
+    renderNav();
+    expect(screen.getByRole("link", { name: "Winter Ball · Event manager" })).toHaveAttribute(
+      "href",
+      "/events/ev-3/manage"
+    );
+    const hrefs = screen.getAllByRole("link").map((l) => l.getAttribute("href") ?? "");
+    expect(hrefs.some((h) => h.startsWith("/admin"))).toBe(false);
+  });
+
+  it("lists My events and the staff entries in the mobile menu", async () => {
+    signInAsStaff(
+      [{ event_id: "ev-2", role: "dj" }],
+      [{ eventId: "ev-2", role: "dj", event: { name: "Fall Fling" } }]
+    );
+    const user = userEvent.setup();
+    renderNav();
+    await user.click(screen.getByRole("button", { name: /toggle menu/i }));
+    expect(screen.getAllByRole("link", { name: /^my events$/i })).toHaveLength(2);
+    expect(screen.getAllByRole("link", { name: "Fall Fling · DJ" })).toHaveLength(2);
   });
 });

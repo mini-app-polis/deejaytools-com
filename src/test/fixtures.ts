@@ -8,6 +8,7 @@ import {
   ApiEventDivisionEntitiesSchema,
   ApiEventSchema,
   ApiEventSongSubmissionSchema,
+  ApiEventStaffSchema,
   ApiLeadingPairSchema,
   ApiManagedPartnershipSchema,
   ApiMyCheckinSchema,
@@ -101,7 +102,11 @@ export const fx = {
   }),
   authMe: factory(ApiAuthMeSchema, {
     id: "user_1", email: "user@example.com", display_name: null, first_name: null,
-    last_name: null, role: "user", created_at: T, updated_at: T,
+    last_name: null, role: "user", created_at: T, updated_at: T, event_roles: [],
+  }),
+  eventStaff: factory(ApiEventStaffSchema, {
+    event_id: "ev-1", user_id: "user_1", role: "dj", email: "user@example.com",
+    first_name: null, last_name: null, granted_by: "user_admin", granted_at: T,
   }),
   team: factory(ApiTeamSchema, {
     id: "team-1", user_id: "user_1", identifier: "Team One", created_at: T, updated_at: T,

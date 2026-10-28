@@ -4,10 +4,12 @@ import {
   ApiAdminSongSchema,
   ApiAdminUserSchema,
   ApiAuthMeSchema,
+  ApiAuthUserSchema,
   ApiCheckinCreatedSchema,
   ApiEventDivisionEntitiesSchema,
   ApiEventSchema,
   ApiEventSongSubmissionSchema,
+  ApiEventStaffSchema,
   ApiLeadingPairSchema,
   ApiManagedPartnershipSchema,
   ApiMyCheckinSchema,
@@ -26,6 +28,8 @@ import {
   createEventSongSubmissionBodySchema,
   createManagedPartnershipBodySchema,
   createTeamBodySchema,
+  type EventStaffRole,
+  type SessionStatusSchema,
 } from "@/schemas";
 import { checkResponse } from "./contract";
 
@@ -44,8 +48,12 @@ import { checkResponse } from "./contract";
  */
 export type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
-/** Who may call it: anyone, any signed-in user, or an admin. */
-export type Access = "public" | "user" | "admin";
+/**
+ * Who may call it: anyone, any signed-in user, an admin, or "event-staff":
+ * an admin, or a person holding the scope on the event the request names
+ * (its coordinator, DJ or event manager, as the route allows).
+ */
+export type Access = "public" | "user" | "admin" | "event-staff";
 
 // Loose on the input type: a schema with defaults (e.g. runCount) has an
 // input shape that differs from its output.
@@ -79,13 +87,13 @@ export const endpoints = {
       id: "auth.me", method: "GET", access: "user",
       path: () => "/v1/auth/me", response: ApiAuthMeSchema,
     }),
-    updateMe: endpoint<void, Body, z.infer<typeof ApiAuthMeSchema>>({
+    updateMe: endpoint<void, Body, z.infer<typeof ApiAuthUserSchema>>({
       id: "auth.updateMe", method: "PATCH", access: "user",
-      path: () => "/v1/auth/me", response: ApiAuthMeSchema,
+      path: () => "/v1/auth/me", response: ApiAuthUserSchema,
     }),
-    sync: endpoint<void, Body, z.infer<typeof ApiAuthMeSchema>>({
+    sync: endpoint<void, Body, z.infer<typeof ApiAuthUserSchema>>({
       id: "auth.sync", method: "POST", access: "user", transport: "fetch",
-      path: () => "/v1/auth/sync", response: ApiAuthMeSchema,
+      path: () => "/v1/auth/sync", response: ApiAuthUserSchema,
     }),
   },
 
@@ -107,12 +115,34 @@ export const endpoints = {
       path: () => "/v1/events", response: ApiEventSchema,
     }),
     update: endpoint<{ id: string }, Body, z.infer<typeof ApiEventSchema>>({
-      id: "events.update", method: "PATCH", access: "admin",
+      id: "events.update", method: "PATCH", access: "event-staff",
       path: (p) => `/v1/events/${id(p)}`, response: ApiEventSchema,
     }),
     remove: endpoint<{ id: string }, void, { deleted: true }>({
-      id: "events.remove", method: "DELETE", access: "admin",
+      id: "events.remove", method: "DELETE", access: "event-staff",
       path: (p) => `/v1/events/${id(p)}`, response: ack("deleted"),
+    }),
+    /** Every submission to the event, for its staff. */
+    songSubmissions: endpoint<{ id: string }, void, z.infer<typeof ApiAdminEventSongSubmissionSchema>[]>({
+      id: "events.songSubmissions", method: "GET", access: "event-staff",
+      path: (p) => `/v1/events/${id(p)}/song-submissions`,
+      response: z.array(ApiAdminEventSongSubmissionSchema),
+    }),
+    staff: endpoint<{ id: string }, void, z.infer<typeof ApiEventStaffSchema>[]>({
+      id: "events.staff", method: "GET", access: "event-staff",
+      path: (p) => `/v1/events/${id(p)}/staff`, response: z.array(ApiEventStaffSchema),
+    }),
+    grantStaff: endpoint<{ id: string; userId: string; role: EventStaffRole }, void, z.infer<typeof ApiEventStaffSchema>>({
+      id: "events.grantStaff", method: "PUT", access: "event-staff",
+      path: (p) =>
+        `/v1/events/${id(p)}/staff/${encodeURIComponent(p.userId)}/${encodeURIComponent(p.role)}`,
+      response: ApiEventStaffSchema,
+    }),
+    revokeStaff: endpoint<{ id: string; userId: string; role: EventStaffRole }, void, { deleted: true }>({
+      id: "events.revokeStaff", method: "DELETE", access: "event-staff",
+      path: (p) =>
+        `/v1/events/${id(p)}/staff/${encodeURIComponent(p.userId)}/${encodeURIComponent(p.role)}`,
+      response: ack("deleted"),
     }),
   },
 
@@ -128,19 +158,23 @@ export const endpoints = {
       path: (p) => `/v1/sessions/${id(p)}`, response: ApiSessionSchema,
     }),
     create: endpoint<void, Body, z.infer<typeof ApiSessionSchema>>({
-      id: "sessions.create", method: "POST", access: "admin",
+      id: "sessions.create", method: "POST", access: "event-staff",
       path: () => "/v1/sessions", response: ApiSessionSchema,
     }),
     update: endpoint<{ id: string }, Body, z.infer<typeof ApiSessionSchema>>({
-      id: "sessions.update", method: "PATCH", access: "admin",
+      id: "sessions.update", method: "PATCH", access: "event-staff",
       path: (p) => `/v1/sessions/${id(p)}`, response: ApiSessionSchema,
     }),
     setDivisions: endpoint<{ id: string }, Body, z.infer<typeof ApiSessionSchema>>({
-      id: "sessions.setDivisions", method: "PUT", access: "admin",
+      id: "sessions.setDivisions", method: "PUT", access: "event-staff",
       path: (p) => `/v1/sessions/${id(p)}/divisions`, response: ApiSessionSchema,
     }),
+    setStatus: endpoint<{ id: string }, { status: z.infer<typeof SessionStatusSchema> }, z.infer<typeof ApiSessionSchema>>({
+      id: "sessions.setStatus", method: "PATCH", access: "event-staff",
+      path: (p) => `/v1/sessions/${id(p)}/status`, response: ApiSessionSchema,
+    }),
     remove: endpoint<{ id: string }, void, { deleted: true }>({
-      id: "sessions.remove", method: "DELETE", access: "admin",
+      id: "sessions.remove", method: "DELETE", access: "event-staff",
       path: (p) => `/v1/sessions/${id(p)}`, response: ack("deleted"),
     }),
   },
@@ -157,29 +191,29 @@ export const endpoints = {
       response: z.array(ApiQueueEntrySchema),
     }),
     priority: endpoint<{ sessionId: string }, void, z.infer<typeof ApiQueueEntrySchema>[]>({
-      id: "queue.priority", method: "GET", access: "admin",
+      id: "queue.priority", method: "GET", access: "event-staff",
       path: (p) => `/v1/queue/${encodeURIComponent(p.sessionId)}/priority`,
       response: z.array(ApiQueueEntrySchema),
     }),
     nonPriority: endpoint<{ sessionId: string }, void, z.infer<typeof ApiQueueEntrySchema>[]>({
-      id: "queue.nonPriority", method: "GET", access: "admin",
+      id: "queue.nonPriority", method: "GET", access: "event-staff",
       path: (p) => `/v1/queue/${encodeURIComponent(p.sessionId)}/non-priority`,
       response: z.array(ApiQueueEntrySchema),
     }),
     complete: endpoint<void, { queueEntryId: string }, { completed: true }>({
-      id: "queue.complete", method: "POST", access: "admin",
+      id: "queue.complete", method: "POST", access: "event-staff",
       path: () => "/v1/queue/complete", response: ack("completed"),
     }),
     incomplete: endpoint<void, { queueEntryId: string }, { rotated: true }>({
-      id: "queue.incomplete", method: "POST", access: "admin",
+      id: "queue.incomplete", method: "POST", access: "event-staff",
       path: () => "/v1/queue/incomplete", response: ack("rotated"),
     }),
     moveDown: endpoint<void, { queueEntryId: string }, { moved: true }>({
-      id: "queue.moveDown", method: "POST", access: "admin",
+      id: "queue.moveDown", method: "POST", access: "event-staff",
       path: () => "/v1/queue/move-down", response: ack("moved"),
     }),
     withdraw: endpoint<void, { queueEntryId: string }, { withdrawn: true }>({
-      id: "queue.withdraw", method: "POST", access: "admin",
+      id: "queue.withdraw", method: "POST", access: "event-staff",
       path: () => "/v1/queue/withdraw", response: ack("withdrawn"),
     }),
   },
@@ -317,7 +351,7 @@ export const endpoints = {
 
   runs: {
     list: endpoint<{ query?: string } | void, void, z.infer<typeof ApiRunSchema>[]>({
-      id: "runs.list", method: "GET", access: "admin",
+      id: "runs.list", method: "GET", access: "event-staff",
       path: (p) => withQuery("/v1/runs", p ? p.query : undefined), response: z.array(ApiRunSchema),
     }),
   },

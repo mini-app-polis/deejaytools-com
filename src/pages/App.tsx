@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import AdminGuard from "@/components/AdminGuard";
+import EventRoleGuard from "@/components/EventRoleGuard";
 import ManagerGuard from "@/components/ManagerGuard";
 import Layout from "@/components/Layout";
 import RequireAuth from "@/components/RequireAuth";
@@ -26,6 +27,10 @@ import AddSongPage from "./AddSongPage";
 import EventSubmissionsPage, { OpenSubmissionsRedirect } from "./EventSubmissionsPage";
 import SongsPage from "./SongsPage";
 import FeedbackPage from "./FeedbackPage";
+import MyEventsPage from "./MyEventsPage";
+import CoordinatorPortalPage from "./CoordinatorPortalPage";
+import DjPortalPage from "./DjPortalPage";
+import EventManagerPortalPage from "./EventManagerPortalPage";
 
 export default function App() {
   return (
@@ -129,6 +134,59 @@ export default function App() {
               The detail page gates only its entity roster behind sign-in. */}
           <Route path="events" element={<EventsPage />} />
           <Route path="events/:id" element={<EventDetailPage />} />
+
+          {/* Per-event staff portals. Each guard admits the role it names,
+              or a richer one, held on the event in the URL; the API checks
+              every call again against the same event. "My events" lists
+              the caller's events, each linking to its richest portal. */}
+          <Route
+            path="my-events"
+            element={
+              <RequireAuth>
+                <MyEventsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="events/:eventId/coordinator"
+            element={
+              <EventRoleGuard role="coordinator">
+                <CoordinatorPortalPage />
+              </EventRoleGuard>
+            }
+          />
+          <Route
+            path="events/:eventId/dj"
+            element={
+              <EventRoleGuard role="dj">
+                <DjPortalPage />
+              </EventRoleGuard>
+            }
+          />
+          <Route
+            path="events/:eventId/dj/:section"
+            element={
+              <EventRoleGuard role="dj">
+                <DjPortalPage />
+              </EventRoleGuard>
+            }
+          />
+          <Route
+            path="events/:eventId/manage"
+            element={
+              <EventRoleGuard role="event-manager">
+                <EventManagerPortalPage />
+              </EventRoleGuard>
+            }
+          />
+          <Route
+            path="events/:eventId/manage/:section"
+            element={
+              <EventRoleGuard role="event-manager">
+                <EventManagerPortalPage />
+              </EventRoleGuard>
+            }
+          />
 
           {/* Admin-required.
               /admin is split into one route per section so each admin

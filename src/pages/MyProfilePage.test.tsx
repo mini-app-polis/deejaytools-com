@@ -15,6 +15,7 @@ const { apiGet, apiPatch, apiClient, reload, meState } = vi.hoisted(() => {
     role: "user",
     created_at: 1,
     updated_at: 2,
+    event_roles: [],
   };
   return {
     apiGet: vi.fn(),
@@ -73,6 +74,7 @@ beforeEach(() => {
     role: "user",
     created_at: 1,
     updated_at: 2,
+    event_roles: [],
   };
   meState.loading = false;
   vi.mocked(toast.success).mockReset();

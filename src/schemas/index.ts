@@ -427,7 +427,23 @@ export const ApiTestInjectionSchema = z.object({
 });
 export type ApiTestInjection = z.infer<typeof ApiTestInjectionSchema>;
 
-export const ApiAuthMeSchema = z.object({
+/**
+ * Per-event staff roles. Each is held on one event, never globally; a person
+ * with several on one event gets the richest one's portal.
+ */
+export const EVENT_STAFF_ROLES = ["coordinator", "dj", "event-manager"] as const;
+export const EventStaffRoleSchema = z.enum(EVENT_STAFF_ROLES);
+export type EventStaffRole = z.infer<typeof EventStaffRoleSchema>;
+
+/** One staff role the caller holds, as GET /v1/auth/me lists it. */
+export const ApiEventRoleSchema = z.object({
+  event_id: z.string(),
+  role: EventStaffRoleSchema,
+});
+export type ApiEventRole = z.infer<typeof ApiEventRoleSchema>;
+
+/** The caller's users row, as POST /v1/auth/sync and PATCH /v1/auth/me return it. */
+export const ApiAuthUserSchema = z.object({
   id: z.string(),
   email: z.string().nullable(),
   display_name: z.string().nullable(),
@@ -437,7 +453,27 @@ export const ApiAuthMeSchema = z.object({
   created_at: z.number(),
   updated_at: z.number(),
 });
+export type ApiAuthUser = z.infer<typeof ApiAuthUserSchema>;
+
+/** GET /v1/auth/me: the users row plus the caller's per-event staff roles. */
+export const ApiAuthMeSchema = ApiAuthUserSchema.extend({
+  /** Empty when none. Independent of `role`, which stays user or admin. */
+  event_roles: z.array(ApiEventRoleSchema),
+});
 export type ApiAuthMe = z.infer<typeof ApiAuthMeSchema>;
+
+/** A staff grant on an event, as the event's staff routes return it. */
+export const ApiEventStaffSchema = z.object({
+  event_id: z.string(),
+  user_id: z.string(),
+  role: EventStaffRoleSchema,
+  email: z.string(),
+  first_name: z.string().nullable(),
+  last_name: z.string().nullable(),
+  granted_by: z.string(),
+  granted_at: z.number(),
+});
+export type ApiEventStaff = z.infer<typeof ApiEventStaffSchema>;
 
 export const ApiTeamSchema = z.object({
   id: z.string(),

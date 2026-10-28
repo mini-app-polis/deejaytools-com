@@ -78,6 +78,28 @@ describe("endpoint paths", () => {
     );
   });
 
+  it("builds the event-scoped staff paths, encoding each segment", () => {
+    expect(endpoints.events.songSubmissions.path({ id: "e 1" })).toBe("/v1/events/e%201/song-submissions");
+    expect(endpoints.events.staff.path({ id: "e1" })).toBe("/v1/events/e1/staff");
+    expect(endpoints.events.grantStaff.path({ id: "e1", userId: "user/1", role: "event-manager" })).toBe(
+      "/v1/events/e1/staff/user%2F1/event-manager"
+    );
+    expect(endpoints.events.revokeStaff.path({ id: "e1", userId: "u1", role: "dj" })).toBe(
+      "/v1/events/e1/staff/u1/dj"
+    );
+    expect(endpoints.sessions.setStatus.path({ id: "s1" })).toBe("/v1/sessions/s1/status");
+  });
+
+  it("keeps the staff portals' calls out of /v1/admin", () => {
+    const staffCalls = allEndpoints().filter((e) => e.access === "event-staff");
+    expect(staffCalls.length).toBeGreaterThan(0);
+    for (const ep of staffCalls) {
+      expect(ep.path({ id: "x", sessionId: "x", eventId: "x", userId: "x", role: "dj" }).startsWith("/v1/admin")).toBe(
+        false
+      );
+    }
+  });
+
   it("gives every endpoint a unique id and a path that starts with /v1/", () => {
     const all = allEndpoints();
     const ids = all.map((e) => e.id);
