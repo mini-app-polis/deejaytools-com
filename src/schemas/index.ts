@@ -475,6 +475,18 @@ export const ApiEventStaffSchema = z.object({
 });
 export type ApiEventStaff = z.infer<typeof ApiEventStaffSchema>;
 
+/**
+ * A person connected to an event (on a submitted song, checked in or queued
+ * in one of its sessions, or on its staff), as the event's people search
+ * returns them to its staff. The email is masked, and may be missing.
+ */
+export const ApiEventPersonSchema = z.object({
+  user_id: z.string(),
+  display_name: z.string(),
+  email_masked: z.string().nullable(),
+});
+export type ApiEventPerson = z.infer<typeof ApiEventPersonSchema>;
+
 export const ApiTeamSchema = z.object({
   id: z.string(),
   user_id: z.string(),

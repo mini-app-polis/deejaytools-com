@@ -1,9 +1,9 @@
 import { useState } from "react";
 import SongUploadForm from "@/components/SongUploadForm";
-import UserIdField from "@/components/staff/UserIdField";
+import PersonPicker from "@/components/staff/PersonPicker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { ApiEvent } from "@/schemas";
+import type { ApiEvent, ApiEventPerson } from "@/schemas";
 
 /**
  * Upload a song for a dancer at the event. The upload form the admins use,
@@ -11,37 +11,37 @@ import type { ApiEvent } from "@/schemas";
  * delegation on.
  */
 export default function UploadForSection({ event }: { event: ApiEvent }) {
-  const [draft, setDraft] = useState("");
-  const [userId, setUserId] = useState<string | null>(null);
+  const [dancer, setDancer] = useState<ApiEventPerson | null>(null);
 
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <CardTitle>{userId ? `Upload for: ${userId}` : "Upload for a dancer"}</CardTitle>
-          {userId && (
-            <Button variant="outline" size="sm" onClick={() => { setUserId(null); setDraft(""); }}>
+          <CardTitle>{dancer ? `Upload for: ${dancer.display_name}` : "Upload for a dancer"}</CardTitle>
+          {dancer && (
+            <Button variant="outline" size="sm" onClick={() => setDancer(null)}>
               Change dancer
             </Button>
           )}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {!userId ? (
-          <form
-            className="space-y-3 max-w-lg"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (draft.trim()) setUserId(draft.trim());
-            }}
-          >
-            <UserIdField id="upload-for-user" value={draft} onChange={setDraft} />
-            <Button type="submit" disabled={!draft.trim()}>
-              Continue
-            </Button>
-          </form>
+        {!dancer ? (
+          <div className="max-w-lg">
+            <PersonPicker
+              id="upload-for-user"
+              eventId={event.id}
+              label="Dancer"
+              value={null}
+              onChange={setDancer}
+              hint="For a dancer with no link to the event yet, ask an admin to upload."
+            />
+          </div>
         ) : (
-          <SongUploadForm variant="self" onBehalf={{ userId, label: userId, eventId: event.id }} />
+          <SongUploadForm
+            variant="self"
+            onBehalf={{ userId: dancer.user_id, label: dancer.display_name, eventId: event.id }}
+          />
         )}
       </CardContent>
     </Card>

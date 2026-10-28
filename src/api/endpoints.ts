@@ -7,6 +7,7 @@ import {
   ApiAuthUserSchema,
   ApiCheckinCreatedSchema,
   ApiEventDivisionEntitiesSchema,
+  ApiEventPersonSchema,
   ApiEventSchema,
   ApiEventSongSubmissionSchema,
   ApiEventStaffSchema,
@@ -143,6 +144,15 @@ export const endpoints = {
       path: (p) =>
         `/v1/events/${id(p)}/staff/${encodeURIComponent(p.userId)}/${encodeURIComponent(p.role)}`,
       response: ack("deleted"),
+    }),
+    /**
+     * Search the people connected to the event, for its staff to pick from.
+     * `q` must be at least two characters once trimmed; at most 20 come back.
+     */
+    people: endpoint<{ id: string; q: string }, void, z.infer<typeof ApiEventPersonSchema>[]>({
+      id: "events.people", method: "GET", access: "event-staff",
+      path: (p) => `/v1/events/${id(p)}/people?q=${encodeURIComponent(p.q)}`,
+      response: z.array(ApiEventPersonSchema),
     }),
   },
 

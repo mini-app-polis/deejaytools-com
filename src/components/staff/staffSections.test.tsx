@@ -60,6 +60,19 @@ beforeEach(() => {
   apiGet.mockResolvedValue([]);
 });
 
+/** Every path a section called, on any method. */
+function allPaths(): string[] {
+  return [apiGet, apiPost, apiPatch, apiPut, apiDel].flatMap((fn) => fn.mock.calls.map(([p]) => String(p)));
+}
+
+const ada = fx.eventPerson({ user_id: "user_1", display_name: "Ada Lovelace", email_masked: "a•••@example.com" });
+
+/** Search the person picker labelled `label` and pick the result named `name`. */
+async function pickPerson(label: string, query: string, name: RegExp) {
+  fireEvent.change(await screen.findByRole("combobox", { name: label }), { target: { value: query } });
+  fireEvent.click(await screen.findByRole("option", { name }));
+}
+
 describe("EventSessionsSection", () => {
   beforeEach(() => {
     apiGet.mockImplementation((p: string) => Promise.resolve(p === "/v1/sessions?event_id=ev-1" ? [live("s-1")] : []));
@@ -257,11 +270,12 @@ describe("CheckinForSection", () => {
       if (p === "/v1/events/ev-1/song-submissions") {
         return Promise.resolve([fx.adminEventSongSubmission({ id: "sub-1", division: "Showcase", partnership_label: "Ada" })]);
       }
+      if (p === "/v1/events/ev-1/people?q=ad") return Promise.resolve([ada]);
       return Promise.resolve([]);
     });
     apiPost.mockRejectedValue(new Error("Song not found"));
     inRouter(<CheckinForSection event={event} />);
-    fireEvent.change(await screen.findByLabelText("Dancer's user id"), { target: { value: "user_1" } });
+    await pickPerson("Dancer", "ad", /^Ada Lovelace/);
     fireEvent.click(within(screen.getByRole("radiogroup", { name: "Session" })).getAllByRole("radio")[0]!);
     // The submission's division isn't one the session runs, so none is preselected.
     fireEvent.click(await screen.findByRole("radio", { name: /^Ada/ }));
@@ -269,17 +283,24 @@ describe("CheckinForSection", () => {
     fireEvent.click(screen.getByRole("radio", { name: "Classic" }));
     fireEvent.click(screen.getByRole("button", { name: "Check in" }));
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("Song not found"));
+    expect(apiPost).toHaveBeenCalledWith("/v1/checkins", expect.objectContaining({ on_behalf_of_user_id: "user_1" }));
+    expect(allPaths().some((p) => p.startsWith("/v1/admin"))).toBe(false);
   });
 });
 
 describe("UploadForSection", () => {
-  it("lets the dancer be changed", async () => {
+  it("picks the dancer from the event's people, and lets them be changed", async () => {
+    apiGet.mockImplementation((p: string) => Promise.resolve(p.startsWith("/v1/events/ev-1/people?") ? [ada] : []));
     inRouter(<UploadForSection event={event} />);
-    fireEvent.change(screen.getByLabelText("Dancer's user id"), { target: { value: "user_1" } });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    expect(await screen.findByText("Upload for: user_1")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Only people connected to this event appear here\. For a dancer with no link to the event yet, ask an admin/)
+    ).toBeInTheDocument();
+    await pickPerson("Dancer", "ada", /^Ada Lovelace/);
+    expect(await screen.findByText("Upload for: Ada Lovelace")).toBeInTheDocument();
+    expect(apiGet).toHaveBeenCalledWith("/v1/events/ev-1/people?q=ada");
     fireEvent.click(screen.getByRole("button", { name: "Change dancer" }));
-    expect(screen.getByLabelText("Dancer's user id")).toHaveValue("");
+    expect(screen.getByRole("combobox", { name: "Dancer" })).toHaveValue("");
+    expect(allPaths().some((p) => p.startsWith("/v1/admin"))).toBe(false);
   });
 });
 
@@ -330,12 +351,18 @@ describe("EventStaffSection", () => {
     inRouter(<EventStaffSection event={event} />);
     expect(await screen.findByText(/No one is on this event.s staff yet/)).toBeInTheDocument();
     expect(toastError).toHaveBeenCalledWith("staff down");
+    expect(screen.getByText(/Only people connected to this event appear here\. To add someone new to the event, ask an admin\./)).toBeInTheDocument();
 
+    apiGet.mockImplementation((p: string) =>
+      Promise.resolve(p.startsWith("/v1/events/ev-1/people?") ? [fx.eventPerson({ user_id: "user_x", display_name: "Xavier" })] : [])
+    );
     apiPut.mockRejectedValue(new Error("User not found"));
-    fireEvent.change(screen.getByLabelText("Person's user id"), { target: { value: "user_x" } });
+    await pickPerson("Person", "xa", /^Xavier/);
     fireEvent.click(screen.getByRole("radio", { name: "Coordinator" }));
     fireEvent.click(screen.getByRole("button", { name: "Add to staff" }));
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("User not found"));
+    expect(apiPut).toHaveBeenCalledWith("/v1/events/ev-1/staff/user_x/coordinator", undefined);
+    expect(allPaths().some((p) => p.startsWith("/v1/admin"))).toBe(false);
   });
 
   it("toasts a failed revoke and keeps the row", async () => {

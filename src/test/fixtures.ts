@@ -6,6 +6,7 @@ import {
   ApiAuthMeSchema,
   ApiCheckinCreatedSchema,
   ApiEventDivisionEntitiesSchema,
+  ApiEventPersonSchema,
   ApiEventSchema,
   ApiEventSongSubmissionSchema,
   ApiEventStaffSchema,
@@ -103,6 +104,9 @@ export const fx = {
   authMe: factory(ApiAuthMeSchema, {
     id: "user_1", email: "user@example.com", display_name: null, first_name: null,
     last_name: null, role: "user", created_at: T, updated_at: T, event_roles: [],
+  }),
+  eventPerson: factory(ApiEventPersonSchema, {
+    user_id: "user_1", display_name: "Ada Lovelace", email_masked: "a•••@example.com",
   }),
   eventStaff: factory(ApiEventStaffSchema, {
     event_id: "ev-1", user_id: "user_1", role: "dj", email: "user@example.com",
