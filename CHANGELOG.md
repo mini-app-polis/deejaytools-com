@@ -1,3 +1,10 @@
+# [2.12.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.11.6...v2.12.0) (2026-10-28)
+
+
+### Features
+
+* **staff:** add per-event coordinator, DJ and event-manager portals ([1b269b0](https://github.com/mini-app-polis/deejaytools-com/commit/1b269b0dbffd830a787319b83a3fb0b9e23c77a4))
+
 ## [2.11.6](https://github.com/mini-app-polis/deejaytools-com/compare/v2.11.5...v2.11.6) (2026-10-25)
 
 
