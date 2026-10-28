@@ -1,3 +1,10 @@
+# [2.13.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.12.0...v2.13.0) (2026-10-28)
+
+
+### Features
+
+* **staff:** pick people from the event's people search instead of typing user ids ([af24ae2](https://github.com/mini-app-polis/deejaytools-com/commit/af24ae2b854a3679f2ffc7eb12d3d4df5b9bc1ea))
+
 # [2.12.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.11.6...v2.12.0) (2026-10-28)
 
 
