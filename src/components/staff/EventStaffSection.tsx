@@ -2,13 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useApiClient } from "@/api/client";
 import { call, endpoints } from "@/api/endpoints";
-import UserIdField from "@/components/staff/UserIdField";
+import PersonPicker from "@/components/staff/PersonPicker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EVENT_ROLE_LABELS } from "@/lib/eventRoles";
-import type { ApiEvent, ApiEventStaff, EventStaffRole } from "@/schemas";
+import type { ApiEvent, ApiEventPerson, ApiEventStaff, EventStaffRole } from "@/schemas";
 
 /**
  * The roles an event manager may grant and revoke. Event manager itself is
@@ -27,7 +27,7 @@ function personLabel(s: ApiEventStaff): string {
 export default function EventStaffSection({ event }: { event: ApiEvent }) {
   const api = useApiClient();
   const [staff, setStaff] = useState<ApiEventStaff[] | null>(null);
-  const [userId, setUserId] = useState("");
+  const [person, setPerson] = useState<ApiEventPerson | null>(null);
   const [role, setRole] = useState<EventStaffRole | "">("");
   const [granting, setGranting] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
@@ -47,16 +47,15 @@ export default function EventStaffSection({ event }: { event: ApiEvent }) {
 
   const grant = async (e: React.FormEvent) => {
     e.preventDefault();
-    const target = userId.trim();
-    if (!target) { toast.error("Enter the person's user id"); return; }
+    if (!person) { toast.error("Choose a person"); return; }
     if (!role) { toast.error("Choose a role"); return; }
     setGranting(true);
     try {
       const row = await call(api, endpoints.events.grantStaff, {
-        params: { id: event.id, userId: target, role },
+        params: { id: event.id, userId: person.user_id, role },
       });
       toast.success(`${personLabel(row)} is now ${EVENT_ROLE_LABELS[row.role]}`);
-      setUserId("");
+      setPerson(null);
       setRole("");
       load();
     } catch (err) {
@@ -132,7 +131,14 @@ export default function EventStaffSection({ event }: { event: ApiEvent }) {
         </CardHeader>
         <CardContent>
           <form onSubmit={(e) => void grant(e)} className="space-y-4 max-w-lg">
-            <UserIdField id="staff-grant-user" label="Person's user id" value={userId} onChange={setUserId} />
+            <PersonPicker
+              id="staff-grant-user"
+              eventId={event.id}
+              label="Person"
+              value={person}
+              onChange={setPerson}
+              hint="To add someone new to the event, ask an admin."
+            />
             <div className="space-y-1">
               <span className="block text-sm font-medium">Role</span>
               <ChoiceGroup
@@ -143,7 +149,7 @@ export default function EventStaffSection({ event }: { event: ApiEvent }) {
               />
               <p className="text-xs text-muted-foreground">An admin adds event managers.</p>
             </div>
-            <Button type="submit" disabled={granting || !userId.trim() || !role}>
+            <Button type="submit" disabled={granting || !person || !role}>
               {granting ? "Adding…" : "Add to staff"}
             </Button>
           </form>

@@ -41,6 +41,9 @@ function routeGet(path: string): Promise<unknown> {
   if (path.startsWith("/v1/runs?")) {
     return Promise.resolve([fx.run({ id: "r-1", entity_label: "Cy & Di", division_name: "Classic" })]);
   }
+  if (path.startsWith("/v1/events/ev-1/people?q=")) {
+    return Promise.resolve([fx.eventPerson({ user_id: "user_42", display_name: "Ada Lovelace", email_masked: "a•••@example.com" })]);
+  }
   if (path === "/v1/events/ev-1/song-submissions") {
     return Promise.resolve([
       fx.adminEventSongSubmission({ id: "sub-1", song_id: "song-9", division: "Classic", partnership_label: "Ada & Bob" }),
@@ -158,7 +161,9 @@ describe("DjPortalPage", () => {
   it("checks a dancer in on their behalf", async () => {
     apiPost.mockResolvedValue(fx.checkinCreated({ sessionId: "s-1" }));
     renderAt("checkin-for");
-    fireEvent.change(await screen.findByLabelText("Dancer's user id"), { target: { value: " user_42 " } });
+    fireEvent.change(await screen.findByRole("combobox", { name: "Dancer" }), { target: { value: " ada " } });
+    fireEvent.click(await screen.findByRole("option", { name: "Ada Lovelace · a•••@example.com" }));
+    expect(apiGet).toHaveBeenCalledWith("/v1/events/ev-1/people?q=ada");
     fireEvent.click(await screen.findByRole("radio", { name: /^Ada & Bob/ }));
     // Pick the one open session (its title is a date and time).
     const session = within(screen.getByRole("radiogroup", { name: "Session" })).getAllByRole("radio")[0]!;
@@ -176,10 +181,12 @@ describe("DjPortalPage", () => {
     expect(allPaths().some((p) => p.startsWith("/v1/admin"))).toBe(false);
   });
 
-  it("takes a dancer's id before showing the upload form", async () => {
+  it("picks the dancer before showing the upload form", async () => {
     renderAt("upload-for");
-    fireEvent.change(await screen.findByLabelText("Dancer's user id"), { target: { value: "user_42" } });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.change(await screen.findByRole("combobox", { name: "Dancer" }), { target: { value: "ada" } });
+    fireEvent.click(await screen.findByRole("option", { name: /^Ada Lovelace/ }));
+    expect(apiGet).toHaveBeenCalledWith("/v1/events/ev-1/people?q=ada");
+    expect(await screen.findByText("Upload for: Ada Lovelace")).toBeInTheDocument();
     expect(await screen.findByText(/with no partner/)).toBeInTheDocument();
     expect(allPaths().some((p) => p.startsWith("/v1/admin"))).toBe(false);
   });

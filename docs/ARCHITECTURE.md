@@ -249,7 +249,7 @@ A person granted a staff role on an event (`event_roles` on `GET /v1/auth/me`) s
 - **DJ** — live queue, sessions (create, edit, status, divisions, delete), run history (always filtered to the event), check in and upload for a dancer (uploads send `event_id`), submissions, and where to find the event's Drive folder.
 - **Event manager** — the DJ sections plus editing and deleting the event and its staff list, with grant and revoke for coordinator and DJ (`/v1/events/:id/staff`). Granting event manager and creating events stay with admins.
 
-The section list for each portal is in `components/staff/portalSections.tsx`; a section's slug is its URL (`/events/:eventId/dj/queue`). Picking a person by name needs the admin user search, so the portals take a user id.
+The section list for each portal is in `components/staff/portalSections.tsx`; a section's slug is its URL (`/events/:eventId/dj/queue`). Check in for, upload for and staff grant pick the person with `components/staff/PersonPicker.tsx`, which searches `GET /v1/events/:id/people?q=` (two characters or more, debounced). It finds only people already connected to the event (a submission, a check-in or queue entry in one of its sessions, or a staff grant), so granting staff to someone new to the event, or uploading for a dancer with no link to it yet, needs an admin.
 
 ### Admin / manager sections — keeping URL, tabs, and nav in sync
 

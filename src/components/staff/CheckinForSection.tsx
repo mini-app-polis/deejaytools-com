@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useApiClient } from "@/api/client";
 import { call, endpoints } from "@/api/endpoints";
-import UserIdField from "@/components/staff/UserIdField";
+import PersonPicker from "@/components/staff/PersonPicker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChoiceGroup } from "@/components/ui/choice-group";
 import { formatSessionTitle } from "@/lib/sessionFormat";
-import type { ApiAdminEventSongSubmission, ApiEvent, ApiSession } from "@/schemas";
+import type { ApiAdminEventSongSubmission, ApiEvent, ApiEventPerson, ApiSession } from "@/schemas";
 
 const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
 
@@ -22,7 +22,7 @@ export default function CheckinForSection({ event }: { event: ApiEvent }) {
   const api = useApiClient();
   const [sessions, setSessions] = useState<ApiSession[]>([]);
   const [submissions, setSubmissions] = useState<ApiAdminEventSongSubmission[]>([]);
-  const [userId, setUserId] = useState("");
+  const [dancer, setDancer] = useState<ApiEventPerson | null>(null);
   const [sessionId, setSessionId] = useState("");
   const [submissionId, setSubmissionId] = useState("");
   const [division, setDivision] = useState("");
@@ -53,15 +53,14 @@ export default function CheckinForSection({ event }: { event: ApiEvent }) {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const dancer = userId.trim();
-    if (!dancer) { toast.error("Enter the dancer's user id"); return; }
+    if (!dancer) { toast.error("Choose the dancer"); return; }
     if (!sessionId) { toast.error("Select a session"); return; }
     if (!submission) { toast.error("Select a song"); return; }
     if (!division) { toast.error("Select a division"); return; }
     setSubmitting(true);
     try {
       await call(api, endpoints.checkins.create, {
-        body: { sessionId, songId: submission.song_id, divisionName: division, on_behalf_of_user_id: dancer },
+        body: { sessionId, songId: submission.song_id, divisionName: division, on_behalf_of_user_id: dancer.user_id },
       });
       toast.success(`Checked in ${submission.partnership_label}`);
       setSubmissionId("");
@@ -80,7 +79,7 @@ export default function CheckinForSection({ event }: { event: ApiEvent }) {
       </CardHeader>
       <CardContent>
         <form onSubmit={(e) => void submit(e)} className="space-y-4 max-w-lg">
-          <UserIdField id="checkin-for-user" value={userId} onChange={setUserId} />
+          <PersonPicker id="checkin-for-user" eventId={event.id} label="Dancer" value={dancer} onChange={setDancer} />
           <div>
             <span className={FIELD_LABEL_CLASS}>Session</span>
             {openSessions.length === 0 ? (
@@ -130,7 +129,7 @@ export default function CheckinForSection({ event }: { event: ApiEvent }) {
             type="submit"
             size="lg"
             className="w-full sm:w-auto"
-            disabled={submitting || !userId.trim() || !sessionId || !submission || !division}
+            disabled={submitting || !dancer || !sessionId || !submission || !division}
           >
             {submitting ? "Checking in…" : "Check in"}
           </Button>

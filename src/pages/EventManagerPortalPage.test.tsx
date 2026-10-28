@@ -52,6 +52,9 @@ beforeEach(() => {
   apiGet.mockImplementation((path: string) => {
     if (path === "/v1/events/ev-1") return Promise.resolve(event);
     if (path === "/v1/events/ev-1/staff") return Promise.resolve(staff);
+    if (path.startsWith("/v1/events/ev-1/people?q=")) {
+      return Promise.resolve([fx.eventPerson({ user_id: "user_new", display_name: "Nia New", email_masked: null })]);
+    }
     return Promise.resolve([]);
   });
 });
@@ -117,10 +120,33 @@ describe("EventManagerPortalPage", () => {
   it("grants a role through PUT /v1/events/:id/staff/:userId/:role", async () => {
     apiPut.mockResolvedValue(fx.eventStaff({ user_id: "user_new", role: "dj", email: "n@example.com" }));
     renderAt("staff");
-    fireEvent.change(await screen.findByLabelText("Person's user id"), { target: { value: " user_new " } });
+    fireEvent.change(await screen.findByRole("combobox", { name: "Person" }), { target: { value: "nia" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Nia New" }));
+    expect(apiGet).toHaveBeenCalledWith("/v1/events/ev-1/people?q=nia");
     fireEvent.click(screen.getByRole("radio", { name: "DJ" }));
     fireEvent.click(screen.getByRole("button", { name: "Add to staff" }));
     await waitFor(() => expect(apiPut).toHaveBeenCalledWith("/v1/events/ev-1/staff/user_new/dj", undefined));
+    // The picker is cleared for the next grant.
+    expect(await screen.findByRole("combobox", { name: "Person" })).toHaveValue("");
+    expect(allPaths().some((p) => p.startsWith("/v1/admin"))).toBe(false);
+  });
+
+  it("picks the dancer for check-in and upload from the event's people", async () => {
+    renderAt("checkin-for");
+    fireEvent.change(await screen.findByRole("combobox", { name: "Dancer" }), { target: { value: "ni" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Nia New" }));
+    expect(screen.getByRole("group", { name: "Dancer" })).toHaveTextContent("Nia New");
+    expect(apiGet).toHaveBeenCalledWith("/v1/events/ev-1/people?q=ni");
+    expect(allPaths().some((p) => p.startsWith("/v1/admin"))).toBe(false);
+  });
+
+  it("picks the dancer before showing the upload form", async () => {
+    renderAt("upload-for");
+    fireEvent.change(await screen.findByRole("combobox", { name: "Dancer" }), { target: { value: "nia" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Nia New" }));
+    expect(await screen.findByText("Upload for: Nia New")).toBeInTheDocument();
+    expect(apiGet).toHaveBeenCalledWith("/v1/events/ev-1/people?q=nia");
+    expect(allPaths().some((p) => p.startsWith("/v1/admin"))).toBe(false);
   });
 
   it("revokes a role through DELETE /v1/events/:id/staff/:userId/:role", async () => {

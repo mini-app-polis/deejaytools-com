@@ -560,6 +560,9 @@ describe("contract", () => {
     const me = await ledger.hit(endpoints.auth.me);
     const eventId = state.eventId!;
     await ledger.hit(endpoints.events.songSubmissions, { params: { id: eventId } });
+    // Who matches depends on the event's data, so only the shape and the cap are pinned.
+    const people = await ledger.hit(endpoints.events.people, { params: { id: eventId, q: "co" } });
+    expect(people.length).toBeLessThanOrEqual(20);
     const granted = await ledger.hit(endpoints.events.grantStaff, { params: { id: eventId, userId: me.id, role: "coordinator" } });
     expect(granted).toMatchObject({ event_id: eventId, user_id: me.id, role: "coordinator" });
     const staff = await ledger.hit(endpoints.events.staff, { params: { id: eventId } });

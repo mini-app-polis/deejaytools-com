@@ -87,6 +87,7 @@ describe("endpoint paths", () => {
     expect(endpoints.events.revokeStaff.path({ id: "e1", userId: "u1", role: "dj" })).toBe(
       "/v1/events/e1/staff/u1/dj"
     );
+    expect(endpoints.events.people.path({ id: "e 1", q: "ada l&b" })).toBe("/v1/events/e%201/people?q=ada%20l%26b");
     expect(endpoints.sessions.setStatus.path({ id: "s1" })).toBe("/v1/sessions/s1/status");
   });
 
