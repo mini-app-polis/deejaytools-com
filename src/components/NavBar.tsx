@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 import { isProdHost } from "@/lib/env";
 import { useApiVersion } from "@/hooks/useApiVersion";
 import { useAuthMe } from "@/hooks/useAuthMe";
+import { useStaffEvents } from "@/hooks/useStaffEvents";
+import { EVENT_ROLE_LABELS, eventPortalPath } from "@/lib/eventRoles";
 import pkg from "../../package.json";
 
 type NavItem = { to: string; label: string };
@@ -40,12 +42,23 @@ const MANAGER_ITEMS: NavItem[] = [
   { to: "/manager/guide", label: "Guide" },
 ];
 
+// Shown only to people on the staff of at least one event.
+const MY_EVENTS_ITEM: NavItem = { to: "/my-events", label: "My events" };
+
 // Stamped at build time by vite.config.ts. Empty when the sha could not be
 // resolved (no git, no CF_PAGES_COMMIT_SHA), in which case we show the version.
 const buildSha = import.meta.env.VITE_COMMIT_SHA ?? "";
 
 export default function NavBar() {
-  const { isAdmin, isManager } = useAuthMe();
+  const { isAdmin, isManager, eventRoles } = useAuthMe();
+  // One entry per event the caller is on the staff of, opening the portal
+  // of their richest role there.
+  const { items: staffEvents } = useStaffEvents(eventRoles);
+  const isEventStaff = eventRoles.length > 0;
+  const staffEventItems: NavItem[] = staffEvents.map((s) => ({
+    to: eventPortalPath(s.eventId, s.role),
+    label: `${s.event?.name ?? "Event"} · ${EVENT_ROLE_LABELS[s.role]}`,
+  }));
   // Dev and preview hosts show the commit instead of the semver version: the
   // version only moves on release, so it cannot identify a dev build.
   const showSha = !isProdHost() && buildSha !== "";
@@ -144,6 +157,11 @@ export default function NavBar() {
                 {item.label}
               </NavLink>
             ))}
+            {isEventStaff && (
+              <NavLink to={MY_EVENTS_ITEM.to} className={desktopLinkClass}>
+                {MY_EVENTS_ITEM.label}
+              </NavLink>
+            )}
           </SignedIn>
         </div>
 
@@ -220,6 +238,24 @@ export default function NavBar() {
         )}
       </SignedIn>
 
+      {/* Event staff sub-bar — desktop, people on the staff of an event */}
+      <SignedIn>
+        {staffEventItems.length > 0 && (
+          <div className="hidden sm:block border-t border-white/[0.07] bg-black/20">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 h-11 flex items-center gap-1 overflow-x-auto">
+              <Badge variant="secondary" className="mr-2 shrink-0">
+                Event staff
+              </Badge>
+              {staffEventItems.map((item) => (
+                <NavLink key={item.to} to={item.to} className={subBarLinkClass}>
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        )}
+      </SignedIn>
+
       {/* Mobile menu */}
       {menuOpen && (
         <div className="sm:hidden border-t border-white/[0.07] bg-background">
@@ -235,6 +271,11 @@ export default function NavBar() {
                   {item.label}
                 </NavLink>
               ))}
+              {isEventStaff && (
+                <NavLink to={MY_EVENTS_ITEM.to} onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
+                  {MY_EVENTS_ITEM.label}
+                </NavLink>
+              )}
             </SignedIn>
             <NavLink to="/how-it-works" onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
               Help
@@ -243,6 +284,18 @@ export default function NavBar() {
               Contact
             </NavLink>
             <SignedIn>
+              {staffEventItems.length > 0 && (
+                <>
+                  <div className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Event staff
+                  </div>
+                  {staffEventItems.map((item) => (
+                    <NavLink key={item.to} to={item.to} onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </>
+              )}
               {showManagerBar && (
                 <>
                   <div className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">

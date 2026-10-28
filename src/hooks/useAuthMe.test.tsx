@@ -69,6 +69,7 @@ describe("useAuthMe", () => {
       role: "user",
       created_at: 1,
       updated_at: 2,
+      event_roles: [],
     });
 
     const { result } = renderHook(() => useAuthMe());
@@ -79,6 +80,38 @@ describe("useAuthMe", () => {
     expect(result.current.loading).toBe(false);
     expect(result.current.isAdmin).toBe(false);
     expect(apiGet).toHaveBeenCalledWith("/v1/auth/me");
+  });
+
+  it("exposes the caller's event roles, and an empty list when they hold none", async () => {
+    useAuthMock.mockReturnValue({ isLoaded: true, isSignedIn: true });
+    apiGet.mockResolvedValue({
+      id: "u1",
+      email: "dj@example.com",
+      display_name: null,
+      first_name: null,
+      last_name: null,
+      role: "user",
+      created_at: 1,
+      updated_at: 2,
+      event_roles: [
+        { event_id: "ev-1", role: "dj" },
+        { event_id: "ev-2", role: "coordinator" },
+      ],
+    });
+
+    const { result } = renderHook(() => useAuthMe());
+
+    await waitFor(() => {
+      expect(result.current.eventRoles).toHaveLength(2);
+    });
+    expect(result.current.eventRoles[0]).toEqual({ event_id: "ev-1", role: "dj" });
+    expect(result.current.isAdmin).toBe(false);
+  });
+
+  it("gives no event roles while signed out", () => {
+    useAuthMock.mockReturnValue({ isLoaded: true, isSignedIn: false });
+    const { result } = renderHook(() => useAuthMe());
+    expect(result.current.eventRoles).toEqual([]);
   });
 
   it("sets isAdmin=true when role is 'admin'", async () => {
@@ -92,6 +125,7 @@ describe("useAuthMe", () => {
       role: "admin",
       created_at: 1,
       updated_at: 2,
+      event_roles: [],
     });
 
     const { result } = renderHook(() => useAuthMe());

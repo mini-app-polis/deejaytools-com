@@ -219,6 +219,35 @@ describe("SongUploadForm — uploading", () => {
     expect(screen.getByLabelText(/routine \/ song name/i)).toHaveValue("");
   });
 
+  it("uploads for a dancer at an event as event staff: sends event_id and makes no admin call", async () => {
+    apiGet.mockReset();
+    apiGet.mockResolvedValue([]);
+    uploadSongInChunks.mockResolvedValue(undefined);
+    render(
+      <MemoryRouter>
+        <SongUploadForm variant="self" onBehalf={{ userId: "u9", label: "u9", eventId: "ev-1" }} />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText(/with no partner/)).toBeInTheDocument();
+    chooseFile(audioFile());
+    chooseDivision("Classic");
+    submit();
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Song uploaded successfully."));
+    const [{ buildFormFields }] = uploadSongInChunks.mock.calls[0]!;
+    expect(buildFormFields()).toEqual({
+      division: "Classic",
+      routine_name: "",
+      personal_descriptor: "",
+      partner_id: "",
+      on_behalf_of_user_id: "u9",
+      event_id: "ev-1",
+    });
+    // The dancer's partners are an admin-only lookup; staff never call it.
+    expect(apiGet.mock.calls.some(([path]) => String(path).startsWith("/v1/admin"))).toBe(false);
+  });
+
   it("shows progress while uploading", async () => {
     mockLoadedSelfForm();
     let finish!: () => void;

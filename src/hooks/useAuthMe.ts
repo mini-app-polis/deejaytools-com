@@ -1,12 +1,15 @@
 import { useAuth } from "@clerk/clerk-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import type { ApiAuthMe } from "@/schemas";
+import type { ApiAuthMe, ApiEventRole } from "@/schemas";
 import { useApiClient } from "@/api/client";
 import { call, endpoints } from "@/api/endpoints";
 
 /** Re-exported alias so callers can import `AuthMe` from this module. */
 export type AuthMe = ApiAuthMe;
+
+// One shared empty list, so callers that depend on eventRoles see a stable value.
+const NO_EVENT_ROLES: ApiEventRole[] = [];
 
 export function useAuthMe() {
   const { isLoaded, isSignedIn } = useAuth();
@@ -52,5 +55,7 @@ export function useAuthMe() {
     reload,
     isAdmin: me?.role === "admin",
     isManager: me?.role === "manager",
+    /** The caller's per-event staff roles; empty when none or signed out. */
+    eventRoles: me?.event_roles ?? NO_EVENT_ROLES,
   };
 }

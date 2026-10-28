@@ -76,17 +76,23 @@ One default-export component per route. Pages orchestrate fetching, local state,
 | `EventDetailPage.tsx` | `/events/:id` |
 | `AdminPage.tsx` | `/admin/:section` |
 | `ManagerPage.tsx` | `/manager/:section` |
+| `MyEventsPage.tsx` | `/my-events` — the events the caller is on the staff of |
+| `CoordinatorPortalPage.tsx` | `/events/:eventId/coordinator` |
+| `DjPortalPage.tsx` | `/events/:eventId/dj/:section` |
+| `EventManagerPortalPage.tsx` | `/events/:eventId/manage/:section` |
 
 ### `components/`
 
 | Area | Purpose |
 |------|---------|
 | `Layout.tsx` | Shell: `NavBar`, `<Outlet />`, `AuthSync` (signed-in only) |
-| `NavBar.tsx` | Primary nav + admin/manager sub-bars |
+| `NavBar.tsx` | Primary nav + admin/manager sub-bars; "My events" and an Event staff sub-bar for event staff |
 | `AuthSync.tsx` | One-shot POST `/v1/auth/sync` after sign-in |
 | `RequireAuth.tsx` | Clerk signed-in gate |
 | `AdminGuard.tsx` | Requires `role === "admin"` |
 | `ManagerGuard.tsx` | Requires admin **or** manager role |
+| `EventRoleGuard.tsx` | Requires a staff role, or a richer one, on the event in `:eventId` |
+| `staff/` | Per-event staff portals: `StaffPortal` (shell + section tabs), `portalSections.tsx` (which sections each portal has) and one component per section |
 | `SongUploadForm.tsx` | Chunked upload form (self + managed variants) |
 | `SpecialUploadForm.tsx` | Portal-specific upload (Teams/Cabaret/etc.) |
 | `SessionInfoHeader.tsx` | Session title + metadata block |
@@ -101,7 +107,8 @@ One default-export component per route. Pages orchestrate fetching, local state,
 
 | File | Purpose |
 |------|---------|
-| `useAuthMe.ts` | Fetches `/v1/auth/me`, exposes `me`, `loading`, `isAdmin`, `isManager` |
+| `useAuthMe.ts` | Fetches `/v1/auth/me`, exposes `me`, `loading`, `isAdmin`, `isManager`, `eventRoles` |
+| `useStaffEvents.ts` | Joins `eventRoles` to the events list: each staff event with its richest role |
 | `useApiVersion.ts` | Fetches the API's public `GET /version` once (shown in the nav) |
 
 ### `lib/` modules
@@ -179,7 +186,7 @@ For any new authenticated JSON call, use `useApiClient()`. Only bypass it when y
 
 ### Endpoint catalog (`api/endpoints.ts`) and response validation (`api/contract.ts`)
 
-Every API call the app makes is declared once in `endpoints.ts`: method, access (`public` / `user` / `admin`), path builder, and the zod schema the response must satisfy. `call(api, endpoints.x.y, { params, body })` builds the path, sends the request and validates the response; no `/v1/` path appears anywhere else in `src/`.
+Every API call the app makes is declared once in `endpoints.ts`: method, access (`public` / `user` / `admin` / `event-staff`), path builder, and the zod schema the response must satisfy. `call(api, endpoints.x.y, { params, body })` builds the path, sends the request and validates the response; no `/v1/` path appears anywhere else in `src/`.
 
 A response that fails its schema is a contract violation. In dev and tests it throws `ContractViolation`; in production it is reported to Sentry (tagged `contract_endpoint`) and the raw data is used, so harmless drift never breaks a page but never goes unnoticed. Unit-test API mocks are built with the `fx.*` factories in `src/test/fixtures.ts`, which parse through the same schemas.
 
@@ -222,12 +229,27 @@ Defined in `pages/App.tsx`. Pattern: public landing **outside** `Layout`; everyt
 | `/admin/:section` | `AdminGuard` | `AdminPage` | |
 | `/manager` | — | `<Navigate to="/manager/active-sessions">` | |
 | `/manager/:section` | `ManagerGuard` | `ManagerPage` | |
+| `/my-events` | `RequireAuth` | `MyEventsPage` | The caller's staff events, each linking to its portal |
+| `/events/:eventId/coordinator` | `EventRoleGuard` (coordinator) | `CoordinatorPortalPage` | |
+| `/events/:eventId/dj`, `/events/:eventId/dj/:section` | `EventRoleGuard` (dj) | `DjPortalPage` | Bare path lands on the first section |
+| `/events/:eventId/manage`, `/events/:eventId/manage/:section` | `EventRoleGuard` (event-manager) | `EventManagerPortalPage` | Bare path lands on the first section |
 
 ### Guards (behavior)
 
 - **`RequireAuth`** — `<SignedOut>` → redirect `/`. No role check.
 - **`AdminGuard`** — waits for `useAuthMe().loading`, then requires `isAdmin && me`; else redirect `/`. Shows skeleton while loading.
 - **`ManagerGuard`** — same loading pattern; requires `isAdmin || isManager`.
+- **`EventRoleGuard`** — same loading pattern; requires the role it names, or a richer one (event manager, then DJ, then coordinator), in `eventRoles` for the `:eventId` in the URL. The global admin role does not count. The API checks every portal call again against the same event.
+
+### Per-event staff portals
+
+A person granted a staff role on an event (`event_roles` on `GET /v1/auth/me`) sees **My events** in the nav and an **Event staff** sub-bar, one entry per event, opening the portal of their richest role there. Each portal shows only its event and calls only event-scoped routes, never `/v1/admin/*`:
+
+- **Coordinator** — the event's submissions (`GET /v1/events/:id/song-submissions`), filterable by division. Read-only.
+- **DJ** — live queue, sessions (create, edit, status, divisions, delete), run history (always filtered to the event), check in and upload for a dancer (uploads send `event_id`), submissions, and where to find the event's Drive folder.
+- **Event manager** — the DJ sections plus editing and deleting the event and its staff list, with grant and revoke for coordinator and DJ (`/v1/events/:id/staff`). Granting event manager and creating events stay with admins.
+
+The section list for each portal is in `components/staff/portalSections.tsx`; a section's slug is its URL (`/events/:eventId/dj/queue`). Picking a person by name needs the admin user search, so the portals take a user id.
 
 ### Admin / manager sections — keeping URL, tabs, and nav in sync
 
@@ -269,7 +291,7 @@ Because `/` renders **outside** `Layout`:
 ## 5. Auth state — `useAuthMe()`
 
 ```ts
-const { me, loading, reload, isAdmin, isManager } = useAuthMe();
+const { me, loading, reload, isAdmin, isManager, eventRoles } = useAuthMe();
 ```
 
 | Field | Meaning |
@@ -279,6 +301,7 @@ const { me, loading, reload, isAdmin, isManager } = useAuthMe();
 | `reload()` | Re-fetch profile (after profile edits) |
 | `isAdmin` | `me?.role === "admin"` |
 | `isManager` | `me?.role === "manager"` |
+| `eventRoles` | `me.event_roles`: the caller's `{ event_id, role }` staff roles; `[]` when none or signed out |
 
 ### Why `loading` is computed that way
 
@@ -500,7 +523,7 @@ Plus a **1 second** `lqNowTick` interval only to refresh the “Updated Xs ago�
 
 1. Create `src/pages/MyPage.tsx` (default export).
 2. Add a `<Route>` in `App.tsx` inside or outside `Layout` as appropriate.
-3. Wrap with `RequireAuth`, `AdminGuard`, or `ManagerGuard` if needed.
+3. Wrap with `RequireAuth`, `AdminGuard`, `ManagerGuard` or `EventRoleGuard` if needed.
 4. Fetch with `useApiClient()` in `useEffect` / handlers — no new global layer.
 5. Add `MyPage.test.tsx` with `// @vitest-environment jsdom` if it renders UI.
 6. Link from `NavBar` or an existing page if it should be discoverable.

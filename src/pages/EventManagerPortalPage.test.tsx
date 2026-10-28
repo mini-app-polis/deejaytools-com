@@ -1,0 +1,134 @@
+// @vitest-environment jsdom
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fx } from "@/test/fixtures";
+
+const { apiGet, apiPost, apiPatch, apiPut, apiDel, apiClient } = vi.hoisted(() => {
+  const get = vi.fn();
+  const post = vi.fn();
+  const patch = vi.fn();
+  const put = vi.fn();
+  const del = vi.fn();
+  return {
+    apiGet: get,
+    apiPost: post,
+    apiPatch: patch,
+    apiPut: put,
+    apiDel: del,
+    apiClient: { get, post, patch, put, del, postForm: vi.fn() },
+  };
+});
+vi.mock("@/api/client", () => ({ useApiClient: () => apiClient }));
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock("@clerk/clerk-react", () => ({ useAuth: () => ({ getToken: vi.fn() }) }));
+
+import EventManagerPortalPage from "./EventManagerPortalPage";
+
+const event = fx.event({ id: "ev-1", name: "Winter Ball", season_year: "2026" });
+const staff = [
+  fx.eventStaff({ user_id: "user_m", role: "event-manager", email: "m@example.com", first_name: "Mia", last_name: "Lane" }),
+  fx.eventStaff({ user_id: "user_d", role: "dj", email: "d@example.com", first_name: "Dee", last_name: "Jay" }),
+  fx.eventStaff({ user_id: "user_c", role: "coordinator", email: "c@example.com" }),
+];
+
+function renderAt(section: string) {
+  return render(
+    <MemoryRouter initialEntries={[`/events/ev-1/manage/${section}`]}>
+      <Routes>
+        <Route path="/events/:eventId/manage/:section" element={<EventManagerPortalPage />} />
+        <Route path="/my-events" element={<p>my events page</p>} />
+      </Routes>
+    </MemoryRouter>
+  );
+}
+
+function allPaths(): string[] {
+  return [apiGet, apiPost, apiPatch, apiPut, apiDel].flatMap((fn) => fn.mock.calls.map(([p]) => String(p)));
+}
+
+beforeEach(() => {
+  for (const fn of [apiGet, apiPost, apiPatch, apiPut, apiDel]) fn.mockReset();
+  apiGet.mockImplementation((path: string) => {
+    if (path === "/v1/events/ev-1") return Promise.resolve(event);
+    if (path === "/v1/events/ev-1/staff") return Promise.resolve(staff);
+    return Promise.resolve([]);
+  });
+});
+
+describe("EventManagerPortalPage", () => {
+  it("has every DJ section plus Event and Staff, and no event creation", async () => {
+    renderAt("event");
+    expect(await screen.findByText("Winter Ball", { selector: "h1" })).toBeInTheDocument();
+    const nav = screen.getByRole("navigation", { name: "Event manager sections" });
+    for (const label of [
+      "Live queue", "Sessions", "Run history", "Check in for", "Upload for", "Submissions", "Drive folder", "Event", "Staff",
+    ]) {
+      expect(within(nav).getByRole("link", { name: label })).toBeInTheDocument();
+    }
+    expect(screen.queryByRole("button", { name: /new event|create event/i })).toBeNull();
+  });
+
+  it("edits the event through PATCH /v1/events/:id", async () => {
+    apiPatch.mockResolvedValue({ ...event, name: "Winter Ball 2026" });
+    renderAt("event");
+    const name = await screen.findByLabelText("Name");
+    fireEvent.change(name, { target: { value: "Winter Ball 2026" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() =>
+      expect(apiPatch).toHaveBeenCalledWith("/v1/events/ev-1", {
+        name: "Winter Ball 2026",
+        start_date: event.start_date,
+        end_date: event.end_date,
+        timezone: event.timezone,
+        season_year: "2026",
+      })
+    );
+    // The portal header follows the saved event.
+    expect(await screen.findByText("Winter Ball 2026", { selector: "h1" })).toBeInTheDocument();
+  });
+
+  it("deletes the event through DELETE /v1/events/:id after confirming, then leaves for My events", async () => {
+    apiDel.mockResolvedValue({ deleted: true });
+    renderAt("event");
+    fireEvent.click(await screen.findByRole("button", { name: "Delete event" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(apiDel).toHaveBeenCalledWith("/v1/events/ev-1"));
+    expect(await screen.findByText("my events page")).toBeInTheDocument();
+  });
+
+  it("lists the staff and offers revoke for coordinator and DJ only", async () => {
+    renderAt("staff");
+    expect(await screen.findByText("Mia Lane")).toBeInTheDocument();
+    expect(screen.getByText("Dee Jay")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove Dee Jay as DJ" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove c@example.com as Coordinator" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Remove Mia Lane/ })).toBeNull();
+  });
+
+  it("never offers granting event manager", async () => {
+    renderAt("staff");
+    const roles = await screen.findByRole("radiogroup", { name: "Role" });
+    const options = within(roles).getAllByRole("radio").map((r) => r.textContent);
+    expect(options).toEqual(["Coordinator", "DJ"]);
+  });
+
+  it("grants a role through PUT /v1/events/:id/staff/:userId/:role", async () => {
+    apiPut.mockResolvedValue(fx.eventStaff({ user_id: "user_new", role: "dj", email: "n@example.com" }));
+    renderAt("staff");
+    fireEvent.change(await screen.findByLabelText("Person's user id"), { target: { value: " user_new " } });
+    fireEvent.click(screen.getByRole("radio", { name: "DJ" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to staff" }));
+    await waitFor(() => expect(apiPut).toHaveBeenCalledWith("/v1/events/ev-1/staff/user_new/dj", undefined));
+  });
+
+  it("revokes a role through DELETE /v1/events/:id/staff/:userId/:role", async () => {
+    apiDel.mockResolvedValue({ deleted: true });
+    renderAt("staff");
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Dee Jay as DJ" }));
+    await waitFor(() => expect(apiDel).toHaveBeenCalledWith("/v1/events/ev-1/staff/user_d/dj"));
+    await waitFor(() => expect(screen.queryByText("Dee Jay")).toBeNull());
+    expect(allPaths().some((p) => p.startsWith("/v1/admin"))).toBe(false);
+  });
+});

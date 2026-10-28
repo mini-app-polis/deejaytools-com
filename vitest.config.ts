@@ -32,7 +32,7 @@ export default defineConfig({
         statements: 92,
         branches: 83,
         functions: 91,
-        lines: 94,
+        lines: 95,
         autoUpdate: (next: number) => Math.floor(next),
       },
     },
