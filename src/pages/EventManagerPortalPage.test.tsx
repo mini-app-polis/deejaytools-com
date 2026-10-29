@@ -131,12 +131,10 @@ describe("EventManagerPortalPage", () => {
     expect(allPaths().some((p) => p.startsWith("/v1/admin"))).toBe(false);
   });
 
-  it("picks the dancer for check-in and upload from the event's people", async () => {
+  it("checks in the picked song's owner, with no dancer picker", async () => {
     renderAt("checkin-for");
-    fireEvent.change(await screen.findByRole("combobox", { name: "Dancer" }), { target: { value: "ni" } });
-    fireEvent.click(await screen.findByRole("option", { name: "Nia New" }));
-    expect(screen.getByRole("group", { name: "Dancer" })).toHaveTextContent("Nia New");
-    expect(apiGet).toHaveBeenCalledWith("/v1/events/ev-1/people?q=ni");
+    expect(await screen.findByText("Check in for a dancer")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Dancer" })).toBeNull();
     expect(allPaths().some((p) => p.startsWith("/v1/admin"))).toBe(false);
   });
 
@@ -156,5 +154,15 @@ describe("EventManagerPortalPage", () => {
     await waitFor(() => expect(apiDel).toHaveBeenCalledWith("/v1/events/ev-1/staff/user_d/dj"));
     await waitFor(() => expect(screen.queryByText("Dee Jay")).toBeNull());
     expect(allPaths().some((p) => p.startsWith("/v1/admin"))).toBe(false);
+  });
+
+  it("links the Drive folder section straight to the event's folder", async () => {
+    const url = "https://drive.google.com/drive/folders/folder_em";
+    const fallback = apiGet.getMockImplementation()!;
+    apiGet.mockImplementation((path: string) =>
+      path === "/v1/events/ev-1/drive-folder" ? Promise.resolve({ folder_id: "folder_em", url }) : fallback(path)
+    );
+    renderAt("drive");
+    expect(await screen.findByRole("link", { name: /Open the event's folder/ })).toHaveAttribute("href", url);
   });
 });

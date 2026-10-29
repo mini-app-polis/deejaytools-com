@@ -487,6 +487,16 @@ export const ApiEventPersonSchema = z.object({
 });
 export type ApiEventPerson = z.infer<typeof ApiEventPersonSchema>;
 
+/**
+ * The event's shared Drive folder, for its DJs and event managers: both
+ * fields are null until the API has shared the folder with someone.
+ */
+export const ApiEventDriveFolderSchema = z.object({
+  folder_id: z.string().nullable(),
+  url: z.string().nullable(),
+});
+export type ApiEventDriveFolder = z.infer<typeof ApiEventDriveFolderSchema>;
+
 export const ApiTeamSchema = z.object({
   id: z.string(),
   user_id: z.string(),
@@ -565,6 +575,8 @@ export const ApiAdminEventSongSubmissionSchema = z.object({
   event_name: z.string(),
   division: z.string().nullable(),
   song_id: z.string(),
+  /** The song owner's user id: what a staff check-in for this song sends as on_behalf_of_user_id. */
+  owner_user_id: z.string(),
   song_label: z.string(),
   partnership_label: z.string(),
   submitter_email: z.string(),

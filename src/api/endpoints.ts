@@ -7,6 +7,7 @@ import {
   ApiAuthUserSchema,
   ApiCheckinCreatedSchema,
   ApiEventDivisionEntitiesSchema,
+  ApiEventDriveFolderSchema,
   ApiEventPersonSchema,
   ApiEventSchema,
   ApiEventSongSubmissionSchema,
@@ -153,6 +154,11 @@ export const endpoints = {
       id: "events.people", method: "GET", access: "event-staff",
       path: (p) => `/v1/events/${id(p)}/people?q=${encodeURIComponent(p.q)}`,
       response: z.array(ApiEventPersonSchema),
+    }),
+    /** The event's shared Drive folder: its DJs, event managers and admins only. */
+    driveFolder: endpoint<{ id: string }, void, z.infer<typeof ApiEventDriveFolderSchema>>({
+      id: "events.driveFolder", method: "GET", access: "event-staff",
+      path: (p) => `/v1/events/${id(p)}/drive-folder`, response: ApiEventDriveFolderSchema,
     }),
   },
 

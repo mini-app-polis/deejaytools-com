@@ -264,19 +264,46 @@ describe("CheckinForSection", () => {
     expect(screen.getByRole("button", { name: "Check in" })).toBeDisabled();
   });
 
+  it("checks in the picked submission's owner, with no dancer picked or typed", async () => {
+    apiGet.mockImplementation((p: string) => {
+      if (p === "/v1/sessions?event_id=ev-1") return Promise.resolve([live("s-1")]);
+      if (p === "/v1/events/ev-1/song-submissions") {
+        return Promise.resolve([
+          fx.adminEventSongSubmission({ id: "sub-1", song_id: "song-7", owner_user_id: "user_owner", division: "Classic", partnership_label: "Ada" }),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    apiPost.mockResolvedValue(fx.checkinCreated({ sessionId: "s-1" }));
+    inRouter(<CheckinForSection event={event} />);
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    fireEvent.click(within(await screen.findByRole("radiogroup", { name: "Session" })).getAllByRole("radio")[0]!);
+    fireEvent.click(await screen.findByRole("radio", { name: /^Ada/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Check in" }));
+    await waitFor(() =>
+      expect(apiPost).toHaveBeenCalledWith("/v1/checkins", {
+        sessionId: "s-1",
+        songId: "song-7",
+        divisionName: "Classic",
+        on_behalf_of_user_id: "user_owner",
+      })
+    );
+    expect(screen.queryByText("user_owner")).toBeNull();
+    expect(allPaths().some((p) => p.includes("/people"))).toBe(false);
+  });
+
   it("toasts a refused check-in", async () => {
     apiGet.mockImplementation((p: string) => {
       if (p === "/v1/sessions?event_id=ev-1") return Promise.resolve([live("s-1")]);
       if (p === "/v1/events/ev-1/song-submissions") {
-        return Promise.resolve([fx.adminEventSongSubmission({ id: "sub-1", division: "Showcase", partnership_label: "Ada" })]);
+        return Promise.resolve([fx.adminEventSongSubmission({ id: "sub-1", owner_user_id: "user_1", division: "Showcase", partnership_label: "Ada" })]);
       }
-      if (p === "/v1/events/ev-1/people?q=ad") return Promise.resolve([ada]);
       return Promise.resolve([]);
     });
     apiPost.mockRejectedValue(new Error("Song not found"));
     inRouter(<CheckinForSection event={event} />);
-    await pickPerson("Dancer", "ad", /^Ada Lovelace/);
-    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Session" })).getAllByRole("radio")[0]!);
+    fireEvent.click(within(await screen.findByRole("radiogroup", { name: "Session" })).getAllByRole("radio")[0]!);
     // The submission's division isn't one the session runs, so none is preselected.
     fireEvent.click(await screen.findByRole("radio", { name: /^Ada/ }));
     expect(screen.getByRole("button", { name: "Check in" })).toBeDisabled();
