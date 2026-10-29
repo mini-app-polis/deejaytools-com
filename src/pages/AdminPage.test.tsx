@@ -88,8 +88,8 @@ describe("AdminPage", () => {
       expect(screen.getByRole("heading", { name: /admin/i })).toBeInTheDocument()
     );
     // The Events section is the default landing page; assert the action
-    // button it owns is visible, since the in-page tab strip no longer
-    // exists (admin sections are now navbar-dropdown routes).
+    // button it owns is visible (admin sections are navbar-dropdown routes
+    // with no in-page tab strip).
     expect(screen.getByRole("button", { name: /new event/i })).toBeInTheDocument();
   });
 
@@ -225,8 +225,7 @@ describe("AdminPage", () => {
   it("shows error toast when session creation is missing required fields", async () => {
     apiGet.mockResolvedValue([]);
     const user = userEvent.setup();
-    // The Sessions section is now its own route — render it directly
-    // rather than clicking a tab that no longer exists.
+    // The Sessions section is its own route — render it directly.
     renderPage("/admin/sessions");
 
     await waitFor(() =>
@@ -960,7 +959,7 @@ describe("AdminPage — Run History section", () => {
     expect(first).toHaveTextContent("Ann & Bo Classic 2026");
     expect(first).toHaveTextContent(`${SESS_OPEN_TITLE} · Swing Fling`);
     expect(first.parentElement).toHaveTextContent("by DJ Kai");
-    // A session no longer in the list falls back to the run's own start time,
+    // A session missing from the list falls back to the run's own start time,
     // shown in the event's timezone.
     expect(screen.getByText("Cy & Di", { selector: "p" }).parentElement).toHaveTextContent(
       SESS_OPEN_TITLE

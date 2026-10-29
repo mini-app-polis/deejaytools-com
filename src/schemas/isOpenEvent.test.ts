@@ -20,8 +20,8 @@ describe("isOpenEvent", () => {
   });
 
   it("does NOT match a bare leading Open", () => {
-    // Previously true. "Open Practice Night" being rerouted to the dedicated
-    // Open submission page is the bug this predicate was tightened to fix.
+    // "Open Practice Night" must not be routed to the dedicated Open
+    // submission page.
     expect(isOpenEvent("Open Swing Dance Championships")).toBe(false);
     expect(isOpenEvent("open 2026")).toBe(false);
     expect(isOpenEvent("Open Practice Night")).toBe(false);

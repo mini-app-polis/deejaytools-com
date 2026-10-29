@@ -6,14 +6,13 @@ import { Badge } from "@/components/ui/badge";
 /**
  * Help hub for the floor-trial guide.
  *
- * This page used to be the entire guide — one long scrolling document with nine
- * anchored sections. It is now a hub linking to the topic pages under
- * /how-it-works/*, which are the real content.
+ * This page is a hub linking to the topic pages under /how-it-works/*, which
+ * hold the real content.
  *
- * The old anchors are still live all over the internet and in older copies of the
- * competitor information document, so any request carrying one is redirected to the
- * topic page that absorbed it, hash intact. HelpLayout scrolls to the matching
- * section on arrival.
+ * Legacy section anchors still circulate on the internet and in copies of the
+ * competitor information document, so any request carrying one is redirected to
+ * the topic page that covers it, hash intact (see LEGACY_HASH_REDIRECTS).
+ * HelpLayout scrolls to the matching section on arrival.
  */
 export default function HowItWorksPage() {
   const { hash } = useLocation();

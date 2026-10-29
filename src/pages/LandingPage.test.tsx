@@ -118,8 +118,8 @@ describe("LandingPage — My Content card auth behaviour", () => {
 describe("LandingPage — no inline how-it-works", () => {
   it("does not render the old 4-step process list inline anymore", () => {
     renderPage();
-    // These were the four step titles in the old vague section. They moved
-    // to /how-it-works. The homepage should no longer render them.
+    // These step titles belong to /how-it-works. The homepage must not
+    // render them.
     expect(screen.queryByText("Submit your music")).toBeNull();
     expect(screen.queryByText("Check in")).toBeNull();
     expect(screen.queryByText("Watch the queue")).toBeNull();

@@ -250,7 +250,7 @@ export default function ApiSessionPage() {
   }, [userQueueEntries]);
 
   // True when the entity for the selected song is already in the queue —
-  // used to warn the user and block submission.
+  // the page then warns the user and blocks submission.
   const selectedEntityInQueue = useMemo(() => {
     if (!fSongId || !selectedSong) return false;
     if (selectedSong.managed_partnership_id) {
