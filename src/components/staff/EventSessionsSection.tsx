@@ -16,7 +16,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { compareSessionChrono } from "@/lib/chronoSort";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { epochToTimeInTz, toEpochInTz } from "@/lib/zonedTime";
-import { DIVISIONS, SessionStatusSchema, type ApiEvent, type ApiSession } from "@/schemas";
+import { useDivisions } from "@/hooks/useDivisions";
+import { SessionStatusSchema, type ApiEvent, type ApiSession } from "@/schemas";
 
 const FIELD_INPUT_CLASS =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
@@ -25,8 +26,9 @@ const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
 type SessionStatus = (typeof SessionStatusSchema.options)[number];
 const STATUS_OPTIONS = SessionStatusSchema.options;
 
+// No division flagged priority. A division missing from the map is not priority.
 function noPriorityDivisions(): Record<string, boolean> {
-  return Object.fromEntries(DIVISIONS.map((d) => [d, false]));
+  return {};
 }
 
 /**
@@ -38,6 +40,7 @@ function noPriorityDivisions(): Record<string, boolean> {
  */
 export default function EventSessionsSection({ event }: { event: ApiEvent }) {
   const api = useApiClient();
+  const { divisions: divisionList } = useDivisions();
   const tz = event.timezone;
   const [sessions, setSessions] = useState<ApiSession[] | null>(null);
 
@@ -115,6 +118,7 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
     e.preventDefault();
     if (!date) { toast.error("Date is required"); return; }
     if (!startTime) { toast.error("Start time is required"); return; }
+    if (divisionList.length === 0) { toast.error("The division list has not loaded yet"); return; }
     const pMax = Number(priorityMax);
     const npMax = Number(nonPriorityMax);
     if (Number.isNaN(pMax) || pMax < 0) {
@@ -144,7 +148,7 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
       month: "long",
       day: "numeric",
     });
-    const divisions = DIVISIONS.map((d, i) => ({
+    const divisions = divisionList.map((d, i) => ({
       division_name: d,
       is_priority: divisionPriority[d] ?? false,
       sort_order: i,
@@ -356,7 +360,7 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
             <div>
               <span className={FIELD_LABEL_CLASS}>Divisions</span>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
-                {DIVISIONS.map((d) => (
+                {divisionList.map((d) => (
                   <label key={d} className="flex items-center gap-2 text-sm cursor-pointer py-0.5">
                     <input
                       type="checkbox"

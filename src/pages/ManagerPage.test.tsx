@@ -29,7 +29,6 @@ vi.mock("@/hooks/useAuthMe", () => ({
     me: { id: "admin_1", email: "admin@example.com", role: "admin" },
     loading: false,
     isAdmin: true,
-    isManager: false,
   }),
 }));
 

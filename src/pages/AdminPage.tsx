@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  DIVISIONS,
   type ApiEvent,
   type ApiSession,
   type ApiRun,
@@ -13,6 +12,7 @@ import {
 import { useApiClient } from "@/api/client";
 import { call, endpoints } from "@/api/endpoints";
 import { useAuthMe } from "@/hooks/useAuthMe";
+import { useDivisions } from "@/hooks/useDivisions";
 import { CLICKABLE_ROW_CLASS } from "@/lib/clickable";
 import { seasonYearFromDateString } from "@/lib/seasonYear";
 import { cn } from "@/lib/utils";
@@ -46,13 +46,11 @@ import { compareEventChrono, compareSessionChrono } from "@/lib/chronoSort";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const DIVISION_OPTIONS = DIVISIONS;
-
 function randomFourDigitTag(): string {
   return Math.floor(Math.random() * 10000).toString().padStart(4, "0");
 }
-function randomDivision(): string {
-  return DIVISION_OPTIONS[Math.floor(Math.random() * DIVISION_OPTIONS.length)];
+function randomDivision(divisions: readonly string[]): string {
+  return divisions.length > 0 ? divisions[Math.floor(Math.random() * divisions.length)] : "";
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -137,6 +135,7 @@ function isAdminSection(s: string | undefined): s is AdminSection {
 
 export default function AdminPage() {
   const api = useApiClient();
+  const { divisions: divisionOptions } = useDivisions();
   const navigate = useNavigate();
   // The URL drives which section is shown. An unknown / missing slug
   // collapses to the default rather than rendering nothing, so a
@@ -192,9 +191,7 @@ export default function AdminPage() {
   const [sessNonPriorityMax, setSessNonPriorityMax] = useState("4");
   const [sessPriorityRunLimit, setSessPriorityRunLimit] = useState("1");
   // Per-division priority flags — all divisions always present, admin picks which are priority
-  const [sessDivisionPriority, setSessDivisionPriority] = useState<Record<string, boolean>>(
-    Object.fromEntries(DIVISION_OPTIONS.map((d) => [d, false]))
-  );
+  const [sessDivisionPriority, setSessDivisionPriority] = useState<Record<string, boolean>>({});
   const [showSessionsCompleted, setShowSessionsCompleted] = useState(false);
   const [showSessionsCancelled, setShowSessionsCancelled] = useState(false);
 
@@ -235,7 +232,11 @@ export default function AdminPage() {
 
   // ── Test Checkin tab ──────────────────────────────────────────────────────
   const [tcSessionId, setTcSessionId] = useState("");
-  const [tcDivision, setTcDivision] = useState<string>(() => randomDivision());
+  const [tcDivision, setTcDivision] = useState<string>("");
+  // A random division once the list loads, so each test checkin differs.
+  useEffect(() => {
+    if (tcDivision === "" && divisionOptions.length > 0) setTcDivision(randomDivision(divisionOptions));
+  }, [tcDivision, divisionOptions]);
   const [tcLeaderFirst, setTcLeaderFirst] = useState("Leader");
   const [tcLeaderLast, setTcLeaderLast] = useState(() => randomFourDigitTag());
   const [tcFollowerFirst, setTcFollowerFirst] = useState("Follower");
@@ -585,7 +586,7 @@ export default function AdminPage() {
     setSessPriorityMax("6");
     setSessNonPriorityMax("4");
     setSessPriorityRunLimit("1");
-    setSessDivisionPriority(Object.fromEntries(DIVISION_OPTIONS.map((d) => [d, false])));
+    setSessDivisionPriority({});
   };
 
   const openSessDialog = () => {
@@ -620,10 +621,7 @@ export default function AdminPage() {
     setSessNonPriorityMax(String(s.active_non_priority_max ?? 4));
 
     // Per-division priority flags + the (single, shared) priority run limit.
-    const flags = Object.fromEntries(DIVISION_OPTIONS.map((d) => [d, false])) as Record<
-      string,
-      boolean
-    >;
+    const flags: Record<string, boolean> = {};
     let runLimit = 1;
     for (const d of s.divisions ?? []) {
       flags[d.division_name] = d.is_priority;
@@ -669,6 +667,7 @@ export default function AdminPage() {
     if (!sessEventId) { toast.error("Select an event"); return; }
     if (!sessDate) { toast.error("Date is required"); return; }
     if (!sessStartTime) { toast.error("Start time is required"); return; }
+    if (divisionOptions.length === 0) { toast.error("The division list has not loaded yet"); return; }
 
     const priorityMaxNum = Number(sessPriorityMax);
     const nonPriorityMaxNum = Number(sessNonPriorityMax);
@@ -710,7 +709,7 @@ export default function AdminPage() {
     });
 
     // All divisions always included; per-division priority flag; shared run limit
-    const divisions = DIVISION_OPTIONS.map((d, i) => ({
+    const divisions = divisionOptions.map((d, i) => ({
       division_name: d,
       is_priority: sessDivisionPriority[d] ?? false,
       sort_order: i,
@@ -805,7 +804,7 @@ export default function AdminPage() {
       setTcLeaderLast(randomFourDigitTag());
       setTcFollowerFirst("Follower");
       setTcFollowerLast(randomFourDigitTag());
-      setTcDivision(randomDivision());
+      setTcDivision(randomDivision(divisionOptions));
       void loadTestCheckins().catch(() => {});
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Check-in failed");
@@ -1609,7 +1608,7 @@ export default function AdminPage() {
               <label className={FIELD_LABEL_CLASS}>Division</label>
               <ChoiceGroup
                 ariaLabel="Division"
-                options={DIVISION_OPTIONS.map((d) => ({ value: d, label: d }))}
+                options={divisionOptions.map((d) => ({ value: d, label: d }))}
                 value={tcDivision}
                 onChange={setTcDivision}
               />
@@ -2154,7 +2153,7 @@ export default function AdminPage() {
               <div>
                 <label className={FIELD_LABEL_CLASS}>Divisions</label>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
-                  {DIVISION_OPTIONS.map((d) => (
+                  {divisionOptions.map((d) => (
                     <label key={d} className="flex items-center gap-2 text-sm cursor-pointer py-0.5">
                       <input
                         type="checkbox"

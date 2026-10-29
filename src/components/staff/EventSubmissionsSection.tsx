@@ -5,7 +5,8 @@ import { call, endpoints } from "@/api/endpoints";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DIVISIONS, type ApiAdminEventSongSubmission, type ApiEvent } from "@/schemas";
+import { useDivisions } from "@/hooks/useDivisions";
+import type { ApiAdminEventSongSubmission, ApiEvent } from "@/schemas";
 
 const ALL = "__all__";
 const UNSPECIFIED = "Unspecified";
@@ -15,11 +16,11 @@ function divisionOf(row: ApiAdminEventSongSubmission): string {
 }
 
 /** Known divisions in display order, then any others by name, then Unspecified. */
-function compareDivisions(a: string, b: string): number {
+function compareDivisions(order: readonly string[], a: string, b: string): number {
   if (a === UNSPECIFIED) return 1;
   if (b === UNSPECIFIED) return -1;
-  const ia = (DIVISIONS as readonly string[]).indexOf(a);
-  const ib = (DIVISIONS as readonly string[]).indexOf(b);
+  const ia = order.indexOf(a);
+  const ib = order.indexOf(b);
   if (ia !== -1 && ib !== -1) return ia - ib;
   if (ia !== -1) return -1;
   if (ib !== -1) return 1;
@@ -36,6 +37,7 @@ export default function EventSubmissionsSection({ event }: { event: ApiEvent }) 
   const api = useApiClient();
   const [rows, setRows] = useState<ApiAdminEventSongSubmission[] | null>(null);
   const [division, setDivision] = useState<string>(ALL);
+  const { divisions: divisionOrder } = useDivisions();
 
   useEffect(() => {
     let cancelled = false;
@@ -62,8 +64,8 @@ export default function EventSubmissionsSection({ event }: { event: ApiEvent }) 
       list.push(row);
       map.set(key, list);
     }
-    return [...map.keys()].sort(compareDivisions).map((d) => ({ division: d, rows: map.get(d)! }));
-  }, [rows]);
+    return [...map.keys()].sort((a, b) => compareDivisions(divisionOrder, a, b)).map((d) => ({ division: d, rows: map.get(d)! }));
+  }, [rows, divisionOrder]);
 
   const visible = division === ALL ? groups : groups.filter((g) => g.division === division);
 

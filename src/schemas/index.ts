@@ -7,28 +7,18 @@ import { z } from "zod";
 // ---------------------------------------------------------------------------
 
 /**
- * Divisions in display order, grouped by how competitors think about them.
+ * GET /v1/divisions: the competition divisions. The API owns the list; the app
+ * reads it through useDivisions rather than keeping a copy.
  *
- * This is the source of truth for both order and grouping — DIVISIONS is
- * derived from it, so a division added to a group automatically appears in
- * every list and the two can never disagree.
- *
- * Pills render one row per group. Dropdowns and checkbox lists use the flat
- * DIVISIONS order and ignore the grouping.
+ * `groups` is the display grouping (pills render one row per group);
+ * `divisions` is the same list flattened, in the same order, for dropdowns,
+ * checkbox lists and sorting.
  */
-export const DIVISION_GROUPS = [
-  ["Classic", "Showcase", "Rising Star Classic", "Rising Star Showcase"],
-  ["ProAm LeaderAm", "ProAm FollowerAm", "NovInt Routines"],
-  ["Sophisticated", "Masters", "Juniors", "Young Adult"],
-  ["Exhibition", "Superstar"],
-  ["Carolina Shag Divisions"],
-  ["Teams", "Cabaret"],
-  ["My Division Is Not Listed"],
-] as const;
-
-export type Division = (typeof DIVISION_GROUPS)[number][number];
-
-export const DIVISIONS: readonly Division[] = DIVISION_GROUPS.flat();
+export const ApiDivisionsSchema = z.object({
+  groups: z.array(z.array(z.string())),
+  divisions: z.array(z.string()),
+});
+export type ApiDivisions = z.infer<typeof ApiDivisionsSchema>;
 
 /**
  * Divisions where the entity is ordered amateur-first rather than
@@ -449,7 +439,8 @@ export const ApiAuthUserSchema = z.object({
   display_name: z.string().nullable(),
   first_name: z.string().nullable(),
   last_name: z.string().nullable(),
-  role: z.string(),
+  /** The API assigns only these two global roles; staff roles are per event. */
+  role: z.enum(["user", "admin"]),
   created_at: z.number(),
   updated_at: z.number(),
 });
@@ -556,11 +547,10 @@ export const createEventSongSubmissionBodySchema = z.object({
   song_id: z.string().min(1),
   /**
    * Overrides the song's own division for this event only. Defaults to the
-   * song's. Constrained to the known list: an arbitrary string here would
-   * bypass the one-song-per-division rule (a differently-cased or
-   * whitespace-padded value compares unequal) and create a stray Drive folder.
+   * song's. The API rejects a name that is not in its division list, so the
+   * app sends only a name picked from GET /v1/divisions.
    */
-  division: z.enum(DIVISIONS as unknown as [Division, ...Division[]]).optional(),
+  division: z.string().min(1).optional(),
   /** Classic on The Open only; rejected elsewhere. Defaults to prelims_and_finals. */
   round: z.enum(SUBMISSION_ROUNDS).optional(),
 });
@@ -645,6 +635,12 @@ export type ApiPairRef = z.infer<typeof ApiPairRefSchema>;
 /** POST /v1/songs/upload/chunk — every chunk but the last, then the last. */
 export const ApiSongUploadChunkSchema = z.union([
   z.object({ received: z.literal(true), complete: z.literal(false) }),
-  z.object({ received: z.literal(true), complete: z.literal(true), song: ApiSongSchema }),
+  z.object({
+    received: z.literal(true),
+    complete: z.literal(true),
+    song: ApiSongSchema,
+    /** Only for a staff upload with submit_to_event: the song's submission to the event. */
+    submission: ApiEventSongSubmissionSchema.optional(),
+  }),
 ]);
 export type ApiSongUploadChunk = z.infer<typeof ApiSongUploadChunkSchema>;

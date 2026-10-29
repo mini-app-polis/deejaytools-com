@@ -37,6 +37,24 @@ async function fileReadFailure(file: File): Promise<string | null> {
   }
 }
 
+/**
+ * The API refused the upload for good: retrying sends the same request and
+ * gets the same answer. `code` is the API's error code.
+ */
+export class UploadRefused extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code: string | undefined
+  ) {
+    super(message);
+    this.name = "UploadRefused";
+  }
+}
+
+/** Refusals that no retry can change: the entity's slot is already taken. */
+const FINAL_REFUSALS = new Set(["ENTITY_SLOT_TAKEN"]);
+
 export type UploadStage = "idle" | "uploading" | "processing" | "finishing";
 
 export type ChunkUploadProgress = {
@@ -130,9 +148,12 @@ export async function uploadSongInChunks({
         continue;
       }
       if (!res.ok) {
-        const json = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-        lastErr = new Error(json?.error?.message ?? `Upload failed (${res.status})`);
-        if (res.status === 401) throw lastErr;
+        const json = (await res.json().catch(() => null)) as
+          | { error?: { message?: string; code?: string } }
+          | null;
+        const code = json?.error?.code;
+        lastErr = new UploadRefused(json?.error?.message ?? `Upload failed (${res.status})`, res.status, code);
+        if (res.status === 401 || (code !== undefined && FINAL_REFUSALS.has(code))) throw lastErr;
         continue;
       }
       lastErr = null;

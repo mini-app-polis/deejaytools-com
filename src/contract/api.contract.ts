@@ -296,6 +296,13 @@ describe("contract", () => {
     });
   });
 
+  it("divisions", async () => {
+    const list = await ledger.hit(endpoints.divisions.list);
+    expect(list.divisions.length).toBeGreaterThan(0);
+    // The flat list is the groups flattened, in the same order.
+    expect(list.divisions).toEqual(list.groups.flat());
+  });
+
   it("events", async () => {
     // Yesterday through tomorrow: the session opens an hour ago and runs two
     // hours on, which can cross midnight either way.
@@ -570,6 +577,10 @@ describe("contract", () => {
     expect(granted).toMatchObject({ event_id: eventId, user_id: me.id, role: "coordinator" });
     const staff = await ledger.hit(endpoints.events.staff, { params: { id: eventId } });
     expect(staff.some((s) => s.user_id === me.id && s.role === "coordinator")).toBe(true);
+    // A staff grant connects the test user to the event, so its partners can
+    // be read for an upload on its behalf. Only the shape is pinned.
+    const partners = await ledger.hit(endpoints.events.personPartners, { params: { id: eventId, userId: me.id } });
+    expect(partners.every((p) => typeof p.id === "string")).toBe(true);
     const withRole = await ledger.hit(endpoints.auth.me);
     expect(withRole.event_roles).toContainEqual({ event_id: eventId, role: "coordinator" });
     await ledger.hit(endpoints.events.revokeStaff, { params: { id: eventId, userId: me.id, role: "coordinator" } });

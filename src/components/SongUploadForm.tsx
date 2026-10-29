@@ -1,5 +1,5 @@
 import { useAuth } from "@clerk/clerk-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useApiClient } from "@/api/client";
@@ -9,19 +9,24 @@ import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DIVISION_GROUPS, type ApiManagedPartnership, type ApiPartner } from "@/schemas";
+import { useDivisions } from "@/hooks/useDivisions";
+import type { ApiManagedPartnership, ApiPartner } from "@/schemas";
 import type { AuthMe as MeResponse } from "@/hooks/useAuthMe";
 import {
   MAX_FILE_BYTES,
+  UploadRefused,
   uploadSongInChunks,
   type UploadStage,
 } from "@/lib/chunkedSongUpload";
 
 // Divisions handled only by the (future) solo/teams portal — hidden from the standard upload picker.
 const PORTAL_ONLY_DIVISIONS = new Set<string>(["Teams", "Cabaret", "My Division Is Not Listed"]);
-const UPLOAD_DIVISION_GROUPS = DIVISION_GROUPS.map((group) =>
-  group.filter((d) => !PORTAL_ONLY_DIVISIONS.has(d)).map((d) => ({ value: d, label: d }))
-);
+
+function uploadDivisionGroups(groups: readonly (readonly string[])[]) {
+  return groups
+    .map((group) => group.filter((d) => !PORTAL_ONLY_DIVISIONS.has(d)).map((d) => ({ value: d, label: d })))
+    .filter((group) => group.length > 0);
+}
 
 type Partner = Pick<ApiPartner, "id" | "first_name" | "last_name" | "partner_role">;
 
@@ -33,6 +38,8 @@ function isIOS(): boolean {
   if (ua.includes("Mac") && typeof document !== "undefined" && "ontouchend" in document) return true;
   return false;
 }
+/** The staff partner picker's "no partner" choice. */
+const NO_PARTNER = "__none__";
 function partnerLabel(p: Partner) { return `${p.first_name} ${p.last_name}`.trim(); }
 function managedPartnershipLabel(p: ApiManagedPartnership) {
   return `${p.leader_first_name} ${p.leader_last_name} & ${p.follower_first_name} ${p.follower_last_name}`;
@@ -47,9 +54,9 @@ export type SongUploadFormProps = {
   /** When set, an admin uploads on behalf of this existing user (variant must be "self").
       Loads the target user's partners and sends on_behalf_of_user_id.
       With `eventId`, an event's staff upload for a dancer at that event: the
-      upload carries event_id, which the API authorizes the delegation on, and
-      the dancer's partners are not loaded (that lookup is admin-only), so the
-      song is the dancer's own, with no partner. */
+      dancer's partners come from the event's own route, the upload carries
+      event_id, which the API authorizes the delegation on, and the song is
+      submitted to the event in the same request (submit_to_event). */
   onBehalf?: { userId: string; label: string; eventId?: string };
   /** Optional callback after a successful upload (e.g. to keep the picked user). */
   onUploaded?: () => void;
@@ -58,6 +65,8 @@ export type SongUploadFormProps = {
 export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUploadFormProps) {
   const api = useApiClient();
   const { getToken } = useAuth();
+  const { groups: divisionGroups, loading: divisionsLoading, error: divisionsError } = useDivisions();
+  const uploadGroups = useMemo(() => uploadDivisionGroups(divisionGroups), [divisionGroups]);
 
   const [partners, setPartners] = useState<Partner[]>([]);
   const [managedPartnerships, setManagedPartnerships] = useState<ApiManagedPartnership[]>([]);
@@ -84,7 +93,9 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
     Promise.all([
       onBehalf
         ? onBehalf.eventId
-          ? Promise.resolve([] as Partner[])
+          ? call(api, endpoints.events.personPartners, {
+              params: { id: onBehalf.eventId, userId: onBehalf.userId },
+            })
           : call(api, endpoints.admin.userPartners, { params: { id: onBehalf.userId } })
         : call(api, endpoints.partners.list),
       onBehalf ? Promise.resolve(null) : call(api, endpoints.auth.me),
@@ -142,7 +153,10 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
             fields.managed_partnership_id = selectedManagedPartnershipId;
           }
           if (onBehalf) fields.on_behalf_of_user_id = onBehalf.userId;
-          if (onBehalf?.eventId) fields.event_id = onBehalf.eventId;
+          if (onBehalf?.eventId) {
+            fields.event_id = onBehalf.eventId;
+            fields.submit_to_event = "true";
+          }
           return fields;
         },
         onProgress: ({ stage, progress, bytesSent }) => {
@@ -152,7 +166,11 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
         },
       });
 
-      toast.success("Song uploaded successfully.");
+      toast.success(
+        staffOnBehalf
+          ? "Song uploaded and submitted to the event, ready for check-in."
+          : "Song uploaded successfully."
+      );
       setFile(null);
       setDivision("");
       setRoutineName("");
@@ -163,6 +181,12 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
       setFormKey((k) => k + 1);
       onUploaded?.();
     } catch (err) {
+      if (staffOnBehalf && err instanceof UploadRefused && err.code === "ENTITY_SLOT_TAKEN") {
+        toast.error(
+          `${onBehalf!.label} already has a song submitted for ${division} at this event. Nothing was uploaded.`
+        );
+        return;
+      }
       toast.error(err instanceof Error ? err.message : "Upload failed.");
     } finally {
       setUploadStage("idle");
@@ -211,10 +235,22 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
 
       {/* Entity selector */}
       {staffOnBehalf ? (
-        <p className="text-sm text-muted-foreground">
-          The song is uploaded as the dancer&apos;s own, with no partner: their partner list is open to
-          admins only.
-        </p>
+        <div className="space-y-2">
+          <Label>Partner</Label>
+          <ChoiceGroup
+            key={formKey}
+            ariaLabel="Partner"
+            options={[
+              ...partners.map((p) => ({ value: p.id, label: partnerLabel(p) })),
+              { value: NO_PARTNER, label: "No partner" },
+            ]}
+            value={selectedPartnerId || NO_PARTNER}
+            onChange={(v) => setSelectedPartnerId(v === NO_PARTNER ? "" : v)}
+          />
+          <p className="text-xs text-muted-foreground">
+            The dancer&apos;s partners. The song is submitted to this event when it uploads.
+          </p>
+        </div>
       ) : variant === "self" ? (
         <div className="space-y-2">
           <Label>Partner</Label>
@@ -269,13 +305,19 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
       {/* Shared fields */}
       <div className="space-y-2">
         <Label>Division</Label>
-        <ChoiceGroup
-          key={formKey}
-          ariaLabel="Division"
-          groups={UPLOAD_DIVISION_GROUPS}
-          value={division}
-          onChange={setDivision}
-        />
+        {divisionsError ? (
+          <p className="text-sm text-destructive">Could not load the divisions: {divisionsError}</p>
+        ) : divisionsLoading ? (
+          <Skeleton className="h-16 w-full" />
+        ) : (
+          <ChoiceGroup
+            key={formKey}
+            ariaLabel="Division"
+            groups={uploadGroups}
+            value={division}
+            onChange={setDivision}
+          />
+        )}
       </div>
       <div className="space-y-2">
         <Label htmlFor="song-routine">Routine / Song name</Label>

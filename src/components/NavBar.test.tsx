@@ -30,17 +30,15 @@ vi.mock("@clerk/clerk-react", () => ({
 
 // Drive useAuthMe via mutable flags.
 let isAdmin = false;
-let isManager = false;
 let eventRoles: { event_id: string; role: "coordinator" | "dj" | "event-manager" }[] = [];
 vi.mock("@/hooks/useAuthMe", () => ({
   useAuthMe: () => ({
     me: signedIn
-      ? { id: "u1", role: isAdmin ? "admin" : isManager ? "manager" : "user" }
+      ? { id: "u1", role: isAdmin ? "admin" : "user" }
       : null,
     loading: false,
     reload: vi.fn(),
     isAdmin,
-    isManager,
     eventRoles: signedIn ? eventRoles : [],
   }),
 }));
@@ -76,7 +74,6 @@ describe("NavBar — signed out", () => {
   it("shows public nav links and the Sign in button", () => {
     signedIn = false;
     isAdmin = false;
-    isManager = false;
     renderNav();
 
     expect(screen.getAllByRole("link", { name: /floor trials/i }).length).toBeGreaterThan(0);
@@ -98,7 +95,6 @@ describe("NavBar — signed in (regular user)", () => {
   it("shows Floor Trials, Help, My Content, My Profile and the UserButton; no admin bars", () => {
     signedIn = true;
     isAdmin = false;
-    isManager = false;
     renderNav();
 
     expect(screen.getAllByRole("link", { name: /floor trials/i }).length).toBeGreaterThan(0);
@@ -117,7 +113,6 @@ describe("NavBar — signed in (admin)", () => {
   it("shows Superuser and Manager sub-bars with their section links", () => {
     signedIn = true;
     isAdmin = true;
-    isManager = false;
     renderNav();
 
     expect(screen.getAllByRole("link", { name: /floor trials/i }).length).toBeGreaterThan(0);
@@ -142,21 +137,16 @@ describe("NavBar — signed in (admin)", () => {
   });
 });
 
-describe("NavBar — signed in (manager only)", () => {
-  it("shows the Manager sub-bar but not Superuser", () => {
+describe("NavBar — signed in (not an admin)", () => {
+  it("shows neither the Manager sub-bar nor Superuser", () => {
     signedIn = true;
     isAdmin = false;
-    isManager = true;
     renderNav();
 
-    expect(screen.getByText("Manager")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /^active sessions$/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /^upload for$/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /^checkin for$/i })).toBeInTheDocument();
+    expect(screen.queryByText("Manager")).toBeNull();
+    expect(screen.queryByRole("link", { name: /^active sessions$/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^upload for$/i })).toBeNull();
     expect(screen.queryByText("Superuser")).toBeNull();
-    // The public /events link still renders; only the Superuser section is gone.
-    const eventsLinks = screen.queryAllByRole("link", { name: /^events$/i });
-    expect(eventsLinks.some((link) => link.getAttribute("href") === "/admin/events")).toBe(false);
   });
 });
 
@@ -164,7 +154,6 @@ describe("NavBar — mobile menu", () => {
   it("shows Help in the mobile nav for signed-out users", async () => {
     signedIn = false;
     isAdmin = false;
-    isManager = false;
     const user = userEvent.setup();
     renderNav();
 
@@ -178,7 +167,6 @@ describe("NavBar — mobile menu", () => {
   it("shows Help in the mobile nav for signed-in users", async () => {
     signedIn = true;
     isAdmin = false;
-    isManager = false;
     const user = userEvent.setup();
     renderNav();
 
@@ -194,7 +182,6 @@ describe("NavBar — wordmark", () => {
   it("renders the DJT icon, DeejayTools.com wordmark and version label", () => {
     signedIn = false;
     isAdmin = false;
-    isManager = false;
     renderNav();
     // The new layout uses a square DJT icon (alt="DeejayTools") next to a
     // visible "DeejayTools.com" text wordmark, with a small version label.
@@ -274,7 +261,6 @@ describe("NavBar — environment badge", () => {
   it("shows a DEV badge on non-production hosts (e.g. localhost)", () => {
     signedIn = false;
     isAdmin = false;
-    isManager = false;
     renderNav();
     expect(screen.getByText("DEV")).toBeInTheDocument();
   });
@@ -282,7 +268,6 @@ describe("NavBar — environment badge", () => {
   it("hides the DEV badge on the production host", () => {
     signedIn = false;
     isAdmin = false;
-    isManager = false;
     setHostname("deejaytools.com");
     renderNav();
     expect(screen.queryByText("DEV")).toBeNull();
@@ -293,7 +278,6 @@ describe("NavBar — event staff", () => {
   function signInAsStaff(roles: typeof eventRoles, events: typeof staffEvents) {
     signedIn = true;
     isAdmin = false;
-    isManager = false;
     eventRoles = roles;
     staffEvents = events;
   }

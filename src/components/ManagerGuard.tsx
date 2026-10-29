@@ -3,7 +3,7 @@ import { useAuthMe } from "@/hooks/useAuthMe";
 import { Navigate } from "react-router-dom";
 
 export default function ManagerGuard({ children }: { children: React.ReactNode }) {
-  const { me, loading, isAdmin, isManager } = useAuthMe();
+  const { me, loading, isAdmin } = useAuthMe();
 
   if (loading) {
     return (
@@ -14,7 +14,8 @@ export default function ManagerGuard({ children }: { children: React.ReactNode }
     );
   }
 
-  if ((!isAdmin && !isManager) || !me) {
+  // The manager area is admin-only: the API has no global manager role.
+  if (!isAdmin || !me) {
     return <Navigate to="/" replace />;
   }
 

@@ -1,15 +1,10 @@
 import type { ApiEvent, ApiEventSongSubmission, ApiSong } from "@/schemas";
-import {
-  DIVISIONS,
-  ROUND_SPLIT_DIVISION,
-  isOpenEvent,
-  type Division,
-  type SubmissionRound,
-} from "@/schemas";
+import { ROUND_SPLIT_DIVISION, isOpenEvent, type SubmissionRound } from "@/schemas";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useApiClient } from "@/api/client";
+import { useDivisions } from "@/hooks/useDivisions";
 import { call, endpoints } from "@/api/endpoints";
 import { Button } from "@/components/ui/button";
 import {
@@ -159,6 +154,7 @@ function EventPicker() {
 }
 
 function EventSubmissionForm({ eventId }: { eventId: string }) {
+  const { divisions } = useDivisions();
   const api = useApiClient();
 
   const [event, setEvent] = useState<ApiEvent | null>(null);
@@ -261,8 +257,7 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
         body: {
           event_id: event.id,
           song_id: selectedSongId,
-          // Chosen from the DIVISIONS picker, so a member of the enum.
-          division: division as Division,
+          division,
           ...(showRoundField ? { round } : {}),
         },
       });
@@ -393,7 +388,7 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
                     <SelectValue placeholder="Select a division" />
                   </SelectTrigger>
                   <SelectContent>
-                    {DIVISIONS.map((d) => (
+                    {divisions.map((d) => (
                       <SelectItem key={d} value={d}>
                         {d}
                       </SelectItem>

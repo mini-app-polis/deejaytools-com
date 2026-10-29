@@ -107,7 +107,8 @@ One default-export component per route. Pages orchestrate fetching, local state,
 
 | File | Purpose |
 |------|---------|
-| `useAuthMe.ts` | Fetches `/v1/auth/me`, exposes `me`, `loading`, `isAdmin`, `isManager`, `eventRoles` |
+| `useAuthMe.ts` | Fetches `/v1/auth/me`, exposes `me`, `loading`, `isAdmin`, `eventRoles` |
+| `useDivisions.ts` | Reads the competition divisions from the public `GET /v1/divisions`, once per page load and shared by every caller; works before sign-in |
 | `useStaffEvents.ts` | Joins `eventRoles` to the events list: each staff event with its richest role |
 | `useApiVersion.ts` | Fetches the API's public `GET /version` once (shown in the nav) |
 
@@ -238,7 +239,7 @@ Defined in `pages/App.tsx`. Pattern: public landing **outside** `Layout`; everyt
 
 - **`RequireAuth`** — `<SignedOut>` → redirect `/`. No role check.
 - **`AdminGuard`** — waits for `useAuthMe().loading`, then requires `isAdmin && me`; else redirect `/`. Shows skeleton while loading.
-- **`ManagerGuard`** — same loading pattern; requires `isAdmin || isManager`.
+- **`ManagerGuard`** — same loading pattern; requires `isAdmin && me`. The manager area is admin-only: the API's global roles are `user` and `admin`, and staff roles are per event.
 - **`EventRoleGuard`** — same loading pattern; requires the role it names, or a richer one (event manager, then DJ, then coordinator), in `eventRoles` for the `:eventId` in the URL. The global admin role does not count. The API checks every portal call again against the same event.
 
 ### Per-event staff portals
@@ -291,7 +292,7 @@ Because `/` renders **outside** `Layout`:
 ## 5. Auth state — `useAuthMe()`
 
 ```ts
-const { me, loading, reload, isAdmin, isManager, eventRoles } = useAuthMe();
+const { me, loading, reload, isAdmin, eventRoles } = useAuthMe();
 ```
 
 | Field | Meaning |
@@ -300,7 +301,6 @@ const { me, loading, reload, isAdmin, isManager, eventRoles } = useAuthMe();
 | `loading` | `true` until Clerk is loaded **and** (signed out **or** `me` is populated) |
 | `reload()` | Re-fetch profile (after profile edits) |
 | `isAdmin` | `me?.role === "admin"` |
-| `isManager` | `me?.role === "manager"` |
 | `eventRoles` | `me.event_roles`: the caller's `{ event_id, role }` staff roles; `[]` when none or signed out |
 
 ### Why `loading` is computed that way
@@ -311,17 +311,9 @@ const loading = !isLoaded || fetching || (isSignedIn === true && me === null);
 
 Clerk can report `isSignedIn: true` before `/v1/auth/me` returns. Without the third clause, `AdminGuard` would see `loading: false`, `isAdmin: false`, and redirect a legitimate admin to `/` before the fetch starts. The hook keeps guards in a loading state until `me` exists or the user is confirmed signed out.
 
-### Known bug — `isManager`
+### Divisions — `useDivisions()`
 
-The API only assigns roles `"user"` and `"admin"`. There is no `"manager"` role in the backend today, so **`isManager` is always false** and **`ManagerGuard` only admits admins** in practice.
-
-From `useAuthMe.ts`:
-
-```ts
-isManager: me?.role === "manager",
-```
-
-Do not build features assuming a distinct manager role works until the backend exposes one (or this check is aligned with however managers are represented).
+The API owns the division list; the app keeps no copy. `useDivisions()` returns `{ groups, divisions, loading, error }` from `GET /v1/divisions`: `groups` for the grouped pills on the upload form, `divisions` (the groups flattened, in order) for dropdowns, checkbox lists and sorting. Both are empty until the list loads, so forms that send divisions (the session dialogs) refuse to submit until then. Unit tests get the list already loaded from `src/test/setup.ts`; `useDivisions.test.tsx` tests the hook itself.
 
 ---
 
