@@ -1,3 +1,10 @@
+# [2.14.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.13.0...v2.14.0) (2026-10-29)
+
+
+### Features
+
+* **staff:** check in a submission's owner without picking a dancer, and link the Drive tab to the event's folder ([1d8c0e4](https://github.com/mini-app-polis/deejaytools-com/commit/1d8c0e4b8b33fa023f692d28c9001ce556f06b9e))
+
 # [2.13.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.12.0...v2.13.0) (2026-10-28)
 
 
