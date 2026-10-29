@@ -296,6 +296,13 @@ describe("contract", () => {
     });
   });
 
+  it("divisions", async () => {
+    const list = await ledger.hit(endpoints.divisions.list);
+    expect(list.divisions.length).toBeGreaterThan(0);
+    // The flat list is the groups flattened, in the same order.
+    expect(list.divisions).toEqual(list.groups.flat());
+  });
+
   it("events", async () => {
     // Yesterday through tomorrow: the session opens an hour ago and runs two
     // hours on, which can cross midnight either way.

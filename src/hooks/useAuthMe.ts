@@ -54,7 +54,6 @@ export function useAuthMe() {
     loading,
     reload,
     isAdmin: me?.role === "admin",
-    isManager: me?.role === "manager",
     /** The caller's per-event staff roles; empty when none or signed out. */
     eventRoles: me?.event_roles ?? NO_EVENT_ROLES,
   };

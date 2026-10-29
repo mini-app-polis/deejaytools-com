@@ -6,6 +6,7 @@ import {
   ApiAuthMeSchema,
   ApiAuthUserSchema,
   ApiCheckinCreatedSchema,
+  ApiDivisionsSchema,
   ApiEventDivisionEntitiesSchema,
   ApiEventDriveFolderSchema,
   ApiEventPersonSchema,
@@ -96,6 +97,13 @@ export const endpoints = {
     sync: endpoint<void, Body, z.infer<typeof ApiAuthUserSchema>>({
       id: "auth.sync", method: "POST", access: "user", transport: "fetch",
       path: () => "/v1/auth/sync", response: ApiAuthUserSchema,
+    }),
+  },
+
+  divisions: {
+    list: endpoint<void, void, z.infer<typeof ApiDivisionsSchema>>({
+      id: "divisions.list", method: "GET", access: "public",
+      path: () => "/v1/divisions", response: ApiDivisionsSchema,
     }),
   },
 

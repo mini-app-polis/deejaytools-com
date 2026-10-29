@@ -13,6 +13,17 @@
 // export {} makes this a module so top-level await is valid
 export {};
 
+import { vi } from "vitest";
+
+// Components read the division list from GET /v1/divisions through
+// useDivisions. Every test sees it already loaded, so a test's API mock does
+// not have to serve the route. useDivisions.test.ts unmocks it to test the
+// hook itself.
+vi.mock("@/hooks/useDivisions", async () => {
+  const { LOADED_DIVISIONS } = await import("./divisions");
+  return { useDivisions: () => LOADED_DIVISIONS, resetDivisionsCache: () => {} };
+});
+
 if (typeof window !== "undefined") {
   // jsdom environment — wire up Testing Library.
   await import("@testing-library/jest-dom/vitest");

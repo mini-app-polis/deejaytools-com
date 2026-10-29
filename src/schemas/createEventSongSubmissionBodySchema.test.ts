@@ -11,20 +11,20 @@ describe("createEventSongSubmissionBodySchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("rejects a division not in DIVISIONS", () => {
-    const result = createEventSongSubmissionBodySchema.safeParse({
-      event_id: "evt_1",
-      song_id: "song_1",
-      division: "classic",
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects an arbitrary division string", () => {
+  it("leaves checking the division name to the API, which owns the list", () => {
     const result = createEventSongSubmissionBodySchema.safeParse({
       event_id: "evt_1",
       song_id: "song_1",
       division: "Not A Real Division",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an empty division", () => {
+    const result = createEventSongSubmissionBodySchema.safeParse({
+      event_id: "evt_1",
+      song_id: "song_1",
+      division: "",
     });
     expect(result.success).toBe(false);
   });

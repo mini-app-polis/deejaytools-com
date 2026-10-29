@@ -50,7 +50,7 @@ const MY_EVENTS_ITEM: NavItem = { to: "/my-events", label: "My events" };
 const buildSha = import.meta.env.VITE_COMMIT_SHA ?? "";
 
 export default function NavBar() {
-  const { isAdmin, isManager, eventRoles } = useAuthMe();
+  const { isAdmin, eventRoles } = useAuthMe();
   // One entry per event the caller is on the staff of, opening the portal
   // of their richest role there.
   const { items: staffEvents } = useStaffEvents(eventRoles);
@@ -73,7 +73,7 @@ export default function NavBar() {
       : `api v${api.version}`
     : null;
   const [menuOpen, setMenuOpen] = useState(false);
-  const showManagerBar = isAdmin || isManager;
+  const showManagerBar = isAdmin;
 
   const desktopLinkClass = ({ isActive }: { isActive: boolean }) =>
     cn(

@@ -1,5 +1,5 @@
 import { useAuth } from "@clerk/clerk-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useApiClient } from "@/api/client";
@@ -9,7 +9,8 @@ import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DIVISION_GROUPS, type ApiManagedPartnership, type ApiPartner } from "@/schemas";
+import { useDivisions } from "@/hooks/useDivisions";
+import type { ApiManagedPartnership, ApiPartner } from "@/schemas";
 import type { AuthMe as MeResponse } from "@/hooks/useAuthMe";
 import {
   MAX_FILE_BYTES,
@@ -20,9 +21,12 @@ import {
 
 // Divisions handled only by the (future) solo/teams portal — hidden from the standard upload picker.
 const PORTAL_ONLY_DIVISIONS = new Set<string>(["Teams", "Cabaret", "My Division Is Not Listed"]);
-const UPLOAD_DIVISION_GROUPS = DIVISION_GROUPS.map((group) =>
-  group.filter((d) => !PORTAL_ONLY_DIVISIONS.has(d)).map((d) => ({ value: d, label: d }))
-);
+
+function uploadDivisionGroups(groups: readonly (readonly string[])[]) {
+  return groups
+    .map((group) => group.filter((d) => !PORTAL_ONLY_DIVISIONS.has(d)).map((d) => ({ value: d, label: d })))
+    .filter((group) => group.length > 0);
+}
 
 type Partner = Pick<ApiPartner, "id" | "first_name" | "last_name" | "partner_role">;
 
@@ -61,6 +65,8 @@ export type SongUploadFormProps = {
 export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUploadFormProps) {
   const api = useApiClient();
   const { getToken } = useAuth();
+  const { groups: divisionGroups, loading: divisionsLoading, error: divisionsError } = useDivisions();
+  const uploadGroups = useMemo(() => uploadDivisionGroups(divisionGroups), [divisionGroups]);
 
   const [partners, setPartners] = useState<Partner[]>([]);
   const [managedPartnerships, setManagedPartnerships] = useState<ApiManagedPartnership[]>([]);
@@ -299,13 +305,19 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
       {/* Shared fields */}
       <div className="space-y-2">
         <Label>Division</Label>
-        <ChoiceGroup
-          key={formKey}
-          ariaLabel="Division"
-          groups={UPLOAD_DIVISION_GROUPS}
-          value={division}
-          onChange={setDivision}
-        />
+        {divisionsError ? (
+          <p className="text-sm text-destructive">Could not load the divisions: {divisionsError}</p>
+        ) : divisionsLoading ? (
+          <Skeleton className="h-16 w-full" />
+        ) : (
+          <ChoiceGroup
+            key={formKey}
+            ariaLabel="Division"
+            groups={uploadGroups}
+            value={division}
+            onChange={setDivision}
+          />
+        )}
       </div>
       <div className="space-y-2">
         <Label htmlFor="song-routine">Routine / Song name</Label>

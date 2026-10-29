@@ -13,7 +13,7 @@ let mockState = {
   eventRoles: [] as { event_id: string; role: Role }[],
 };
 vi.mock("@/hooks/useAuthMe", () => ({
-  useAuthMe: () => ({ ...mockState, isManager: false, reload: vi.fn() }),
+  useAuthMe: () => ({ ...mockState, reload: vi.fn() }),
 }));
 
 import EventRoleGuard from "./EventRoleGuard";
