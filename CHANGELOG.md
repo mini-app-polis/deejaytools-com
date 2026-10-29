@@ -1,3 +1,10 @@
+# [2.15.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.14.0...v2.15.0) (2026-10-29)
+
+
+### Features
+
+* **upload:** staff Upload for picks the dancer's partner and submits to the event ([32c535f](https://github.com/mini-app-polis/deejaytools-com/commit/32c535fade0960d41d003b92478e60583057d470))
+
 # [2.14.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.13.0...v2.14.0) (2026-10-29)
 
 
