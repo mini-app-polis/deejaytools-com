@@ -570,6 +570,10 @@ describe("contract", () => {
     expect(granted).toMatchObject({ event_id: eventId, user_id: me.id, role: "coordinator" });
     const staff = await ledger.hit(endpoints.events.staff, { params: { id: eventId } });
     expect(staff.some((s) => s.user_id === me.id && s.role === "coordinator")).toBe(true);
+    // A staff grant connects the test user to the event, so its partners can
+    // be read for an upload on its behalf. Only the shape is pinned.
+    const partners = await ledger.hit(endpoints.events.personPartners, { params: { id: eventId, userId: me.id } });
+    expect(partners.every((p) => typeof p.id === "string")).toBe(true);
     const withRole = await ledger.hit(endpoints.auth.me);
     expect(withRole.event_roles).toContainEqual({ event_id: eventId, role: "coordinator" });
     await ledger.hit(endpoints.events.revokeStaff, { params: { id: eventId, userId: me.id, role: "coordinator" } });

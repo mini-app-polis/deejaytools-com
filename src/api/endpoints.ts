@@ -155,6 +155,15 @@ export const endpoints = {
       path: (p) => `/v1/events/${id(p)}/people?q=${encodeURIComponent(p.q)}`,
       response: z.array(ApiEventPersonSchema),
     }),
+    /**
+     * One person's partners, for the event's staff uploading a song on their
+     * behalf: only for a person connected to the event.
+     */
+    personPartners: endpoint<{ id: string; userId: string }, void, z.infer<typeof ApiPartnerSchema>[]>({
+      id: "events.personPartners", method: "GET", access: "event-staff",
+      path: (p) => `/v1/events/${id(p)}/people/${encodeURIComponent(p.userId)}/partners`,
+      response: z.array(ApiPartnerSchema),
+    }),
     /** The event's shared Drive folder: its DJs, event managers and admins only. */
     driveFolder: endpoint<{ id: string }, void, z.infer<typeof ApiEventDriveFolderSchema>>({
       id: "events.driveFolder", method: "GET", access: "event-staff",

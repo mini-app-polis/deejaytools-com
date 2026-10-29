@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CHUNK_SIZE, uploadSongInChunks } from "./chunkedSongUpload";
+import { CHUNK_SIZE, UploadRefused, uploadSongInChunks } from "./chunkedSongUpload";
 
 const getToken = vi.fn().mockResolvedValue("test-token");
 const buildFormFields = vi.fn(() => ({ division: "Classic" }));
@@ -111,5 +111,22 @@ describe("uploadSongInChunks", () => {
       /the connection may have dropped/
     );
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("stops at a final refusal without retrying", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: "ENTITY_SLOT_TAKEN", message: "taken" } }), {
+        status: 409,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const file = new File([new Uint8Array(1024)], "ok.mp3", { type: "audio/mpeg" });
+
+    const err = await uploadSongInChunks({ file, getToken, buildFormFields }).catch((e) => e);
+    expect(err).toBeInstanceOf(UploadRefused);
+    expect(err.code).toBe("ENTITY_SLOT_TAKEN");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -44,6 +44,9 @@ function routeGet(path: string): Promise<unknown> {
   if (path.startsWith("/v1/events/ev-1/people?q=")) {
     return Promise.resolve([fx.eventPerson({ user_id: "user_42", display_name: "Ada Lovelace", email_masked: "a•••@example.com" })]);
   }
+  if (path === "/v1/events/ev-1/people/user_42/partners") {
+    return Promise.resolve([fx.partner({ id: "p-1", first_name: "Bob", last_name: "Byron" })]);
+  }
   if (path === "/v1/events/ev-1/song-submissions") {
     return Promise.resolve([
       fx.adminEventSongSubmission({ id: "sub-1", song_id: "song-9", owner_user_id: "user_42", division: "Classic", partnership_label: "Ada & Bob" }),
@@ -186,7 +189,9 @@ describe("DjPortalPage", () => {
     fireEvent.click(await screen.findByRole("option", { name: /^Ada Lovelace/ }));
     expect(apiGet).toHaveBeenCalledWith("/v1/events/ev-1/people?q=ada");
     expect(await screen.findByText("Upload for: Ada Lovelace")).toBeInTheDocument();
-    expect(await screen.findByText(/with no partner/)).toBeInTheDocument();
+    expect(await screen.findByRole("radio", { name: "Bob Byron" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "No partner" })).toBeInTheDocument();
+    expect(apiGet).toHaveBeenCalledWith("/v1/events/ev-1/people/user_42/partners");
     expect(allPaths().some((p) => p.startsWith("/v1/admin"))).toBe(false);
   });
 

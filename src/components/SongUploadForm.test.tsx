@@ -219,33 +219,97 @@ describe("SongUploadForm — uploading", () => {
     expect(screen.getByLabelText(/routine \/ song name/i)).toHaveValue("");
   });
 
-  it("uploads for a dancer at an event as event staff: sends event_id and makes no admin call", async () => {
+  it("uploads for a dancer at an event as event staff: picks their partner and submits to the event", async () => {
     apiGet.mockReset();
-    apiGet.mockResolvedValue([]);
+    apiGet.mockImplementation((path: string) =>
+      Promise.resolve(
+        path === "/v1/events/ev-1/people/u9/partners"
+          ? [
+              fx.partner({ id: "p9", first_name: "Sam", last_name: "Hart", partner_role: "follower" }),
+              fx.partner({ id: "p8", first_name: "Kim", last_name: "Ode", partner_role: "follower" }),
+            ]
+          : []
+      )
+    );
     uploadSongInChunks.mockResolvedValue(undefined);
     render(
       <MemoryRouter>
-        <SongUploadForm variant="self" onBehalf={{ userId: "u9", label: "u9", eventId: "ev-1" }} />
+        <SongUploadForm variant="self" onBehalf={{ userId: "u9", label: "Dana Fox", eventId: "ev-1" }} />
       </MemoryRouter>
     );
 
-    expect(await screen.findByText(/with no partner/)).toBeInTheDocument();
+    const partner = await screen.findByRole("radiogroup", { name: "Partner" });
+    expect(partner).toHaveTextContent("Sam Hart");
+    expect(partner).toHaveTextContent("Kim Ode");
+    expect(partner).toHaveTextContent("No partner");
+    fireEvent.click(screen.getByRole("radio", { name: "Kim Ode" }));
     chooseFile(audioFile());
     chooseDivision("Classic");
     submit();
 
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Song uploaded successfully."));
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith("Song uploaded and submitted to the event, ready for check-in.")
+    );
     const [{ buildFormFields }] = uploadSongInChunks.mock.calls[0]!;
     expect(buildFormFields()).toEqual({
       division: "Classic",
       routine_name: "",
       personal_descriptor: "",
-      partner_id: "",
+      partner_id: "p8",
       on_behalf_of_user_id: "u9",
       event_id: "ev-1",
+      submit_to_event: "true",
     });
-    // The dancer's partners are an admin-only lookup; staff never call it.
+    // Through the event's own route; the admin-wide lookup is never called.
     expect(apiGet.mock.calls.some(([path]) => String(path).startsWith("/v1/admin"))).toBe(false);
+  });
+
+  it("lets event staff upload with no partner", async () => {
+    apiGet.mockReset();
+    apiGet.mockResolvedValue([]);
+    uploadSongInChunks.mockResolvedValue(undefined);
+    render(
+      <MemoryRouter>
+        <SongUploadForm variant="self" onBehalf={{ userId: "u9", label: "Dana Fox", eventId: "ev-1" }} />
+      </MemoryRouter>
+    );
+    expect(await screen.findByRole("radio", { name: "No partner" })).toBeChecked();
+    chooseFile(audioFile());
+    chooseDivision("Classic");
+    submit();
+    await waitFor(() => expect(uploadSongInChunks).toHaveBeenCalled());
+    const [{ buildFormFields }] = uploadSongInChunks.mock.calls[0]!;
+    expect(buildFormFields()).toMatchObject({ partner_id: "", submit_to_event: "true" });
+  });
+
+  it("says plainly when the dancer already has a song in that division", async () => {
+    apiGet.mockReset();
+    apiGet.mockResolvedValue([]);
+    const { UploadRefused } = await import("@/lib/chunkedSongUpload");
+    uploadSongInChunks.mockRejectedValue(
+      new UploadRefused("This entity already has a song submitted for Classic", 409, "ENTITY_SLOT_TAKEN")
+    );
+    const onUploaded = vi.fn();
+    render(
+      <MemoryRouter>
+        <SongUploadForm
+          variant="self"
+          onBehalf={{ userId: "u9", label: "Dana Fox", eventId: "ev-1" }}
+          onUploaded={onUploaded}
+        />
+      </MemoryRouter>
+    );
+    await screen.findByRole("radiogroup", { name: "Partner" });
+    chooseFile(audioFile());
+    chooseDivision("Classic");
+    submit();
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "Dana Fox already has a song submitted for Classic at this event. Nothing was uploaded."
+      )
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(onUploaded).not.toHaveBeenCalled();
   });
 
   it("shows progress while uploading", async () => {

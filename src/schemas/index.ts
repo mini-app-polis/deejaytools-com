@@ -645,6 +645,12 @@ export type ApiPairRef = z.infer<typeof ApiPairRefSchema>;
 /** POST /v1/songs/upload/chunk — every chunk but the last, then the last. */
 export const ApiSongUploadChunkSchema = z.union([
   z.object({ received: z.literal(true), complete: z.literal(false) }),
-  z.object({ received: z.literal(true), complete: z.literal(true), song: ApiSongSchema }),
+  z.object({
+    received: z.literal(true),
+    complete: z.literal(true),
+    song: ApiSongSchema,
+    /** Only for a staff upload with submit_to_event: the song's submission to the event. */
+    submission: ApiEventSongSubmissionSchema.optional(),
+  }),
 ]);
 export type ApiSongUploadChunk = z.infer<typeof ApiSongUploadChunkSchema>;
