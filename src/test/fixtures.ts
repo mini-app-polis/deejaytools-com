@@ -126,7 +126,7 @@ export const fx = {
   }),
   adminEventSongSubmission: factory(ApiAdminEventSongSubmissionSchema, {
     id: "sub-1", event_id: "ev-1", event_name: "Test Event", division: null,
-    song_id: "song-1", song_label: "Song", partnership_label: "Leader & Follower",
+    song_id: "song-1", owner_user_id: "user-1", song_label: "Song", partnership_label: "Leader & Follower",
     submitter_email: "user@example.com", created_at: T,
   }),
   eventDivisionEntities: factory(ApiEventDivisionEntitiesSchema, {

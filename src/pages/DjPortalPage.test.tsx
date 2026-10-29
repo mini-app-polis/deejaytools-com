@@ -46,7 +46,7 @@ function routeGet(path: string): Promise<unknown> {
   }
   if (path === "/v1/events/ev-1/song-submissions") {
     return Promise.resolve([
-      fx.adminEventSongSubmission({ id: "sub-1", song_id: "song-9", division: "Classic", partnership_label: "Ada & Bob" }),
+      fx.adminEventSongSubmission({ id: "sub-1", song_id: "song-9", owner_user_id: "user_42", division: "Classic", partnership_label: "Ada & Bob" }),
     ]);
   }
   return Promise.reject(new Error(`unexpected GET ${path}`));
@@ -161,9 +161,8 @@ describe("DjPortalPage", () => {
   it("checks a dancer in on their behalf", async () => {
     apiPost.mockResolvedValue(fx.checkinCreated({ sessionId: "s-1" }));
     renderAt("checkin-for");
-    fireEvent.change(await screen.findByRole("combobox", { name: "Dancer" }), { target: { value: " ada " } });
-    fireEvent.click(await screen.findByRole("option", { name: "Ada Lovelace · a•••@example.com" }));
-    expect(apiGet).toHaveBeenCalledWith("/v1/events/ev-1/people?q=ada");
+    // The dancer is the picked song's owner: there is nobody to pick or type.
+    expect(screen.queryByRole("combobox", { name: "Dancer" })).toBeNull();
     fireEvent.click(await screen.findByRole("radio", { name: /^Ada & Bob/ }));
     // Pick the one open session (its title is a date and time).
     const session = within(screen.getByRole("radiogroup", { name: "Session" })).getAllByRole("radio")[0]!;
@@ -191,11 +190,38 @@ describe("DjPortalPage", () => {
     expect(allPaths().some((p) => p.startsWith("/v1/admin"))).toBe(false);
   });
 
-  it("points to the event's Drive folder in Shared with me", async () => {
+  it("links straight to the event's Drive folder once it is shared", async () => {
+    const url = "https://drive.google.com/drive/folders/folder_1";
+    apiGet.mockImplementation((path: string) =>
+      path === "/v1/events/ev-1/drive-folder" ? Promise.resolve({ folder_id: "folder_1", url }) : routeGet(path)
+    );
     renderAt("drive");
+    expect(await screen.findByRole("link", { name: /Open the event's folder/ })).toHaveAttribute("href", url);
+    expect(screen.queryByRole("link", { name: /Open Shared with me/ })).toBeNull();
+    expect(apiGet).toHaveBeenCalledWith("/v1/events/ev-1/drive-folder");
+  });
+
+  it("points to Shared with me while the folder is not shared yet", async () => {
+    apiGet.mockImplementation((path: string) =>
+      path === "/v1/events/ev-1/drive-folder" ? Promise.resolve({ folder_id: null, url: null }) : routeGet(path)
+    );
+    renderAt("drive");
+    await waitFor(() => expect(apiGet).toHaveBeenCalledWith("/v1/events/ev-1/drive-folder"));
     expect(await screen.findByRole("link", { name: /Open Shared with me/ })).toHaveAttribute(
       "href",
       "https://drive.google.com/drive/shared-with-me"
     );
+    expect(screen.getByText(/can take a few minutes to appear/)).toBeInTheDocument();
+  });
+
+  it("points to Shared with me when the folder cannot be read", async () => {
+    renderAt("drive");
+    // routeGet refuses the drive-folder path, as a denied or failed call would.
+    await waitFor(() => expect(apiGet).toHaveBeenCalledWith("/v1/events/ev-1/drive-folder"));
+    expect(await screen.findByRole("link", { name: /Open Shared with me/ })).toHaveAttribute(
+      "href",
+      "https://drive.google.com/drive/shared-with-me"
+    );
+    expect(screen.queryByRole("link", { name: /Open the event's folder/ })).toBeNull();
   });
 });

@@ -563,6 +563,9 @@ describe("contract", () => {
     // Who matches depends on the event's data, so only the shape and the cap are pinned.
     const people = await ledger.hit(endpoints.events.people, { params: { id: eventId, q: "co" } });
     expect(people.length).toBeLessThanOrEqual(20);
+    // Null until a share has recorded the folder; a URL to it after.
+    const folder = await ledger.hit(endpoints.events.driveFolder, { params: { id: eventId } });
+    expect(folder.url === null || folder.url === `https://drive.google.com/drive/folders/${folder.folder_id}`).toBe(true);
     const granted = await ledger.hit(endpoints.events.grantStaff, { params: { id: eventId, userId: me.id, role: "coordinator" } });
     expect(granted).toMatchObject({ event_id: eventId, user_id: me.id, role: "coordinator" });
     const staff = await ledger.hit(endpoints.events.staff, { params: { id: eventId } });
