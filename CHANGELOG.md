@@ -1,3 +1,10 @@
+# [2.16.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.15.0...v2.16.0) (2026-10-30)
+
+
+### Features
+
+* **my-content:** show songs shared with you and partner check-ins without owner-only actions ([1939587](https://github.com/mini-app-polis/deejaytools-com/commit/19395875b4d5ce3b749a978c92623f8027f0d302))
+
 # [2.15.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.14.0...v2.15.0) (2026-10-29)
 
 
