@@ -144,7 +144,7 @@ export default function AdminPage() {
   const section: AdminSection = isAdminSection(rawSection)
     ? rawSection
     : DEFAULT_ADMIN_SECTION;
-  // Used to identify the current admin so the Users tab can hide the role
+  // Identifies the current admin so the Users tab can hide the role
   // toggle on their own row (the API also rejects self-demotion).
   const { me } = useAuthMe();
 
@@ -1029,10 +1029,9 @@ export default function AdminPage() {
     <div className="space-y-6">
       <h1 className="page-title text-2xl">Admin</h1>
 
-      {/* The tab strip lived here previously; admin sections are now their
-          own routes (`/admin/<section>`) reached via the navbar dropdown.
-          We keep Radix's <Tabs> wrapper so we don't have to rewrite every
-          <TabsContent value="..."> block — Radix hides every TabsContent
+      {/* Admin sections are their own routes (`/admin/<section>`) reached
+          via the navbar dropdown; there is no in-page tab strip. Radix's
+          <Tabs> wrapper selects the section: Radix hides every TabsContent
           whose `value` doesn't match the controlled `value` prop. */}
       <Tabs value={section}>
 

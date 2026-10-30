@@ -161,8 +161,8 @@ export type PartnerRole = z.infer<typeof PartnerRoleSchema>;
  *
  * Two deliberate choices:
  *
- * - A bare leading "Open" does NOT match. It used to, which meant an unrelated
- *   "Open Practice Night" was treated as The Open.
+ * - A bare leading "Open" does NOT match, so an unrelated "Open Practice
+ *   Night" is not treated as The Open.
  * - startsWith, not includes. Normalization removes spaces, so `includes`
  *   matches across word boundaries — "Breathe Open Air" becomes
  *   "breatheopenair", which contains "theopen".

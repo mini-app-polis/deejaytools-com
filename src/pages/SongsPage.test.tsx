@@ -196,7 +196,7 @@ describe("SongsPage — delete flow", () => {
       expect(toast.success).toHaveBeenCalledWith("Song removed.");
     });
 
-    // The song filename should no longer be in the document.
+    // The song filename should be gone from the document.
     expect(screen.queryByText("Classic - The Open 2025")).not.toBeInTheDocument();
 
     // apiDel should have been called with the correct path.

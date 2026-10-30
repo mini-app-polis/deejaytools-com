@@ -408,7 +408,7 @@ export default function ManagerPage() {
           <ManagerGuideSection />
         </TabsContent>
 
-        {/* ── Active Sessions (moved from admin Live Queue tab) ── */}
+        {/* ── Active Sessions ── */}
         <TabsContent value="active-sessions" className="mt-4 space-y-5">
           <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <p className="text-sm">

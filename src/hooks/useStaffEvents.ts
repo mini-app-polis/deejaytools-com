@@ -44,7 +44,7 @@ export function useStaffEvents(eventRoles: readonly ApiEventRole[]) {
     return (
       staff
         .map((s) => ({ eventId: s.event_id, role: s.role, event: byId.get(s.event_id) ?? null }))
-        // Once the list is in, an event it no longer has (deleted since the
+        // Once the list is in, an event missing from it (deleted since the
         // roles were read) has no portal to open.
         .filter((s) => events === null || s.event !== null)
     );
