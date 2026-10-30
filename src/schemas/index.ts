@@ -268,6 +268,12 @@ export const ApiMyCheckinSchema = z.object({
   queuePosition: z.number(),
   overallPosition: z.number(),
   runCount: z.number().optional().default(0),
+  /**
+   * False for a live check-in of the couple that the caller sees as the
+   * linked partner but cannot withdraw (the API refuses DELETE for it).
+   * Older responses omit it; the caller's own check-ins are withdrawable.
+   */
+  canWithdraw: z.boolean().optional().default(true),
 });
 export type ApiMyCheckin = z.infer<typeof ApiMyCheckinSchema>;
 
@@ -309,6 +315,12 @@ export const ApiSongSchema = z.object({
    * managed partnership. The API orders it; the site never re-composes it.
    */
   partnership_label: z.string().nullable().optional(),
+  /**
+   * True when the song belongs to someone else and is listed because the
+   * caller is its linked partner. Shared songs can be submitted and checked
+   * in, but only the owner may edit or delete them. Older responses omit it.
+   */
+  shared_with_me: z.boolean().optional().default(false),
 });
 export type ApiSong = z.infer<typeof ApiSongSchema>;
 

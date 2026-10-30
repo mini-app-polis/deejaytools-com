@@ -122,6 +122,7 @@ function makeMyCheckin(opts: {
   entitySoloUserId?: string | null;
   entityManagedPartnershipId?: string | null;
   divisionName?: string;
+  canWithdraw?: boolean;
 }) {
   return fx.myCheckin({
     id: `ci_${opts.queueEntryId ?? "qe1"}`,
@@ -145,6 +146,7 @@ function makeMyCheckin(opts: {
     queuePosition: 1,
     overallPosition: 1,
     runCount: 0,
+    ...(opts.canWithdraw === undefined ? {} : { canWithdraw: opts.canWithdraw }),
   });
 }
 
@@ -867,7 +869,70 @@ describe("SessionDetailPage — check-in song selector", () => {
     await waitFor(() => {
       expect(screen.getAllByText(/already in the queue/i).length).toBeGreaterThan(0);
     });
+    expect(screen.getByText(/withdraw your current entry first/i)).toBeInTheDocument();
+    expect(screen.queryByText(/checked in by your partner/i)).not.toBeInTheDocument();
 
+    const submitButton = screen
+      .getAllByRole("button", { name: /^check in$/i })
+      .find((button) => button.getAttribute("type") === "submit");
+    expect(submitButton).toBeDisabled();
+  });
+
+  it("says the partner checked the couple in when the caller cannot withdraw the entry", async () => {
+    signedIn = true;
+    stubGets({
+      session: openCheckinWindowSession(),
+      active: [],
+      waiting: [
+        {
+          queueEntryId: "qe_couple",
+          checkinId: "c_couple",
+          position: 1,
+          enteredQueueAt: 1,
+          entityPairId: "pair_couple",
+          entitySoloUserId: null,
+          entityLabel: "Ann & Bo",
+          divisionName: "Classic",
+          songId: "song_shared",
+          notes: null,
+          initialQueue: "priority",
+          checkedInAt: 1,
+          subQueue: "priority",
+        },
+      ],
+      pairs: [],
+      songs: [
+        {
+          id: "song_shared",
+          user_id: "user_partner",
+          routine_name: "Shared Routine",
+          division: "Classic",
+          partner_id: "partner_of_owner",
+          managed_partnership_id: null,
+          shared_with_me: true,
+        },
+      ],
+      myCheckins: [
+        makeMyCheckin({ entityPairId: "pair_couple", queueEntryId: "qe_couple", canWithdraw: false }),
+      ],
+      eventSubmissions: [makeSubmission("song_shared")],
+    });
+    renderAt();
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/#1 in queue/i).length).toBeGreaterThan(0);
+    });
+    expect(screen.getAllByText(/checked in by your partner/i).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /withdraw/i })).not.toBeInTheDocument();
+
+    await openFormAndPick(/Shared Routine/i);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/your partner already checked this partnership in/i)
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/withdraw your current entry/i)).not.toBeInTheDocument();
     const submitButton = screen
       .getAllByRole("button", { name: /^check in$/i })
       .find((button) => button.getAttribute("type") === "submit");
