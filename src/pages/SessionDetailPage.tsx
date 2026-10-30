@@ -226,6 +226,19 @@ export default function ApiSessionPage() {
     return s;
   }, [myCheckins, id]);
 
+  // Entities the caller's linked partner checked in: the caller sees them in
+  // /v1/checkins/mine but cannot withdraw them.
+  const partnerCheckedInEntityIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const ci of myCheckins) {
+      if (ci.sessionId !== id || ci.canWithdraw) continue;
+      if (ci.entityPairId) s.add(ci.entityPairId);
+      if (ci.entitySoloUserId) s.add(ci.entitySoloUserId);
+      if (ci.entityManagedPartnershipId) s.add(ci.entityManagedPartnershipId);
+    }
+    return s;
+  }, [myCheckins, id]);
+
   // Find ALL of the current user's active queue entries — one per entity
   // (pair, solo, or managed partnership). A user with multiple partnerships can have several.
   const userQueueEntries = useMemo(() => {
@@ -249,16 +262,18 @@ export default function ApiSessionPage() {
     return s;
   }, [userQueueEntries]);
 
-  // True when the entity for the selected song is already in the queue —
-  // the page then warns the user and blocks submission.
-  const selectedEntityInQueue = useMemo(() => {
-    if (!fSongId || !selectedSong) return false;
+  // The entity for the selected song when it is already in the queue (null
+  // otherwise) — the page then warns the user and blocks submission.
+  const selectedQueuedEntityId = useMemo((): string | null => {
+    if (!fSongId || !selectedSong) return null;
+    const queued = (eid: string | null | undefined) =>
+      eid && inQueueEntityIds.has(eid) ? eid : null;
     if (selectedSong.managed_partnership_id) {
-      return inQueueEntityIds.has(selectedSong.managed_partnership_id);
+      return queued(selectedSong.managed_partnership_id);
     }
-    if (isSolo) return inQueueEntityIds.has(user?.id ?? "");
+    if (isSolo) return queued(user?.id);
     const pid = derivedPair?.id;
-    if (pid) return inQueueEntityIds.has(pid);
+    if (pid) return queued(pid);
     // Placeholder partner: pair isn't in leading-pairs — resolve via ownership set.
     if (selectedSong.partner_id) {
       for (const eid of myEntityIds) {
@@ -270,11 +285,11 @@ export default function ApiSessionPage() {
             r.entitySoloUserId === eid
         );
         if (entry && songs.find((s) => s.id === entry.songId)?.partner_id === selectedSong.partner_id) {
-          return true;
+          return eid;
         }
       }
     }
-    return false;
+    return null;
   }, [
     fSongId,
     selectedSong,
@@ -286,6 +301,9 @@ export default function ApiSessionPage() {
     songs,
     user?.id,
   ]);
+  const selectedEntityInQueue = selectedQueuedEntityId != null;
+  const selectedEntityCheckedInByPartner =
+    selectedQueuedEntityId != null && partnerCheckedInEntityIds.has(selectedQueuedEntityId);
 
 
   const checkinWindowOpen =
@@ -408,6 +426,12 @@ export default function ApiSessionPage() {
                         : ""}
                       )
                     </span>
+                    {((entry.entityPairId != null &&
+                      partnerCheckedInEntityIds.has(entry.entityPairId)) ||
+                      (entry.entityManagedPartnershipId != null &&
+                        partnerCheckedInEntityIds.has(entry.entityManagedPartnershipId))) && (
+                      <span className="text-muted-foreground"> · checked in by your partner</span>
+                    )}
                   </p>
                 );
               })}
@@ -647,7 +671,9 @@ export default function ApiSessionPage() {
                   </div>
                   {selectedEntityInQueue && (
                     <p className="text-xs text-destructive pt-0.5">
-                      This partnership is already in the queue. Pick a different song or withdraw your current entry first.{" "}
+                      {selectedEntityCheckedInByPartner
+                        ? "Your partner already checked this partnership in. Pick a different song."
+                        : "This partnership is already in the queue. Pick a different song or withdraw your current entry first."}{" "}
                       <Link
                         to="/how-it-works/troubleshooting"
                         className="underline font-normal text-destructive/90"

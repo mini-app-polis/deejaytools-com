@@ -106,6 +106,22 @@ describe("SongsPage", () => {
     const alone = screen.getByText("Untitled song").closest("div.rounded-lg")!;
     expect(alone).not.toHaveTextContent("Entered as");
   });
+
+  it("marks a song shared with the user and offers no Delete for it", async () => {
+    apiGet.mockResolvedValue([
+      fx.song({ id: "own", routine_name: "Mine" }),
+      fx.song({ id: "shared", user_id: "user_2", routine_name: "Theirs", shared_with_me: true }),
+    ]);
+    renderPage();
+
+    const shared = (await screen.findByText("Theirs", { selector: "p" })).closest("div.rounded-lg")!;
+    expect(shared).toHaveTextContent("Shared with you");
+    expect(within(shared as HTMLElement).queryByRole("button", { name: "Delete" })).toBeNull();
+
+    const own = screen.getByText("Mine", { selector: "p" }).closest("div.rounded-lg")!;
+    expect(own).not.toHaveTextContent("Shared with you");
+    expect(within(own as HTMLElement).getByRole("button", { name: "Delete" })).toBeInTheDocument();
+  });
 });
 
 describe("SongsPage — delete flow", () => {

@@ -5,6 +5,7 @@ import type { ApiSong } from "@/schemas";
 import { songLabel, songPieces } from "@/lib/songLabel";
 import { useApiClient } from "@/api/client";
 import { call, endpoints } from "@/api/endpoints";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -147,15 +148,19 @@ export default function SongsPage() {
                   </span>
                 )}
               </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="destructive"
-                className="w-full mt-1"
-                onClick={() => setPendingDeleteId(s.id)}
-              >
-                Delete
-              </Button>
+              {s.shared_with_me ? (
+                <Badge variant="outline">Shared with you</Badge>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  className="w-full mt-1"
+                  onClick={() => setPendingDeleteId(s.id)}
+                >
+                  Delete
+                </Button>
+              )}
             </div>
           );
         })}

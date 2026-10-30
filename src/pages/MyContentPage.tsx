@@ -352,15 +352,21 @@ export default function MyContentPage() {
                       )}
                     </div>
 
-                    {/* Withdraw */}
+                    {/* Withdraw — the API refuses it for a check-in the partner made. */}
                     <div className="pt-2 border-t border-border/40 mt-1">
-                      <Button
-                        type="button" size="sm" variant="outline"
-                        className="border-destructive/50 text-destructive hover:bg-destructive-strong hover:text-destructive-foreground"
-                        onClick={() => setPendingWithdrawId(ci.id)}
-                      >
-                        Withdraw from queue
-                      </Button>
+                      {ci.canWithdraw ? (
+                        <Button
+                          type="button" size="sm" variant="outline"
+                          className="border-destructive/50 text-destructive hover:bg-destructive-strong hover:text-destructive-foreground"
+                          onClick={() => setPendingWithdrawId(ci.id)}
+                        >
+                          Withdraw from queue
+                        </Button>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Your partner checked this partnership in. Only they can withdraw it.
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -483,6 +489,9 @@ export default function MyContentPage() {
                       {new Date(s.created_at).toLocaleDateString()}
                     </p>
                   </div>
+                  {s.shared_with_me && (
+                    <Badge variant="outline">Shared with you</Badge>
+                  )}
                   {s.original_filename?.trim() && (
                     <p className="font-mono text-xs text-muted-foreground leading-snug break-all">
                       <span className="text-muted-foreground text-xs not-italic">Uploaded: </span>
@@ -545,15 +554,18 @@ export default function MyContentPage() {
                         </a>
                       </Button>
                     ) : null}
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="destructive"
-                      className="flex-1"
-                      onClick={() => setPendingDeleteSongId(s.id)}
-                    >
-                      Delete
-                    </Button>
+                    {/* Only the owner may delete; a shared song is the partner's. */}
+                    {!s.shared_with_me && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        className="flex-1"
+                        onClick={() => setPendingDeleteSongId(s.id)}
+                      >
+                        Delete
+                      </Button>
+                    )}
                   </div>
                 </div>
               );

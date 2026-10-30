@@ -360,6 +360,29 @@ describe("MyContentPage — Check-ins section", () => {
     expect(screen.getByText("Ann & Bo")).toBeInTheDocument();
   });
 
+  it("offers no Withdraw on a check-in the partner made and says so", async () => {
+    const partners = fx.myCheckin({ ...CHECKIN, id: "ci-partner", canWithdraw: false });
+    withGets({ "/v1/checkins/mine": [partners] });
+    renderPage();
+
+    expect(await screen.findByText("Ann & Bo")).toBeInTheDocument();
+    expect(
+      screen.getByText("Your partner checked this partnership in. Only they can withdraw it.")
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /withdraw from queue/i })).not.toBeInTheDocument();
+  });
+
+  it("offers Withdraw when the API omits canWithdraw or sends true", async () => {
+    const { canWithdraw: _omitted, ...older } = CHECKIN;
+    withGets({
+      "/v1/checkins/mine": [older, fx.myCheckin({ ...CHECKIN, id: "ci-2", canWithdraw: true })],
+    });
+    renderPage();
+
+    expect(await screen.findAllByRole("button", { name: /withdraw from queue/i })).toHaveLength(2);
+    expect(screen.queryByText(/your partner checked this partnership in/i)).not.toBeInTheDocument();
+  });
+
   it("reports a failure to load check-ins", async () => {
     withGets({ "/v1/checkins/mine": () => Promise.reject(new Error("checkins down")) });
     renderPage();
@@ -464,6 +487,35 @@ describe("MyContentPage — Songs section", () => {
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Song is checked in"));
     expect(screen.getByRole("button", { name: "Legacy Song" })).toBeInTheDocument();
+  });
+
+  it("lists a song shared with the user with its Drive link but no Delete", async () => {
+    const shared = fx.song({
+      id: "song-shared",
+      user_id: "user_partner",
+      routine_name: "Their Routine",
+      drive_file_id: "drive-shared",
+      shared_with_me: true,
+    });
+    // An older API response without the field is the caller's own song.
+    const { shared_with_me: _omitted, ...older } = UPLOADED;
+    withGets({ "/v1/songs": [shared, older] });
+    renderPage();
+
+    const card = (await screen.findByText("Their Routine", { selector: "p" })).closest(
+      "div.rounded-lg"
+    )! as HTMLElement;
+    expect(card).toHaveTextContent("Shared with you");
+    expect(
+      within(card).getByRole("link", { name: /open song in google drive/i })
+    ).toHaveAttribute("href", "https://drive.google.com/file/d/drive-shared/view");
+    expect(within(card).queryByRole("button", { name: "Delete" })).toBeNull();
+
+    const own = screen
+      .getByText("Ann Lee & Bo Kim - Classic - Fever - v02")
+      .closest("div.rounded-lg")! as HTMLElement;
+    expect(own).not.toHaveTextContent("Shared with you");
+    expect(within(own).getByRole("button", { name: "Delete" })).toBeInTheDocument();
   });
 
   it("reports a failure to load songs", async () => {
