@@ -218,7 +218,7 @@ function resetAll() {
   vi.mocked(toast.success).mockClear();
 }
 
-function queueCalls(kind: "active" | "priority" | "non-priority") {
+function queueCalls(kind: "active/staff" | "priority" | "non-priority") {
   return apiGet.mock.calls.filter(([p]) => (p as string).endsWith(`/${kind}`)).length;
 }
 
@@ -276,7 +276,7 @@ describe("ManagerPage — Active Sessions", () => {
       "Saturday - 11:00 AM - May 23, 2026 (completed)",
     ]);
     expect(screen.getByText(/choose a session above/i)).toBeInTheDocument();
-    expect(queueCalls("active")).toBe(0);
+    expect(queueCalls("active/staff")).toBe(0);
   });
 
   it("auto-selects the only live session and renders all three queues", async () => {
@@ -284,7 +284,7 @@ describe("ManagerPage — Active Sessions", () => {
       "/v1/sessions": [LIVE],
       "/v1/partners/leading-pairs": [fx.leadingPair({ id: "pair-9", display_name: "Pair From Map" })],
       "/v1/songs": [fx.song({ id: "song-9", processed_filename: "pair_classic_2026.mp3" })],
-      "/v1/queue/live/active": [
+      "/v1/queue/live/active/staff": [
         fx.queueEntry({ queueEntryId: "a2", position: 2, entityLabel: "Second Pair", songDisplayName: "Song Two" }),
         fx.queueEntry({
           queueEntryId: "a1",
@@ -336,18 +336,18 @@ describe("ManagerPage — Active Sessions", () => {
   ])("'%s' posts the entry to %s and reloads the queues", async (label, path, ack) => {
     routeGets({
       "/v1/sessions": [LIVE],
-      "/v1/queue/live/active": [fx.queueEntry({ queueEntryId: "a1", position: 1 })],
+      "/v1/queue/live/active/staff": [fx.queueEntry({ queueEntryId: "a1", position: 1 })],
     });
     apiPost.mockResolvedValue(ack);
     const user = userEvent.setup();
     renderPage();
 
     await screen.findByText("Leader & Follower");
-    const before = queueCalls("active");
+    const before = queueCalls("active/staff");
     await user.click(screen.getByRole("button", { name: label }));
 
     await waitFor(() => expect(apiPost).toHaveBeenCalledWith(path, { queueEntryId: "a1" }));
-    await waitFor(() => expect(queueCalls("active")).toBe(before + 1));
+    await waitFor(() => expect(queueCalls("active/staff")).toBe(before + 1));
   });
 
   it("moves a waiting entry down", async () => {
@@ -389,23 +389,23 @@ describe("ManagerPage — Active Sessions", () => {
       if (failQueues) throw new Error("offline");
       return [];
     };
-    routeGets({ "/v1/sessions": [LIVE], "/v1/queue/live/active": active });
+    routeGets({ "/v1/sessions": [LIVE], "/v1/queue/live/active/staff": active });
     const user = userEvent.setup();
     renderPage();
 
     expect(await screen.findByRole("button", { name: "Updated just now" })).toBeInTheDocument();
-    const initial = queueCalls("active");
+    const initial = queueCalls("active/staff");
 
     act(() => {
       vi.advanceTimersByTime(6_000);
     });
     expect(screen.getByRole("button", { name: "Updated 6s ago" })).toBeInTheDocument();
-    expect(queueCalls("active")).toBe(initial);
+    expect(queueCalls("active/staff")).toBe(initial);
 
     await act(async () => {
       vi.advanceTimersByTime(2_000);
     });
-    await waitFor(() => expect(queueCalls("active")).toBe(initial + 1));
+    await waitFor(() => expect(queueCalls("active/staff")).toBe(initial + 1));
     expect(await screen.findByRole("button", { name: "Updated just now" })).toBeInTheDocument();
 
     // A failed background poll is silent but changes the label to a retry.
