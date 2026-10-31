@@ -1,3 +1,10 @@
+## [2.17.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.17.0...v2.17.1) (2026-10-31)
+
+
+### Bug Fixes
+
+* **app:** handle failed loads and refusals, require the fields the API always sends, and share one /v1/auth/me record ([7265b89](https://github.com/mini-app-polis/deejaytools-com/commit/7265b89313d4cc1835f6a36eda92df5ea1139f11))
+
 # [2.17.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.16.0...v2.17.0) (2026-10-31)
 
 
