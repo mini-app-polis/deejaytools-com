@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointQuery } from "@/api/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ApiEvent } from "@/schemas";
 
@@ -16,14 +15,9 @@ const LINK_CLASS = "inline-block font-medium text-primary hover:underline";
  * back to Drive's "Shared with me", where the folder appears.
  */
 export default function DriveFolderSection({ event }: { event: ApiEvent }) {
-  const api = useApiClient();
-  const [folderUrl, setFolderUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    call(api, endpoints.events.driveFolder, { params: { id: event.id } })
-      .then((folder) => setFolderUrl(folder.url))
-      .catch(() => setFolderUrl(null));
-  }, [api, event.id]);
+  // A failed call is not an error to show: the fallback link still gets there.
+  const folderQuery = useEndpointQuery(endpoints.events.driveFolder, { params: { id: event.id } });
+  const folderUrl = folderQuery.data?.url ?? null;
 
   return (
     <Card>

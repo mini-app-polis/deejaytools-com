@@ -1,14 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
+import QueryError from "@/components/QueryError";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChoiceGroup } from "@/components/ui/choice-group";
 import { formatSessionTitle } from "@/lib/sessionFormat";
-import type { ApiAdminEventSongSubmission, ApiEvent, ApiSession } from "@/schemas";
+import type { ApiEvent } from "@/schemas";
 
 const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
+
+// A stable empty list while a query has no data, so memos over it hold.
+const NO_ROWS: readonly never[] = [];
 
 /**
  * Check a dancer in to one of the event's open sessions, on their behalf:
@@ -20,22 +24,17 @@ const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
  * dancer is done from the live queue.
  */
 export default function CheckinForSection({ event }: { event: ApiEvent }) {
-  const api = useApiClient();
-  const [sessions, setSessions] = useState<ApiSession[]>([]);
-  const [submissions, setSubmissions] = useState<ApiAdminEventSongSubmission[]>([]);
+  const sessionsQuery = useEndpointQuery(endpoints.sessions.list, { params: { eventId: event.id } });
+  const submissionsQuery = useEndpointQuery(endpoints.events.songSubmissions, { params: { id: event.id } });
+  const sessions = sessionsQuery.data ?? NO_ROWS;
+  const submissions = submissionsQuery.data ?? NO_ROWS;
   const [sessionId, setSessionId] = useState("");
   const [submissionId, setSubmissionId] = useState("");
   const [division, setDivision] = useState("");
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    call(api, endpoints.sessions.list, { params: { eventId: event.id } })
-      .then(setSessions)
-      .catch(() => setSessions([]));
-    call(api, endpoints.events.songSubmissions, { params: { id: event.id } })
-      .then(setSubmissions)
-      .catch(() => setSubmissions([]));
-  }, [api, event.id]);
+  const createCheckin = useEndpointMutation(endpoints.checkins.create, {
+    invalidates: [endpoints.queue.activeStaff, endpoints.queue.priority, endpoints.queue.nonPriority],
+  });
 
   const openSessions = useMemo(
     () => sessions.filter((s) => s.status === "checkin_open" || s.status === "in_progress"),
@@ -58,7 +57,7 @@ export default function CheckinForSection({ event }: { event: ApiEvent }) {
     if (!division) { toast.error("Select a division"); return; }
     setSubmitting(true);
     try {
-      await call(api, endpoints.checkins.create, {
+      await createCheckin.mutateAsync({
         body: { sessionId, songId: submission.song_id, divisionName: division, on_behalf_of_user_id: submission.owner_user_id },
       });
       toast.success(`Checked in ${submission.partnership_label}`);
@@ -80,7 +79,9 @@ export default function CheckinForSection({ event }: { event: ApiEvent }) {
         <form onSubmit={(e) => void submit(e)} className="space-y-4 max-w-lg">
           <div>
             <span className={FIELD_LABEL_CLASS}>Session</span>
-            {openSessions.length === 0 ? (
+            {sessionsQuery.error && !sessionsQuery.data ? (
+              <QueryError what="the sessions" error={sessionsQuery.error} onRetry={() => void sessionsQuery.refetch()} />
+            ) : sessionsQuery.isLoading ? null : openSessions.length === 0 ? (
               <p className="text-sm text-muted-foreground">No session of this event is open for check-in.</p>
             ) : (
               <ChoiceGroup
@@ -99,7 +100,13 @@ export default function CheckinForSection({ event }: { event: ApiEvent }) {
           </div>
           <div>
             <span className={FIELD_LABEL_CLASS}>Song</span>
-            {submissions.length === 0 ? (
+            {submissionsQuery.error && !submissionsQuery.data ? (
+              <QueryError
+                what="the submitted songs"
+                error={submissionsQuery.error}
+                onRetry={() => void submissionsQuery.refetch()}
+              />
+            ) : submissionsQuery.isLoading ? null : submissions.length === 0 ? (
               <p className="text-sm text-muted-foreground">No songs submitted to this event yet.</p>
             ) : (
               <ChoiceGroup

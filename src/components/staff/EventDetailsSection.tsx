@@ -4,8 +4,8 @@ import { useForm, type FieldErrors } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { z } from "zod";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointMutation } from "@/api/queries";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,8 +56,14 @@ export default function EventDetailsSection({
   event: ApiEvent;
   onUpdated: (next: ApiEvent) => void;
 }) {
-  const api = useApiClient();
   const navigate = useNavigate();
+  // Event names and timezones show on the event and session lists too.
+  const updateEvent = useEndpointMutation(endpoints.events.update, {
+    invalidates: [endpoints.events.list, endpoints.sessions.list],
+  });
+  const removeEvent = useEndpointMutation(endpoints.events.remove, {
+    invalidates: [endpoints.events.list, endpoints.sessions.list],
+  });
   // The nav bar lists the caller's staff events by name, from their record.
   const { reload: reloadMe } = useAuthMe();
   const {
@@ -78,7 +84,7 @@ export default function EventDetailsSection({
 
   const save = async ({ name, startDate, endDate, timezone }: EventDetailsValues) => {
     try {
-      const updated = await call(api, endpoints.events.update, {
+      const updated = await updateEvent.mutateAsync({
         params: { id: event.id },
         body: {
           name,
@@ -99,7 +105,7 @@ export default function EventDetailsSection({
     setConfirmDelete(false);
     setDeleting(true);
     try {
-      await call(api, endpoints.events.remove, { params: { id: event.id } });
+      await removeEvent.mutateAsync({ params: { id: event.id } });
       toast.success("Event deleted");
       void reloadMe();
       navigate("/my-events", { replace: true });

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import { useMemo, useState } from "react";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointQuery } from "@/api/queries";
+import QueryError from "@/components/QueryError";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,27 +34,10 @@ function compareDivisions(order: readonly string[], a: string, b: string): numbe
  * event manager may all call.
  */
 export default function EventSubmissionsSection({ event }: { event: ApiEvent }) {
-  const api = useApiClient();
-  const [rows, setRows] = useState<ApiAdminEventSongSubmission[] | null>(null);
+  const rowsQuery = useEndpointQuery(endpoints.events.songSubmissions, { params: { id: event.id } });
+  const rows = rowsQuery.data ?? null;
   const [division, setDivision] = useState<string>(ALL);
   const { divisions: divisionOrder } = useDivisions();
-
-  useEffect(() => {
-    let cancelled = false;
-    setRows(null);
-    call(api, endpoints.events.songSubmissions, { params: { id: event.id } })
-      .then((data) => {
-        if (!cancelled) setRows(data);
-      })
-      .catch((e: Error) => {
-        if (cancelled) return;
-        setRows([]);
-        toast.error(e.message);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, event.id]);
 
   const groups = useMemo(() => {
     const map = new Map<string, ApiAdminEventSongSubmission[]>();
@@ -75,7 +58,9 @@ export default function EventSubmissionsSection({ event }: { event: ApiEvent }) 
         <CardTitle>Submissions</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {rows === null ? (
+        {rowsQuery.error && rows === null ? (
+          <QueryError what="the submissions" error={rowsQuery.error} onRetry={() => void rowsQuery.refetch()} />
+        ) : rows === null ? (
           <Skeleton className="h-24 w-full" />
         ) : rows.length === 0 ? (
           <p className="text-sm text-muted-foreground">No songs submitted to this event yet.</p>

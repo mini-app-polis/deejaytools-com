@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
+import QueryError from "@/components/QueryError";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import PersonPicker from "@/components/staff/PersonPicker";
 import { Button } from "@/components/ui/button";
@@ -26,27 +27,16 @@ function personLabel(s: ApiEventStaff): string {
  * the event's own staff routes.
  */
 export default function EventStaffSection({ event }: { event: ApiEvent }) {
-  const api = useApiClient();
   // A grant or revoke may be the caller's own, which changes their portals.
   const { reload: reloadMe } = useAuthMe();
-  const [staff, setStaff] = useState<ApiEventStaff[] | null>(null);
+  const staffQuery = useEndpointQuery(endpoints.events.staff, { params: { id: event.id } });
+  const staff = staffQuery.data ?? null;
+  const grantStaff = useEndpointMutation(endpoints.events.grantStaff, { invalidates: [endpoints.events.staff] });
+  const revokeStaff = useEndpointMutation(endpoints.events.revokeStaff, { invalidates: [endpoints.events.staff] });
   const [person, setPerson] = useState<ApiEventPerson | null>(null);
   const [role, setRole] = useState<EventStaffRole | "">("");
   const [granting, setGranting] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
-
-  const load = useCallback(() => {
-    call(api, endpoints.events.staff, { params: { id: event.id } })
-      .then(setStaff)
-      .catch((e: Error) => {
-        setStaff((prev) => prev ?? []);
-        toast.error(e.message);
-      });
-  }, [api, event.id]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   const grant = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,13 +44,12 @@ export default function EventStaffSection({ event }: { event: ApiEvent }) {
     if (!role) { toast.error("Choose a role"); return; }
     setGranting(true);
     try {
-      const row = await call(api, endpoints.events.grantStaff, {
+      const row = await grantStaff.mutateAsync({
         params: { id: event.id, userId: person.user_id, role },
       });
       toast.success(`${personLabel(row)} is now ${EVENT_ROLE_LABELS[row.role]}`);
       setPerson(null);
       setRole("");
-      load();
       void reloadMe();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Grant failed");
@@ -73,11 +62,10 @@ export default function EventStaffSection({ event }: { event: ApiEvent }) {
     const key = `${s.user_id}:${s.role}`;
     setRevoking(key);
     try {
-      await call(api, endpoints.events.revokeStaff, {
+      await revokeStaff.mutateAsync({
         params: { id: event.id, userId: s.user_id, role: s.role },
       });
       toast.success(`Removed ${personLabel(s)} as ${EVENT_ROLE_LABELS[s.role]}`);
-      setStaff((prev) => prev?.filter((x) => !(x.user_id === s.user_id && x.role === s.role)) ?? null);
       void reloadMe();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Revoke failed");
@@ -93,7 +81,9 @@ export default function EventStaffSection({ event }: { event: ApiEvent }) {
           <CardTitle>Staff</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          {staff === null ? (
+          {staffQuery.error && staff === null ? (
+            <QueryError what="the staff" error={staffQuery.error} onRetry={() => void staffQuery.refetch()} />
+          ) : staff === null ? (
             <Skeleton className="h-24 w-full" />
           ) : staff.length === 0 ? (
             <p className="text-sm text-muted-foreground">No one is on this event&apos;s staff yet.</p>

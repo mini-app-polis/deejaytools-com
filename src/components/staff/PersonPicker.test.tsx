@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PERSON_SEARCH_DEBOUNCE_MS } from "@/lib/personSearch";
@@ -13,6 +13,7 @@ const { apiGet, apiClient } = vi.hoisted(() => {
 vi.mock("@/api/client", () => ({ useApiClient: () => apiClient }));
 
 import PersonPicker from "./PersonPicker";
+import { renderWithQueryClient } from "@/test/render";
 
 const ada = fx.eventPerson({ user_id: "user_ada", display_name: "Ada Lovelace", email_masked: "a•••@example.com" });
 const bob = fx.eventPerson({ user_id: "user_bob", display_name: "Bob Noemail", email_masked: null });
@@ -43,14 +44,14 @@ beforeEach(() => {
 
 describe("PersonPicker", () => {
   it("is a labelled combobox with the help line", () => {
-    render(<Harness onPick={vi.fn()} />);
+    renderWithQueryClient(<Harness onPick={vi.fn()} />);
     const input = screen.getByRole("combobox", { name: "Dancer" });
     expect(input).toHaveAttribute("aria-expanded", "false");
     expect(screen.getByText("Only people connected to this event appear here. Ask an admin otherwise.")).toBeInTheDocument();
   });
 
   it("sends no request under two trimmed characters", async () => {
-    render(<Harness onPick={vi.fn()} />);
+    renderWithQueryClient(<Harness onPick={vi.fn()} />);
     fireEvent.change(screen.getByLabelText("Dancer"), { target: { value: " a " } });
     expect(screen.getByRole("status")).toHaveTextContent("Type at least 2 characters to search.");
     await pause(PERSON_SEARCH_DEBOUNCE_MS + 100);
@@ -58,7 +59,7 @@ describe("PersonPicker", () => {
   });
 
   it("debounces typing into one event-scoped request with the trimmed query", async () => {
-    render(<Harness onPick={vi.fn()} />);
+    renderWithQueryClient(<Harness onPick={vi.fn()} />);
     const input = screen.getByLabelText("Dancer");
     fireEvent.change(input, { target: { value: "ad" } });
     fireEvent.change(input, { target: { value: "ada" } });
@@ -71,7 +72,7 @@ describe("PersonPicker", () => {
   });
 
   it("shows the masked email, or just the name when there is none", async () => {
-    render(<Harness onPick={vi.fn()} />);
+    renderWithQueryClient(<Harness onPick={vi.fn()} />);
     fireEvent.change(screen.getByLabelText("Dancer"), { target: { value: "ad" } });
     expect(await screen.findByRole("option", { name: "Ada Lovelace · a•••@example.com" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Bob Noemail" })).toBeInTheDocument();
@@ -80,7 +81,7 @@ describe("PersonPicker", () => {
 
   it("yields the user id when a result is clicked, and Change searches again", async () => {
     const onPick = vi.fn();
-    render(<Harness onPick={onPick} />);
+    renderWithQueryClient(<Harness onPick={onPick} />);
     fireEvent.change(screen.getByLabelText("Dancer"), { target: { value: "ad" } });
     fireEvent.click(await screen.findByRole("option", { name: /Ada Lovelace/ }));
     expect(onPick).toHaveBeenLastCalledWith(expect.objectContaining({ user_id: "user_ada" }));
@@ -96,7 +97,7 @@ describe("PersonPicker", () => {
 
   it("picks with the arrow keys and Enter, without submitting the form", async () => {
     const onPick = vi.fn();
-    render(<Harness onPick={onPick} />);
+    renderWithQueryClient(<Harness onPick={onPick} />);
     const input = screen.getByLabelText("Dancer");
     fireEvent.change(input, { target: { value: "ad" } });
     await screen.findByRole("option", { name: /Ada Lovelace/ });
@@ -112,7 +113,7 @@ describe("PersonPicker", () => {
   });
 
   it("closes on Escape and blur, and reopens on focus or ArrowDown", async () => {
-    render(<Harness onPick={vi.fn()} />);
+    renderWithQueryClient(<Harness onPick={vi.fn()} />);
     const input = screen.getByLabelText("Dancer");
     fireEvent.change(input, { target: { value: "ad" } });
     await screen.findByRole("option", { name: /Ada Lovelace/ });
@@ -131,7 +132,7 @@ describe("PersonPicker", () => {
 
   it("says when no one matches", async () => {
     apiGet.mockResolvedValue([]);
-    render(<Harness onPick={vi.fn()} />);
+    renderWithQueryClient(<Harness onPick={vi.fn()} />);
     const input = screen.getByLabelText("Dancer");
     fireEvent.change(input, { target: { value: "zz" } });
     expect(await screen.findByText("No one connected to this event matches that.")).toBeInTheDocument();
@@ -143,7 +144,7 @@ describe("PersonPicker", () => {
 
   it("shows the API's error", async () => {
     apiGet.mockRejectedValue(new Error("You do not have access to this event"));
-    render(<Harness onPick={vi.fn()} />);
+    renderWithQueryClient(<Harness onPick={vi.fn()} />);
     fireEvent.change(screen.getByLabelText("Dancer"), { target: { value: "ad" } });
     expect(await screen.findByText("Couldn't search: You do not have access to this event")).toBeInTheDocument();
     expect(screen.queryByRole("option")).toBeNull();
@@ -153,7 +154,7 @@ describe("PersonPicker", () => {
     let resolveFirst!: (v: ApiEventPerson[]) => void;
     apiGet.mockImplementationOnce(() => new Promise((r) => { resolveFirst = r; }));
     apiGet.mockResolvedValueOnce([bob]);
-    render(<Harness onPick={vi.fn()} />);
+    renderWithQueryClient(<Harness onPick={vi.fn()} />);
     const input = screen.getByLabelText("Dancer");
     fireEvent.change(input, { target: { value: "ad" } });
     await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(1));

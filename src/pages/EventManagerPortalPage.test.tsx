@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fx } from "@/test/fixtures";
@@ -24,6 +24,7 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 vi.mock("@clerk/clerk-react", () => ({ useAuth: () => ({ getToken: vi.fn() }) }));
 
 import EventManagerPortalPage from "./EventManagerPortalPage";
+import { renderWithQueryClient } from "@/test/render";
 
 const event = fx.event({ id: "ev-1", name: "Winter Ball", season_year: "2026" });
 const staff = [
@@ -33,7 +34,7 @@ const staff = [
 ];
 
 function renderAt(section: string) {
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter initialEntries={[`/events/ev-1/manage/${section}`]}>
       <Routes>
         <Route path="/events/:eventId/manage/:section" element={<EventManagerPortalPage />} />
@@ -147,7 +148,17 @@ describe("EventManagerPortalPage", () => {
   });
 
   it("revokes a role through DELETE /v1/events/:id/staff/:userId/:role", async () => {
-    apiDel.mockResolvedValue({ deleted: true });
+    const fallback = apiGet.getMockImplementation()!;
+    let revoked = false;
+    apiGet.mockImplementation((path: string) =>
+      path === "/v1/events/ev-1/staff" && revoked
+        ? Promise.resolve(staff.filter((s) => s.user_id !== "user_d"))
+        : fallback(path)
+    );
+    apiDel.mockImplementation(async () => {
+      revoked = true;
+      return { deleted: true };
+    });
     renderAt("staff");
     fireEvent.click(await screen.findByRole("button", { name: "Remove Dee Jay as DJ" }));
     await waitFor(() => expect(apiDel).toHaveBeenCalledWith("/v1/events/ev-1/staff/user_d/dj"));

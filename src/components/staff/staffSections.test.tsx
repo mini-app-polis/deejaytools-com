@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fx } from "@/test/fixtures";
@@ -38,6 +38,7 @@ import LiveQueueSection from "./LiveQueueSection";
 import RunHistorySection from "./RunHistorySection";
 import StaffPortal from "./StaffPortal";
 import UploadForSection from "./UploadForSection";
+import { renderWithQueryClient } from "@/test/render";
 
 const event = fx.event({ id: "ev-1", name: "Fall Fling", timezone: "America/Chicago" });
 const NOW = Date.now();
@@ -49,7 +50,7 @@ const live = (id: string) =>
   });
 
 function inRouter(node: React.ReactNode) {
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter initialEntries={["/here"]}>
       <Routes>
         <Route path="/here" element={node} />
@@ -171,11 +172,17 @@ describe("EventSessionsSection", () => {
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("no delete"));
   });
 
-  it("says when the event has no sessions, and toasts a failed load", async () => {
-    apiGet.mockRejectedValue(new Error("down"));
+  it("says when the event has no sessions", async () => {
+    apiGet.mockResolvedValue([]);
     inRouter(<EventSessionsSection event={event} />);
     expect(await screen.findByText("This event has no sessions yet.")).toBeInTheDocument();
-    expect(toastError).toHaveBeenCalledWith("down");
+  });
+
+  it("shows a failed sessions load inline, not as no sessions", async () => {
+    apiGet.mockRejectedValue(new Error("down"));
+    inRouter(<EventSessionsSection event={event} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load sessions: down");
+    expect(screen.queryByText("This event has no sessions yet.")).not.toBeInTheDocument();
   });
 });
 
@@ -205,7 +212,7 @@ describe("LiveQueueSection", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Updated|Updating|Refreshing/ }));
   });
 
-  it("asks for a session when several exist, and toasts a failed action or load", async () => {
+  it("asks for a session when several exist, shows a failed load, and toasts a failed action", async () => {
     apiGet.mockImplementation((p: string) => {
       if (p === "/v1/sessions?event_id=ev-1") return Promise.resolve([live("s-1"), live("s-2")]);
       if (p === "/v1/queue/s-2/active/staff") return Promise.resolve([fx.queueEntry({ queueEntryId: "qe-9", entityLabel: "Solo" })]);
@@ -217,8 +224,8 @@ describe("LiveQueueSection", () => {
     expect(await screen.findByText("Choose a session above to manage its queue.")).toBeInTheDocument();
     const radios = within(screen.getByRole("radiogroup", { name: "Session" })).getAllByRole("radio");
     fireEvent.click(radios[0]!);
-    await waitFor(() => expect(toastError).toHaveBeenCalledWith("queue down"));
-    expect(await screen.findByRole("button", { name: /Couldn't refresh/ })).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load the queues: queue down");
+    expect(screen.getByRole("button", { name: /Couldn't refresh/ })).toBeInTheDocument();
     fireEvent.click(radios[1]!);
     fireEvent.click(await screen.findByRole("button", { name: "Withdraw" }));
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Withdraw" }));
@@ -302,9 +309,16 @@ describe("LiveQueueSection", () => {
   });
 
   it("says when the event has no sessions", async () => {
-    apiGet.mockRejectedValue(new Error("down"));
+    apiGet.mockResolvedValue([]);
     inRouter(<LiveQueueSection event={event} />);
     expect(await screen.findByText("This event has no sessions yet.")).toBeInTheDocument();
+  });
+
+  it("shows a failed sessions load, not an empty event", async () => {
+    apiGet.mockRejectedValue(new Error("down"));
+    inRouter(<LiveQueueSection event={event} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load sessions: down");
+    expect(screen.queryByText("This event has no sessions yet.")).not.toBeInTheDocument();
   });
 });
 
@@ -331,11 +345,17 @@ describe("RunHistorySection", () => {
     );
   });
 
-  it("says when there are no runs, and toasts a failed load", async () => {
-    apiGet.mockImplementation((p: string) => (p.startsWith("/v1/runs?") ? Promise.reject(new Error("no runs")) : Promise.resolve([])));
+  it("says when there are no runs", async () => {
+    apiGet.mockResolvedValue([]);
     inRouter(<RunHistorySection event={event} />);
     expect(await screen.findByText("No runs recorded yet.")).toBeInTheDocument();
-    expect(toastError).toHaveBeenCalledWith("no runs");
+  });
+
+  it("shows a failed runs load inline, not as no runs", async () => {
+    apiGet.mockImplementation((p: string) => (p.startsWith("/v1/runs?") ? Promise.reject(new Error("no runs")) : Promise.resolve([])));
+    inRouter(<RunHistorySection event={event} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load run history: no runs");
+    expect(screen.queryByText("No runs recorded yet.")).not.toBeInTheDocument();
   });
 });
 
@@ -496,11 +516,11 @@ describe("EventDetailsSection", () => {
 });
 
 describe("EventStaffSection", () => {
-  it("says when there is no staff, and toasts a failed load, grant or revoke", async () => {
+  it("shows a failed staff load inline, and toasts a failed grant", async () => {
     apiGet.mockRejectedValueOnce(new Error("staff down"));
     inRouter(<EventStaffSection event={event} />);
-    expect(await screen.findByText(/No one is on this event.s staff yet/)).toBeInTheDocument();
-    expect(toastError).toHaveBeenCalledWith("staff down");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load the staff: staff down");
+    expect(screen.queryByText(/No one is on this event.s staff yet/)).not.toBeInTheDocument();
     expect(screen.getByText(/Only people connected to this event appear here\. To add someone new to the event, ask an admin\./)).toBeInTheDocument();
 
     apiGet.mockImplementation((p: string) =>
@@ -535,18 +555,18 @@ describe("EventStaffSection", () => {
 });
 
 describe("EventSubmissionsSection", () => {
-  it("toasts a failed load", async () => {
+  it("shows a failed load inline, not as no submissions", async () => {
     apiGet.mockRejectedValue(new Error("Admin access required"));
     inRouter(<EventSubmissionsSection event={event} />);
-    expect(await screen.findByText("No songs submitted to this event yet.")).toBeInTheDocument();
-    expect(toastError).toHaveBeenCalledWith("Admin access required");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load the submissions: Admin access required");
+    expect(screen.queryByText("No songs submitted to this event yet.")).not.toBeInTheDocument();
   });
 });
 
 describe("StaffPortal", () => {
   it("says when the event can't be loaded", async () => {
     apiGet.mockRejectedValue(new Error("Event not found"));
-    render(
+    renderWithQueryClient(
       <MemoryRouter initialEntries={["/events/ev-x/coordinator"]}>
         <Routes>
           <Route
@@ -556,8 +576,7 @@ describe("StaffPortal", () => {
         </Routes>
       </MemoryRouter>
     );
-    expect(await screen.findByText("This event couldn't be loaded.")).toBeInTheDocument();
-    expect(toastError).toHaveBeenCalledWith("Event not found");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load this event: Event not found");
     expect(screen.queryByText("body")).toBeNull();
   });
 });

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fx } from "@/test/fixtures";
@@ -15,9 +15,10 @@ vi.mock("@/api/client", () => ({ useApiClient: () => apiClient }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 import CoordinatorPortalPage from "./CoordinatorPortalPage";
+import { renderWithQueryClient } from "@/test/render";
 
 function renderPortal() {
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter initialEntries={["/events/ev-1/coordinator"]}>
       <Routes>
         <Route path="/events/:eventId/coordinator" element={<CoordinatorPortalPage />} />
