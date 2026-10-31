@@ -372,14 +372,13 @@ describe("MyContentPage — Check-ins section", () => {
     expect(screen.queryByRole("button", { name: /withdraw from queue/i })).not.toBeInTheDocument();
   });
 
-  it("offers Withdraw when the API omits canWithdraw or sends true", async () => {
-    const { canWithdraw: _omitted, ...older } = CHECKIN;
+  it("offers Withdraw when the API sends canWithdraw true", async () => {
     withGets({
-      "/v1/checkins/mine": [older, fx.myCheckin({ ...CHECKIN, id: "ci-2", canWithdraw: true })],
+      "/v1/checkins/mine": [fx.myCheckin({ ...CHECKIN, id: "ci-2", canWithdraw: true })],
     });
     renderPage();
 
-    expect(await screen.findAllByRole("button", { name: /withdraw from queue/i })).toHaveLength(2);
+    expect(await screen.findAllByRole("button", { name: /withdraw from queue/i })).toHaveLength(1);
     expect(screen.queryByText(/your partner checked this partnership in/i)).not.toBeInTheDocument();
   });
 
@@ -497,9 +496,7 @@ describe("MyContentPage — Songs section", () => {
       drive_file_id: "drive-shared",
       shared_with_me: true,
     });
-    // An older API response without the field is the caller's own song.
-    const { shared_with_me: _omitted, ...older } = UPLOADED;
-    withGets({ "/v1/songs": [shared, older] });
+    withGets({ "/v1/songs": [shared, UPLOADED] });
     renderPage();
 
     const card = (await screen.findByText("Their Routine", { selector: "p" })).closest(

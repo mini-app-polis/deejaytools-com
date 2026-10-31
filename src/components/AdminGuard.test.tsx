@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
@@ -9,10 +10,13 @@ let mockState = {
   loading: true,
   isAdmin: false,
 };
+let mockError: string | null = null;
+const reload = vi.hoisted(() => vi.fn());
 vi.mock("@/hooks/useAuthMe", () => ({
   useAuthMe: () => ({
     ...mockState,
-    reload: vi.fn(),
+    error: mockError,
+    reload,
   }),
 }));
 
@@ -37,6 +41,18 @@ function renderAt(path = "/admin") {
 }
 
 describe("AdminGuard", () => {
+  it("shows a failed account load with a retry instead of redirecting", async () => {
+    mockState = { me: null, loading: false, isAdmin: false };
+    mockError = "server down";
+    reload.mockClear();
+    renderAt();
+    expect(screen.getByRole("alert")).toHaveTextContent("Couldn't load your account: server down");
+    expect(screen.queryByText("landing page")).toBeNull();
+    await userEvent.setup().click(screen.getByRole("button", { name: /try again/i }));
+    expect(reload).toHaveBeenCalledOnce();
+    mockError = null;
+  });
+
   it("shows a skeleton while useAuthMe is still loading", () => {
     mockState = { me: null, loading: true, isAdmin: false };
     const { container } = renderAt();

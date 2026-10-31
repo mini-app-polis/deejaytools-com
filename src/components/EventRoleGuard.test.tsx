@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
@@ -12,8 +13,10 @@ let mockState = {
   isAdmin: false,
   eventRoles: [] as { event_id: string; role: Role }[],
 };
+let mockError: string | null = null;
+const reload = vi.hoisted(() => vi.fn());
 vi.mock("@/hooks/useAuthMe", () => ({
-  useAuthMe: () => ({ ...mockState, reload: vi.fn() }),
+  useAuthMe: () => ({ ...mockState, error: mockError, reload }),
 }));
 
 import EventRoleGuard from "./EventRoleGuard";
@@ -57,6 +60,18 @@ function renderAt(path: string) {
 }
 
 describe("EventRoleGuard", () => {
+  it("shows a failed account load with a retry instead of redirecting", async () => {
+    mockState = { me: null, loading: false, isAdmin: false, eventRoles: [] };
+    mockError = "server down";
+    reload.mockClear();
+    renderAt("/events/ev-1/coordinator");
+    expect(screen.getByRole("alert")).toHaveTextContent("Couldn't load your account: server down");
+    expect(screen.queryByText("coordinator portal")).toBeNull();
+    await userEvent.setup().click(screen.getByRole("button", { name: /try again/i }));
+    expect(reload).toHaveBeenCalledOnce();
+    mockError = null;
+  });
+
   it("shows a skeleton while useAuthMe is loading", () => {
     mockState = { me: null, loading: true, isAdmin: false, eventRoles: [] };
     const { container } = renderAt("/events/ev-1/coordinator");

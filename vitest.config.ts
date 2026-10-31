@@ -29,9 +29,9 @@ export default defineConfig({
       // is separately required to be exercised by the live contract suite
       // (src/contract), and the core journeys by the e2e suite (e2e/).
       thresholds: {
-        statements: 92,
+        statements: 93,
         branches: 83,
-        functions: 91,
+        functions: 92,
         lines: 95,
         autoUpdate: (next: number) => Math.floor(next),
       },

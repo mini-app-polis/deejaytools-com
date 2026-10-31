@@ -26,8 +26,13 @@ vi.mock("sonner", () => ({
   toast: toastMocks,
 }));
 
+// The division list as loaded; a test swaps in a failed load.
+const useDivisionsMock = vi.hoisted(() => vi.fn());
+vi.mock("@/hooks/useDivisions", () => ({ useDivisions: useDivisionsMock }));
+
 import EventSubmissionsPage, { OpenSubmissionsRedirect } from "./EventSubmissionsPage";
 import { fx } from "@/test/fixtures";
+import { LOADED_DIVISIONS } from "@/test/divisions";
 
 const EVENT = fx.event({
   id: "ev1",
@@ -127,6 +132,8 @@ beforeEach(() => {
   apiDel.mockReset();
   toastMocks.error.mockReset();
   toastMocks.success.mockReset();
+  useDivisionsMock.mockReset();
+  useDivisionsMock.mockReturnValue(LOADED_DIVISIONS);
 });
 
 describe("EventSubmissionsPage — picker", () => {
@@ -296,6 +303,86 @@ describe("EventSubmissionsPage — event page", () => {
 
     expect(await screen.findByText(/every song in your library is already submitted/i)).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: /song/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("EventSubmissionsPage — failed loads", () => {
+  it("says the event and songs couldn't load, not that the event is closed, and retries", async () => {
+    let fail = true;
+    mockApi([EVENT], [SONG]);
+    const served = apiGet.getMockImplementation()!;
+    apiGet.mockImplementation((path: string) =>
+      path === "/v1/songs" && fail ? Promise.reject(new Error("songs down")) : served(path)
+    );
+    const user = userEvent.setup();
+    renderAt("/event-submissions/ev1");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't load .*songs down/i);
+    expect(screen.queryByText(/event not open for submissions/i)).not.toBeInTheDocument();
+
+    fail = false;
+    await user.click(screen.getByRole("button", { name: /try again/i }));
+    expect(await screen.findByRole("heading", { name: "Spring Classic" })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("shows the error when the events request fails", async () => {
+    mockApi([EVENT], [SONG]);
+    const served = apiGet.getMockImplementation()!;
+    apiGet.mockImplementation((path: string) =>
+      path === "/v1/events" ? Promise.reject(new Error("events down")) : served(path)
+    );
+    renderAt("/event-submissions/ev1");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/events down/);
+    expect(screen.queryByText(/event not open for submissions/i)).not.toBeInTheDocument();
+  });
+
+  it("shows a failed submissions load instead of an empty list, blocks submitting, and retries", async () => {
+    let fail = true;
+    mockApi(
+      [EVENT],
+      [SONG, SONG_SHOWCASE],
+      [{ id: "sub1", event_id: "ev1", song_id: "song1", song_label: "2026_Classic_MyRoutine.mp3", division: "Classic", created_at: 1 }]
+    );
+    const served = apiGet.getMockImplementation()!;
+    apiGet.mockImplementation((path: string) =>
+      path.startsWith("/v1/event-song-submissions") && fail
+        ? Promise.reject(new Error("submissions down"))
+        : served(path)
+    );
+    const user = userEvent.setup();
+    renderAt("/event-submissions/ev1");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /couldn't load your submissions to this event: submissions down/i
+    );
+    expect(screen.queryByText("Your submissions")).not.toBeInTheDocument();
+
+    await pickSong(user, /Showcase - My Routine/);
+    expect(screen.getByRole("button", { name: /^submit$/i })).toBeDisabled();
+
+    fail = false;
+    await user.click(screen.getByRole("button", { name: /try again/i }));
+    expect(await screen.findByText("Your submissions")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^submit$/i })).toBeEnabled();
+  });
+
+  it("shows a failed divisions load with a retry", async () => {
+    const retry = vi.fn();
+    useDivisionsMock.mockReturnValue({
+      groups: [], divisions: [], loading: false, error: "divisions down", retry,
+    });
+    mockApi([EVENT], [SONG]);
+    const user = userEvent.setup();
+    renderAt("/event-submissions/ev1");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /couldn't load the divisions: divisions down/i
+    );
+    await user.click(screen.getByRole("button", { name: /try again/i }));
+    expect(retry).toHaveBeenCalledOnce();
   });
 });
 

@@ -35,6 +35,7 @@ vi.mock("@/hooks/useAuthMe", () => ({
     me: { id: "admin_1", email: "admin@example.com", role: "admin" },
     loading: false,
     isAdmin: true,
+    reload: () => Promise.resolve(),
   }),
 }));
 
@@ -353,7 +354,6 @@ const MIN = 60_000;
 const EV_ACTIVE = fx.event({ id: "e1", name: "Swing Fling", status: "active", start_date: "2026-05-22", end_date: "2026-05-24" });
 const EV_UPCOMING = fx.event({ id: "e2", name: "Future Fest", status: "upcoming", start_date: "2026-11-01", end_date: "2026-11-02", season_year: "2027" });
 const EV_DONE = fx.event({ id: "e3", name: "Old Jam", status: "completed", start_date: "2025-03-01", end_date: "2025-03-02" });
-const EV_CANCELLED = fx.event({ id: "e4", name: "Rained Out", status: "cancelled", start_date: "2025-04-01", end_date: "2025-04-02" });
 
 const SESS_OPEN = fx.session({
   id: "s1",
@@ -435,25 +435,20 @@ function resetAll() {
 describe("AdminPage — Events section", () => {
   beforeEach(resetAll);
 
-  it("buckets events by status and only shows completed/cancelled when asked", async () => {
-    routeGets({ "/v1/events": [EV_ACTIVE, EV_UPCOMING, EV_DONE, EV_CANCELLED] });
+  it("buckets events by status and only shows completed when asked", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE, EV_UPCOMING, EV_DONE] });
     const user = userEvent.setup();
     renderPage("/admin/events");
 
     expect(await screen.findByText("Swing Fling")).toBeInTheDocument();
     expect(screen.getByText("Future Fest")).toBeInTheDocument();
     expect(screen.queryByText("Old Jam")).not.toBeInTheDocument();
-    expect(screen.queryByText("Rained Out")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /^completed$/i })).not.toBeInTheDocument();
 
-    const [showCompleted, showCancelled] = screen.getAllByRole("checkbox");
+    const [showCompleted] = screen.getAllByRole("checkbox");
     await user.click(showCompleted);
     expect(screen.getByRole("heading", { name: /^completed$/i })).toBeInTheDocument();
     expect(screen.getByText("Old Jam")).toBeInTheDocument();
-
-    await user.click(showCancelled);
-    expect(screen.getByRole("heading", { name: /^cancelled$/i })).toBeInTheDocument();
-    expect(screen.getByText("Rained Out")).toBeInTheDocument();
   });
 
   it("navigates to the event detail page when a row is clicked, but not from its buttons", async () => {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useApiClient } from "@/api/client";
 import { call, endpoints } from "@/api/endpoints";
+import { useAuthMe } from "@/hooks/useAuthMe";
 import PersonPicker from "@/components/staff/PersonPicker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +27,8 @@ function personLabel(s: ApiEventStaff): string {
  */
 export default function EventStaffSection({ event }: { event: ApiEvent }) {
   const api = useApiClient();
+  // A grant or revoke may be the caller's own, which changes their portals.
+  const { reload: reloadMe } = useAuthMe();
   const [staff, setStaff] = useState<ApiEventStaff[] | null>(null);
   const [person, setPerson] = useState<ApiEventPerson | null>(null);
   const [role, setRole] = useState<EventStaffRole | "">("");
@@ -58,6 +61,7 @@ export default function EventStaffSection({ event }: { event: ApiEvent }) {
       setPerson(null);
       setRole("");
       load();
+      void reloadMe();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Grant failed");
     } finally {
@@ -74,6 +78,7 @@ export default function EventStaffSection({ event }: { event: ApiEvent }) {
       });
       toast.success(`Removed ${personLabel(s)} as ${EVENT_ROLE_LABELS[s.role]}`);
       setStaff((prev) => prev?.filter((x) => !(x.user_id === s.user_id && x.role === s.role)) ?? null);
+      void reloadMe();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Revoke failed");
     } finally {

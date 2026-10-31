@@ -1,6 +1,6 @@
 import type { ApiEvent, ApiEventSongSubmission, ApiSong } from "@/schemas";
 import { ROUND_SPLIT_DIVISION, isOpenEvent, type SubmissionRound } from "@/schemas";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useApiClient } from "@/api/client";
@@ -65,6 +65,24 @@ function LoadingSkeleton() {
     <div className="space-y-3">
       <Skeleton className="h-8 w-48" />
       <Skeleton className="h-40 w-full" />
+    </div>
+  );
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : "Something went wrong.";
+}
+
+/** A failed load, said plainly, with a way to try it again. */
+function LoadError({ what, message, onRetry }: { what: string; message: string; onRetry: () => void }) {
+  return (
+    <div role="alert" className="space-y-2 rounded-lg border border-destructive/50 px-4 py-3">
+      <p className="text-sm text-destructive">
+        Couldn&apos;t load {what}: {message}
+      </p>
+      <Button type="button" size="sm" variant="outline" onClick={onRetry}>
+        Try again
+      </Button>
     </div>
   );
 }
@@ -154,15 +172,21 @@ function EventPicker() {
 }
 
 function EventSubmissionForm({ eventId }: { eventId: string }) {
-  const { divisions } = useDivisions();
+  const { divisions, error: divisionsError, retry: retryDivisions } = useDivisions();
   const api = useApiClient();
 
   const [event, setEvent] = useState<ApiEvent | null>(null);
   const [songs, setSongs] = useState<ApiSong[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   const [submissions, setSubmissions] = useState<ApiEventSongSubmission[]>([]);
   const [submissionsLoading, setSubmissionsLoading] = useState(true);
+  // While set, the list on screen is not the real one: submitting is blocked
+  // so a song already entered is not entered twice.
+  const [submissionsError, setSubmissionsError] = useState<string | null>(null);
+  const [submissionsAttempt, setSubmissionsAttempt] = useState(0);
   const [busySongId, setBusySongId] = useState<string | null>(null);
 
   const [selectedSongId, setSelectedSongId] = useState("");
@@ -173,14 +197,15 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    Promise.all([
-      call(api, endpoints.events.list).catch(() => [] as ApiEvent[]),
-      call(api, endpoints.songs.list).catch(() => [] as ApiSong[]),
-    ])
+    setLoadError(null);
+    Promise.all([call(api, endpoints.events.list), call(api, endpoints.songs.list)])
       .then(([evs, songRows]) => {
         if (cancelled) return;
         setEvent(evs.find((e) => e.id === eventId && e.status !== "completed") ?? null);
         setSongs(songRows);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setLoadError(errorMessage(err));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -188,15 +213,18 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [api, eventId]);
+  }, [api, eventId, loadAttempt]);
 
   useEffect(() => {
     let cancelled = false;
     setSubmissionsLoading(true);
+    setSubmissionsError(null);
     call(api, endpoints.eventSongSubmissions.list, { params: { eventId } })
-      .catch(() => [] as ApiEventSongSubmission[])
       .then((rows) => {
         if (!cancelled) setSubmissions(rows);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setSubmissionsError(errorMessage(err));
       })
       .finally(() => {
         if (!cancelled) setSubmissionsLoading(false);
@@ -204,7 +232,9 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [api, eventId]);
+  }, [api, eventId, submissionsAttempt]);
+
+  const retrySubmissions = useCallback(() => setSubmissionsAttempt((n) => n + 1), []);
 
   const submissionBySongId = useMemo(() => {
     const map = new Map<string, ApiEventSongSubmission>();
@@ -261,12 +291,9 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
           ...(showRoundField ? { round } : {}),
         },
       });
-      const rows = await call(api, endpoints.eventSongSubmissions.list, {
-        params: { eventId: event.id },
-      }).catch(() => [] as ApiEventSongSubmission[]);
-      setSubmissions(rows);
       resetForm();
       toast.success(`Song added to ${event.name}.`);
+      retrySubmissions();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to add song.");
     } finally {
@@ -289,6 +316,19 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
 
   if (loading) return <LoadingSkeleton />;
 
+  if (loadError) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Event submissions" />
+        <LoadError
+          what="this event and your songs"
+          message={loadError}
+          onRetry={() => setLoadAttempt((n) => n + 1)}
+        />
+      </div>
+    );
+  }
+
   if (!event) {
     return (
       <div className="space-y-6">
@@ -308,7 +348,12 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
     );
   }
 
-  const canSubmit = !!selectedSongId && !!division.trim() && !submitting && !submissionsLoading;
+  const canSubmit =
+    !!selectedSongId &&
+    !!division.trim() &&
+    !submitting &&
+    !submissionsLoading &&
+    !submissionsError;
 
   return (
     <div className="space-y-6">
@@ -379,6 +424,9 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
 
               <div className="space-y-2">
                 <Label htmlFor="event-submissions-division">Division</Label>
+                {divisionsError && (
+                  <LoadError what="the divisions" message={divisionsError} onRetry={retryDivisions} />
+                )}
                 <Select
                   value={division || undefined}
                   onValueChange={handleDivisionChange}
@@ -420,7 +468,15 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
             </div>
           )}
 
-          {submissions.length > 0 && (
+          {submissionsError && (
+            <LoadError
+              what="your submissions to this event"
+              message={submissionsError}
+              onRetry={retrySubmissions}
+            />
+          )}
+
+          {!submissionsError && submissions.length > 0 && (
             <div className={`space-y-3 pt-2${submissionsLoading ? " opacity-60" : ""}`}>
               <p className="text-sm font-medium">Your submissions</p>
               {submissions.map((submission) => {

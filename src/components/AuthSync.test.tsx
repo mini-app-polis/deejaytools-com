@@ -19,6 +19,7 @@ vi.mock("@/lib/logger", () => ({
 }));
 
 import AuthSync from "./AuthSync";
+import { resetAuthSyncStatus, waitForAuthSync } from "@/lib/authSyncStatus";
 
 const fetchMock = vi.fn();
 
@@ -122,5 +123,37 @@ describe("AuthSync", () => {
     userState.user = clerkUser("user_b");
     render(<AuthSync />);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  });
+
+  it("reports the sync as settled only once the request has answered", async () => {
+    resetAuthSyncStatus();
+    let answer: (r: Response) => void = () => {};
+    fetchMock.mockReturnValue(new Promise<Response>((resolve) => (answer = resolve)));
+    render(<AuthSync />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    let settled = false;
+    const waiting = waitForAuthSync().then(() => {
+      settled = true;
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(settled).toBe(false);
+
+    answer(ok());
+    await waiting;
+    expect(settled).toBe(true);
+  });
+
+  it("reports the sync as settled at once when this user is already synced", async () => {
+    resetAuthSyncStatus();
+    sessionStorage.setItem("deejaytools_auth_sync_v1:user_a", "1");
+    render(<AuthSync />);
+    let settled = false;
+    void waitForAuthSync(60_000).then(() => {
+      settled = true;
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(settled).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

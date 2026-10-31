@@ -112,10 +112,6 @@ export default function EventDetailPage() {
               </Badge>
             )}
             {event.status === "completed" && <Badge variant="secondary">completed</Badge>}
-            {event.status === "cancelled" && <Badge variant="destructive">cancelled</Badge>}
-            {!["upcoming", "active", "completed", "cancelled"].includes(event.status) && (
-              <Badge variant="outline">{event.status}</Badge>
-            )}
           </div>
         </div>
       </div>

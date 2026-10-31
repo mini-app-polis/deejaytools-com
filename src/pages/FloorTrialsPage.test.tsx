@@ -25,6 +25,7 @@ vi.mock("sonner", () => ({
 }));
 
 import FloorTrialsPage from "./FloorTrialsPage";
+import type { SessionStatus } from "@/schemas";
 import { fx } from "@/test/fixtures";
 
 // ---------------------------------------------------------------------------
@@ -44,7 +45,7 @@ afterEach(() => {
 // Helper: build a full session row.
 function makeSession(opts: {
   id: string;
-  status: string;
+  status: SessionStatus;
   /** Local-time ISO string for floor_trial_starts_at. */
   startsAt: string;
   eventId?: string | null;

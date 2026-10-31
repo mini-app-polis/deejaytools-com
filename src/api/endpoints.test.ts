@@ -180,7 +180,20 @@ describe("call", () => {
     );
   });
 
-  it("applies schema defaults to the returned data", async () => {
+  it("refuses an event status the API never sends, and accepts a null creator", async () => {
+    const event = {
+      id: "e1", name: "E", start_date: "2026-06-01", end_date: "2026-06-02",
+      timezone: "America/Chicago", season_year: "2026", status: "active",
+      created_by: null, created_at: 1, updated_at: 1,
+    };
+    await expect(call(fakeTransport(event), endpoints.events.get, { params: { id: "e1" } }))
+      .resolves.toMatchObject({ status: "active", created_by: null });
+    await expect(
+      call(fakeTransport({ ...event, status: "cancelled" }), endpoints.events.get, { params: { id: "e1" } })
+    ).rejects.toBeInstanceOf(ContractViolation);
+  });
+
+  it("refuses a response missing a field the API always sends", async () => {
     const checkin = {
       id: "c1",
       sessionId: "s1",
@@ -200,9 +213,12 @@ describe("call", () => {
       queuePosition: 1,
       overallPosition: 1,
     };
+    // runCount and canWithdraw are missing: a renamed field must not pass.
     const api = fakeTransport([checkin]);
-    const [out] = await call(api, endpoints.checkins.mine);
-    expect(out.runCount).toBe(0);
+    await expect(call(api, endpoints.checkins.mine)).rejects.toThrow(/0\.runCount/);
+    const complete = fakeTransport([{ ...checkin, runCount: 2, canWithdraw: true }]);
+    const [out] = await call(complete, endpoints.checkins.mine);
+    expect(out.runCount).toBe(2);
   });
 });
 

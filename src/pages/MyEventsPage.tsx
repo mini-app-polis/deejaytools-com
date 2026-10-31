@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import AuthMeError from "@/components/AuthMeError";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import { useStaffEvents } from "@/hooks/useStaffEvents";
@@ -12,8 +13,12 @@ import { cn } from "@/lib/utils";
  * the richest role they hold there.
  */
 export default function MyEventsPage() {
-  const { eventRoles, loading: meLoading } = useAuthMe();
+  const { me, eventRoles, loading: meLoading, error, reload } = useAuthMe();
   const { items, loading } = useStaffEvents(eventRoles);
+
+  if (!me && error) {
+    return <AuthMeError message={error} onRetry={() => void reload()} />;
+  }
 
   if (meLoading || loading) {
     return (

@@ -180,7 +180,7 @@ beforeAll(async () => {
   // sessions, check-ins, queue entries and song submissions with it (and
   // trashes the submissions' Drive copies), which leaves its songs free to
   // delete.
-  const events = await api.get<{ id: string; name: string; created_by: string }[]>(endpoints.events.list.path());
+  const events = await api.get<{ id: string; name: string; created_by: string | null }[]>(endpoints.events.list.path());
   for (const e of events) {
     if (e.name.startsWith(RUN_PREFIX) && e.created_by === me.id) {
       await api.del(endpoints.events.remove.path({ id: e.id })).catch(() => undefined);

@@ -58,7 +58,7 @@ export type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
  */
 export type Access = "public" | "user" | "admin" | "event-staff";
 
-// Loose on the input type: a schema with defaults (e.g. runCount) has an
+// Loose on the input type: a schema with a default or transform has an
 // input shape that differs from its output.
 type Schema<T> = z.ZodType<T, unknown>;
 

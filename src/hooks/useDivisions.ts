@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ApiDivisions } from "@/schemas";
 import { useApiClient } from "@/api/client";
 import { call, endpoints } from "@/api/endpoints";
@@ -13,6 +13,8 @@ export type DivisionList = {
   loading: boolean;
   /** Set when the list could not be loaded. */
   error: string | null;
+  /** Tries the load again after a failure. */
+  retry: () => void;
 };
 
 // Stable empty values, so callers that memoise on them do not recompute.
@@ -52,6 +54,7 @@ export function useDivisions(): DivisionList {
   const api = useApiClient();
   const [list, setList] = useState<ApiDivisions | null>(loaded);
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (list) return;
@@ -66,12 +69,18 @@ export function useDivisions(): DivisionList {
     return () => {
       cancelled = true;
     };
-  }, [api, list]);
+  }, [api, list, attempt]);
+
+  const retry = useCallback(() => {
+    setError(null);
+    setAttempt((n) => n + 1);
+  }, []);
 
   return {
     groups: list?.groups ?? NO_GROUPS,
     divisions: list?.divisions ?? NO_DIVISIONS,
     loading: list === null && error === null,
     error,
+    retry,
   };
 }

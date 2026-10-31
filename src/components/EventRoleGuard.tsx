@@ -1,4 +1,5 @@
 import { Navigate, useParams } from "react-router-dom";
+import AuthMeError from "@/components/AuthMeError";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import { holdsEventRole } from "@/lib/eventRoles";
@@ -21,7 +22,7 @@ export default function EventRoleGuard({
   children: React.ReactNode;
 }) {
   const { eventId } = useParams<{ eventId: string }>();
-  const { me, loading, eventRoles } = useAuthMe();
+  const { me, loading, eventRoles, error, reload } = useAuthMe();
 
   if (loading) {
     return (
@@ -30,6 +31,10 @@ export default function EventRoleGuard({
         <Skeleton className="h-32 w-full max-w-lg" />
       </div>
     );
+  }
+
+  if (!me && error) {
+    return <AuthMeError message={error} onRetry={() => void reload()} />;
   }
 
   if (!me || !eventId || !holdsEventRole(eventRoles, eventId, role)) {
