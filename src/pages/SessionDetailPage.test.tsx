@@ -1122,3 +1122,73 @@ describe("SessionDetailPage — loading", () => {
     expect(toast.error).toHaveBeenCalledWith("Session not found");
   });
 });
+
+// ---------------------------------------------------------------------------
+// A song shared by a linked partner
+// ---------------------------------------------------------------------------
+
+// Owned by the partner and listed because the caller is its linked partner.
+// The API lets the caller check it in for themselves when the song has a
+// submission to the session's event; the entity is the owner's pair with
+// their partner row, which POST /v1/pairs/find-or-create returns for a row
+// linked to the caller. The picker offers songs among the caller's own
+// submissions (GET /v1/event-song-submissions lists only those).
+const sharedSong = {
+  id: "song_shared",
+  user_id: "user_owner",
+  routine_name: "Shared Routine",
+  division: "Classic",
+  partner_id: "owner_partner_row",
+  managed_partnership_id: null,
+  shared_with_me: true,
+};
+
+describe("SessionDetailPage — a song shared by a linked partner", () => {
+  it("offers a shared song the caller submitted and checks it in as the owner's pair", async () => {
+    signedIn = true;
+    apiPost.mockReset();
+    apiPost.mockImplementation((path: string) =>
+      Promise.resolve(path === "/v1/pairs/find-or-create" ? { id: "pair_owner" } : {})
+    );
+    stubGets({
+      session: openCheckinWindowSession(),
+      songs: [sharedSong],
+      pairs: [],
+      eventSubmissions: [makeSubmission("song_shared")],
+    });
+    renderAt();
+
+    await openFormAndPick(/Shared Routine/i);
+    submitForm();
+
+    await waitFor(() => {
+      expect(apiPost).toHaveBeenCalledWith("/v1/checkins", {
+        sessionId: "s1",
+        divisionName: "Classic",
+        entityPairId: "pair_owner",
+        entityManagedPartnershipId: null,
+        songId: "song_shared",
+        notes: undefined,
+      });
+    });
+    expect(apiPost).toHaveBeenCalledWith("/v1/pairs/find-or-create", {
+      partner_id: "owner_partner_row",
+    });
+  });
+
+  it("does not offer a shared song that is not among the caller's submissions to the event", async () => {
+    signedIn = true;
+    stubGets({
+      session: openCheckinWindowSession(),
+      songs: [sharedSong],
+      pairs: [],
+      eventSubmissions: [],
+    });
+    renderAt();
+
+    expect(
+      (await screen.findAllByText(/haven't added any songs to this event yet/i)).length
+    ).toBeGreaterThan(0);
+    expect(screen.queryByRole("radio", { name: /Shared Routine/i })).not.toBeInTheDocument();
+  });
+});
