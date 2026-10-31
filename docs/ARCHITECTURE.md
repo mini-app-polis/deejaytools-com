@@ -25,7 +25,7 @@ Orientation for a developer who has never opened this codebase. The app is a Vit
 - **No TanStack Query / react-query** — no global cache, no stale-time config, no `useQuery` to grep for.
 - **No Redux, Zustand, Jotai, or similar** — no store file, no slices, no selectors.
 
-**Data fetching is local:** each page owns its own `useState` + `useEffect` (or event handlers) and calls `useApiClient()` directly. That keeps the bundle small and makes each screen self-contained, at the cost of duplicated loading/error patterns and no automatic deduplication. If you find yourself hunting for “where the global fetch layer lives,” stop — there isn't one.
+**Data fetching is local:** each page owns its own `useState` + `useEffect` (or event handlers) and calls `useApiClient()` directly. That keeps the bundle small and makes each screen self-contained, at the cost of duplicated loading/error patterns and no automatic deduplication. If you find yourself hunting for “where the global fetch layer lives,” stop — there isn't one. [ADR-0003](decisions/ADR-0003-shared-data-fetching-with-tanstack-query.md) adopts TanStack Query as that layer; until a page is migrated, it fetches locally as described here.
 
 ---
 
