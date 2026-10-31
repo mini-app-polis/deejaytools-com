@@ -24,6 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { formatSessionTitle } from "@/lib/sessionFormat";
 import ManagerGuideSection from "@/components/manager/ManagerGuideSection";
+import { useQueueActions, WithdrawEntryDialog } from "@/components/staff/queueActions";
 import { cn } from "@/lib/utils";
 
 const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
@@ -347,32 +348,16 @@ export default function ManagerPage() {
   const renderSongLabel = (row: ApiQueueEntry) =>
     row.songDisplayName ?? (row.songId ? (songMap.get(row.songId) ?? row.songId) : "—");
 
-  type QueueActionEndpoint =
-    | typeof endpoints.queue.complete
-    | typeof endpoints.queue.incomplete
-    | typeof endpoints.queue.moveDown
-    | typeof endpoints.queue.withdraw;
-
-  const queueAction = async (ep: QueueActionEndpoint, body: { queueEntryId: string }) => {
-    try {
-      await call(api, ep as typeof endpoints.queue.complete, { body });
-      await loadLiveQueues(lqSessionRef.current);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Action failed");
-    }
-  };
+  const queueActions = useQueueActions(api, () => loadLiveQueues(lqSessionRef.current));
 
   const handleComplete = (queueEntryId: string) =>
-    queueAction(endpoints.queue.complete, { queueEntryId });
+    void queueActions.run(endpoints.queue.complete, queueEntryId);
 
   const handleIncomplete = (queueEntryId: string) =>
-    queueAction(endpoints.queue.incomplete, { queueEntryId });
+    void queueActions.run(endpoints.queue.incomplete, queueEntryId);
 
   const handleMoveDown = (queueEntryId: string) =>
-    queueAction(endpoints.queue.moveDown, { queueEntryId });
-
-  const handleWithdraw = (queueEntryId: string) =>
-    queueAction(endpoints.queue.withdraw, { queueEntryId });
+    void queueActions.run(endpoints.queue.moveDown, queueEntryId);
 
   const submitCheckinFor = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -529,14 +514,14 @@ export default function ManagerPage() {
                                 </p>
                               )}
                               <div className="flex gap-2 flex-wrap pt-2 border-t border-border/40 mt-1.5">
-                                <Button size="sm" onClick={() => handleComplete(row.queueEntryId)}>
+                                <Button size="sm" disabled={queueActions.busy} onClick={() => handleComplete(row.queueEntryId)}>
                                   Run complete
                                 </Button>
-                                <Button size="sm" variant="outline" onClick={() => handleIncomplete(row.queueEntryId)}>
+                                <Button size="sm" variant="outline" disabled={queueActions.busy} onClick={() => handleIncomplete(row.queueEntryId)}>
                                   Run incomplete
                                 </Button>
                                 {!isLast && (
-                                  <Button size="sm" variant="outline" onClick={() => handleMoveDown(row.queueEntryId)}>
+                                  <Button size="sm" variant="outline" disabled={queueActions.busy} onClick={() => handleMoveDown(row.queueEntryId)}>
                                     Move down
                                   </Button>
                                 )}
@@ -544,7 +529,8 @@ export default function ManagerPage() {
                                   size="sm"
                                   variant="ghost"
                                   className="text-destructive hover:text-destructive"
-                                  onClick={() => handleWithdraw(row.queueEntryId)}
+                                  disabled={queueActions.busy}
+                                  onClick={() => queueActions.requestWithdraw(row)}
                                 >
                                   Withdraw
                                 </Button>
@@ -596,7 +582,7 @@ export default function ManagerPage() {
                                 )}
                                 <div className="flex gap-2 pt-2 border-t border-border/40 mt-1.5">
                                   {!isLast && (
-                                    <Button size="sm" variant="outline" onClick={() => handleMoveDown(row.queueEntryId)}>
+                                    <Button size="sm" variant="outline" disabled={queueActions.busy} onClick={() => handleMoveDown(row.queueEntryId)}>
                                       Move down
                                     </Button>
                                   )}
@@ -604,7 +590,8 @@ export default function ManagerPage() {
                                     size="sm"
                                     variant="ghost"
                                     className="text-destructive hover:text-destructive"
-                                    onClick={() => handleWithdraw(row.queueEntryId)}
+                                    disabled={queueActions.busy}
+                                    onClick={() => queueActions.requestWithdraw(row)}
                                   >
                                     Withdraw
                                   </Button>
@@ -654,7 +641,7 @@ export default function ManagerPage() {
                                 )}
                                 <div className="flex gap-2 pt-2 border-t border-border/40 mt-1.5">
                                   {!isLast && (
-                                    <Button size="sm" variant="outline" onClick={() => handleMoveDown(row.queueEntryId)}>
+                                    <Button size="sm" variant="outline" disabled={queueActions.busy} onClick={() => handleMoveDown(row.queueEntryId)}>
                                       Move down
                                     </Button>
                                   )}
@@ -662,7 +649,8 @@ export default function ManagerPage() {
                                     size="sm"
                                     variant="ghost"
                                     className="text-destructive hover:text-destructive"
-                                    onClick={() => handleWithdraw(row.queueEntryId)}
+                                    disabled={queueActions.busy}
+                                    onClick={() => queueActions.requestWithdraw(row)}
                                   >
                                     Withdraw
                                   </Button>
@@ -678,6 +666,13 @@ export default function ManagerPage() {
 
             </div>
           )}
+          <WithdrawEntryDialog
+            entry={queueActions.pendingWithdraw}
+            label={queueActions.pendingWithdraw ? renderEntityLabel(queueActions.pendingWithdraw) : ""}
+            busy={queueActions.busy}
+            onCancel={queueActions.cancelWithdraw}
+            onConfirm={() => void queueActions.confirmWithdraw()}
+          />
         </TabsContent>
 
         {/* ── Event Songs tab ── */}

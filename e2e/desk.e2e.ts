@@ -190,6 +190,10 @@ test("at the desk, a manager uploads a dancer's song, checks them in, and works 
 
     await test.step("and withdraw the dancer", async () => {
       await entry(PARTNER_LAST, "Withdraw").getByRole("button", { name: "Withdraw", exact: true }).click();
+      await page
+        .getByRole("dialog", { name: "Withdraw from the queue?" })
+        .getByRole("button", { name: "Withdraw", exact: true })
+        .click();
       await expect(entry(PARTNER_LAST, "Withdraw")).toHaveCount(0);
       await expect
         .poll(async () => (await standardQueue()).map((r) => r.entityLabel.includes(AHEAD_LAST)))

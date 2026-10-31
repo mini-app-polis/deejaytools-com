@@ -105,7 +105,9 @@ describe("DjPortalPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Run complete" }));
     await waitFor(() => expect(apiPost).toHaveBeenCalledWith("/v1/queue/complete", { queueEntryId: "qe-1" }));
     apiPost.mockResolvedValue({ withdrawn: true });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Withdraw" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Withdraw" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Withdraw" }));
     await waitFor(() => expect(apiPost).toHaveBeenCalledWith("/v1/queue/withdraw", { queueEntryId: "qe-1" }));
     expect(allPaths().some((p) => p.startsWith("/v1/admin"))).toBe(false);
   });

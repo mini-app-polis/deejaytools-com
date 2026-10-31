@@ -184,7 +184,7 @@ export default function ManagerGuideSection() {
             </li>
             <li>
               <strong>Withdraw</strong> — Removes the entry from whichever queue it is in. Does{" "}
-              <strong>not</strong> record a run.
+              <strong>not</strong> record a run. Asks you to confirm first, since it can&apos;t be undone.
             </li>
           </ul>
         </div>

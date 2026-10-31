@@ -196,6 +196,7 @@ describe("LiveQueueSection", () => {
     expect(screen.getByText("Third")).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: "Move down" })[0]!);
     await waitFor(() => expect(apiPost).toHaveBeenCalledWith("/v1/queue/move-down", { queueEntryId: "qe-1" }));
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "Run incomplete" })[0]).toBeEnabled());
     fireEvent.click(screen.getAllByRole("button", { name: "Run incomplete" })[0]!);
     await waitFor(() => expect(apiPost).toHaveBeenCalledWith("/v1/queue/incomplete", { queueEntryId: "qe-1" }));
     fireEvent.click(await screen.findByRole("button", { name: /Updated|Updating|Refreshing/ }));
@@ -217,7 +218,55 @@ describe("LiveQueueSection", () => {
     expect(await screen.findByRole("button", { name: /Couldn't refresh/ })).toBeInTheDocument();
     fireEvent.click(radios[1]!);
     fireEvent.click(await screen.findByRole("button", { name: "Withdraw" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Withdraw" }));
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("cap reached"));
+  });
+
+  it("asks before withdrawing, and locks every action while one is in flight", async () => {
+    apiGet.mockImplementation((p: string) => {
+      if (p === "/v1/sessions?event_id=ev-1") return Promise.resolve([live("s-1")]);
+      if (p === "/v1/queue/s-1/active/staff") {
+        return Promise.resolve([
+          fx.queueEntry({ queueEntryId: "qe-1", position: 1, entityLabel: "First" }),
+          fx.queueEntry({ queueEntryId: "qe-2", position: 2, entityLabel: "Second" }),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    const pending: ((v: unknown) => void)[] = [];
+    apiPost.mockImplementation(() => new Promise((r) => pending.push(r)));
+    inRouter(<LiveQueueSection event={event} />);
+    await screen.findByText("First");
+
+    // Withdraw asks first; cancelling posts nothing.
+    fireEvent.click(screen.getAllByRole("button", { name: "Withdraw" })[1]!);
+    const dialog = await screen.findByRole("dialog", { name: /withdraw from the queue/i });
+    expect(dialog).toHaveTextContent("Second (Classic) will be removed from the queue");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(apiPost).not.toHaveBeenCalled();
+
+    // A double click on Move down sends one request, and every action waits for it.
+    const moveDown = screen.getByRole("button", { name: "Move down" });
+    fireEvent.click(moveDown);
+    fireEvent.click(moveDown);
+    expect(apiPost).toHaveBeenCalledTimes(1);
+    for (const name of ["Run complete", "Run incomplete", "Move down", "Withdraw"]) {
+      for (const b of screen.getAllByRole("button", { name })) expect(b).toBeDisabled();
+    }
+    pending[0]!({ moved: true });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Move down" })).toBeEnabled());
+
+    // Confirming withdraws, and the dialog stays locked until the request ends.
+    fireEvent.click(screen.getAllByRole("button", { name: "Withdraw" })[1]!);
+    const confirm = within(await screen.findByRole("dialog")).getByRole("button", { name: "Withdraw" });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    expect(apiPost).toHaveBeenCalledTimes(2);
+    expect(apiPost).toHaveBeenLastCalledWith("/v1/queue/withdraw", { queueEntryId: "qe-2" });
+    expect(within(screen.getByRole("dialog")).getByRole("button", { name: "Withdrawing…" })).toBeDisabled();
+    pending[1]!({ withdrawn: true });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
   it("says when the event has no sessions", async () => {

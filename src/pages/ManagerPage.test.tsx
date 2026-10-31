@@ -332,7 +332,6 @@ describe("ManagerPage — Active Sessions", () => {
   it.each([
     ["Run complete", "/v1/queue/complete", { completed: true }],
     ["Run incomplete", "/v1/queue/incomplete", { rotated: true }],
-    ["Withdraw", "/v1/queue/withdraw", { withdrawn: true }],
   ])("'%s' posts the entry to %s and reloads the queues", async (label, path, ack) => {
     routeGets({
       "/v1/sessions": [LIVE],
@@ -348,6 +347,54 @@ describe("ManagerPage — Active Sessions", () => {
 
     await waitFor(() => expect(apiPost).toHaveBeenCalledWith(path, { queueEntryId: "a1" }));
     await waitFor(() => expect(queueCalls("active/staff")).toBe(before + 1));
+  });
+
+  it("asks before withdrawing, and withdraws only once confirmed", async () => {
+    routeGets({
+      "/v1/sessions": [LIVE],
+      "/v1/queue/live/active/staff": [fx.queueEntry({ queueEntryId: "a1", position: 1, entityLabel: "Pair One" })],
+    });
+    apiPost.mockResolvedValue({ withdrawn: true });
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText("Pair One");
+    await user.click(screen.getByRole("button", { name: "Withdraw" }));
+    const dialog = await screen.findByRole("dialog", { name: /withdraw from the queue/i });
+    expect(dialog).toHaveTextContent("Pair One (Classic) will be removed from the queue");
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(apiPost).not.toHaveBeenCalled();
+
+    const before = queueCalls("active/staff");
+    await user.click(screen.getByRole("button", { name: "Withdraw" }));
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Withdraw" }));
+    await waitFor(() => expect(apiPost).toHaveBeenCalledWith("/v1/queue/withdraw", { queueEntryId: "a1" }));
+    await waitFor(() => expect(queueCalls("active/staff")).toBe(before + 1));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("locks the queue actions while one is in flight, so a double click moves one place", async () => {
+    routeGets({
+      "/v1/sessions": [LIVE],
+      "/v1/queue/live/non-priority": [
+        fx.queueEntry({ queueEntryId: "n1", position: 1, entityLabel: "First" }),
+        fx.queueEntry({ queueEntryId: "n2", position: 2, entityLabel: "Second" }),
+      ],
+    });
+    let release!: (v: unknown) => void;
+    apiPost.mockImplementation(() => new Promise((r) => { release = r; }));
+    const user = userEvent.setup();
+    renderPage();
+
+    const first = (await screen.findByText("First")).parentElement!;
+    await user.dblClick(within(first).getByRole("button", { name: "Move down" }));
+    expect(apiPost).toHaveBeenCalledTimes(1);
+    for (const b of screen.getAllByRole("button", { name: /move down|withdraw/i })) expect(b).toBeDisabled();
+
+    await act(async () => release({ moved: true }));
+    await waitFor(() => expect(within(first).getByRole("button", { name: "Move down" })).toBeEnabled());
+    expect(apiPost).toHaveBeenCalledTimes(1);
   });
 
   it("moves a waiting entry down", async () => {
@@ -380,6 +427,7 @@ describe("ManagerPage — Active Sessions", () => {
 
     await screen.findByText("Leader & Follower");
     await user.click(screen.getByRole("button", { name: "Withdraw" }));
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Withdraw" }));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Entry already withdrawn"));
   });
 

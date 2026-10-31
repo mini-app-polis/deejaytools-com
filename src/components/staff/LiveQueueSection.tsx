@@ -6,6 +6,7 @@ import { SessionInfoHeader } from "@/components/SessionInfoHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChoiceGroup } from "@/components/ui/choice-group";
+import { useQueueActions, WithdrawEntryDialog } from "@/components/staff/queueActions";
 import { compareSessionChrono } from "@/lib/chronoSort";
 import { formatSessionTitle } from "@/lib/sessionFormat";
 import { cn } from "@/lib/utils";
@@ -26,12 +27,6 @@ function formatAgo(ms: number): string {
   if (m < 60) return `${m}m ago`;
   return `${Math.floor(m / 60)}h ago`;
 }
-
-type QueueAction =
-  | typeof endpoints.queue.complete
-  | typeof endpoints.queue.incomplete
-  | typeof endpoints.queue.moveDown
-  | typeof endpoints.queue.withdraw;
 
 /**
  * The live floor-trial queue for one of the event's sessions: the active
@@ -128,14 +123,7 @@ export default function LiveQueueSection({ event }: { event: ApiEvent }) {
 
   const session = sessions?.find((s) => s.id === sessionId) ?? null;
 
-  const act = async (ep: QueueAction, queueEntryId: string) => {
-    try {
-      await call(api, ep as typeof endpoints.queue.complete, { body: { queueEntryId } });
-      await loadQueues(sessionRef.current);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Action failed");
-    }
-  };
+  const actions = useQueueActions(api, () => loadQueues(sessionRef.current));
 
   const renderRow = (row: ApiQueueEntry, list: ApiQueueEntry[], isActiveQueue: boolean) => {
     const isSlotOne = isActiveQueue && row.position === 1;
@@ -162,16 +150,26 @@ export default function LiveQueueSection({ event }: { event: ApiEvent }) {
           <div className="flex gap-2 flex-wrap pt-2 border-t border-border/40 mt-1.5">
             {isActiveQueue && (
               <>
-                <Button size="sm" onClick={() => void act(endpoints.queue.complete, row.queueEntryId)}>
+                <Button size="sm" disabled={actions.busy} onClick={() => void actions.run(endpoints.queue.complete, row.queueEntryId)}>
                   Run complete
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => void act(endpoints.queue.incomplete, row.queueEntryId)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={actions.busy}
+                  onClick={() => void actions.run(endpoints.queue.incomplete, row.queueEntryId)}
+                >
                   Run incomplete
                 </Button>
               </>
             )}
             {!isLast && (
-              <Button size="sm" variant="outline" onClick={() => void act(endpoints.queue.moveDown, row.queueEntryId)}>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={actions.busy}
+                onClick={() => void actions.run(endpoints.queue.moveDown, row.queueEntryId)}
+              >
                 Move down
               </Button>
             )}
@@ -179,7 +177,8 @@ export default function LiveQueueSection({ event }: { event: ApiEvent }) {
               size="sm"
               variant="ghost"
               className="text-destructive hover:text-destructive"
-              onClick={() => void act(endpoints.queue.withdraw, row.queueEntryId)}
+              disabled={actions.busy}
+              onClick={() => actions.requestWithdraw(row)}
             >
               Withdraw
             </Button>
@@ -269,6 +268,14 @@ export default function LiveQueueSection({ event }: { event: ApiEvent }) {
           </div>
         </div>
       )}
+
+      <WithdrawEntryDialog
+        entry={actions.pendingWithdraw}
+        label={actions.pendingWithdraw?.entityLabel ?? ""}
+        busy={actions.busy}
+        onCancel={actions.cancelWithdraw}
+        onConfirm={() => void actions.confirmWithdraw()}
+      />
     </div>
   );
 }
