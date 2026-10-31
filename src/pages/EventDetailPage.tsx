@@ -47,21 +47,37 @@ export default function EventDetailPage() {
   const [loading, setLoading] = useState(true);
 
   // The event and its sessions load independently: a sessions failure keeps
-  // the event on screen and shows the error in the sessions section.
+  // the event on screen and shows the error in the sessions section. A
+  // response for an earlier :id is dropped, and that event's details are
+  // cleared rather than shown under the new URL.
   useEffect(() => {
     if (!id) return;
+    let cancelled = false;
     setLoading(true);
     setSessionsError(null);
+    setEvent((cur) => (cur?.id === id ? cur : null));
     const eventReq = call(api, endpoints.events.get, { params: { id: id } })
-      .then(setEvent)
-      .catch((e: Error) => toast.error(e.message));
-    const sessionsReq = call(api, endpoints.sessions.list, { params: { eventId: id } })
-      .then(setSessions)
+      .then((ev) => {
+        if (!cancelled) setEvent(ev);
+      })
       .catch((e: Error) => {
+        if (!cancelled) toast.error(e.message);
+      });
+    const sessionsReq = call(api, endpoints.sessions.list, { params: { eventId: id } })
+      .then((sess) => {
+        if (!cancelled) setSessions(sess);
+      })
+      .catch((e: Error) => {
+        if (cancelled) return;
         setSessions(null);
         setSessionsError(e.message);
       });
-    void Promise.all([eventReq, sessionsReq]).finally(() => setLoading(false));
+    void Promise.all([eventReq, sessionsReq]).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [api, id]);
 
   if (!id) {

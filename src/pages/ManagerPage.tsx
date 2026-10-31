@@ -194,19 +194,27 @@ export default function ManagerPage() {
     if (cfSelectedUser) return;
     const q = cfUserQuery.trim();
     if (!q) { setCfUserResults([]); return; }
+    // A response for an earlier query is dropped, so results always match
+    // what is typed; the cleanup also ends that query's "searching" state.
+    let cancelled = false;
     const t = setTimeout(async () => {
       setCfSearching(true);
       try {
         const rows = await call(api, endpoints.admin.users, { params: { q: q } });
-        setCfUserResults(rows);
+        if (!cancelled) setCfUserResults(rows);
       } catch (e) {
+        if (cancelled) return;
         toast.error(e instanceof Error ? e.message : "Search failed");
         setCfUserResults([]);
       } finally {
-        setCfSearching(false);
+        if (!cancelled) setCfSearching(false);
       }
     }, 250);
-    return () => clearTimeout(t);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+      setCfSearching(false);
+    };
   }, [cfUserQuery, cfSelectedUser, api]);
 
   useEffect(() => {
@@ -231,18 +239,24 @@ export default function ManagerPage() {
     if (ufSelected) return;
     const q = ufQuery.trim();
     if (!q) { setUfResults([]); return; }
+    // As above: a response for an earlier query is dropped.
+    let cancelled = false;
     const t = setTimeout(async () => {
       setUfSearching(true);
       try {
         const rows = await call(api, endpoints.admin.users, { params: { q: q } });
-        setUfResults(rows);
+        if (!cancelled) setUfResults(rows);
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Search failed");
+        if (!cancelled) toast.error(e instanceof Error ? e.message : "Search failed");
       } finally {
-        setUfSearching(false);
+        if (!cancelled) setUfSearching(false);
       }
     }, 250);
-    return () => clearTimeout(t);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+      setUfSearching(false);
+    };
   }, [ufQuery, ufSelected, api]);
 
   useEffect(() => {

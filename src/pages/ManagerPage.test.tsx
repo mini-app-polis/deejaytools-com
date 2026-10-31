@@ -209,6 +209,19 @@ function routeGets(routes: GetRoutes) {
   });
 }
 
+/**
+ * Routes /v1/admin/users so the search for `slowQuery` hangs until released,
+ * and every other search answers at once with `fast`.
+ */
+function slowUserSearch(slowQuery: string, fast: unknown[]) {
+  let release!: (rows: unknown[]) => void;
+  routeGets({
+    "/v1/admin/users": (path: string) =>
+      path.endsWith(`?q=${slowQuery}`) ? new Promise((r) => { release = r; }) : fast,
+  });
+  return (rows: unknown[]) => release(rows);
+}
+
 function resetAll() {
   apiGet.mockReset();
   apiPost.mockReset();
@@ -605,6 +618,22 @@ describe("ManagerPage — Upload For", () => {
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("search down"));
   });
 
+  it("ignores a late result for an earlier query", async () => {
+    const releaseSlow = slowUserSearch("al", [ALICE]);
+    const user = userEvent.setup();
+    renderPage("/manager/upload-for");
+
+    const box = await screen.findByPlaceholderText(/search by name or email/i);
+    await user.type(box, "al");
+    await waitFor(() => expect(apiGet).toHaveBeenCalledWith("/v1/admin/users?q=al"));
+    await user.type(box, "ice");
+    expect(await screen.findByRole("button", { name: /alice smith/i })).toBeInTheDocument();
+
+    await act(async () => releaseSlow([fx.adminUser({ id: "u-bob", email: "bob@example.com", first_name: "Bob", last_name: "Stale" })]));
+    expect(screen.queryByRole("button", { name: /bob stale/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /alice smith/i })).toBeInTheDocument();
+  });
+
   it("opens the upload form on behalf of the chosen user, and can switch back", async () => {
     routeGets({ "/v1/admin/users": [ALICE] });
     const user = userEvent.setup();
@@ -660,6 +689,22 @@ describe("ManagerPage — CheckIn For", () => {
     await user.type(await screen.findByPlaceholderText(/search by name or email/i), "alice");
     await user.click(await screen.findByRole("button", { name: /alice smith/i }));
   }
+
+  it("ignores a late user-search result for an earlier query", async () => {
+    const releaseSlow = slowUserSearch("al", [ALICE]);
+    const user = userEvent.setup();
+    renderPage("/manager/checkin-for");
+
+    const box = await screen.findByPlaceholderText(/search by name or email/i);
+    await user.type(box, "al");
+    await waitFor(() => expect(apiGet).toHaveBeenCalledWith("/v1/admin/users?q=al"));
+    await user.type(box, "ice");
+    expect(await screen.findByRole("button", { name: /alice smith/i })).toBeInTheDocument();
+
+    await act(async () => releaseSlow([fx.adminUser({ id: "u-bob", email: "bob@example.com", first_name: "Bob", last_name: "Stale" })]));
+    expect(screen.queryByRole("button", { name: /bob stale/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /alice smith/i })).toBeInTheDocument();
+  });
 
   it("checks a user in to a live session with their submitted song and its division", async () => {
     routeGets({
