@@ -42,20 +42,24 @@ export default function EventsPage() {
   // already loads the same pair, so this costs a warm cache hit rather than a
   // new per-event round trip.
   const [sessions, setSessions] = useState<ApiSession[] | null>(null);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Events and sessions load independently: a sessions failure keeps the
+  // events listed, without floor-trial counts, and says why.
   const load = () => {
     setLoading(true);
-    Promise.all([
-      call(api, endpoints.events.list),
-      call(api, endpoints.sessions.list),
-    ])
-      .then(([evs, sess]) => {
-        setEvents(evs);
-        setSessions(sess);
-      })
-      .catch((e: Error) => toast.error(e.message))
-      .finally(() => setLoading(false));
+    setSessionsError(null);
+    const eventsReq = call(api, endpoints.events.list)
+      .then(setEvents)
+      .catch((e: Error) => toast.error(e.message));
+    const sessionsReq = call(api, endpoints.sessions.list)
+      .then(setSessions)
+      .catch((e: Error) => {
+        setSessions(null);
+        setSessionsError(e.message);
+      });
+    void Promise.all([eventsReq, sessionsReq]).finally(() => setLoading(false));
   };
 
   useEffect(() => {
@@ -93,6 +97,12 @@ export default function EventsPage() {
           </Link>
         </p>
       </div>
+
+      {sessionsError !== null && (
+        <p role="alert" className="text-sm text-destructive">
+          Couldn&apos;t load floor trials, so counts are not shown: {sessionsError}
+        </p>
+      )}
 
       {sortedEvents?.length === 0 && (
         <p className="text-sm text-muted-foreground py-8 text-center">

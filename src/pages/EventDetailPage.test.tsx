@@ -208,6 +208,21 @@ describe("EventDetailPage", () => {
     );
   });
 
+  it("keeps the event on screen and reports the sessions error when only sessions fail", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({ name: "Swing Fling" }));
+      if (path.startsWith("/v1/sessions")) return Promise.reject(new Error("Sessions unavailable"));
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Swing Fling" })).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(/sessions unavailable/i);
+    expect(screen.queryByText(/event not found/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/no sessions for this event/i)).not.toBeInTheDocument();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
   it("lists only active and upcoming sessions, tallying the rest in the heading", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
