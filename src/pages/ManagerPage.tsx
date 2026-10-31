@@ -814,6 +814,8 @@ export default function ManagerPage() {
                   Find the user you're uploading for. The song is created exactly as if they uploaded it themselves.
                 </p>
                 <Input
+                  type="search"
+                  aria-label="Search for the user to upload for"
                   placeholder="Search by name or email…"
                   value={ufQuery}
                   onChange={(e) => setUfQuery(e.target.value)}
@@ -881,6 +883,8 @@ export default function ManagerPage() {
                   Find the user you&apos;re checking in for. The check-in is recorded exactly as if they did it themselves.
                 </p>
                 <Input
+                  type="search"
+                  aria-label="Search for the user to check in"
                   placeholder="Search by name or email…"
                   value={cfUserQuery}
                   onChange={(e) => setCfUserQuery(e.target.value)}

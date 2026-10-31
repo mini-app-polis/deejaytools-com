@@ -1148,7 +1148,7 @@ describe("AdminPage — Songs section", () => {
     renderPage("/admin/songs");
 
     await screen.findByText(SONG_A.song_label);
-    await user.type(screen.getByPlaceholderText(/search by song/i), "zzz");
+    await user.type(screen.getByRole("searchbox", { name: /search songs/i }), "zzz");
 
     expect(await screen.findByText('No songs match "zzz".')).toBeInTheDocument();
     const songCalls = apiGet.mock.calls.map(([p]) => p as string).filter((p) => p.startsWith("/v1/admin/songs"));
@@ -1416,7 +1416,7 @@ describe("AdminPage — Users section", () => {
     renderPage("/admin/users");
 
     await screen.findByText("alice@example.com");
-    await user.type(screen.getByPlaceholderText(/search by name or email/i), " nobody ");
+    await user.type(screen.getByRole("searchbox", { name: /search users/i }), " nobody ");
     expect(await screen.findByText('No users match "nobody".')).toBeInTheDocument();
     expect(apiGet).toHaveBeenCalledWith("/v1/admin/users?q=nobody");
   });

@@ -501,7 +501,7 @@ describe("ManagerPage — Upload For", () => {
     renderPage("/manager/upload-for");
 
     expect(await screen.findByText("Type a name or email to search.")).toBeInTheDocument();
-    await user.type(screen.getByPlaceholderText(/search by name or email/i), "ali");
+    await user.type(screen.getByRole("searchbox", { name: /user to upload for/i }), "ali");
 
     expect(await screen.findByRole("button", { name: /alice smith/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /\(no name\)/i })).toBeInTheDocument();
@@ -682,7 +682,7 @@ describe("ManagerPage — CheckIn For", () => {
 
     await pickAlice(user);
     await user.click(screen.getByRole("button", { name: "Change user" }));
-    const box = screen.getByPlaceholderText(/search by name or email/i);
+    const box = screen.getByLabelText(/user to check in/i);
     expect(box).toHaveValue("");
 
     fail = true;

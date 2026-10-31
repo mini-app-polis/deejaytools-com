@@ -1455,6 +1455,8 @@ export default function AdminPage() {
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center flex-wrap">
               <div className="w-full sm:w-80">
                 <Input
+                  type="search"
+                  aria-label="Search songs by song, owner, or partner"
                   placeholder="Search by song, owner, or partner…"
                   value={adminSongsQuery}
                   onChange={(e) => setAdminSongsQuery(e.target.value)}
@@ -1723,6 +1725,8 @@ export default function AdminPage() {
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
             <div className="w-full sm:w-80">
               <Input
+                type="search"
+                aria-label="Search users by name or email"
                 placeholder="Search by name or email…"
                 value={usersQuery}
                 onChange={(e) => setUsersQuery(e.target.value)}

@@ -70,4 +70,16 @@ describe("help topic pages", () => {
     expect(screen.getByRole("heading", { level: 1, name: title })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /back to help/i })).toHaveAttribute("href", "/how-it-works");
   });
+
+  it("names the troubleshooting search box beyond its placeholder", () => {
+    render(
+      <MemoryRouter initialEntries={["/how-it-works/troubleshooting"]}>
+        <TroubleshootingPage />
+      </MemoryRouter>
+    );
+
+    expect(
+      screen.getByRole("searchbox", { name: "Filter troubleshooting entries" })
+    ).toBeInTheDocument();
+  });
 });
