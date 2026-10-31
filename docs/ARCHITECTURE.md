@@ -25,7 +25,7 @@ Orientation for a developer who has never opened this codebase. The app is a Vit
 
 - **No Redux, Zustand, Jotai, or similar** — no store file, no slices, no selectors.
 
-**Data fetching is moving onto TanStack Query** ([ADR-0003](decisions/ADR-0003-shared-data-fetching-with-tanstack-query.md)). Server state is read with `useEndpointQuery` and changed with `useEndpointMutation` (`api/queries.ts`, §3), which share one cache, deduplicate requests, cancel stale responses and refetch what a mutation invalidates. `useState` stays for what the user is editing and for UI state. The migration goes page by page in the order ADR-0003 lists; until a page is migrated it still owns its own `useState` + `useEffect` around `call(api, …)`, so both patterns are in the tree. New code uses the query hooks — `SessionsPage` is the reference.
+**Data fetching is moving onto TanStack Query** ([ADR-0003](decisions/ADR-0003-shared-data-fetching-with-tanstack-query.md)). Server state is read with `useEndpointQuery` and changed with `useEndpointMutation` (`api/queries.ts`, §3), which share one cache, deduplicate requests, cancel stale responses and refetch what a mutation invalidates. `useState` stays for what the user is editing and for UI state. Every page and section reads through the query hooks; the shared `useAuthMe`, `useDivisions` and `useApiVersion` stores are the last step of ADR-0003's migration and still keep their own caches (§5). New code uses the query hooks — `SessionsPage` is the reference.
 
 ---
 
@@ -116,7 +116,9 @@ One default-export component per route. Pages orchestrate fetching, local state,
 |------|---------|
 | `useAuthMe.ts` | Reads the one shared `/v1/auth/me` record; exposes `me`, `loading`, `error`, `reload`, `isAdmin`, `eventRoles` (§5) |
 | `useDivisions.ts` | Reads the competition divisions from the public `GET /v1/divisions`, once per page load and shared by every caller; works before sign-in |
-| `useStaffEvents.ts` | Joins `eventRoles` to the events list: each staff event with its richest role |
+| `useStaffEvents.ts` | Joins `eventRoles` to the shared events list query: each staff event with its richest role; a failed list keeps the portals and returns `error` |
+| `useLiveQueues.ts` | A session's three staff queues, polled every 8 s (§9), with `updatedAt`, `refreshFailed` and a manual `refresh` |
+| `useDebouncedValue.ts` | A value once it has stopped changing for a delay — feeds search boxes into query params |
 | `useApiVersion.ts` | Fetches the API's public `GET /version` once (shown in the nav) |
 
 ### `lib/` modules
@@ -536,33 +538,31 @@ A component that reads through the query hooks renders with `renderWithQueryClie
 
 Three screens poll on an interval. **Do not shorten these casually** — they trade API load against freshness.
 
+Polling is TanStack Query's `refetchInterval` (ADR-0003). A background refetch never brings a skeleton back, because `isLoading` is true only with no data, and a failed one leaves the last data on screen.
+
 ### `SessionDetailPage` — 60 seconds
 
-```ts
-setInterval(() => {
-  void Promise.all([loadQueue(), loadSession()]).catch(() => {});
-}, 60_000);
-```
+The session (`sessions.get`) and its public queues (`queue.active`, `queue.waiting`) are queries with `refetchInterval: 60_000`.
 
 **Why 60s:** Attendees watching the queue on their phone do not need sub-second updates. Floor trials span hours; a one-minute lag is acceptable and keeps hundreds of open tabs from hammering queue endpoints.
 
-Also ticks `now` for time-relative UI on the same interval.
+A failed refresh shows `Couldn't refresh the queue; it may be out of date` with **Retry now**, without blocking the page. The check-in clock (`now`) ticks on its own timer at the window's next edge; it does not fetch.
 
-### `ManagerPage` (active-sessions section) — 8 seconds
+### `ManagerPage` (active-sessions section) and the staff `LiveQueueSection` — 8 seconds
 
-```ts
-setInterval(() => void loadLiveQueues(lqSessionId, true), 8000);
-```
+Both read through `hooks/useLiveQueues.ts`: `queue.activeStaff`, `queue.priority` and `queue.nonPriority` with `refetchInterval: LIVE_QUEUE_POLL_MS` (8000), plus a **1 second** tick only to refresh the “Updated Xs ago” label without re-fetching.
 
-Plus a **1 second** `lqNowTick` interval only to refresh the “Updated Xs ago” staleness label without re-fetching.
+**Why 8s:** Managers actively reorder and advance the queue; they need near-real-time state. A failed background refetch is silent but turns the label amber: `Couldn't refresh — tap to retry`; a refresh someone taps says why it failed in a toast. Success shows `Updated {formatAgo(...)}` (e.g. `just now`, `12s ago`).
 
-**Why 8s:** Managers actively reorder and advance the queue; they need near-real-time state. Silent polling (`silent = true`) avoids flashing loading skeletons every tick. Failures set `lqRefreshFailed` and turn the label amber: `Couldn't refresh — tap to retry`. Success shows `Updated {formatAgo(...)}` (e.g. `just now`, `12s ago`).
+### After a queue action
+
+`useQueueActions` (`components/staff/queueActions.tsx`) runs one action at a time, then invalidates every queue, session, run-history and check-in query and waits for the ones on screen to refetch before it takes another action.
 
 | Surface | Interval | Rationale |
 |---------|----------|-----------|
 | Public session detail | 60s | Low urgency, many passive viewers |
 | Manager live queue | 8s | Operational tool; stale queue causes wrong decisions |
-| Staff portal live queue (`components/staff/LiveQueueSection.tsx`) | 8s (`POLL_MS`), plus a 1s label tick | Same as the manager live queue |
+| Staff portal live queue (`components/staff/LiveQueueSection.tsx`) | 8s (`LIVE_QUEUE_POLL_MS`), plus a 1s label tick | Same as the manager live queue |
 
 `SessionInfoHeader` also re-renders every 30s to keep its time-relative text current; it does not fetch.
 
@@ -593,7 +593,7 @@ Same pattern with `MANAGER_SECTIONS`, `ManagerPage.tsx` `<TabsContent>`, and `MA
 ### A new API call
 
 1. Declare it in `api/endpoints.ts` (method, access, path, response schema).
-2. A read is `useEndpointQuery(endpoints.x.y, { params })`; a change is `useEndpointMutation(endpoints.x.y, { invalidates: [...] })` naming the endpoints whose data it changes. On a page not yet migrated, `call(useApiClient(), …)` in its existing effect is fine until that page moves.
+2. A read is `useEndpointQuery(endpoints.x.y, { params })`; a change is `useEndpointMutation(endpoints.x.y, { invalidates: [...] })` naming the endpoints whose data it changes.
 3. Show a query error inline (`QueryError`); toast a mutation error with `toast.error(e.message)`.
 4. Only use raw `fetch` if unauthenticated, non-React (chunk upload), or a documented exception.
 

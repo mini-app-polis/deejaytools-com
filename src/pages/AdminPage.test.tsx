@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -46,6 +46,7 @@ vi.mock("@clerk/clerk-react", () => ({
 import AdminPage from "./AdminPage";
 import { toast } from "sonner";
 import { fx } from "@/test/fixtures";
+import { renderWithQueryClient } from "@/test/render";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -57,7 +58,7 @@ import { fx } from "@/test/fixtures";
  * to the events page, which is also where bare `/admin` lands.
  */
 function renderPage(path: string = "/admin/events") {
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/admin/:section" element={<AdminPage />} />
@@ -121,22 +122,23 @@ describe("AdminPage", () => {
     );
 
     // Events tab now groups into status boxes; empty events → "Active"/"Upcoming" boxes showing "None."
-    expect(screen.getByRole("heading", { name: /^active$/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /^active$/i })).toBeInTheDocument();
     expect(screen.getAllByText(/^none\.$/i).length).toBeGreaterThan(0);
   });
 
-  it("shows toast error when events API call fails", async () => {
-    const error = new Error("Failed to load events");
-    // Reject the first call (events) and resolve all subsequent calls with []
-    // so the component doesn't crash on runs/users/sessions endpoints.
-    apiGet.mockRejectedValueOnce(error);
-    apiGet.mockResolvedValue([]);
-
+  it("shows a failed events load inline, with a retry", async () => {
+    let fail = true;
+    apiGet.mockImplementation((path: string) =>
+      path === "/v1/events" && fail ? Promise.reject(new Error("events down")) : Promise.resolve([])
+    );
+    const user = userEvent.setup();
     renderPage();
 
-    await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith("Failed to load events");
-    });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load events: events down");
+    expect(screen.queryByRole("heading", { name: /^active$/i })).not.toBeInTheDocument();
+    fail = false;
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("heading", { name: /^active$/i })).toBeInTheDocument();
   });
 
   it("disables the Create Event submit button when name is empty", async () => {
@@ -420,7 +422,7 @@ async function tabToAndEnter(user: ReturnType<typeof userEvent.setup>, el: HTMLE
 }
 
 function renderWithDetailRoutes(path: string) {
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/admin/:section" element={<AdminPage />} />
@@ -487,7 +489,8 @@ describe("AdminPage — Events section", () => {
   });
 
   it("creates an event, defaulting the season year from the start date", async () => {
-    routeGets({ "/v1/events": [] });
+    let events: unknown[] = [];
+    routeGets({ "/v1/events": () => events });
     const created = fx.event({
       id: "new-1",
       name: "Halloween Swing",
@@ -496,7 +499,10 @@ describe("AdminPage — Events section", () => {
       season_year: "2027",
       timezone: "America/New_York",
     });
-    apiPost.mockResolvedValue(created);
+    apiPost.mockImplementation(async () => {
+      events = [created];
+      return created;
+    });
     const user = userEvent.setup();
     renderPage("/admin/events");
 
@@ -520,7 +526,8 @@ describe("AdminPage — Events section", () => {
     );
     expect(toast.success).toHaveBeenCalledWith("Event created");
     expect(screen.queryByRole("heading", { name: "New event" })).not.toBeInTheDocument();
-    expect(screen.getByText("Halloween Swing")).toBeInTheDocument();
+    // The list refetches and shows the new event.
+    expect(await screen.findByText("Halloween Swing")).toBeInTheDocument();
   });
 
   it("keeps a season year the admin typed when the start date changes", async () => {
@@ -589,9 +596,13 @@ describe("AdminPage — Events section", () => {
     expect(screen.getByRole("button", { name: "Create event" })).toBeEnabled();
   });
 
-  it("edits an event with a PATCH pre-filled from the row and updates it in place", async () => {
-    routeGets({ "/v1/events": [EV_ACTIVE] });
-    apiPatch.mockResolvedValue({ ...EV_ACTIVE, name: "Swing Fling 2026" });
+  it("edits an event with a PATCH pre-filled from the row and shows the refetched list", async () => {
+    let events = [EV_ACTIVE];
+    routeGets({ "/v1/events": () => events });
+    apiPatch.mockImplementation(async () => {
+      events = [{ ...EV_ACTIVE, name: "Swing Fling 2026" }];
+      return events[0];
+    });
     const user = userEvent.setup();
     renderPage("/admin/events");
 
@@ -623,8 +634,12 @@ describe("AdminPage — Events section", () => {
   });
 
   it("deletes an event only after confirmation", async () => {
-    routeGets({ "/v1/events": [EV_ACTIVE, EV_UPCOMING] });
-    apiDel.mockResolvedValue({ deleted: true });
+    let events = [EV_ACTIVE, EV_UPCOMING];
+    routeGets({ "/v1/events": () => events });
+    apiDel.mockImplementation(async () => {
+      events = [EV_UPCOMING];
+      return { deleted: true };
+    });
     const user = userEvent.setup();
     renderPage("/admin/events");
 
@@ -890,8 +905,12 @@ describe("AdminPage — Sessions section", () => {
   });
 
   it("deletes a session after a cascade warning", async () => {
-    routeGets({ "/v1/events": [EV_ACTIVE], "/v1/sessions": [SESS_OPEN] });
-    apiDel.mockResolvedValue({ deleted: true });
+    let sessions = [SESS_OPEN];
+    routeGets({ "/v1/events": [EV_ACTIVE], "/v1/sessions": () => sessions });
+    apiDel.mockImplementation(async () => {
+      sessions = [];
+      return { deleted: true };
+    });
     const user = userEvent.setup();
     renderPage("/admin/sessions");
 
@@ -1059,8 +1078,8 @@ describe("AdminPage — Run History section", () => {
     expect(screen.queryByText(/^Filters:/)).not.toBeInTheDocument();
   });
 
-  it("refreshes on demand and reports a load failure", async () => {
-    let fail = false;
+  it("refreshes on demand and shows a failed load inline", async () => {
+    let fail = true;
     routeGets({
       "/v1/runs": () => {
         if (fail) throw new Error("runs down");
@@ -1070,10 +1089,11 @@ describe("AdminPage — Run History section", () => {
     const user = userEvent.setup();
     renderPage("/admin/runs");
 
-    await screen.findByText("0 runs");
-    fail = true;
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load run history: runs down");
+    fail = false;
     await user.click(screen.getByRole("button", { name: "Refresh" }));
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("runs down"));
+    expect(await screen.findByText("0 runs")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });
 
@@ -1175,7 +1195,7 @@ describe("AdminPage — Songs section", () => {
       },
     });
     renderPage("/admin/songs");
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("songs down"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load songs: songs down");
   });
 });
 
@@ -1284,13 +1304,12 @@ describe("AdminPage — Test check-in section", () => {
   });
 
   it("deletes all test check-ins after confirmation", async () => {
-    routeGets({
-      "/v1/admin/checkins/test": [
-        fx.testInjection({ pair_id: "p1" }),
-        fx.testInjection({ pair_id: "p2" }),
-      ],
+    let rows = [fx.testInjection({ pair_id: "p1" }), fx.testInjection({ pair_id: "p2" })];
+    routeGets({ "/v1/admin/checkins/test": () => rows });
+    apiDel.mockImplementation(async () => {
+      rows = [];
+      return { deleted: 2 };
     });
-    apiDel.mockResolvedValue({ deleted: 2 });
     const user = userEvent.setup();
     renderPage("/admin/test-checkin");
 
@@ -1372,9 +1391,13 @@ describe("AdminPage — Users section", () => {
     expect(screen.getByText("3 users")).toBeInTheDocument();
   });
 
-  it("promotes a user and reflects the server's response", async () => {
-    routeGets({ "/v1/admin/users": [ME, ALICE] });
-    apiPatch.mockResolvedValue({ ...ALICE, role: "admin" });
+  it("promotes a user and shows the refetched role", async () => {
+    let users = [ME, ALICE];
+    routeGets({ "/v1/admin/users": () => users });
+    apiPatch.mockImplementation(async () => {
+      users = [ME, { ...ALICE, role: "admin" }];
+      return users[1];
+    });
     const user = userEvent.setup();
     renderPage("/admin/users");
 
@@ -1421,8 +1444,8 @@ describe("AdminPage — Users section", () => {
     expect(apiGet).toHaveBeenCalledWith("/v1/admin/users?q=nobody");
   });
 
-  it("shows an empty state with no users and reports a failed refresh", async () => {
-    let fail = false;
+  it("shows a failed load inline, then the empty state once a refresh succeeds", async () => {
+    let fail = true;
     routeGets({
       "/v1/admin/users": () => {
         if (fail) throw new Error("users down");
@@ -1432,10 +1455,10 @@ describe("AdminPage — Users section", () => {
     const user = userEvent.setup();
     renderPage("/admin/users");
 
-    expect(await screen.findByText("No users yet.")).toBeInTheDocument();
-    fail = true;
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load users: users down");
+    fail = false;
     await user.click(screen.getByRole("button", { name: "Refresh" }));
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("users down"));
+    expect(await screen.findByText("No users yet.")).toBeInTheDocument();
   });
 
   it("falls back to the events section for an unknown slug", async () => {

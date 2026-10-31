@@ -1,16 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { keepPreviousData } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import {
-  type ApiEvent,
-  type ApiSession,
-  type ApiRun,
-  type ApiAdminSong,
-  type ApiAdminUser,
-  type ApiTestInjection,
-} from "@/schemas";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import { type ApiEvent, type ApiSession } from "@/schemas";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
+import QueryError from "@/components/QueryError";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import { useDivisions } from "@/hooks/useDivisions";
 import { CLICKABLE_ROW_CLASS, ROW_LINK_CLASS } from "@/lib/clickable";
@@ -134,7 +129,6 @@ function isAdminSection(s: string | undefined): s is AdminSection {
 }
 
 export default function AdminPage() {
-  const api = useApiClient();
   const { divisions: divisionOptions } = useDivisions();
   const navigate = useNavigate();
   // The URL drives which section is shown. An unknown / missing slug
@@ -150,8 +144,6 @@ export default function AdminPage() {
   const { me, reload: reloadMe } = useAuthMe();
 
   // ── Events tab ──────────────────────────────────────────────────────────────
-  const [events, setEvents] = useState<ApiEvent[] | null>(null);
-  const [loadingEvents, setLoadingEvents] = useState(true);
   const [evDialogOpen, setEvDialogOpen] = useState(false);
   const [evSubmitting, setEvSubmitting] = useState(false);
   const [evName, setEvName] = useState("");
@@ -169,8 +161,6 @@ export default function AdminPage() {
   const [showEventsCompleted, setShowEventsCompleted] = useState(false);
 
   // ── Sessions tab ────────────────────────────────────────────────────────────
-  const [sessions, setSessions] = useState<ApiSession[] | null>(null);
-  const [loadingSessions, setLoadingSessions] = useState(true);
   const [sessDialogOpen, setSessDialogOpen] = useState(false);
   const [sessSubmitting, setSessSubmitting] = useState(false);
   const [sessEventId, setSessEventId] = useState("");
@@ -201,9 +191,6 @@ export default function AdminPage() {
   const [runsEventId, setRunsEventId] = useState("");
   const [runsShowFuture, setRunsShowFuture] = useState(false);
   const [runsSessionFilter, setRunsSessionFilter] = useState("");
-  const [runs, setRuns] = useState<ApiRun[] | null>(null);
-  const [runsLoading, setRunsLoading] = useState(false);
-  const [runsHitLimit, setRunsHitLimit] = useState(false);
   const [runsDivisionFilter, setRunsDivisionFilter] = useState<string | null>(null);
   const [runsPartnershipFilter, setRunsPartnershipFilter] = useState<string | null>(null);
   const [runsShowAllPartnerships, setRunsShowAllPartnerships] = useState(false);
@@ -212,8 +199,6 @@ export default function AdminPage() {
   // `usersQuery` updates on every keystroke; `usersDebouncedQuery` is what
   // actually fires the network request. 300 ms feels responsive without
   // hammering the API on every character.
-  const [users, setUsers] = useState<ApiAdminUser[] | null>(null);
-  const [usersLoading, setUsersLoading] = useState(false);
   const [usersQuery, setUsersQuery] = useState("");
   const [usersDebouncedQuery, setUsersDebouncedQuery] = useState("");
   /** Per-row loading state while a role PATCH is in flight. */
@@ -222,8 +207,6 @@ export default function AdminPage() {
   // ── Admin Songs tab ─────────────────────────────────────────────────────────
   // Mirrors the Users tab pattern: live keystrokes feed `adminSongsQuery`,
   // debounced into `adminSongsDebouncedQuery` to drive the API call.
-  const [adminSongs, setAdminSongs] = useState<ApiAdminSong[] | null>(null);
-  const [adminSongsLoading, setAdminSongsLoading] = useState(false);
   const [adminSongsQuery, setAdminSongsQuery] = useState("");
   const [adminSongsDebouncedQuery, setAdminSongsDebouncedQuery] = useState("");
   const [adminSongsIncludeDeleted, setAdminSongsIncludeDeleted] = useState(false);
@@ -242,110 +225,91 @@ export default function AdminPage() {
   const [tcFollowerFirst, setTcFollowerFirst] = useState("Follower");
   const [tcFollowerLast, setTcFollowerLast] = useState(() => randomFourDigitTag());
   const [tcSubmitting, setTcSubmitting] = useState(false);
-  const [tcData, setTcData] = useState<ApiTestInjection[] | null>(null);
   const [tcDeleting, setTcDeleting] = useState(false);
   const [pendingDeleteAllTestCheckins, setPendingDeleteAllTestCheckins] = useState(false);
 
-  // ── Data loaders ────────────────────────────────────────────────────────────
+  // ── Data ────────────────────────────────────────────────────────────────────
 
-  const loadEvents = useCallback(() => {
-    setLoadingEvents(true);
-    call(api, endpoints.events.list)
-      .then(setEvents)
-      .catch((e: Error) => toast.error(e.message))
-      .finally(() => setLoadingEvents(false));
-  }, [api]);
+  const eventsQuery = useEndpointQuery(endpoints.events.list);
+  const events = eventsQuery.data ?? null;
+  const loadingEvents = eventsQuery.isFetching;
 
-  const loadSessions = useCallback(() => {
-    setLoadingSessions(true);
-    call(api, endpoints.sessions.list)
-      .then(setSessions)
-      .catch((e: Error) => toast.error(e.message))
-      .finally(() => setLoadingSessions(false));
-  }, [api]);
+  const sessionsQuery = useEndpointQuery(endpoints.sessions.list);
+  const sessions = sessionsQuery.data ?? null;
+  const loadingSessions = sessionsQuery.isFetching;
 
-  const loadRuns = useCallback(
-    async ({ eventId, sessionId }: { eventId: string; sessionId: string }) => {
-      setRunsLoading(true);
-      try {
-        const params = new URLSearchParams();
-        params.set("limit", String(RUNS_FETCH_LIMIT));
-        if (sessionId) {
-          params.set("session_id", sessionId);
-        } else if (eventId) {
-          params.set("event_id", eventId);
-        }
-        const data = await call(api, endpoints.runs.list, { params: { query: params.toString() } });
-        setRuns(data);
-        setRunsHitLimit(data.length === RUNS_FETCH_LIMIT);
-        setRunsDivisionFilter(null);
-        setRunsPartnershipFilter(null);
-        setRunsShowAllPartnerships(false);
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Failed to load run history");
-      } finally {
-        setRunsLoading(false);
-      }
-    },
-    [api]
-  );
-
-  const loadUsers = useCallback(
-    async (q: string) => {
-      setUsersLoading(true);
-      try {
-        const data = await call(api, endpoints.admin.users, { params: q ? { q } : undefined });
-        setUsers(data);
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Failed to load users");
-      } finally {
-        setUsersLoading(false);
-      }
-    },
-    [api]
-  );
-
-  const loadAdminSongs = useCallback(
-    async (q: string, includeDeleted: boolean) => {
-      setAdminSongsLoading(true);
-      try {
-        const params = new URLSearchParams();
-        if (q) params.set("q", q);
-        if (includeDeleted) params.set("include_deleted", "true");
-        const data = await call(api, endpoints.admin.songs, {
-          params: { query: params.toString() || undefined },
-        });
-        setAdminSongs(data);
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Failed to load songs");
-      } finally {
-        setAdminSongsLoading(false);
-      }
-    },
-    [api]
-  );
-
-  const loadTestCheckins = useCallback(async () => {
-    try {
-      const data = await call(api, endpoints.admin.testCheckins);
-      setTcData(data);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to load test check-ins");
+  // A session filter wins over an event filter; with neither, every run.
+  const runsQueryString = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("limit", String(RUNS_FETCH_LIMIT));
+    if (runsSessionFilter) {
+      params.set("session_id", runsSessionFilter);
+    } else if (runsEventId) {
+      params.set("event_id", runsEventId);
     }
-  }, [api]);
+    return params.toString();
+  }, [runsEventId, runsSessionFilter]);
+  // The previous result stays on screen, dimmed, while a new filter loads.
+  const runsQuery = useEndpointQuery(endpoints.runs.list, {
+    params: { query: runsQueryString },
+    placeholderData: keepPreviousData,
+  });
+  const runs = runsQuery.data ?? null;
+  const runsLoading = runsQuery.isFetching;
+  const runsHitLimit = runs?.length === RUNS_FETCH_LIMIT;
 
-  useEffect(() => {
-    loadEvents();
-    loadSessions();
-    void loadUsers("").catch(() => {});
-    void loadAdminSongs("", false).catch(() => {});
-    void loadTestCheckins().catch(() => {});
-  }, [loadEvents, loadSessions, loadUsers, loadAdminSongs, loadTestCheckins]);
+  // A new event or session filter starts with no division or partnership filter.
+  const [runsFilteredFor, setRunsFilteredFor] = useState(runsQueryString);
+  if (runsFilteredFor !== runsQueryString) {
+    setRunsFilteredFor(runsQueryString);
+    setRunsDivisionFilter(null);
+    setRunsPartnershipFilter(null);
+    setRunsShowAllPartnerships(false);
+  }
 
-  // Refetch run history whenever the event or session filter changes.
-  useEffect(() => {
-    void loadRuns({ eventId: runsEventId, sessionId: runsSessionFilter }).catch(() => {});
-  }, [runsEventId, runsSessionFilter, loadRuns]);
+  const usersQueryResult = useEndpointQuery(endpoints.admin.users, {
+    params: usersDebouncedQuery ? { q: usersDebouncedQuery } : undefined,
+    placeholderData: keepPreviousData,
+  });
+  const users = usersQueryResult.data ?? null;
+  const usersLoading = usersQueryResult.isFetching;
+
+  const adminSongsQueryString = useMemo(() => {
+    const params = new URLSearchParams();
+    if (adminSongsDebouncedQuery) params.set("q", adminSongsDebouncedQuery);
+    if (adminSongsIncludeDeleted) params.set("include_deleted", "true");
+    return params.toString() || undefined;
+  }, [adminSongsDebouncedQuery, adminSongsIncludeDeleted]);
+  const adminSongsQueryResult = useEndpointQuery(endpoints.admin.songs, {
+    params: { query: adminSongsQueryString },
+    placeholderData: keepPreviousData,
+  });
+  const adminSongs = adminSongsQueryResult.data ?? null;
+  const adminSongsLoading = adminSongsQueryResult.isFetching;
+
+  const tcQuery = useEndpointQuery(endpoints.admin.testCheckins);
+  const tcData = tcQuery.data ?? null;
+
+  const createEvent = useEndpointMutation(endpoints.events.create, { invalidates: [endpoints.events.list] });
+  const updateEvent = useEndpointMutation(endpoints.events.update, {
+    invalidates: [endpoints.events.list, endpoints.sessions.list],
+  });
+  const removeEvent = useEndpointMutation(endpoints.events.remove, {
+    invalidates: [endpoints.events.list, endpoints.sessions.list],
+  });
+  const createSession = useEndpointMutation(endpoints.sessions.create, { invalidates: [endpoints.sessions.list] });
+  const updateSession = useEndpointMutation(endpoints.sessions.update, { invalidates: [endpoints.sessions.list] });
+  const setSessionDivisions = useEndpointMutation(endpoints.sessions.setDivisions, {
+    invalidates: [endpoints.sessions.list],
+  });
+  const removeSession = useEndpointMutation(endpoints.sessions.remove, { invalidates: [endpoints.sessions.list] });
+  const injectCheckin = useEndpointMutation(endpoints.admin.injectCheckin, {
+    invalidates: [endpoints.admin.testCheckins],
+  });
+  const clearTestCheckins = useEndpointMutation(endpoints.admin.clearTestCheckins, {
+    invalidates: [endpoints.admin.testCheckins],
+  });
+  const setRole = useEndpointMutation(endpoints.admin.setUserRole, { invalidates: [endpoints.admin.users] });
 
   const runsVisibleEvents = useMemo(
     () =>
@@ -438,20 +402,11 @@ export default function AdminPage() {
     return () => clearTimeout(t);
   }, [usersQuery]);
 
-  // Refetch users whenever the debounced query changes (including initial empty).
-  useEffect(() => {
-    void loadUsers(usersDebouncedQuery).catch(() => {});
-  }, [usersDebouncedQuery, loadUsers]);
-
   // Same debounce + refetch pattern for the Songs tab.
   useEffect(() => {
     const t = setTimeout(() => setAdminSongsDebouncedQuery(adminSongsQuery.trim()), 300);
     return () => clearTimeout(t);
   }, [adminSongsQuery]);
-
-  useEffect(() => {
-    void loadAdminSongs(adminSongsDebouncedQuery, adminSongsIncludeDeleted).catch(() => {});
-  }, [adminSongsDebouncedQuery, adminSongsIncludeDeleted, loadAdminSongs]);
 
   const adminSongYears = useMemo(() => {
     const set = new Set<string>();
@@ -490,9 +445,8 @@ export default function AdminPage() {
     const id = pendingDeleteEventId;
     setPendingDeleteEventId(null);
     try {
-      await call(api, endpoints.events.remove, { params: { id: id } });
+      await removeEvent.mutateAsync({ params: { id } });
       toast.success("Event deleted");
-      setEvents((prev) => prev?.filter((e) => e.id !== id) ?? null);
       void reloadMe();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Delete failed");
@@ -535,9 +489,8 @@ export default function AdminPage() {
     setEvSubmitting(true);
     try {
       if (evEditId) {
-        // Edit mode — PATCH the existing event and merge the response back
-        // into local state so the table updates without a full refetch.
-        const updated = await call(api, endpoints.events.update, { params: { id: evEditId }, body: {
+        // Edit mode — PATCH the existing event; the lists refetch.
+        await updateEvent.mutateAsync({ params: { id: evEditId }, body: {
           name: evName.trim(),
           start_date: evStartDate,
           end_date: evEndDate,
@@ -545,13 +498,10 @@ export default function AdminPage() {
           season_year: trimmedSeason || undefined,
         } });
         toast.success("Event updated");
-        setEvents((prev) =>
-          prev?.map((e) => (e.id === updated.id ? updated : e)) ?? null
-        );
         void reloadMe();
       } else {
-        // Create mode — POST and prepend.
-        const created = await call(api, endpoints.events.create, { body: {
+        // Create mode — POST; the list refetches.
+        await createEvent.mutateAsync({ body: {
           name: evName.trim(),
           start_date: evStartDate,
           end_date: evEndDate,
@@ -559,7 +509,6 @@ export default function AdminPage() {
           season_year: trimmedSeason || undefined,
         } });
         toast.success("Event created");
-        setEvents((prev) => (prev ? [created, ...prev] : [created]));
       }
       setEvDialogOpen(false);
       setEvEditId(null);
@@ -650,9 +599,8 @@ export default function AdminPage() {
     setPendingDeleteSession(null);
     setSessDeletingId(s.id);
     try {
-      await call(api, endpoints.sessions.remove, { params: { id: s.id } });
+      await removeSession.mutateAsync({ params: { id: s.id } });
       toast.success("Session deleted");
-      setSessions((prev) => prev?.filter((x) => x.id !== s.id) ?? null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to delete session");
     } finally {
@@ -728,7 +676,7 @@ export default function AdminPage() {
         // necessary because the PATCH can succeed while the PUT errors,
         // leaving the row half-updated.
         try {
-          await call(api, endpoints.sessions.update, { params: { id: sessEditId }, body: {
+          await updateSession.mutateAsync({ params: { id: sessEditId }, body: {
             event_id: sessEventId,
             name: sessionName,
             date: sessDate,
@@ -745,7 +693,7 @@ export default function AdminPage() {
           );
         }
         try {
-          await call(api, endpoints.sessions.setDivisions, { params: { id: sessEditId }, body: { divisions } });
+          await setSessionDivisions.mutateAsync({ params: { id: sessEditId }, body: { divisions } });
         } catch (err) {
           throw new Error(
             `Session fields saved, but failed to update divisions: ${err instanceof Error ? err.message : String(err)}`,
@@ -754,7 +702,7 @@ export default function AdminPage() {
         }
         toast.success("Session updated");
       } else {
-        await call(api, endpoints.sessions.create, { body: {
+        await createSession.mutateAsync({ body: {
           event_id: sessEventId,
           name: sessionName,
           date: sessDate,
@@ -769,7 +717,6 @@ export default function AdminPage() {
       }
       setSessDialogOpen(false);
       setSessEditId(null);
-      loadSessions();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save session");
     } finally {
@@ -791,7 +738,7 @@ export default function AdminPage() {
     }
     setTcSubmitting(true);
     try {
-      const result = await call(api, endpoints.admin.injectCheckin, { body: {
+      const result = await injectCheckin.mutateAsync({ body: {
         sessionId: tcSessionId,
         divisionName: tcDivision,
         leaderFirstName: tcLeaderFirst.trim(),
@@ -807,7 +754,6 @@ export default function AdminPage() {
       setTcFollowerFirst("Follower");
       setTcFollowerLast(randomFourDigitTag());
       setTcDivision(randomDivision(divisionOptions));
-      void loadTestCheckins().catch(() => {});
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Check-in failed");
     } finally {
@@ -820,9 +766,8 @@ export default function AdminPage() {
     if (!tcData) return;
     setTcDeleting(true);
     try {
-      const { deleted } = await call(api, endpoints.admin.clearTestCheckins);
+      const { deleted } = await clearTestCheckins.mutateAsync(undefined);
       toast.success(`Deleted ${deleted} check-in${deleted === 1 ? "" : "s"}`);
-      setTcData([]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Delete failed");
     } finally {
@@ -833,19 +778,15 @@ export default function AdminPage() {
   // ── User role management ────────────────────────────────────────────────────
 
   /**
-   * Patch a user's role server-side, then merge the response into local state
-   * so the UI reflects the change without a full refetch. The server is the
-   * source of truth — we mirror its response rather than predicting it. The
+   * Patch a user's role server-side; the users list refetches, so the UI shows
+   * what the server stored rather than a prediction of it. The
    * self-demote case is also blocked server-side; the UI just hides the
    * toggle for the current admin's own row to make it obvious.
    */
   const setUserRole = async (userId: string, nextRole: "user" | "admin") => {
     setUserRoleSubmitting((prev) => ({ ...prev, [userId]: true }));
     try {
-      const updated = await call(api, endpoints.admin.setUserRole, { params: { id: userId }, body: { role: nextRole } });
-      setUsers((prev) =>
-        prev?.map((u) => (u.id === updated.id ? updated : u)) ?? null
-      );
+      const updated = await setRole.mutateAsync({ params: { id: userId }, body: { role: nextRole } });
       toast.success(
         nextRole === "admin"
           ? `${updated.email} is now an admin`
@@ -1067,7 +1008,9 @@ export default function AdminPage() {
               Show completed
             </label>
           </div>
-          {loadingEvents && !events ? (
+          {eventsQuery.error && !events ? (
+            <QueryError what="events" error={eventsQuery.error} onRetry={() => void eventsQuery.refetch()} />
+          ) : loadingEvents && !events ? (
             <Skeleton className="h-40 w-full" />
           ) : (
             <div className={`space-y-4${loadingEvents ? " opacity-60" : ""}`}>
@@ -1101,7 +1044,9 @@ export default function AdminPage() {
               Show cancelled
             </label>
           </div>
-          {loadingSessions && !sessions ? (
+          {sessionsQuery.error && !sessions ? (
+            <QueryError what="sessions" error={sessionsQuery.error} onRetry={() => void sessionsQuery.refetch()} />
+          ) : loadingSessions && !sessions ? (
             <Skeleton className="h-40 w-full" />
           ) : (
             <div className={`space-y-4${loadingSessions ? " opacity-60" : ""}`}>
@@ -1234,9 +1179,11 @@ export default function AdminPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() =>
-                    void loadRuns({ eventId: runsEventId, sessionId: runsSessionFilter })
-                  }
+                  onClick={() => {
+                    clearRunsFilters();
+                    setRunsShowAllPartnerships(false);
+                    void runsQuery.refetch();
+                  }}
                   disabled={runsLoading}
                 >
                   {runsLoading ? "Refreshing…" : "Refresh"}
@@ -1356,7 +1303,9 @@ export default function AdminPage() {
                 </>
               )}
 
-              {runs === null ? (
+              {runsQuery.error && !runs ? (
+                <QueryError what="run history" error={runsQuery.error} onRetry={() => void runsQuery.refetch()} />
+              ) : runs === null ? (
                 <Skeleton className="h-32 w-full" />
               ) : runs.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
@@ -1474,9 +1423,7 @@ export default function AdminPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() =>
-                  void loadAdminSongs(adminSongsDebouncedQuery, adminSongsIncludeDeleted)
-                }
+                onClick={() => void adminSongsQueryResult.refetch()}
                 disabled={adminSongsLoading}
               >
                 {adminSongsLoading ? "Refreshing…" : "Refresh"}
@@ -1515,7 +1462,9 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {adminSongs === null ? (
+          {adminSongsQueryResult.error && !adminSongs ? (
+            <QueryError what="songs" error={adminSongsQueryResult.error} onRetry={() => void adminSongsQueryResult.refetch()} />
+          ) : adminSongs === null ? (
             <Skeleton className="h-32 w-full" />
           ) : adminSongs.length === 0 ? (
             <p className="text-sm text-muted-foreground">
@@ -1663,7 +1612,7 @@ export default function AdminPage() {
               </h2>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm"
-                  onClick={() => void loadTestCheckins()} disabled={tcDeleting}>
+                  onClick={() => void tcQuery.refetch()} disabled={tcDeleting}>
                   Refresh
                 </Button>
                 <Button variant="destructive" size="sm"
@@ -1674,7 +1623,9 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {tcData === null ? (
+            {tcQuery.error && !tcData ? (
+              <QueryError what="test check-ins" error={tcQuery.error} onRetry={() => void tcQuery.refetch()} />
+            ) : tcData === null ? (
               <Skeleton className="h-24 w-full" />
             ) : tcData.length === 0 ? (
               <p className="text-sm text-muted-foreground">No test check-ins yet.</p>
@@ -1735,7 +1686,7 @@ export default function AdminPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => void loadUsers(usersDebouncedQuery)}
+              onClick={() => void usersQueryResult.refetch()}
               disabled={usersLoading}
             >
               {usersLoading ? "Refreshing…" : "Refresh"}
@@ -1745,7 +1696,9 @@ export default function AdminPage() {
             </span>
           </div>
 
-          {users === null ? (
+          {usersQueryResult.error && !users ? (
+            <QueryError what="users" error={usersQueryResult.error} onRetry={() => void usersQueryResult.refetch()} />
+          ) : users === null ? (
             <Skeleton className="h-32 w-full" />
           ) : users.length === 0 ? (
             <p className="text-sm text-muted-foreground">

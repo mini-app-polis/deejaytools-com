@@ -1,21 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import { useEffect, useMemo, useState } from "react";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointQuery } from "@/api/queries";
+import QueryError from "@/components/QueryError";
 import { SessionInfoHeader } from "@/components/SessionInfoHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChoiceGroup } from "@/components/ui/choice-group";
 import { useQueueActions, WithdrawEntryDialog } from "@/components/staff/queueActions";
 import { useAuthMe } from "@/hooks/useAuthMe";
+import { useLiveQueues } from "@/hooks/useLiveQueues";
 import { richestEventRole } from "@/lib/eventRoles";
 import { compareSessionChrono } from "@/lib/chronoSort";
 import { formatSessionTitle } from "@/lib/sessionFormat";
 import { cn } from "@/lib/utils";
 import type { ApiEvent, ApiQueueEntry, ApiSession } from "@/schemas";
-
-/** How often the queues refresh on their own while a session is open. */
-const POLL_MS = 8000;
 
 function isLive(s: ApiSession): boolean {
   return s.status === "checkin_open" || s.status === "in_progress";
@@ -38,81 +36,37 @@ function formatAgo(ms: number): string {
  * session, which the API resolves to the event before deciding.
  */
 export default function LiveQueueSection({ event }: { event: ApiEvent }) {
-  const api = useApiClient();
   // A DJ finds the song's file in the event's Drive folder by its processed
   // filename, so DJs see it under the song; other staff see the label only.
   const { eventRoles } = useAuthMe();
   const showFilename = richestEventRole(eventRoles, event.id) === "dj";
-  const [sessions, setSessions] = useState<ApiSession[] | null>(null);
+  const sessionsQuery = useEndpointQuery(endpoints.sessions.list, { params: { eventId: event.id } });
+  const sessions = sessionsQuery.data ?? null;
   const [sessionId, setSessionId] = useState("");
-  const [active, setActive] = useState<ApiQueueEntry[]>([]);
-  const [priority, setPriority] = useState<ApiQueueEntry[]>([]);
-  const [standard, setStandard] = useState<ApiQueueEntry[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
-  const [refreshFailed, setRefreshFailed] = useState(false);
+  const {
+    active,
+    priority,
+    nonPriority: standard,
+    loading,
+    updatedAt,
+    refreshFailed,
+    loadError,
+    refresh,
+  } = useLiveQueues(sessionId);
   const [now, setNow] = useState(() => Date.now());
-  const sessionRef = useRef(sessionId);
-  sessionRef.current = sessionId;
 
+  // One session running now: open it straight away.
   useEffect(() => {
-    let cancelled = false;
-    call(api, endpoints.sessions.list, { params: { eventId: event.id } })
-      .then((rows) => {
-        if (cancelled) return;
-        setSessions(rows);
-        // One session running now: open it straight away.
-        const live = rows.filter(isLive);
-        if (live.length === 1) setSessionId((cur) => cur || live[0]!.id);
-      })
-      .catch((e: Error) => {
-        if (cancelled) return;
-        setSessions([]);
-        toast.error(e.message);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, event.id]);
+    const live = sessions?.filter(isLive) ?? [];
+    if (live.length === 1) setSessionId((cur) => cur || live[0]!.id);
+  }, [sessions]);
 
-  const loadQueues = useCallback(
-    async (id: string, silent = false) => {
-      if (!id) return;
-      if (!silent) setLoading(true);
-      try {
-        const [a, p, n] = await Promise.all([
-          call(api, endpoints.queue.activeStaff, { params: { sessionId: id } }),
-          call(api, endpoints.queue.priority, { params: { sessionId: id } }),
-          call(api, endpoints.queue.nonPriority, { params: { sessionId: id } }),
-        ]);
-        if (sessionRef.current !== id) return;
-        setActive(a);
-        setPriority(p);
-        setStandard(n);
-        setUpdatedAt(Date.now());
-        setRefreshFailed(false);
-      } catch (e) {
-        setRefreshFailed(true);
-        if (!silent) toast.error(e instanceof Error ? e.message : "Failed to load queues");
-      } finally {
-        if (!silent) setLoading(false);
-      }
-    },
-    [api]
-  );
-
+  // The "Updated 5s ago" clock.
   useEffect(() => {
     if (!sessionId) return;
-    setUpdatedAt(null);
-    setRefreshFailed(false);
-    void loadQueues(sessionId);
-    const poll = setInterval(() => void loadQueues(sessionId, true), POLL_MS);
     const tick = setInterval(() => setNow(Date.now()), 1000);
-    return () => {
-      clearInterval(poll);
-      clearInterval(tick);
-    };
-  }, [sessionId, loadQueues]);
+    return () => clearInterval(tick);
+  }, [sessionId]);
 
   const options = useMemo(
     () =>
@@ -130,9 +84,9 @@ export default function LiveQueueSection({ event }: { event: ApiEvent }) {
 
   const session = sessions?.find((s) => s.id === sessionId) ?? null;
 
-  const actions = useQueueActions(api, () => loadQueues(sessionRef.current));
+  const actions = useQueueActions();
 
-  const renderRow = (row: ApiQueueEntry, list: ApiQueueEntry[], isActiveQueue: boolean) => {
+  const renderRow = (row: ApiQueueEntry, list: readonly ApiQueueEntry[], isActiveQueue: boolean) => {
     const isSlotOne = isActiveQueue && row.position === 1;
     const isLast = row.position === list.length;
     return (
@@ -195,7 +149,7 @@ export default function LiveQueueSection({ event }: { event: ApiEvent }) {
     );
   };
 
-  const renderList = (list: ApiQueueEntry[], empty: string, isActiveQueue = false) =>
+  const renderList = (list: readonly ApiQueueEntry[], empty: string, isActiveQueue = false) =>
     list.length === 0 ? (
       <p className="text-sm text-muted-foreground">{empty}</p>
     ) : (
@@ -208,7 +162,9 @@ export default function LiveQueueSection({ event }: { event: ApiEvent }) {
   return (
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-        {sessions === null ? null : options.length === 0 ? (
+        {sessionsQuery.error && !sessions ? (
+          <QueryError what="sessions" error={sessionsQuery.error} onRetry={() => void sessionsQuery.refetch()} />
+        ) : sessions === null ? null : options.length === 0 ? (
           <p className="text-sm text-muted-foreground">This event has no sessions yet.</p>
         ) : (
           <ChoiceGroup ariaLabel="Session" options={options} value={sessionId} onChange={setSessionId} />
@@ -216,7 +172,7 @@ export default function LiveQueueSection({ event }: { event: ApiEvent }) {
         {sessionId && (
           <button
             type="button"
-            onClick={() => void loadQueues(sessionId)}
+            onClick={() => void refresh()}
             disabled={loading}
             title="Refresh now"
             className={cn(
@@ -239,7 +195,11 @@ export default function LiveQueueSection({ event }: { event: ApiEvent }) {
         <p className="text-sm text-muted-foreground">Choose a session above to manage its queue.</p>
       )}
 
-      {sessionId && (
+      {sessionId && loadError && (
+        <QueryError what="the queues" error={loadError} onRetry={() => void refresh()} />
+      )}
+
+      {sessionId && !loadError && (
         <div className={cn("space-y-4", loading && "opacity-60")}>
           {session && <SessionInfoHeader session={session} showTitle={false} />}
           <Card className="border-primary/30">

@@ -1,6 +1,9 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { call, endpoints, type Transport } from "@/api/endpoints";
+import { useApiClient } from "@/api/client";
+import { call, endpoints } from "@/api/endpoints";
+import { queryKey, type KeyedEndpoint } from "@/api/queryKeys";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,13 +21,29 @@ export type QueueActionEndpoint =
   | typeof endpoints.queue.moveDown
   | typeof endpoints.queue.withdraw;
 
+/** What a queue action changes: every queue, the sessions, runs and check-ins. */
+const QUEUE_ACTION_READS: readonly KeyedEndpoint<never>[] = [
+  endpoints.queue.active,
+  endpoints.queue.activeStaff,
+  endpoints.queue.waiting,
+  endpoints.queue.priority,
+  endpoints.queue.nonPriority,
+  endpoints.sessions.get,
+  endpoints.sessions.list,
+  endpoints.runs.list,
+  endpoints.checkins.mine,
+];
+
 /**
  * Runs the live queue's actions one at a time. While an action and the
- * reload after it are in flight, `busy` is true and further actions are
- * ignored, so a double tap on Move down moves one place, not two. Withdraw
- * goes through `requestWithdraw` and only runs once confirmed.
+ * refetch of the queue and session queries after it are in flight, `busy` is
+ * true and further actions are ignored, so a double tap on Move down moves one
+ * place, not two. Withdraw goes through `requestWithdraw` and only runs once
+ * confirmed.
  */
-export function useQueueActions(api: Transport, reload: () => Promise<void>) {
+export function useQueueActions() {
+  const api = useApiClient();
+  const client = useQueryClient();
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [pendingWithdraw, setPendingWithdraw] = useState<ApiQueueEntry | null>(null);
@@ -35,7 +54,9 @@ export function useQueueActions(api: Transport, reload: () => Promise<void>) {
     setBusy(true);
     try {
       await call(api, ep as typeof endpoints.queue.complete, { body: { queueEntryId } });
-      await reload();
+      await Promise.all(
+        QUEUE_ACTION_READS.map((read) => client.invalidateQueries({ queryKey: queryKey(read) }))
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Action failed");
     } finally {

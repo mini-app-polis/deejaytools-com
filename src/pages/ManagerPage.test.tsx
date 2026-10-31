@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -39,9 +39,10 @@ vi.mock("@clerk/clerk-react", () => ({
 import ManagerPage from "./ManagerPage";
 import { fx } from "@/test/fixtures";
 import { toast } from "sonner";
+import { renderWithQueryClient } from "@/test/render";
 
 function renderPage(path: string = "/manager/active-sessions") {
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/manager/:section" element={<ManagerPage />} />
@@ -163,7 +164,7 @@ describe("ManagerPage — Event Songs section", () => {
     expect(screen.getByText(/eve solo/i)).toBeInTheDocument();
   });
 
-  it("still renders the section when admin submissions reject", async () => {
+  it("shows a failed submissions load inline, not as an empty list", async () => {
     mockManagerGets({
       submissions: () => Promise.reject(new Error("not found")),
     });
@@ -177,9 +178,11 @@ describe("ManagerPage — Event Songs section", () => {
 
     await user.click(screen.getByRole("button", { name: /spring classic/i }));
 
-    expect(
-      await screen.findByText(/no songs submitted to this event yet/i)
-    ).toBeInTheDocument();
+    // A failed load is shown as one, never as an empty list.
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Couldn't load submitted songs: not found"
+    );
+    expect(screen.queryByText(/no songs submitted to this event yet/i)).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /^manager$/i })).toBeInTheDocument();
   });
 });
@@ -624,7 +627,8 @@ describe("ManagerPage — Upload For", () => {
 
     fail = true;
     await user.type(box, "z");
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("search down"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load users: search down");
+    expect(screen.queryByText("No matches.")).not.toBeInTheDocument();
   });
 
   it("ignores a late result for an earlier query", async () => {
@@ -818,8 +822,8 @@ describe("ManagerPage — CheckIn For", () => {
 
     fail = true;
     await user.type(box, "bob");
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("search down"));
-    expect(screen.getByText("No matches.")).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load users: search down");
+    expect(screen.queryByText("No matches.")).not.toBeInTheDocument();
   });
 });
 
