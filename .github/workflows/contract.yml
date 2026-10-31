@@ -65,7 +65,7 @@ jobs:
         with:
           node-version: "22"
           cache: "pnpm"
-      - run: pnpm install
+      - run: pnpm install --frozen-lockfile
         if: steps.config.outputs.ready == 'true'
       - run: pnpm test:contract
         if: steps.config.outputs.ready == 'true'
