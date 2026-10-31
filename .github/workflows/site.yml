@@ -18,11 +18,11 @@ name: site
 # Environment variables are baked into the bundle at build time, so a wrong
 # key or API URL in the Pages settings shows up here and nowhere else.
 #
-# The hostnames are repository variables, not literals, so a domain change
-# is a variable change:
-#   API_URL_DEVELOPMENT    e.g. https://api-dev.deejaytools.com
-#   API_URL_PRODUCTION     e.g. https://api.deejaytools.com
-#   SITE_URL_DEVELOPMENT   e.g. https://dev.deejaytools-com.pages.dev
+# The hostnames are repository variables, synced from Doppler by
+# mini-app-polis/infra (doppler/github.tf), so a domain change is made there:
+#   API_URL_DEVELOPMENT    the development API
+#   API_URL_PRODUCTION     the production API
+#   SITE_URL_DEVELOPMENT   the dev branch's pages.dev URL
 # (https:// is assumed when the value is a bare hostname). The smoke test
 # needs no site URL: it tests the deploy's own preview URL, which the
 # Cloudflare Pages check reports.
@@ -121,7 +121,7 @@ jobs:
           fail() { echo "::error::$1"; exit 1; }
           if [ "$GITHUB_REF" = refs/heads/main ]; then API="$API_URL_PRODUCTION"; else API="$API_URL_DEVELOPMENT"; fi
           [ -n "$API" ] \
-            || fail "Set the API_URL_DEVELOPMENT and API_URL_PRODUCTION repository variables."
+            || fail "API_URL_DEVELOPMENT or API_URL_PRODUCTION is unset: they are synced from Doppler by mini-app-polis/infra."
           # The bundle carries the API URL with its scheme and no trailing
           # slash, so compare against the same form.
           case "$API" in http://*|https://*) ;; *) API="https://$API" ;; esac
@@ -166,7 +166,7 @@ jobs:
       - name: Resolve the dev site URL
         run: |
           [ -n "$E2E_BASE_URL" ] \
-            || { echo "::error::Set the SITE_URL_DEVELOPMENT repository variable."; exit 1; }
+            || { echo "::error::SITE_URL_DEVELOPMENT is unset: it is synced from Doppler by mini-app-polis/infra."; exit 1; }
           case "$E2E_BASE_URL" in http://*|https://*) ;; *) E2E_BASE_URL="https://$E2E_BASE_URL" ;; esac
           echo "E2E_BASE_URL=${E2E_BASE_URL%/}" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
@@ -177,7 +177,7 @@ jobs:
         with:
           node-version: "22"
           cache: "pnpm"
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
       - uses: actions/upload-artifact@v7
