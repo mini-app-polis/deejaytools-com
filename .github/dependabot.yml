@@ -34,15 +34,23 @@
 # publishes to the Cloudflare preview URL and to the Railway development
 # environment, so a bad bump surfaces there instead of in production.
 #
-# Two asymmetries are worth knowing. Dependabot reads this file from the
-# *default* branch only, so this config has to be on `main` to take effect
-# even though every version-update pull request targets `dev`. And
-# Dependabot security updates ignore `target-branch` entirely — they
-# always open against the default branch, and take their settings only
-# from an entry without a non-default `target-branch`. The last entry
-# exists for that reason alone: version updates are switched off there
-# (`open-pull-requests-limit: 0`), and it groups every security fix into
-# one pull request.
+# Dependabot reads this file from the *default* branch only, so this
+# config has to be on `main` to take effect even though every
+# version-update pull request targets `dev`.
+#
+# There is deliberately no security-updates entry: security fixes land on
+# `dev` like every other change and reach `main` only through the
+# promotion pull request (ecosystem-standards CD-034). Dependabot security
+# updates cannot do that: they ignore `target-branch` and always open
+# against `main`, where automerge never merges, so they are off in the
+# repository settings. Dependabot alerts stay on there, as an independent
+# list of open advisories.
+#
+# dependency-fix.yml in mini-app-polis/.github re-locks uv repositories
+# only, so here the fix is made on `dev` when CI's dependency audit
+# (SEC-003) flags an advisory: a bump of the direct dependency, or an entry
+# under `pnpm.overrides` in package.json for a transitive one. The weekly
+# version updates above keep most advisories from arising.
 version: 2
 updates:
   - package-ecosystem: "npm"
@@ -86,17 +94,3 @@ updates:
         patterns: ["*"]
     commit-message:
       prefix: "ci(deps)"
-
-  - package-ecosystem: "npm"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "sunday"
-    open-pull-requests-limit: 0
-    groups:
-      security:
-        applies-to: security-updates
-        patterns: ["*"]
-    commit-message:
-      prefix: "fix(deps)"
-      prefix-development: "chore(deps)"

@@ -84,7 +84,7 @@ The nav bar's version text comes from `NavBar.tsx` importing `package.json` dire
 3. `pnpm typecheck`
 4. `pnpm lint`
 5. `pnpm test:coverage`
-6. `pnpm build`
+6. `pnpm build`, with a placeholder `pk_test_` Clerk publishable key (for `clerk.example.com`). Without a key `src/main.tsx` throws before rendering, so the bundler drops the app as unreachable and the build output is not the real bundle; with one, CI builds — and reports chunk sizes for — the bundle Pages ships. The CI bundle is never deployed.
 
 **`security` job** runs in parallel: the fleet's shared security workflow (gitleaks, `pnpm audit`, semgrep, CycloneDX SBOM).
 

@@ -13,19 +13,19 @@ Orientation for a developer who has never opened this codebase. The app is a Vit
 | Routing | **React Router 7** | `BrowserRouter` in `App.tsx` |
 | Styling | **Tailwind CSS 4** (`@tailwindcss/vite`) | CSS variables for theme tokens; `tw-animate-css` |
 | Auth | **Clerk** (`@clerk/clerk-react`) | JWT via `getToken()`; `ClerkProvider` in `main.tsx` |
+| Server state | **TanStack Query** (`@tanstack/react-query`) | One `QueryClient` (`api/queryClient.ts`), provided in `main.tsx`; see §3 |
 | Components | **shadcn/ui** | Radix primitives + Tailwind; config in `components.json` |
 | Toasts | **sonner** | `<Toaster />` in `App.tsx` — not a shadcn toast |
-| Forms | **react-hook-form** + **@hookform/resolvers** | Used where multi-field validation matters |
+| Forms | **react-hook-form** + **@hookform/resolvers** | `useForm` with a zod schema through `zodResolver` holds a form's fields and validation; forms still keeping one `useState` per field are moving over to it |
 | Types | **`@/schemas`** (`src/schemas`) | API contract shapes — the app's own view of api-deejaytools' contract |
 | Envelopes | **`src/api/envelope.ts`** | `{ data, meta }` / `{ error }` response typing |
 | Observability | **@sentry/react** | Init in `lib/instrument.ts` before React mounts |
 
 **What is intentionally *not* here:**
 
-- **No TanStack Query / react-query** — no global cache, no stale-time config, no `useQuery` to grep for.
 - **No Redux, Zustand, Jotai, or similar** — no store file, no slices, no selectors.
 
-**Data fetching is local:** each page owns its own `useState` + `useEffect` (or event handlers) and calls `useApiClient()` directly. That keeps the bundle small and makes each screen self-contained, at the cost of duplicated loading/error patterns and no automatic deduplication. If you find yourself hunting for “where the global fetch layer lives,” stop — there isn't one. [ADR-0003](decisions/ADR-0003-shared-data-fetching-with-tanstack-query.md) adopts TanStack Query as that layer; until a page is migrated, it fetches locally as described here.
+**Data fetching is moving onto TanStack Query** ([ADR-0003](decisions/ADR-0003-shared-data-fetching-with-tanstack-query.md)). Server state is read with `useEndpointQuery` and changed with `useEndpointMutation` (`api/queries.ts`, §3), which share one cache, deduplicate requests, cancel stale responses and refetch what a mutation invalidates. `useState` stays for what the user is editing and for UI state. The migration goes page by page in the order ADR-0003 lists; until a page is migrated it still owns its own `useState` + `useEffect` around `call(api, …)`, so both patterns are in the tree. New code uses the query hooks — `SessionsPage` is the reference.
 
 ---
 
@@ -33,7 +33,7 @@ Orientation for a developer who has never opened this codebase. The app is a Vit
 
 ```
 src/
-├── api/           HTTP client hook (the default way to talk to the API)
+├── api/           HTTP client hook, endpoint catalog, and the TanStack Query layer over them
 ├── components/    Shared UI, guards, layout, domain sections
 │   ├── help/      HelpLayout, HelpSection, HelpStillStuck, helpTopics
 │   ├── manager/   ManagerGuideSection (manager ops guide tab)
@@ -45,8 +45,8 @@ src/
 │   └── help/      Seven /how-it-works/* topic pages
 ├── contract/      Live contract suite (`pnpm test:contract`)
 ├── schemas/       zod schemas for API responses (`@/schemas`)
-├── test/          Vitest global setup and `fx.*` fixtures
-├── main.tsx       Entry: Sentry → ClerkProvider → App
+├── test/          Vitest global setup, `fx.*` fixtures, `renderWithQueryClient`
+├── main.tsx       Entry: Sentry → ClerkProvider → QueryClientProvider → App
 ├── index.css      Tailwind + shadcn CSS variables
 └── vite-env.d.ts  Vite client types (`import.meta.env`, etc.)
 ```
@@ -96,6 +96,7 @@ One default-export component per route. Pages orchestrate fetching, local state,
 | `AdminGuard.tsx` | Requires `role === "admin"` |
 | `ManagerGuard.tsx` | Requires `role === "admin"` — the API has no global manager role |
 | `AuthMeError.tsx` | What the guards show, with a retry, when `GET /v1/auth/me` fails |
+| `QueryError.tsx` | What a page shows, with a retry, where a query's data would be when it fails (§3) |
 | `MaintenancePage.tsx` | Replaces the whole app when the build has `VITE_MAINTENANCE=1` |
 | `EventRoleGuard.tsx` | Requires a staff role, or a richer one, on the event in `:eventId` |
 | `staff/` | Per-event staff portals: `StaffPortal` (shell + section tabs), `portalSections.tsx` (which sections each portal has) and one component per section |
@@ -145,10 +146,16 @@ One default-export component per route. Pages orchestrate fetching, local state,
 | File | Role |
 |------|------|
 | `components.json` | shadcn generator config + path aliases |
-| `vite.config.ts` | `@/` alias, API proxy, `VITE_APP_VERSION` injection |
+| `vite.config.ts` | `@/` alias, API proxy, `VITE_APP_VERSION` injection, bundle chunk groups (below) |
 | `vitest.config.ts` | Test runner; default `node` env, jsdom opt-in per file |
 | `vitest.contract.config.ts` | Live contract suite (`pnpm test:contract`) — see §3 |
 | `playwright.config.ts` | End-to-end suite (`pnpm test:e2e`, `e2e/`) against a deployed dev site |
+
+### Bundle chunks
+
+`build.rolldownOptions.output.codeSplitting.groups` in `vite.config.ts` splits the libraries out of the main chunk: `react` (React, React DOM, React Router), `clerk` (Clerk and its `swr`), `sentry`, and `vendor` for every other `node_modules` package. The main `index` chunk is then the app's own code. The admin, manager and per-event staff pages are lazy routes in `App.tsx` with chunks of their own; every other page is in the main chunk. The goal is that no chunk the public pages load passes Vite's 500 kB warning — when one does, the build prints the warning; add a group or make a route lazy rather than raising `chunkSizeWarningLimit`.
+
+Measure with a Clerk publishable key set (any `pk_test_…`, as CI does): without one `main.tsx` throws before rendering, the bundler drops the app as unreachable, and the reported sizes are not the real bundle's.
 
 ---
 
@@ -191,6 +198,22 @@ Responses are JSON envelopes, typed in `src/api/envelope.ts`:
 `del()` returns `undefined` for a `204`.
 
 **Sentry:** before throwing, the client calls `Sentry.captureException` with URL and status for a 5xx or an unreadable 2xx. **4xx are not sent to Sentry** — validation, auth, and not-found are expected user-facing failures, often caught and shown as toasts.
+
+### Queries and mutations (`api/queries.ts`, `api/queryKeys.ts`, `api/queryClient.ts`)
+
+Server state goes through TanStack Query (ADR-0003), and every request still goes through `call()`:
+
+```ts
+const { data, error, isLoading, refetch } = useEndpointQuery(endpoints.sessions.list, { params: { eventId } });
+const create = useEndpointMutation(endpoints.sessions.create, { invalidates: [endpoints.sessions.list] });
+create.mutate({ body: { … } }, { onError: (e) => toast.error(e.message) });
+```
+
+- **`useEndpointQuery(ep, { params, ...options })`** reads a GET endpoint. Params are required exactly when `call()` requires them; any other `useQuery` option (`enabled`, `refetchInterval`, `staleTime`, …) passes through. Pages never write a `queryKey` or `queryFn`.
+- **`useEndpointMutation(ep, { invalidates, ...options })`** sends `{ params, body }` through `call()`. On success it invalidates every query of each endpoint in `invalidates`, whatever its params, then runs the caller's `onSuccess`.
+- **Keys** come only from `queryKey(ep, params?)`: `[ep.id]`, or `[ep.id, params]` (e.g. `["sessions.list", { eventId: "e1" }]`). TanStack matches keys by prefix, so `queryKey(ep)` covers every variant.
+- **The client** (`queryClient.ts`) is created once and provided in `main.tsx` inside `ClerkProvider`, so every route and guard shares it. Defaults: no retry for an `ApiError` with a 4xx status or a `ContractViolation` (both answer the same way again); a bounded retry for network errors and 5xx (`shouldRetry`); a short `staleTime` so screens reading the same list share one request.
+- **Errors are shown, not swallowed.** Render a query's `error` where its data would be — `components/QueryError.tsx` gives the inline message and a "Try again" that calls `refetch` — so a failed load never reads as an empty list. Mutation failures keep using a toast. `isLoading` is true only with no data yet, so a background refetch never brings the skeleton back.
 
 ### Call sites that bypass the client
 
@@ -457,6 +480,10 @@ Installed shadcn primitives: `badge`, `button`, `card`, `dialog`, `form`, `input
 
 Default environment is **`node`** so pure tests do not pull DOM deps.
 
+### Coverage
+
+`pnpm test:coverage` counts every file under `src/` (the `coverage.include` / `exclude` in `vitest.config.ts`), not only the ones a test imports, so a file with no test shows as uncovered rather than missing from the report. The thresholds there are a floor: the run fails below them and rewrites them upward when coverage rises.
+
 ### Worked example — page that uses the API client
 
 From `SessionDetailPage.test.tsx` — the pattern used across page tests:
@@ -493,6 +520,8 @@ render(
 await waitFor(() => expect(screen.getByText(/…/)).toBeInTheDocument());
 expect(apiGet).toHaveBeenCalledWith("/v1/sessions/s1");
 ```
+
+A component that reads through the query hooks renders with `renderWithQueryClient(ui)` from `src/test/render.tsx` instead of `render(ui)`: it wraps the tree in a `QueryClientProvider` with a fresh client per render and retries off, so no cache or retry leaks between tests (`SessionsPage.test.tsx`). The `@/api/client` mock stays the same — the query functions call through it.
 
 **Key practices:**
 
@@ -546,8 +575,8 @@ Plus a **1 second** `lqNowTick` interval only to refresh the “Updated Xs ago�
 1. Create `src/pages/MyPage.tsx` (default export).
 2. Add a `<Route>` in `App.tsx` inside or outside `Layout` as appropriate.
 3. Wrap with `RequireAuth`, `AdminGuard`, `ManagerGuard` or `EventRoleGuard` if needed.
-4. Fetch with `useApiClient()` in `useEffect` / handlers — no new global layer.
-5. Add `MyPage.test.tsx` with `// @vitest-environment jsdom` if it renders UI.
+4. Read with `useEndpointQuery` and change with `useEndpointMutation` (§3); render a query's error with `QueryError`.
+5. Add `MyPage.test.tsx` with `// @vitest-environment jsdom` if it renders UI, rendering through `renderWithQueryClient`.
 6. Link from `NavBar` or an existing page if it should be discoverable.
 
 ### A new admin section
@@ -563,9 +592,9 @@ Same pattern with `MANAGER_SECTIONS`, `ManagerPage.tsx` `<TabsContent>`, and `MA
 
 ### A new API call
 
-1. Prefer `const api = useApiClient()` in the component or hook.
-2. Use types from `@/schemas` where available.
-3. Catch errors and `toast.error(e.message)` (or inline error state).
+1. Declare it in `api/endpoints.ts` (method, access, path, response schema).
+2. A read is `useEndpointQuery(endpoints.x.y, { params })`; a change is `useEndpointMutation(endpoints.x.y, { invalidates: [...] })` naming the endpoints whose data it changes. On a page not yet migrated, `call(useApiClient(), …)` in its existing effect is fine until that page moves.
+3. Show a query error inline (`QueryError`); toast a mutation error with `toast.error(e.message)`.
 4. Only use raw `fetch` if unauthenticated, non-React (chunk upload), or a documented exception.
 
 ### A new shadcn component
@@ -593,6 +622,7 @@ Config is in `components.json`; output goes to `src/components/ui/`. Import via 
 | Bootstrap | `main.tsx` |
 | Routes | `pages/App.tsx` |
 | HTTP | `api/client.ts` |
+| Server state | `api/queryClient.ts`, `api/queries.ts`, `api/queryKeys.ts` |
 | Profile / roles | `hooks/useAuthMe.ts` |
 | Clerk → DB sync | `components/AuthSync.tsx` |
 | Upload pipeline | `lib/chunkedSongUpload.ts`, `components/SongUploadForm.tsx` |

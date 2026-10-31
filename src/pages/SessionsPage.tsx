@@ -1,9 +1,7 @@
-import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { toast } from "sonner";
-import type { ApiSession } from "@/schemas";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointQuery } from "@/api/queries";
+import QueryError from "@/components/QueryError";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -41,24 +39,12 @@ function sessionStatusBadge(status: string) {
 }
 
 export default function SessionsPage() {
-  const api = useApiClient();
   const navigate = useNavigate();
-  const [sessions, setSessions] = useState<ApiSession[] | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: sessions, error, isLoading, isFetching, refetch } = useEndpointQuery(endpoints.sessions.list);
+  // Dims the list while a background refetch replaces cached data.
+  const loading = isFetching;
 
-  useEffect(() => {
-    let on = true;
-    setLoading(true);
-    call(api, endpoints.sessions.list)
-      .then((rows) => on && setSessions(rows))
-      .catch((e: Error) => on && toast.error(e.message))
-      .finally(() => on && setLoading(false));
-    return () => {
-      on = false;
-    };
-  }, [api]);
-
-  if (loading && !sessions) {
+  if (isLoading) {
     return (
       <div className="space-y-3">
         <Skeleton className="h-8 w-48" />
@@ -78,6 +64,8 @@ export default function SessionsPage() {
           All floor trials. Active and upcoming first; past sessions at the bottom.
         </p>
       </div>
+
+      {error && !sessions && <QueryError what="sessions" error={error} onRetry={() => void refetch()} />}
 
       {/* Mobile card list */}
       <div className={`sm:hidden space-y-3${loading ? " opacity-60" : ""}`}>

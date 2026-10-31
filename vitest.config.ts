@@ -22,6 +22,19 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "json"],
+      // Every source file counts, imported by a test or not, so an untested
+      // file shows up as uncovered instead of missing from the report. Left
+      // out: the tests themselves, the live contract suite (its own
+      // config), the entry point (it mounts the app on import), the global
+      // setup and the Vite type declarations.
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: [
+        "src/**/*.test.{ts,tsx}",
+        "src/contract/**",
+        "src/main.tsx",
+        "src/test/setup.ts",
+        "src/vite-env.d.ts",
+      ],
       // A floor, not a target: `pnpm test:coverage` fails if coverage drops
       // below where it already is. When a change raises it, running the same
       // command locally rewrites these numbers (rounded down) — commit them,
@@ -30,8 +43,8 @@ export default defineConfig({
       // (src/contract), and the core journeys by the e2e suite (e2e/).
       thresholds: {
         statements: 93,
-        branches: 83,
-        functions: 92,
+        branches: 84,
+        functions: 93,
         lines: 95,
         autoUpdate: (next: number) => Math.floor(next),
       },

@@ -1,10 +1,10 @@
-# ADR-0001. Browser observability stack
+# ADR-0001: Browser observability stack
 
-Date: 2026-04-24
+**Date:** 2026-04-24
+**Status:** Accepted
+**Repo:** deejaytools-com
 
-## Status
-
-Accepted
+---
 
 > **Note (2026-10):** `common-typescript-utils` has since been retired, so
 > the browser-compatible shared logger anticipated under Consequences will

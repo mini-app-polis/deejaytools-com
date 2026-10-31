@@ -1,10 +1,10 @@
-# ADR-0003. Shared data fetching with TanStack Query
+# ADR-0003: Shared data fetching with TanStack Query
 
-Date: 2026-10-30
+**Date:** 2026-10-30
+**Status:** Accepted
+**Repo:** deejaytools-com
 
-## Status
-
-Accepted
+---
 
 ## Context
 

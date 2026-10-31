@@ -75,6 +75,27 @@ export default defineConfig(({ mode }) => {
       "import.meta.env.VITE_CLERK_PUBLISHABLE_KEY": JSON.stringify(clerkPublishableKey),
       "import.meta.env.VITE_API_URL": JSON.stringify(apiUrl ?? ""),
     },
+    build: {
+      rolldownOptions: {
+        output: {
+          // Libraries in their own chunks, so no chunk the public pages load
+          // passes Vite's 500 kB warning, and a release that changes only app
+          // code leaves the library chunks cached. A library that only the
+          // lazy admin/manager/staff pages use lands in `vendor` too and so
+          // loads up front; give it its own group if that ever grows large.
+          // Check sizes with a Clerk key set: without one the build drops the
+          // app (docs/ARCHITECTURE.md §2).
+          codeSplitting: {
+            groups: [
+              { name: "react", test: /node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/, priority: 3 },
+              { name: "clerk", test: /node_modules[\\/](@clerk|swr)[\\/]/, priority: 3 },
+              { name: "sentry", test: /node_modules[\\/]@sentry[\\/]/, priority: 3 },
+              { name: "vendor", test: /node_modules[\\/]/, priority: 1 },
+            ],
+          },
+        },
+      },
+    },
     server: {
       port: 5173,
       proxy: {

@@ -21,7 +21,7 @@ const { apiGet, apiPatch, apiClient, reload, meState } = vi.hoisted(() => {
     apiGet: vi.fn(),
     apiPatch: vi.fn(),
     reload: vi.fn(async () => undefined),
-    meState: { me, loading: false },
+    meState: { me: me as ApiAuthMe | null, loading: false, error: null as string | null },
     apiClient: {
       get: vi.fn(),
       post: vi.fn(),
@@ -42,6 +42,7 @@ vi.mock("@/hooks/useAuthMe", () => ({
   useAuthMe: () => ({
     me: meState.me,
     loading: meState.loading,
+    error: meState.error,
     reload,
     isAdmin: false,
   }),
@@ -77,6 +78,7 @@ beforeEach(() => {
     event_roles: [],
   };
   meState.loading = false;
+  meState.error = null;
   vi.mocked(toast.success).mockReset();
   vi.mocked(toast.error).mockReset();
 });
@@ -135,5 +137,84 @@ describe("MyProfilePage", () => {
     });
     expect(reload).toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalledWith("Profile updated");
+  });
+
+  it("shows a skeleton instead of the form while the profile is loading", () => {
+    meState.me = null;
+    meState.loading = true;
+    const { container } = renderPage();
+
+    expect(container.querySelector(".animate-pulse")).not.toBeNull();
+    expect(screen.queryByLabelText(/^first name$/i)).toBeNull();
+  });
+
+  it("shows a failed profile load with a retry instead of an empty form", async () => {
+    meState.me = null;
+    meState.error = "server down";
+    renderPage();
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Couldn't load your account: server down");
+    expect(screen.queryByLabelText(/^first name$/i)).toBeNull();
+    await userEvent.setup().click(screen.getByRole("button", { name: /try again/i }));
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it("leaves the names empty and shows a dash when the profile has no names or email", async () => {
+    meState.me = { ...meState.me!, first_name: null, last_name: null, email: null as unknown as string };
+    renderPage();
+
+    await waitFor(() => expect(screen.getByLabelText(/^first name$/i)).toHaveValue(""));
+    expect(screen.getByLabelText(/^last name$/i)).toHaveValue("");
+    expect(screen.getByText("—")).toBeInTheDocument();
+  });
+
+  it("does not submit, and says why, when a name is blank", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/^first name$/i)).toHaveValue("Alice"));
+
+    await user.clear(screen.getByLabelText(/^first name$/i));
+    await user.click(screen.getByRole("button", { name: /save changes/i }));
+
+    expect(await screen.findByText("First name is required")).toBeInTheDocument();
+    expect(apiPatch).not.toHaveBeenCalled();
+  });
+
+  it("shows Saving... while the update is in flight", async () => {
+    let resolve: (v: unknown) => void = () => {};
+    apiPatch.mockReturnValue(new Promise((r) => (resolve = r)));
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/^first name$/i)).toHaveValue("Alice"));
+
+    await user.click(screen.getByRole("button", { name: /save changes/i }));
+
+    expect(await screen.findByRole("button", { name: "Saving..." })).toBeDisabled();
+    resolve({ ...meState.me, event_roles: undefined });
+    expect(await screen.findByRole("button", { name: /save changes/i })).toBeEnabled();
+  });
+
+  it("toasts the API's message when the update fails", async () => {
+    apiPatch.mockRejectedValue(new Error("Name too long"));
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/^first name$/i)).toHaveValue("Alice"));
+
+    await user.click(screen.getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Name too long"));
+    expect(reload).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("toasts a generic message when the failure is not an Error", async () => {
+    apiPatch.mockRejectedValue("nope");
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/^first name$/i)).toHaveValue("Alice"));
+
+    await user.click(screen.getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Failed to update profile"));
   });
 });

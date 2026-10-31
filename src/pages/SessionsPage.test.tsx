@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -20,14 +20,10 @@ vi.mock("@/api/client", () => ({
   useApiClient: () => apiClient,
 }));
 
-vi.mock("sonner", () => ({
-  toast: { error: vi.fn(), success: vi.fn() },
-}));
-
 import SessionsPage from "./SessionsPage";
-import { toast } from "sonner";
 import type { SessionStatus } from "@/schemas";
 import { fx } from "@/test/fixtures";
+import { renderWithQueryClient } from "@/test/render";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -55,7 +51,7 @@ function makeSession(opts: {
 }
 
 function renderPage() {
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter>
       <SessionsPage />
     </MemoryRouter>
@@ -63,8 +59,6 @@ function renderPage() {
 }
 
 beforeEach(() => {
-  vi.mocked(toast.error).mockClear();
-  vi.mocked(toast.success).mockClear();
   apiGet.mockReset();
 });
 
@@ -102,13 +96,27 @@ describe("SessionsPage", () => {
     );
   });
 
-  it("shows toast error when the API call fails", async () => {
+  it("shows the error in place of the list when the API call fails, not an empty list", async () => {
     apiGet.mockRejectedValue(new Error("Network error"));
     renderPage();
 
-    await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith("Network error")
-    );
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load sessions: Network error");
+    expect(screen.queryByText(/no sessions yet/i)).not.toBeInTheDocument();
+  });
+
+  it("loads the sessions again when Try again is pressed", async () => {
+    apiGet.mockRejectedValueOnce(new Error("Network error"));
+    apiGet.mockResolvedValueOnce([
+      makeSession({ id: "s1", status: "scheduled", startsAt: "2026-05-22T08:00:00" }),
+    ]);
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: /try again/i }));
+
+    await waitFor(() => expect(screen.getAllByText("scheduled").length).toBeGreaterThan(0));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(apiGet).toHaveBeenCalledTimes(2);
   });
 
   it("renders a session with its status badge", async () => {
@@ -159,7 +167,7 @@ describe("SessionsPage", () => {
       makeSession({ id: "abc-123", status: "scheduled", startsAt: "2026-05-22T08:00:00" }),
     ]);
     const user = userEvent.setup();
-    render(
+    renderWithQueryClient(
       <MemoryRouter initialEntries={["/sessions"]}>
         <Routes>
           <Route path="/sessions" element={<SessionsPage />} />

@@ -1,10 +1,11 @@
 {
   "branches": ["main"],
+  "repositoryUrl": "https://github.com/mini-app-polis/deejaytools-com",
   "plugins": [
     "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
     ["@semantic-release/changelog", { "changelogFile": "CHANGELOG.md" }],
-    ["@semantic-release/exec", { "prepareCmd": "npm version ${nextRelease.version} --no-git-tag-version --allow-same-version" }],
+    ["@semantic-release/exec", { "prepareCmd": "node -e \"const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.version=process.argv[1];fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\\n')\" ${nextRelease.version}" }],
     [
       "@semantic-release/git",
       {
