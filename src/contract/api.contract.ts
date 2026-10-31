@@ -621,6 +621,12 @@ describe("contract", () => {
       body: { active_priority_max: 1, active_non_priority_max: 1 },
     });
     const first = await waitForActive(sessionId);
+    // Check-in notes are for the event's staff: the staff route has them,
+    // the public one leaves them out.
+    const staffActive = await ledger.hit(endpoints.queue.activeStaff, { params: { sessionId } });
+    expect(staffActive.find((e) => e.queueEntryId === first)?.notes).toBe(RUN_PREFIX);
+    const publicActive = await ledger.hit(endpoints.queue.active, { params: { sessionId } });
+    expect(publicActive.every((e) => e.notes === null)).toBe(true);
     await ledger.hit(endpoints.queue.complete, { body: { queueEntryId: first } });
     const second = await waitForActive(sessionId);
     await ledger.hit(endpoints.queue.incomplete, { body: { queueEntryId: second } });
