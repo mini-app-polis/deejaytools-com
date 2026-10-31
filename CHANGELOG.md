@@ -1,3 +1,10 @@
+# [2.20.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.19.0...v2.20.0) (2026-10-31)
+
+
+### Features
+
+* **data:** add the TanStack Query layer and move SessionsPage onto it ([b13494f](https://github.com/mini-app-polis/deejaytools-com/commit/b13494f08b7e204222000ca60caa3c81c3dcf06c))
+
 # [2.19.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.18.0...v2.19.0) (2026-10-31)
 
 
