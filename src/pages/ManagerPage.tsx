@@ -24,6 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { formatSessionTitle } from "@/lib/sessionFormat";
 import { isSessionToday } from "@/lib/zonedTime";
+import { songLabel } from "@/lib/songLabel";
 import ManagerGuideSection from "@/components/manager/ManagerGuideSection";
 import { useQueueActions, WithdrawEntryDialog } from "@/components/staff/queueActions";
 import { cn } from "@/lib/utils";
@@ -298,7 +299,7 @@ export default function ManagerPage() {
   const songMap = useMemo(() => {
     const m = new Map<string, string>();
     for (const s of lqSongs) {
-      m.set(s.id, s.processed_filename?.trim() || s.routine_name?.trim() || s.division?.trim() || s.id);
+      m.set(s.id, songLabel(s));
     }
     return m;
   }, [lqSongs]);

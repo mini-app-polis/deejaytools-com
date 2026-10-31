@@ -25,7 +25,9 @@ vi.mock("@/api/client", () => ({ useApiClient: () => apiClient }));
 vi.mock("sonner", () => ({ toast: { error: toastError, success: toastSuccess } }));
 vi.mock("@clerk/clerk-react", () => ({ useAuth: () => ({ getToken: vi.fn() }) }));
 const reloadMe = vi.hoisted(() => vi.fn());
-vi.mock("@/hooks/useAuthMe", () => ({ useAuthMe: () => ({ reload: reloadMe }) }));
+/** The caller's staff roles, as their /v1/auth/me record lists them. */
+const me = vi.hoisted(() => ({ eventRoles: [] as { event_id: string; role: string }[] }));
+vi.mock("@/hooks/useAuthMe", () => ({ useAuthMe: () => ({ reload: reloadMe, eventRoles: me.eventRoles }) }));
 
 import CheckinForSection from "./CheckinForSection";
 import EventDetailsSection from "./EventDetailsSection";
@@ -59,6 +61,7 @@ function inRouter(node: React.ReactNode) {
 
 beforeEach(() => {
   for (const fn of [apiGet, apiPost, apiPatch, apiPut, apiDel, toastError, toastSuccess, reloadMe]) fn.mockReset();
+  me.eventRoles = [];
   apiGet.mockResolvedValue([]);
 });
 
@@ -269,6 +272,35 @@ describe("LiveQueueSection", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
+  it.each([
+    ["dj", true],
+    ["event-manager", false],
+    ["coordinator", false],
+  ])("shows the processed filename under the song label to a %s: %s", async (role, shown) => {
+    me.eventRoles = [{ event_id: "ev-1", role }];
+    apiGet.mockImplementation((p: string) => {
+      if (p === "/v1/sessions?event_id=ev-1") return Promise.resolve([live("s-1")]);
+      if (p === "/v1/queue/s-1/active/staff") {
+        return Promise.resolve([
+          fx.queueEntry({
+            queueEntryId: "qe-1",
+            entityLabel: "Ada & Bob",
+            songDisplayName: "Ada & Bob - Classic - Waltz - v02",
+            songProcessedFilename: "Ada_Bob_Classic_2027_Waltz_v02.mp3",
+          }),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    inRouter(<LiveQueueSection event={event} />);
+    expect(await screen.findByText("Classic · Ada & Bob - Classic - Waltz - v02")).toBeInTheDocument();
+    if (shown) {
+      expect(screen.getByText("Ada_Bob_Classic_2027_Waltz_v02.mp3")).toHaveClass("text-xs");
+    } else {
+      expect(screen.queryByText(/_2027_/)).not.toBeInTheDocument();
+    }
+  });
+
   it("says when the event has no sessions", async () => {
     apiGet.mockRejectedValue(new Error("down"));
     inRouter(<LiveQueueSection event={event} />);
@@ -400,11 +432,17 @@ describe("EventDetailsSection", () => {
     fireEvent.change(screen.getByLabelText("End date"), { target: { value: "2026-06-01" } });
     fireEvent.click(save);
     expect(toastError).toHaveBeenLastCalledWith("End date must be on or after start date");
-    fireEvent.change(screen.getByLabelText("End date"), { target: { value: "2026-06-06" } });
-    fireEvent.change(screen.getByLabelText("Season year"), { target: { value: "26" } });
-    fireEvent.click(save);
-    expect(toastError).toHaveBeenLastCalledWith("Season year must be four digits");
     expect(apiPatch).not.toHaveBeenCalled();
+  });
+
+  it("offers no season year field, and leaves the season out of the update", async () => {
+    apiPatch.mockResolvedValue(event);
+    inRouter(<EventDetailsSection event={event} onUpdated={vi.fn()} />);
+    expect(screen.queryByLabelText(/season/i)).toBeNull();
+    expect(screen.queryByText(/season/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(apiPatch).toHaveBeenCalled());
+    expect(apiPatch.mock.calls[0]![1]).not.toHaveProperty("season_year");
   });
 
   it("toasts a failed save or delete", async () => {

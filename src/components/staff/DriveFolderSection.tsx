@@ -34,8 +34,8 @@ export default function DriveFolderSection({ event }: { event: ApiEvent }) {
         {folderUrl ? (
           <>
             <p>
-              The event&apos;s Drive folder, <span className="font-medium">{event.name}</span> (season{" "}
-              {event.season_year}), is shared with your email address as a reader. Open it in Google Drive,
+              The event&apos;s Drive folder, <span className="font-medium">{event.name}</span>, is shared with your
+              email address as a reader. Open it in Google Drive,
               signed in with the email you use here.
             </p>
             <a href={folderUrl} target="_blank" rel="noreferrer" className={LINK_CLASS}>
@@ -45,8 +45,8 @@ export default function DriveFolderSection({ event }: { event: ApiEvent }) {
         ) : (
           <>
             <p>
-              The event&apos;s Drive folder, <span className="font-medium">{event.name}</span> (season{" "}
-              {event.season_year}), is shared with your email address as a reader. Open it from{" "}
+              The event&apos;s Drive folder, <span className="font-medium">{event.name}</span>, is shared with your
+              email address as a reader. Open it from{" "}
               <span className="font-medium">Shared with me</span> in Google Drive, signed in with the email you use
               here.
             </p>

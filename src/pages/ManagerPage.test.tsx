@@ -325,7 +325,15 @@ describe("ManagerPage — Active Sessions", () => {
     routeGets({
       "/v1/sessions": [LIVE],
       "/v1/partners/leading-pairs": [fx.leadingPair({ id: "pair-9", display_name: "Pair From Map" })],
-      "/v1/songs": [fx.song({ id: "song-9", processed_filename: "pair_classic_2026.mp3" })],
+      "/v1/songs": [
+        fx.song({
+          id: "song-9",
+          partnership_label: "Pair",
+          division: "Classic",
+          routine_name: "Opener",
+          processed_filename: "Pair_Classic_2026_Opener_v03.mp3",
+        }),
+      ],
       "/v1/queue/live/active/staff": [
         fx.queueEntry({ queueEntryId: "a2", position: 2, entityLabel: "Second Pair", songDisplayName: "Song Two" }),
         fx.queueEntry({
@@ -346,8 +354,9 @@ describe("ManagerPage — Active Sessions", () => {
     expect(await screen.findByText("Pair From Map")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: LIVE_TITLE })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByText("2 slots")).toBeInTheDocument();
-    // Song label falls back to the song catalog when the entry has no display name.
-    expect(screen.getByText("Classic · pair_classic_2026.mp3")).toBeInTheDocument();
+    // Song label falls back to the song catalog's label (no season year) when
+    // the entry has no display name.
+    expect(screen.getByText("Classic · Pair - Classic - Opener - v03")).toBeInTheDocument();
     expect(screen.getByText("Pair_Classic.mp3")).toBeInTheDocument();
     expect(screen.getByText("Note: Starts on the 5")).toBeInTheDocument();
     expect(screen.getByText("Classic · Song Two")).toBeInTheDocument();

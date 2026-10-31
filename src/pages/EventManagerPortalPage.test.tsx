@@ -84,7 +84,6 @@ describe("EventManagerPortalPage", () => {
         start_date: event.start_date,
         end_date: event.end_date,
         timezone: event.timezone,
-        season_year: "2026",
       })
     );
     // The portal header follows the saved event.

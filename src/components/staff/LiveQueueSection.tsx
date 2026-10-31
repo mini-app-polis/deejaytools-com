@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChoiceGroup } from "@/components/ui/choice-group";
 import { useQueueActions, WithdrawEntryDialog } from "@/components/staff/queueActions";
+import { useAuthMe } from "@/hooks/useAuthMe";
+import { richestEventRole } from "@/lib/eventRoles";
 import { compareSessionChrono } from "@/lib/chronoSort";
 import { formatSessionTitle } from "@/lib/sessionFormat";
 import { cn } from "@/lib/utils";
@@ -31,11 +33,16 @@ function formatAgo(ms: number): string {
 /**
  * The live floor-trial queue for one of the event's sessions: the active
  * slots and both waiting queues, with run complete, run incomplete, move
- * down and withdraw. Every action names a queue entry of this event's
+ * down and withdraw. Each entry shows its song label; a DJ also sees the
+ * song's processed filename. Every action names a queue entry of this event's
  * session, which the API resolves to the event before deciding.
  */
 export default function LiveQueueSection({ event }: { event: ApiEvent }) {
   const api = useApiClient();
+  // A DJ finds the song's file in the event's Drive folder by its processed
+  // filename, so DJs see it under the song; other staff see the label only.
+  const { eventRoles } = useAuthMe();
+  const showFilename = richestEventRole(eventRoles, event.id) === "dj";
   const [sessions, setSessions] = useState<ApiSession[] | null>(null);
   const [sessionId, setSessionId] = useState("");
   const [active, setActive] = useState<ApiQueueEntry[]>([]);
@@ -143,7 +150,7 @@ export default function LiveQueueSection({ event }: { event: ApiEvent }) {
           <p className="text-muted-foreground truncate">
             {row.divisionName} · {row.songDisplayName ?? row.songId ?? "—"}
           </p>
-          {row.songProcessedFilename && (
+          {showFilename && row.songProcessedFilename && (
             <p className="text-xs text-muted-foreground break-all font-mono">{row.songProcessedFilename}</p>
           )}
           {row.notes && <p className="text-xs text-muted-foreground italic">Note: {row.notes}</p>}
