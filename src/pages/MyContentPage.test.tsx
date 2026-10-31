@@ -615,3 +615,43 @@ describe("MyContentPage — events and sessions details", () => {
     expect(screen.queryByRole("heading", { name: /^active floor trials$/i })).toBeNull();
   });
 });
+
+describe("MyContentPage — retrying a failed load", () => {
+  beforeEach(() => {
+    apiGet.mockReset();
+  });
+
+  /** Fails the given paths until `recover()`, answering the rest as usual. */
+  function failPaths(paths: string[]) {
+    let fail = true;
+    apiGet.mockImplementation((path: string) =>
+      fail && paths.includes(path) ? Promise.reject(new Error("down")) : defaultApiGet(path)
+    );
+    return () => {
+      fail = false;
+    };
+  }
+
+  const calls = (path: string) => apiGet.mock.calls.filter(([p]) => p === path).length;
+
+  it.each([
+    ["active floor trials", ["/v1/sessions"]],
+    ["your check-ins", ["/v1/checkins/mine"]],
+    ["your event songs", ["/v1/events", "/v1/event-song-submissions"]],
+    ["your songs", ["/v1/songs"]],
+  ])("retries %s from the inline error", async (what, paths) => {
+    const recover = failPaths(paths);
+    const user = userEvent.setup();
+    renderPage();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(`Couldn't load ${what}: down`);
+    const before = paths.map(calls);
+    recover();
+    await user.click(within(alert).getByRole("button", { name: "Try again" }));
+
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    // Every query that failed is fetched again.
+    expect(paths.map(calls)).toEqual(before.map((n) => n + 1));
+  });
+});

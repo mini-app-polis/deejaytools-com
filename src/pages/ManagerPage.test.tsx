@@ -853,3 +853,215 @@ describe("ManagerPage — Guide", () => {
     expect(await screen.findByRole("link", { name: /open guide/i })).toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Retrying a failed load, and the queue actions on every queue
+// ---------------------------------------------------------------------------
+
+/** A GET route that fails until `recover()` is called, then answers `ok`. */
+function failingUntilRecovered(message: string, ok: unknown) {
+  let fail = true;
+  return {
+    route: () => {
+      if (fail) throw new Error(message);
+      return ok;
+    },
+    recover: () => {
+      fail = false;
+    },
+  };
+}
+
+describe("ManagerPage — Active Sessions retries and queue actions", () => {
+  const NOW = Date.UTC(2026, 4, 23, 17, 0);
+  const LIVE = fx.session({
+    id: "live",
+    event_id: "e1",
+    status: "checkin_open",
+    event_timezone: "America/Chicago",
+    checkin_opens_at: NOW - 30 * 60_000,
+    floor_trial_starts_at: NOW,
+    floor_trial_ends_at: NOW + 120 * 60_000,
+  });
+  const LIVE_TITLE = "Saturday - 12:00 PM - May 23, 2026";
+
+  beforeEach(() => {
+    resetAll();
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
+    vi.setSystemTime(NOW);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("retries the sessions list from the inline error", async () => {
+    const sessions = failingUntilRecovered("sessions down", [LIVE]);
+    routeGets({ "/v1/sessions": sessions.route });
+    const user = userEvent.setup();
+    renderPage();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load sessions: sessions down");
+    sessions.recover();
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByRole("radio", { name: LIVE_TITLE })).toHaveAttribute("aria-checked", "true");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("shows queues that never loaded as an error, and loads them on retry", async () => {
+    const active = failingUntilRecovered("queues down", []);
+    routeGets({ "/v1/sessions": [LIVE], "/v1/queue/live/active/staff": active.route });
+    const user = userEvent.setup();
+    renderPage();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load the queues: queues down");
+    expect(screen.queryByText("No one on deck.")).not.toBeInTheDocument();
+    active.recover();
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByText("No one on deck.")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("moves an active slot down", async () => {
+    routeGets({
+      "/v1/sessions": [LIVE],
+      "/v1/queue/live/active/staff": [
+        fx.queueEntry({ queueEntryId: "a1", position: 1, entityLabel: "Slot One" }),
+        fx.queueEntry({ queueEntryId: "a2", position: 2, entityLabel: "Slot Two" }),
+      ],
+    });
+    apiPost.mockResolvedValue({ moved: true });
+    const user = userEvent.setup();
+    renderPage();
+
+    const first = (await screen.findByText("Slot One")).parentElement!;
+    await user.click(within(first).getByRole("button", { name: "Move down" }));
+    await waitFor(() =>
+      expect(apiPost).toHaveBeenCalledWith("/v1/queue/move-down", { queueEntryId: "a1" })
+    );
+  });
+
+  it("lists the priority queue in position order and moves an entry down", async () => {
+    routeGets({
+      "/v1/sessions": [LIVE],
+      "/v1/queue/live/priority": [
+        fx.queueEntry({ queueEntryId: "p2", position: 2, entityLabel: "Prio Two" }),
+        fx.queueEntry({ queueEntryId: "p1", position: 1, entityLabel: "Prio One" }),
+      ],
+    });
+    apiPost.mockResolvedValue({ moved: true });
+    const user = userEvent.setup();
+    renderPage();
+
+    const one = await screen.findByText("Prio One");
+    const two = screen.getByText("Prio Two");
+    expect(one.compareDocumentPosition(two) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The last entry cannot move further down.
+    expect(within(two.parentElement!).queryByRole("button", { name: "Move down" })).not.toBeInTheDocument();
+
+    await user.click(within(one.parentElement!).getByRole("button", { name: "Move down" }));
+    await waitFor(() =>
+      expect(apiPost).toHaveBeenCalledWith("/v1/queue/move-down", { queueEntryId: "p1" })
+    );
+  });
+
+  it("withdraws a standard-queue entry once confirmed", async () => {
+    routeGets({
+      "/v1/sessions": [LIVE],
+      "/v1/queue/live/non-priority": [fx.queueEntry({ queueEntryId: "n1", position: 1, entityLabel: "Std Pair" })],
+    });
+    apiPost.mockResolvedValue({ withdrawn: true });
+    const user = userEvent.setup();
+    renderPage();
+
+    const row = (await screen.findByText("Std Pair")).parentElement!;
+    await user.click(within(row).getByRole("button", { name: "Withdraw" }));
+    const dialog = await screen.findByRole("dialog", { name: /withdraw from the queue/i });
+    expect(dialog).toHaveTextContent("Std Pair");
+    await user.click(within(dialog).getByRole("button", { name: "Withdraw" }));
+    await waitFor(() =>
+      expect(apiPost).toHaveBeenCalledWith("/v1/queue/withdraw", { queueEntryId: "n1" })
+    );
+  });
+});
+
+describe("ManagerPage — retrying failed loads in the other sections", () => {
+  beforeEach(resetAll);
+
+  const EVENT = fx.event({ id: "cur", name: "Current Fest", status: "active", start_date: "2026-05-01" });
+  const ALICE = fx.adminUser({ id: "u-alice", email: "alice@example.com", first_name: "Alice", last_name: "Smith" });
+
+  it("retries the events list from the inline error", async () => {
+    const events = failingUntilRecovered("events down", [EVENT]);
+    routeGets({ "/v1/events": events.route });
+    const user = userEvent.setup();
+    renderPage("/manager/event-songs");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load events: events down");
+    events.recover();
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("button", { name: /current fest/i })).toBeInTheDocument();
+  });
+
+  it("retries an event's submitted songs from the inline error", async () => {
+    const subs = failingUntilRecovered("subs down", [
+      fx.adminEventSongSubmission({ id: "x", event_id: "cur", division: "Classic", partnership_label: "Ann & Bo" }),
+    ]);
+    routeGets({ "/v1/events": [EVENT], "/v1/admin/event-song-submissions": subs.route });
+    const user = userEvent.setup();
+    renderPage("/manager/event-songs");
+
+    await user.click(await screen.findByRole("button", { name: /current fest/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load submitted songs: subs down");
+    subs.recover();
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("Ann & Bo")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["/manager/upload-for", /user to upload for/i],
+    ["/manager/checkin-for", /user to check in/i],
+  ])("retries a failed user search on %s", async (path, label) => {
+    const users = failingUntilRecovered("search down", [ALICE]);
+    routeGets({ "/v1/admin/users": users.route });
+    const user = userEvent.setup();
+    renderPage(path);
+
+    await user.type(await screen.findByLabelText(label), "alice");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load users: search down");
+    users.recover();
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("button", { name: /alice smith/i })).toBeInTheDocument();
+  });
+
+  it("retries a user's submitted songs for the chosen session from the inline error", async () => {
+    const OPEN = fx.session({
+      id: "open",
+      event_id: "e1",
+      status: "checkin_open",
+      event_timezone: "America/Chicago",
+      floor_trial_starts_at: Date.UTC(2026, 4, 23, 17, 0),
+    });
+    const subs = failingUntilRecovered("songs down", [
+      fx.eventSongSubmission({ id: "sub1", song_id: "song-c", song_label: "Our Classic", division: "Classic" }),
+    ]);
+    routeGets({
+      "/v1/sessions": [OPEN],
+      "/v1/admin/users": [ALICE],
+      "/v1/admin/users/u-alice/event-song-submissions": subs.route,
+    });
+    const user = userEvent.setup();
+    renderPage("/manager/checkin-for");
+
+    await user.type(await screen.findByPlaceholderText(/search by name or email/i), "alice");
+    await user.click(await screen.findByRole("button", { name: /alice smith/i }));
+    await user.click(screen.getByRole("radio", { name: "Saturday - 12:00 PM - May 23, 2026" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load this user's songs: songs down");
+    subs.recover();
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("radio", { name: "Our Classic" })).toBeInTheDocument();
+  });
+});

@@ -1467,3 +1467,278 @@ describe("AdminPage — Users section", () => {
     expect(await screen.findByRole("button", { name: /new event/i })).toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Retries after a failed load, and dismissing dialogs without acting
+// ---------------------------------------------------------------------------
+
+/** A GET route that fails until `recover()` is called, then answers `ok`. */
+function failingUntilRecovered(message: string, ok: unknown) {
+  let fail = true;
+  return {
+    route: () => {
+      if (fail) throw new Error(message);
+      return ok;
+    },
+    recover: () => {
+      fail = false;
+    },
+  };
+}
+
+function getCalls(base: string) {
+  return apiGet.mock.calls.filter(([p]) => (p as string).split("?")[0] === base).length;
+}
+
+describe("AdminPage — retrying a failed load", () => {
+  beforeEach(resetAll);
+
+  it("retries the sessions list from the inline error", async () => {
+    const sessions = failingUntilRecovered("sessions down", [SESS_OPEN]);
+    routeGets({ "/v1/events": [EV_ACTIVE], "/v1/sessions": sessions.route });
+    const user = userEvent.setup();
+    renderPage("/admin/sessions");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load sessions: sessions down");
+    expect(screen.queryByText(SESS_OPEN_TITLE)).not.toBeInTheDocument();
+    sessions.recover();
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByText(SESS_OPEN_TITLE)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("retries run history from the inline error", async () => {
+    const runs = failingUntilRecovered("runs down", [fx.run({ id: "r1", entity_label: "Ann & Bo" })]);
+    routeGets({ "/v1/runs": runs.route });
+    const user = userEvent.setup();
+    renderPage("/admin/runs");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load run history: runs down");
+    runs.recover();
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByText("Ann & Bo", { selector: "p" })).toBeInTheDocument();
+    expect(screen.getByText("1 run")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("retries the songs list from the inline error, and refreshes it on demand", async () => {
+    const song = fx.adminSong({ id: "a", song_label: "Ann & Bo Classic 2026 v01" });
+    const songs = failingUntilRecovered("songs down", [song]);
+    routeGets({ "/v1/admin/songs": songs.route });
+    const user = userEvent.setup();
+    renderPage("/admin/songs");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load songs: songs down");
+    songs.recover();
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText(song.song_label)).toBeInTheDocument();
+
+    const before = getCalls("/v1/admin/songs");
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(getCalls("/v1/admin/songs")).toBe(before + 1));
+    expect(screen.getByText(song.song_label)).toBeInTheDocument();
+  });
+
+  it("retries the test check-ins from the inline error, and refreshes them on demand", async () => {
+    const rows = failingUntilRecovered("checkins down", [fx.testInjection({ pair_id: "p1" })]);
+    routeGets({ "/v1/sessions": [SESS_OPEN], "/v1/admin/checkins/test": rows.route });
+    const user = userEvent.setup();
+    renderPage("/admin/test-checkin");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Couldn't load test check-ins: checkins down"
+    );
+    rows.recover();
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("Test Leader")).toBeInTheDocument();
+
+    const before = getCalls("/v1/admin/checkins/test");
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(getCalls("/v1/admin/checkins/test")).toBe(before + 1));
+  });
+
+  it("retries the users list from the inline error", async () => {
+    const alice = fx.adminUser({ id: "u2", email: "alice@example.com" });
+    const users = failingUntilRecovered("users down", [alice]);
+    routeGets({ "/v1/admin/users": users.route });
+    const user = userEvent.setup();
+    renderPage("/admin/users");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load users: users down");
+    users.recover();
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("alice@example.com")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
+
+describe("AdminPage — filters that reset", () => {
+  beforeEach(resetAll);
+
+  it("shows cancelled sessions only when asked", async () => {
+    const cancelled = fx.session({ ...SESS_DONE, id: "s3", status: "cancelled" });
+    routeGets({ "/v1/events": [EV_ACTIVE, EV_DONE], "/v1/sessions": [SESS_OPEN, cancelled] });
+    const user = userEvent.setup();
+    renderPage("/admin/sessions");
+
+    await screen.findByText(SESS_OPEN_TITLE);
+    expect(screen.queryByRole("heading", { name: "Cancelled" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/March 1, 2025/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("checkbox", { name: /show cancelled/i }));
+    expect(screen.getByRole("heading", { name: "Cancelled" })).toBeInTheDocument();
+    expect(screen.getByText(/March 1, 2025/)).toBeInTheDocument();
+  });
+
+  it("goes back to all sessions, then all events, from the run history pickers", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE], "/v1/sessions": [SESS_OPEN], "/v1/runs": [] });
+    const user = userEvent.setup();
+    renderPage("/admin/runs");
+
+    await user.click(await screen.findByRole("button", { name: /swing fling/i }));
+    await user.click(screen.getByRole("button", { name: SESS_OPEN_TITLE }));
+    expect(
+      await screen.findByText(`No runs recorded for ${SESS_OPEN_TITLE} yet.`)
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "All sessions" }));
+    expect(await screen.findByText("No runs recorded for Swing Fling yet.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "All events" }));
+    expect(await screen.findByText("No runs recorded yet.")).toBeInTheDocument();
+    expect(apiGet).toHaveBeenLastCalledWith("/v1/runs?limit=500");
+  });
+
+  it("clears a division or partnership filter with its 'All' chip", async () => {
+    const runs = [
+      fx.run({ id: "r1", division_name: "Classic", entity_key: "pair:a", entity_label: "Ann & Bo" }),
+      fx.run({ id: "r2", division_name: "Showcase", entity_key: "pair:c", entity_label: "Cy & Di" }),
+    ];
+    routeGets({ "/v1/runs": runs });
+    const user = userEvent.setup();
+    renderPage("/admin/runs");
+
+    await user.click(await screen.findByRole("button", { name: "Classic (1)" }));
+    expect(screen.getByText("Division: Classic")).toBeInTheDocument();
+    expect(screen.queryByText("Cy & Di", { selector: "p" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "All divisions (2)" }));
+    expect(screen.queryByText(/^Division:/)).not.toBeInTheDocument();
+    expect(screen.getByText("Cy & Di", { selector: "p" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Cy & Di (1)" }));
+    expect(screen.getByText("Partnership: Cy & Di")).toBeInTheDocument();
+    expect(screen.queryByText("Ann & Bo", { selector: "p" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "All partnerships (2)" }));
+    expect(screen.queryByText(/^Partnership:/)).not.toBeInTheDocument();
+    expect(screen.getByText("Ann & Bo", { selector: "p" })).toBeInTheDocument();
+  });
+});
+
+describe("AdminPage — dismissing dialogs", () => {
+  beforeEach(resetAll);
+
+  it("closes the event delete confirmation with Escape without deleting", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE] });
+    const user = userEvent.setup();
+    renderPage("/admin/events");
+
+    await screen.findByText("Swing Fling");
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    expect(await screen.findByRole("dialog")).toHaveTextContent("This will permanently delete Swing Fling");
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(apiDel).not.toHaveBeenCalled();
+  });
+
+  it("closes the session delete confirmation by Cancel or Escape without deleting", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE], "/v1/sessions": [SESS_OPEN] });
+    const user = userEvent.setup();
+    renderPage("/admin/sessions");
+
+    await user.click(await screen.findByRole("button", { name: "Delete" }));
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await screen.findByRole("dialog");
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    expect(apiDel).not.toHaveBeenCalled();
+    expect(screen.getByText(SESS_OPEN_TITLE)).toBeInTheDocument();
+  });
+
+  it("closes the delete-all test check-ins confirmation by Cancel or Escape without deleting", async () => {
+    routeGets({ "/v1/admin/checkins/test": [fx.testInjection({ pair_id: "p1" })] });
+    const user = userEvent.setup();
+    renderPage("/admin/test-checkin");
+
+    await screen.findByText("Test Leader");
+    await user.click(screen.getByRole("button", { name: "Delete all" }));
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: "Delete all" }));
+    await screen.findByRole("dialog");
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    expect(apiDel).not.toHaveBeenCalled();
+    expect(screen.getByText("Test Leader")).toBeInTheDocument();
+  });
+
+  it("closes the event form from its backdrop without saving", async () => {
+    routeGets({ "/v1/events": [] });
+    const user = userEvent.setup();
+    renderPage("/admin/events");
+
+    await user.click(await screen.findByRole("button", { name: /new event/i }));
+    const dialog = screen.getByRole("dialog", { name: "New event" });
+    // A click inside the form leaves it open.
+    await user.click(within(dialog).getByRole("heading", { name: "New event" }));
+    expect(screen.getByRole("dialog", { name: "New event" })).toBeInTheDocument();
+
+    await user.click(dialog.parentElement!);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(apiPost).not.toHaveBeenCalled();
+  });
+
+  it("closes the session form from its backdrop or its close button without saving", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE], "/v1/sessions": [] });
+    const user = userEvent.setup();
+    renderPage("/admin/sessions");
+
+    await user.click(await screen.findByRole("button", { name: /new session/i }));
+    await user.click(screen.getByRole("dialog", { name: "New session" }).parentElement!);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /new session/i }));
+    await user.click(
+      within(screen.getByRole("dialog", { name: "New session" })).getByRole("button", { name: "Close" })
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(apiPost).not.toHaveBeenCalled();
+  });
+
+  it("injects a test check-in with the leader first name as typed", async () => {
+    routeGets({ "/v1/sessions": [SESS_OPEN], "/v1/admin/checkins/test": [] });
+    apiPost.mockResolvedValue({ ...fx.checkinCreated(), pair: fx.leadingPair() });
+    const user = userEvent.setup();
+    renderPage("/admin/test-checkin");
+
+    await user.click(await screen.findByRole("radio", { name: SESS_OPEN_TITLE }));
+    await user.clear(field("Leader first name"));
+    await user.type(field("Leader first name"), "Ada");
+    await user.click(screen.getByRole("button", { name: "Test check-in" }));
+
+    await waitFor(() =>
+      expect(apiPost).toHaveBeenCalledWith(
+        "/v1/admin/checkins",
+        expect.objectContaining({ leaderFirstName: "Ada" })
+      )
+    );
+  });
+});
