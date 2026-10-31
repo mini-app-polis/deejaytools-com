@@ -1,3 +1,15 @@
+# [2.17.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.16.0...v2.17.0) (2026-10-31)
+
+
+### Bug Fixes
+
+* **deps:** override minimatch 10 to 11.0.1 for GHSA-g3hv-75wg-m249 ([d351555](https://github.com/mini-app-polis/deejaytools-com/commit/d351555eb97bd2045151697d11f8bcb278da2b2b))
+
+
+### Features
+
+* **staff:** read the active queue with notes from the staff route ([d42b3db](https://github.com/mini-app-polis/deejaytools-com/commit/d42b3db317a240a6cb2bbcfff2ab3613421f2765))
+
 # [2.16.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.15.0...v2.16.0) (2026-10-30)
 
 
