@@ -20,6 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import PartnersSection from "@/components/PartnersSection";
 import TeamsSection from "@/components/TeamsSection";
 import ManagedPartnershipsSection from "@/components/ManagedPartnershipsSection";
+import AuthMeError from "@/components/AuthMeError";
 import { useAuthMe } from "@/hooks/useAuthMe";
 
 const profileSchema = z.object({
@@ -30,7 +31,7 @@ type ProfileForm = z.infer<typeof profileSchema>;
 
 export default function MyProfilePage() {
   const api = useApiClient();
-  const { me, loading, reload } = useAuthMe();
+  const { me, loading, error, reload } = useAuthMe();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<ProfileForm>({
@@ -73,6 +74,8 @@ export default function MyProfilePage() {
         <div className="p-4 space-y-4">
           {loading && !me ? (
             <Skeleton className="h-40 w-full" />
+          ) : !me && error ? (
+            <AuthMeError message={error} onRetry={() => void reload()} />
           ) : (
             <>
               <div className="flex items-baseline gap-2">

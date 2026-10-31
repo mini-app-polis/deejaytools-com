@@ -24,6 +24,8 @@ export function useStaffEvents(eventRoles: readonly ApiEventRole[]) {
   const hasRoles = staff.length > 0;
   const [events, setEvents] = useState<ApiEvent[] | null>(null);
 
+  // Keyed on the roles themselves: a reloaded caller record (after an event
+  // is renamed or a role granted) reads the list again.
   useEffect(() => {
     if (!hasRoles) return;
     let cancelled = false;
@@ -37,7 +39,7 @@ export function useStaffEvents(eventRoles: readonly ApiEventRole[]) {
     return () => {
       cancelled = true;
     };
-  }, [api, hasRoles]);
+  }, [api, hasRoles, staff]);
 
   const items = useMemo<StaffEvent[]>(() => {
     const byId = new Map((events ?? []).map((e) => [e.id, e]));

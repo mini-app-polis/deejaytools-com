@@ -62,14 +62,15 @@ export const fx = {
     sessionFloorTrialStartsAt: T, sessionStatus: "checkin_open", eventTimezone: null,
     divisionName: "Classic", entityLabel: "Leader & Follower", songDisplayName: null,
     songProcessedFilename: null, notes: null, checkedInAt: T, queueEntryId: "qe-1",
-    queueType: "non_priority", queuePosition: 1, overallPosition: 1,
+    queueType: "non_priority", queuePosition: 1, overallPosition: 1, runCount: 0,
+    canWithdraw: true,
   }),
   song: factory(ApiSongSchema, {
     id: "song-1", user_id: "user_1", partner_id: null, display_name: null,
     original_filename: null, drive_file_id: null, drive_folder_id: null,
     processed_filename: null, division: null, routine_name: null,
     personal_descriptor: null, season_year: null, is_legacy: false,
-    created_at: T, updated_at: T,
+    created_at: T, updated_at: T, partnership_label: null, shared_with_me: false,
   }),
   partner: factory(ApiPartnerSchema, {
     id: "p-1", user_id: "user_1", first_name: "Pat", last_name: "Partner",

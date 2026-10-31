@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useApiClient } from "@/api/client";
 import { call, endpoints } from "@/api/endpoints";
+import { useAuthMe } from "@/hooks/useAuthMe";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -33,6 +34,8 @@ export default function EventDetailsSection({
 }) {
   const api = useApiClient();
   const navigate = useNavigate();
+  // The nav bar lists the caller's staff events by name, from their record.
+  const { reload: reloadMe } = useAuthMe();
   const [name, setName] = useState(event.name);
   const [startDate, setStartDate] = useState(event.start_date);
   const [endDate, setEndDate] = useState(event.end_date);
@@ -64,6 +67,7 @@ export default function EventDetailsSection({
       });
       onUpdated(updated);
       toast.success("Event updated");
+      void reloadMe();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save event");
     } finally {
@@ -77,6 +81,7 @@ export default function EventDetailsSection({
     try {
       await call(api, endpoints.events.remove, { params: { id: event.id } });
       toast.success("Event deleted");
+      void reloadMe();
       navigate("/my-events", { replace: true });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Delete failed");

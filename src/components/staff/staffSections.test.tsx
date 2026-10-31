@@ -24,6 +24,8 @@ const { apiGet, apiPost, apiPatch, apiPut, apiDel, apiClient, toastError, toastS
 vi.mock("@/api/client", () => ({ useApiClient: () => apiClient }));
 vi.mock("sonner", () => ({ toast: { error: toastError, success: toastSuccess } }));
 vi.mock("@clerk/clerk-react", () => ({ useAuth: () => ({ getToken: vi.fn() }) }));
+const reloadMe = vi.hoisted(() => vi.fn());
+vi.mock("@/hooks/useAuthMe", () => ({ useAuthMe: () => ({ reload: reloadMe }) }));
 
 import CheckinForSection from "./CheckinForSection";
 import EventDetailsSection from "./EventDetailsSection";
@@ -56,7 +58,7 @@ function inRouter(node: React.ReactNode) {
 }
 
 beforeEach(() => {
-  for (const fn of [apiGet, apiPost, apiPatch, apiPut, apiDel, toastError, toastSuccess]) fn.mockReset();
+  for (const fn of [apiGet, apiPost, apiPatch, apiPut, apiDel, toastError, toastSuccess, reloadMe]) fn.mockReset();
   apiGet.mockResolvedValue([]);
 });
 
@@ -369,6 +371,22 @@ describe("EventDetailsSection", () => {
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("not yours"));
     expect(screen.queryByText("my events page")).toBeNull();
+    expect(reloadMe).not.toHaveBeenCalled();
+  });
+
+  it("refreshes the caller's record after a save and after a delete", async () => {
+    apiPatch.mockResolvedValue({ ...event, name: "Fall Fling II" });
+    apiDel.mockResolvedValue({ deleted: true });
+    inRouter(<EventDetailsSection event={event} onUpdated={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Fall Fling II" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith("Event updated"));
+    expect(reloadMe).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete event" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete" }));
+    expect(await screen.findByText("my events page")).toBeInTheDocument();
+    expect(reloadMe).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -399,6 +417,15 @@ describe("EventStaffSection", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Remove d@example.com as DJ" }));
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("Admin access required"));
     expect(screen.getByText("d@example.com")).toBeInTheDocument();
+    expect(reloadMe).not.toHaveBeenCalled();
+  });
+
+  it("refreshes the caller's record after a revoke, which may be their own", async () => {
+    apiGet.mockResolvedValue([fx.eventStaff({ user_id: "u2", role: "dj", email: "d@example.com" })]);
+    apiDel.mockResolvedValue({ deleted: true });
+    inRouter(<EventStaffSection event={event} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Remove d@example.com as DJ" }));
+    await waitFor(() => expect(reloadMe).toHaveBeenCalledOnce());
   });
 });
 

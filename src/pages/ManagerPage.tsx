@@ -288,9 +288,7 @@ export default function ManagerPage() {
   const esVisibleEvents = useMemo(
     () =>
       esEvents
-        .filter(
-          (ev) => esShowPast || (ev.status !== "completed" && ev.status !== "cancelled")
-        )
+        .filter((ev) => esShowPast || ev.status !== "completed")
         .slice()
         .sort((a, b) => a.start_date.localeCompare(b.start_date)),
     [esEvents, esShowPast]
@@ -698,7 +696,7 @@ export default function ManagerPage() {
                         setEsShowPast(next);
                         if (!next) {
                           const sel = esEvents.find((ev) => ev.id === esEventId);
-                          if (sel && (sel.status === "completed" || sel.status === "cancelled")) {
+                          if (sel && sel.status === "completed") {
                             setEsEventId("");
                           }
                         }

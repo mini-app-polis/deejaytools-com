@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import type { ApiEvent, ApiSession } from "@/schemas";
+import type { ApiEvent, ApiSession, EventStatus } from "@/schemas";
 import { useApiClient } from "@/api/client";
 import { call, endpoints } from "@/api/endpoints";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 /** Shared empty tally for events that have no sessions at all. */
 const EMPTY_TRIALS: FloorTrialCounts = { active: 0, upcoming: 0, completed: 0, cancelled: 0 };
 
-function eventStatusBadge(status: string) {
+function eventStatusBadge(status: EventStatus) {
   switch (status) {
     case "upcoming":
       return <Badge variant="default">{status}</Badge>;
@@ -30,10 +30,6 @@ function eventStatusBadge(status: string) {
       );
     case "completed":
       return <Badge variant="secondary">{status}</Badge>;
-    case "cancelled":
-      return <Badge variant="destructive">{status}</Badge>;
-    default:
-      return <Badge variant="outline">{status}</Badge>;
   }
 }
 
@@ -76,7 +72,7 @@ export default function EventsPage() {
   }
 
   // This page answers "what is on right now, and what is coming up". Completed
-  // and cancelled events are dropped rather than sorted to the bottom — they
+  // events are dropped rather than sorted to the bottom — they
   // stay reachable by direct URL, they just don't belong in the listing.
   // Active first, then upcoming soonest-first.
   const sortedEvents = events

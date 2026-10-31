@@ -21,7 +21,7 @@ vi.mock("@/lib/instrument", () => ({
   Sentry: { captureException },
 }));
 
-import { useApiClient } from "./client";
+import { ApiError, SERVER_UNAVAILABLE_MESSAGE, useApiClient } from "./client";
 
 // Mock global fetch — every test sets the response shape.
 const fetchMock = vi.fn();
@@ -109,11 +109,44 @@ describe("useApiClient.get", () => {
     );
   });
 
-  it("throws a generic 'Request failed: <status>' when the server doesn't return an envelope", async () => {
+  it("throws the friendly server message when a 5xx doesn't carry an error envelope", async () => {
     // res.ok === false but body is not an error envelope (no `error` key).
     fetchMock.mockResolvedValue(jsonResponse({ unexpected: true }, { status: 500 }));
     const { result } = renderHook(() => useApiClient());
-    await expect(result.current.get("/v1/foo")).rejects.toThrow("Request failed: 500");
+    await expect(result.current.get("/v1/foo")).rejects.toThrow(SERVER_UNAVAILABLE_MESSAGE);
+  });
+
+  it("throws 'Request failed: <status>' for a 4xx without an error envelope", async () => {
+    fetchMock.mockResolvedValue(
+      new Response("<html><body>413 Request Entity Too Large</body></html>", {
+        status: 413,
+        headers: { "Content-Type": "text/html" },
+      })
+    );
+    const { result } = renderHook(() => useApiClient());
+    const err = await result.current.get("/v1/foo").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).message).toBe("Request failed: 413");
+    expect((err as ApiError).status).toBe(413);
+    expect(captureException).not.toHaveBeenCalled();
+  });
+
+  it("carries the API's status and error code on the thrown error", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ error: { code: "NOT_FOUND", message: "Event not found" } }, { status: 404 })
+    );
+    const { result } = renderHook(() => useApiClient());
+    const err = await result.current.get("/v1/foo").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).status).toBe(404);
+    expect((err as ApiError).code).toBe("NOT_FOUND");
+  });
+
+  it("rejects a success response whose body isn't JSON and reports it", async () => {
+    fetchMock.mockResolvedValue(new Response("<html></html>", { status: 200 }));
+    const { result } = renderHook(() => useApiClient());
+    await expect(result.current.get("/v1/foo")).rejects.toThrow("couldn't read");
+    expect(captureException).toHaveBeenCalledOnce();
   });
 });
 
@@ -218,7 +251,7 @@ describe("useApiClient — Sentry error capture", () => {
   it("calls Sentry.captureException for 5xx server errors", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ unexpected: true }, { status: 500 }));
     const { result } = renderHook(() => useApiClient());
-    await expect(result.current.get("/v1/foo")).rejects.toThrow("Request failed: 500");
+    await expect(result.current.get("/v1/foo")).rejects.toThrow(SERVER_UNAVAILABLE_MESSAGE);
     expect(captureException).toHaveBeenCalledOnce();
     const [err, opts] = captureException.mock.calls[0] as [Error, { extra: { url: string; status: number } }];
     expect(err).toBeInstanceOf(Error);
@@ -231,6 +264,31 @@ describe("useApiClient — Sentry error capture", () => {
     );
     const { result } = renderHook(() => useApiClient());
     await expect(result.current.get("/v1/foo")).rejects.toThrow("Something broke");
+    expect(captureException).toHaveBeenCalledOnce();
+  });
+
+  it("shows a friendly message for an HTML 502 from a proxy and still reports it", async () => {
+    fetchMock.mockResolvedValue(
+      new Response("<!DOCTYPE html><html><body>502 Bad Gateway</body></html>", {
+        status: 502,
+        headers: { "Content-Type": "text/html; charset=UTF-8" },
+      })
+    );
+    const { result } = renderHook(() => useApiClient());
+    const err = await result.current.get("/v1/foo").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as Error).message).toBe(SERVER_UNAVAILABLE_MESSAGE);
+    expect((err as Error).message).not.toMatch(/Unexpected token/);
+    expect(captureException).toHaveBeenCalledOnce();
+    const [captured, opts] = captureException.mock.calls[0] as [Error, { extra: { status: number } }];
+    expect(captured).toBe(err);
+    expect(opts.extra.status).toBe(502);
+  });
+
+  it("reports a 5xx with an empty body", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 504 }));
+    const { result } = renderHook(() => useApiClient());
+    await expect(result.current.get("/v1/foo")).rejects.toThrow(SERVER_UNAVAILABLE_MESSAGE);
     expect(captureException).toHaveBeenCalledOnce();
   });
 

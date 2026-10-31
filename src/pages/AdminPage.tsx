@@ -145,8 +145,9 @@ export default function AdminPage() {
     ? rawSection
     : DEFAULT_ADMIN_SECTION;
   // Identifies the current admin so the Users tab can hide the role
-  // toggle on their own row (the API also rejects self-demotion).
-  const { me } = useAuthMe();
+  // toggle on their own row (the API also rejects self-demotion). reloadMe
+  // refreshes the nav bar's staff events after an event changes.
+  const { me, reload: reloadMe } = useAuthMe();
 
   // ── Events tab ──────────────────────────────────────────────────────────────
   const [events, setEvents] = useState<ApiEvent[] | null>(null);
@@ -166,7 +167,6 @@ export default function AdminPage() {
    */
   const [evEditId, setEvEditId] = useState<string | null>(null);
   const [showEventsCompleted, setShowEventsCompleted] = useState(false);
-  const [showEventsCancelled, setShowEventsCancelled] = useState(false);
 
   // ── Sessions tab ────────────────────────────────────────────────────────────
   const [sessions, setSessions] = useState<ApiSession[] | null>(null);
@@ -493,6 +493,7 @@ export default function AdminPage() {
       await call(api, endpoints.events.remove, { params: { id: id } });
       toast.success("Event deleted");
       setEvents((prev) => prev?.filter((e) => e.id !== id) ?? null);
+      void reloadMe();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Delete failed");
     }
@@ -547,6 +548,7 @@ export default function AdminPage() {
         setEvents((prev) =>
           prev?.map((e) => (e.id === updated.id ? updated : e)) ?? null
         );
+        void reloadMe();
       } else {
         // Create mode — POST and prepend.
         const created = await call(api, endpoints.events.create, { body: {
@@ -867,7 +869,6 @@ export default function AdminPage() {
       active: list.filter((e) => e.status === "active"),
       upcoming: list.filter((e) => e.status === "upcoming"),
       completed: list.filter((e) => e.status === "completed"),
-      cancelled: list.filter((e) => e.status === "cancelled"),
     };
   }, [events]);
 
@@ -1049,14 +1050,6 @@ export default function AdminPage() {
               />
               Show completed
             </label>
-            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={showEventsCancelled}
-                onChange={(e) => setShowEventsCancelled(e.target.checked)}
-              />
-              Show cancelled
-            </label>
           </div>
           {loadingEvents && !events ? (
             <Skeleton className="h-40 w-full" />
@@ -1065,7 +1058,6 @@ export default function AdminPage() {
               {renderEventBox("Active", eventBuckets.active)}
               {renderEventBox("Upcoming", eventBuckets.upcoming)}
               {showEventsCompleted && renderEventBox("Completed", eventBuckets.completed)}
-              {showEventsCancelled && renderEventBox("Cancelled", eventBuckets.cancelled)}
             </div>
           )}
         </TabsContent>

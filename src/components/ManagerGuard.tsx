@@ -1,9 +1,10 @@
+import AuthMeError from "@/components/AuthMeError";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import { Navigate } from "react-router-dom";
 
 export default function ManagerGuard({ children }: { children: React.ReactNode }) {
-  const { me, loading, isAdmin } = useAuthMe();
+  const { me, loading, isAdmin, error, reload } = useAuthMe();
 
   if (loading) {
     return (
@@ -15,6 +16,10 @@ export default function ManagerGuard({ children }: { children: React.ReactNode }
   }
 
   // The manager area is admin-only: the API has no global manager role.
+  if (!me && error) {
+    return <AuthMeError message={error} onRetry={() => void reload()} />;
+  }
+
   if (!isAdmin || !me) {
     return <Navigate to="/" replace />;
   }

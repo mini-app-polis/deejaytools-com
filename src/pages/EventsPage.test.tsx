@@ -26,6 +26,7 @@ vi.mock("sonner", () => ({
 
 import EventsPage from "./EventsPage";
 import { toast } from "sonner";
+import type { EventStatus, SessionStatus } from "@/schemas";
 import { fx } from "@/test/fixtures";
 
 // ---------------------------------------------------------------------------
@@ -45,7 +46,7 @@ function makeEvent(opts: {
   name: string;
   startDate: string;
   endDate: string;
-  status: string;
+  status: EventStatus;
   seasonYear?: string;
   timezone?: string;
 }) {
@@ -60,7 +61,7 @@ function makeEvent(opts: {
   });
 }
 
-function makeSession(opts: { id: string; eventId: string | null; status?: string }) {
+function makeSession(opts: { id: string; eventId: string | null; status?: SessionStatus }) {
   return fx.session({
     id: opts.id,
     event_id: opts.eventId,
@@ -169,13 +170,6 @@ describe("EventsPage", () => {
             endDate: "2026-03-05",
             status: "completed",
           }),
-          makeEvent({
-            id: "ev4",
-            name: "Cancelled Event",
-            startDate: "2026-05-10",
-            endDate: "2026-05-12",
-            status: "cancelled",
-          }),
         ]);
       }
       return Promise.resolve([]);
@@ -188,11 +182,9 @@ describe("EventsPage", () => {
     });
     expect(screen.getAllByText("Upcoming Event").length).toBeGreaterThan(0);
 
-    // Past and cancelled events stay off the listing entirely.
+    // Past events stay off the listing entirely.
     expect(screen.queryByText("Completed Event")).toBeNull();
-    expect(screen.queryByText("Cancelled Event")).toBeNull();
     expect(screen.queryByText("completed")).toBeNull();
-    expect(screen.queryByText("cancelled")).toBeNull();
   });
 
   it("shows toast error when API fails", async () => {

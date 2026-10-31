@@ -25,6 +25,7 @@ vi.mock("sonner", () => ({
 
 import SessionsPage from "./SessionsPage";
 import { toast } from "sonner";
+import type { SessionStatus } from "@/schemas";
 import { fx } from "@/test/fixtures";
 
 // ---------------------------------------------------------------------------
@@ -33,7 +34,7 @@ import { fx } from "@/test/fixtures";
 
 function makeSession(opts: {
   id: string;
-  status: string;
+  status: SessionStatus;
   /** Local-time ISO string for floor_trial_starts_at. */
   startsAt: string;
   timezone?: string | null;

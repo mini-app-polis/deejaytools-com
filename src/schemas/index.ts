@@ -108,6 +108,7 @@ export const SessionStatusSchema = z.enum([
   "completed",
   "cancelled",
 ]);
+export type SessionStatus = z.infer<typeof SessionStatusSchema>;
 
 export const createCheckinBodySchema = z
   .object({
@@ -176,6 +177,10 @@ export function isOpenEvent(eventName: string | null | undefined): boolean {
   return normalized.startsWith("theopen");
 }
 
+/** An event's status, derived by the API from its dates in its own timezone. */
+export const EventStatusSchema = z.enum(["upcoming", "active", "completed"]);
+export type EventStatus = z.infer<typeof EventStatusSchema>;
+
 export const ApiEventSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -183,8 +188,8 @@ export const ApiEventSchema = z.object({
   end_date: z.string(),
   timezone: z.string(),
   season_year: z.string(),
-  status: z.string(),
-  created_by: z.string(),
+  status: EventStatusSchema,
+  created_by: z.string().nullable(),
   created_at: z.number(),
   updated_at: z.number(),
 });
@@ -209,8 +214,8 @@ export const ApiSessionSchema = z.object({
   floor_trial_ends_at: z.number(),
   active_priority_max: z.number(),
   active_non_priority_max: z.number(),
-  status: z.string(),
-  created_by: z.string(),
+  status: SessionStatusSchema,
+  created_by: z.string().nullable(),
   created_at: z.number(),
   // Optional fields — present on GET /v1/sessions (list) and GET /v1/sessions/:id (detail)
   event_timezone: z.string().nullable().optional(),
@@ -267,13 +272,12 @@ export const ApiMyCheckinSchema = z.object({
   queueType: z.string(),
   queuePosition: z.number(),
   overallPosition: z.number(),
-  runCount: z.number().optional().default(0),
+  runCount: z.number(),
   /**
    * False for a live check-in of the couple that the caller sees as the
    * linked partner but cannot withdraw (the API refuses DELETE for it).
-   * Older responses omit it; the caller's own check-ins are withdrawable.
    */
-  canWithdraw: z.boolean().optional().default(true),
+  canWithdraw: z.boolean(),
 });
 export type ApiMyCheckin = z.infer<typeof ApiMyCheckinSchema>;
 
@@ -314,13 +318,13 @@ export const ApiSongSchema = z.object({
    * couple's leader & follower. Null when the song has no partner and no
    * managed partnership. The API orders it; the site never re-composes it.
    */
-  partnership_label: z.string().nullable().optional(),
+  partnership_label: z.string().nullable(),
   /**
    * True when the song belongs to someone else and is listed because the
    * caller is its linked partner. Shared songs can be submitted and checked
-   * in, but only the owner may edit or delete them. Older responses omit it.
+   * in, but only the owner may edit or delete them.
    */
-  shared_with_me: z.boolean().optional().default(false),
+  shared_with_me: z.boolean(),
 });
 export type ApiSong = z.infer<typeof ApiSongSchema>;
 

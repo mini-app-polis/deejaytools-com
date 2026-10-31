@@ -19,4 +19,5 @@ export const LOADED_DIVISIONS: DivisionList = {
   divisions: TEST_DIVISIONS,
   loading: false,
   error: null,
+  retry: () => {},
 };

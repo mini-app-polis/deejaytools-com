@@ -52,8 +52,20 @@ export class UploadRefused extends Error {
   }
 }
 
-/** Refusals that no retry can change: the entity's slot is already taken. */
-const FINAL_REFUSALS = new Set(["ENTITY_SLOT_TAKEN"]);
+/**
+ * Whether a refused chunk is worth sending again. Server errors (5xx), a
+ * request timeout (408) and the rate limit (429) can pass on a retry; any
+ * other 4xx is the API's answer to this request and would be repeated —
+ * an unsupported format (whose staged chunks are already deleted, so a
+ * retry would only earn a misleading CHUNK_MISSING), a file over the size
+ * limit, an expired session, a taken slot. TOO_MANY_UPLOADS is a 429 that
+ * lasts until the caller's other uploads finish, so it is not retried either.
+ */
+export function isRetryableRefusal(status: number, code: string | undefined): boolean {
+  if (status >= 500 || status === 408) return true;
+  if (status === 429) return code !== "TOO_MANY_UPLOADS";
+  return false;
+}
 
 export type UploadStage = "idle" | "uploading" | "processing" | "finishing";
 
@@ -153,7 +165,7 @@ export async function uploadSongInChunks({
           | null;
         const code = json?.error?.code;
         lastErr = new UploadRefused(json?.error?.message ?? `Upload failed (${res.status})`, res.status, code);
-        if (res.status === 401 || (code !== undefined && FINAL_REFUSALS.has(code))) throw lastErr;
+        if (!isRetryableRefusal(res.status, code)) throw lastErr;
         continue;
       }
       lastErr = null;

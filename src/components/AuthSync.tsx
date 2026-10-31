@@ -2,6 +2,11 @@ import { useAuth, useUser } from "@clerk/clerk-react";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { checkEndpoint, endpoints } from "@/api/endpoints";
+import {
+  markAuthSyncPending,
+  markAuthSyncSettled,
+  resetAuthSyncStatus,
+} from "@/lib/authSyncStatus";
 import { createLogger } from "@/lib/logger";
 
 // Keyed by Clerk user id. A bare key would survive a sign-out/sign-in in the
@@ -32,6 +37,10 @@ export default function AuthSync() {
   const inFlight = useRef(false);
   const attempts = useRef(0);
 
+  // Mounted only while signed in: unmounting is a sign-out, and whoever signs
+  // in next has their own sync to wait for.
+  useEffect(() => resetAuthSyncStatus, []);
+
   useEffect(() => {
     if (!authLoaded || !userLoaded || !isSignedIn || !user) {
       return;
@@ -39,9 +48,14 @@ export default function AuthSync() {
 
     const key = sessionKey(user.id);
     if (sessionStorage.getItem(key)) {
+      markAuthSyncSettled();
       return;
     }
-    if (inFlight.current || attempts.current >= MAX_ATTEMPTS) {
+    if (inFlight.current) {
+      return;
+    }
+    if (attempts.current >= MAX_ATTEMPTS) {
+      markAuthSyncSettled();
       return;
     }
 
@@ -52,6 +66,7 @@ export default function AuthSync() {
         category: "api",
         context: { reason: "missing_primary_email" },
       });
+      markAuthSyncSettled();
       return;
     }
 
@@ -65,6 +80,7 @@ export default function AuthSync() {
 
     inFlight.current = true;
     attempts.current += 1;
+    markAuthSyncPending();
 
     void (async () => {
       try {
@@ -130,6 +146,7 @@ export default function AuthSync() {
         });
       } finally {
         inFlight.current = false;
+        markAuthSyncSettled();
       }
     })();
   }, [authLoaded, userLoaded, isSignedIn, user, getToken]);

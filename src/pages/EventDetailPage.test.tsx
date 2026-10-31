@@ -39,6 +39,7 @@ vi.mock("@clerk/clerk-react", () => ({
 
 import EventDetailPage from "./EventDetailPage";
 import { toast } from "sonner";
+import type { EventStatus, SessionStatus } from "@/schemas";
 import { fx } from "@/test/fixtures";
 
 // ---------------------------------------------------------------------------
@@ -50,7 +51,7 @@ function makeEvent(opts: {
   name?: string;
   startDate?: string;
   endDate?: string;
-  status?: string;
+  status?: EventStatus;
   timezone?: string;
 }) {
   return fx.event({
@@ -65,7 +66,7 @@ function makeEvent(opts: {
 
 function makeSession(opts: {
   id: string;
-  status?: string;
+  status?: SessionStatus;
   startsAt?: string;
 }) {
   const startTs = new Date(opts.startsAt ?? "2026-06-03T08:00:00").getTime();
@@ -170,7 +171,7 @@ describe("EventDetailPage", () => {
   });
 
   it("renders the correct status badge for each event status", async () => {
-    const statuses = ["upcoming", "active", "completed", "cancelled"] as const;
+    const statuses = ["upcoming", "active", "completed"] as const;
 
     for (const status of statuses) {
       apiGet.mockReset();

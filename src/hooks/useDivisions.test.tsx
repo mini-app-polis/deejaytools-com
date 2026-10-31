@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // The global setup stubs this hook for component tests; test the real one here.
@@ -56,6 +56,18 @@ describe("useDivisions", () => {
 
     const retry = renderHook(() => useDivisions());
     await waitFor(() => expect(retry.result.current.divisions).toEqual(LIST.divisions));
+    expect(apiGet).toHaveBeenCalledTimes(2);
+  });
+
+  it("loads again when the caller retries after a failure", async () => {
+    apiGet.mockRejectedValueOnce(new Error("offline")).mockResolvedValue(LIST);
+    const { result } = renderHook(() => useDivisions());
+    await waitFor(() => expect(result.current.error).toBe("offline"));
+
+    act(() => result.current.retry());
+    expect(result.current.loading).toBe(true);
+    await waitFor(() => expect(result.current.divisions).toEqual(LIST.divisions));
+    expect(result.current.error).toBeNull();
     expect(apiGet).toHaveBeenCalledTimes(2);
   });
 });
