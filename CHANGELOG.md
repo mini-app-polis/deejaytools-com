@@ -1,3 +1,29 @@
+# [2.18.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.17.1...v2.18.0) (2026-10-31)
+
+
+### Bug Fixes
+
+* **a11y:** give clickable table rows a real link reachable by keyboard ([24ea59b](https://github.com/mini-app-polis/deejaytools-com/commit/24ea59bc2e560da9025198316e0ab79060d6c4cd))
+* **a11y:** give placeholder-only search inputs accessible names ([aa659ed](https://github.com/mini-app-polis/deejaytools-com/commit/aa659ede8a379fede73bbf1bccb7ad3c477715e4))
+* **app:** drop stale responses on EventDetailPage and ManagerPage's user searches ([c9ff41b](https://github.com/mini-app-polis/deejaytools-com/commit/c9ff41b81fa0086690073a0a1138447152dc0f0a))
+* **events:** show the events when only the sessions request fails ([9123e28](https://github.com/mini-app-polis/deejaytools-com/commit/9123e289770f1769016e8e723b6fa4759d51e67e))
+* **manager:** pick today's sessions in the event's timezone, including ones past midnight ([9e0532c](https://github.com/mini-app-polis/deejaytools-com/commit/9e0532c7ad16fa708df82c92cfa2f795f4d151cd))
+* **my-content:** reload check-in positions after a withdrawal ([ebe0e30](https://github.com/mini-app-polis/deejaytools-com/commit/ebe0e30159ebfa11a58f154af8df7c545348d688))
+* **queue:** confirm Withdraw and lock live-queue actions while one is in flight ([9923d5b](https://github.com/mini-app-polis/deejaytools-com/commit/9923d5bcc17a696f8dcb26f169d27b626e9f185c))
+* **session:** enable Check in as the window opens, and say when a refresh fails ([3f74e46](https://github.com/mini-app-polis/deejaytools-com/commit/3f74e460f052d62eb7a6671bbd57d1721518ab19))
+* **staff:** show the season year and processed filename only where decided ([9c16923](https://github.com/mini-app-polis/deejaytools-com/commit/9c169239d52620e7e476401922cc06136a0def40))
+
+
+### Features
+
+* **api:** declare GET /version in the endpoint catalog ([623fc19](https://github.com/mini-app-polis/deejaytools-com/commit/623fc1902ad00754251182773d9f046fcc4f82f5))
+* **app:** show a recovery screen when rendering throws ([4ce3dd4](https://github.com/mini-app-polis/deejaytools-com/commit/4ce3dd4c3a112f695b317e5f9557cdc77a90c5d9))
+
+
+### Performance Improvements
+
+* **app:** lazy-load the admin, manager and per-event staff routes ([df62c85](https://github.com/mini-app-polis/deejaytools-com/commit/df62c855e96343f7d41cba696ccb216a286826e0))
+
 ## [2.17.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.17.0...v2.17.1) (2026-10-31)
 
 
