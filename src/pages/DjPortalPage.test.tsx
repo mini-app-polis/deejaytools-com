@@ -35,7 +35,7 @@ const liveSession = fx.session({
 function routeGet(path: string): Promise<unknown> {
   if (path === "/v1/events/ev-1") return Promise.resolve(fx.event({ id: "ev-1", name: "Fall Fling" }));
   if (path === "/v1/sessions?event_id=ev-1") return Promise.resolve([liveSession]);
-  if (path === "/v1/queue/s-1/active") return Promise.resolve([fx.queueEntry({ queueEntryId: "qe-1", entityLabel: "Ada & Bob" })]);
+  if (path === "/v1/queue/s-1/active/staff") return Promise.resolve([fx.queueEntry({ queueEntryId: "qe-1", entityLabel: "Ada & Bob" })]);
   if (path === "/v1/queue/s-1/priority") return Promise.resolve([]);
   if (path === "/v1/queue/s-1/non-priority") return Promise.resolve([]);
   if (path.startsWith("/v1/runs?")) {

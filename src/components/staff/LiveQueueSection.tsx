@@ -79,7 +79,7 @@ export default function LiveQueueSection({ event }: { event: ApiEvent }) {
       if (!silent) setLoading(true);
       try {
         const [a, p, n] = await Promise.all([
-          call(api, endpoints.queue.active, { params: { sessionId: id } }),
+          call(api, endpoints.queue.activeStaff, { params: { sessionId: id } }),
           call(api, endpoints.queue.priority, { params: { sessionId: id } }),
           call(api, endpoints.queue.nonPriority, { params: { sessionId: id } }),
         ]);

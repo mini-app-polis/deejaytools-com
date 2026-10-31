@@ -45,6 +45,7 @@ describe("endpoint paths", () => {
   it("percent-encodes ids so a slash or space cannot escape the path segment", () => {
     expect(endpoints.events.get.path({ id: "a/b c" })).toBe("/v1/events/a%2Fb%20c");
     expect(endpoints.queue.active.path({ sessionId: "s/1" })).toBe("/v1/queue/s%2F1/active");
+    expect(endpoints.queue.activeStaff.path({ sessionId: "s/1" })).toBe("/v1/queue/s%2F1/active/staff");
     expect(endpoints.admin.setUserRole.path({ id: "u?1" })).toBe("/v1/admin/users/u%3F1/role");
   });
 

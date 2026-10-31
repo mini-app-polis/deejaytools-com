@@ -178,7 +178,7 @@ describe("LiveQueueSection", () => {
   it("moves an entry down and runs it incomplete", async () => {
     apiGet.mockImplementation((p: string) => {
       if (p === "/v1/sessions?event_id=ev-1") return Promise.resolve([live("s-1")]);
-      if (p === "/v1/queue/s-1/active") {
+      if (p === "/v1/queue/s-1/active/staff") {
         return Promise.resolve([
           fx.queueEntry({ queueEntryId: "qe-1", position: 1, entityLabel: "First", notes: "fast start", songProcessedFilename: "a.mp3" }),
           fx.queueEntry({ queueEntryId: "qe-2", position: 2, entityLabel: "Second" }),
@@ -202,8 +202,8 @@ describe("LiveQueueSection", () => {
   it("asks for a session when several exist, and toasts a failed action or load", async () => {
     apiGet.mockImplementation((p: string) => {
       if (p === "/v1/sessions?event_id=ev-1") return Promise.resolve([live("s-1"), live("s-2")]);
-      if (p === "/v1/queue/s-2/active") return Promise.resolve([fx.queueEntry({ queueEntryId: "qe-9", entityLabel: "Solo" })]);
-      if (p === "/v1/queue/s-1/active") return Promise.reject(new Error("queue down"));
+      if (p === "/v1/queue/s-2/active/staff") return Promise.resolve([fx.queueEntry({ queueEntryId: "qe-9", entityLabel: "Solo" })]);
+      if (p === "/v1/queue/s-1/active/staff") return Promise.reject(new Error("queue down"));
       return Promise.resolve([]);
     });
     apiPost.mockRejectedValue(new Error("cap reached"));

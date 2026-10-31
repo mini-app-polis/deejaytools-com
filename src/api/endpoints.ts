@@ -218,6 +218,12 @@ export const endpoints = {
       path: (p) => `/v1/queue/${encodeURIComponent(p.sessionId)}/active`,
       response: z.array(ApiQueueEntrySchema),
     }),
+    /** The active queue with each entry's check-in notes, for the event's staff. */
+    activeStaff: endpoint<{ sessionId: string }, void, z.infer<typeof ApiQueueEntrySchema>[]>({
+      id: "queue.activeStaff", method: "GET", access: "event-staff",
+      path: (p) => `/v1/queue/${encodeURIComponent(p.sessionId)}/active/staff`,
+      response: z.array(ApiQueueEntrySchema),
+    }),
     waiting: endpoint<{ sessionId: string }, void, z.infer<typeof ApiQueueEntrySchema>[]>({
       id: "queue.waiting", method: "GET", access: "public",
       path: (p) => `/v1/queue/${encodeURIComponent(p.sessionId)}/waiting`,

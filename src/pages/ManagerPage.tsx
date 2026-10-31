@@ -115,7 +115,7 @@ export default function ManagerPage() {
       if (!silent) setLqLoading(true);
       try {
         const [active, priority, nonPriority] = await Promise.all([
-          call(api, endpoints.queue.active, { params: { sessionId: sessionId } }),
+          call(api, endpoints.queue.activeStaff, { params: { sessionId: sessionId } }),
           call(api, endpoints.queue.priority, { params: { sessionId: sessionId } }),
           call(api, endpoints.queue.nonPriority, { params: { sessionId: sessionId } }),
         ]);
