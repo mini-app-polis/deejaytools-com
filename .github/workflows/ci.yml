@@ -45,7 +45,14 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test:coverage
-      - run: pnpm build
+      # The build compiles the app only with a Clerk publishable key: without
+      # one, main.tsx throws before rendering and the bundler drops every page
+      # as unreachable, so a page that fails to compile would still pass. The
+      # key is a placeholder development-instance key for clerk.example.com,
+      # built here rather than written out so secret scanners do not flag it;
+      # this bundle is never deployed.
+      - name: pnpm build
+        run: DEEJAYTOOLS_CLERK_PUBLISHABLE_KEY="pk_test_$(printf 'clerk.example.com$' | base64)" pnpm build
 
   release:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
