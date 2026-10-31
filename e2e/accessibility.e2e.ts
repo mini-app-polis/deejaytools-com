@@ -78,6 +78,7 @@ test("the main pages pass an automated accessibility scan", async ({ page }) => 
     ["/", h1],
     ["/how-it-works", h1],
     ["/events", h1],
+    [`/events/${eventId}`, h1],
     ["/floor-trials", h1],
   ];
   const signedIn: [string, (p: Page) => Locator][] = [
@@ -86,6 +87,7 @@ test("the main pages pass an automated accessibility scan", async ({ page }) => 
     ["/my-profile", h1],
     ["/event-submissions", h1],
     [`/event-submissions/${eventId}`, h1],
+    ["/sessions", h1],
     [`/sessions/${sessionId}`, h1],
     ["/manager/active-sessions", h1],
     ["/manager/checkin-for", h1],
