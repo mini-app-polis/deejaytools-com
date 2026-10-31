@@ -3,13 +3,14 @@ import {
   type ApiManagedPartnership,
 } from "@/schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { z } from "zod";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
+import QueryError from "@/components/QueryError";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -44,10 +45,14 @@ function partnershipLabel(p: ApiManagedPartnership): string {
 }
 
 export default function ManagedPartnershipsSection() {
-  const api = useApiClient();
-
-  const [items, setItems] = useState<ApiManagedPartnership[] | null>(null);
-  const [loading, setLoading] = useState(true);
+  const itemsQuery = useEndpointQuery(endpoints.managedPartnerships.list);
+  const items = itemsQuery.data ?? null;
+  const loading = itemsQuery.isFetching;
+  // Songs show the partnership they are for, so a change refreshes them too.
+  const partnershipReads = [endpoints.managedPartnerships.list, endpoints.songs.list];
+  const createPartnership = useEndpointMutation(endpoints.managedPartnerships.create, { invalidates: partnershipReads });
+  const updatePartnership = useEndpointMutation(endpoints.managedPartnerships.update, { invalidates: partnershipReads });
+  const removePartnership = useEndpointMutation(endpoints.managedPartnerships.remove, { invalidates: partnershipReads });
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ApiManagedPartnership | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ApiManagedPartnership | null>(null);
@@ -58,18 +63,6 @@ export default function ManagedPartnershipsSection() {
     resolver: zodResolver(createManagedPartnershipBodySchema),
     defaultValues: emptyForm,
   });
-
-  const load = useCallback(() => {
-    setLoading(true);
-    call(api, endpoints.managedPartnerships.list)
-      .then(setItems)
-      .catch((e: Error) => toast.error(e.message))
-      .finally(() => setLoading(false));
-  }, [api]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   const openCreate = () => {
     setEditing(null);
@@ -92,13 +85,11 @@ export default function ManagedPartnershipsSection() {
     setIsFormSubmitting(true);
     try {
       if (editing) {
-        const updated = await call(api, endpoints.managedPartnerships.update, { params: { id: editing.id }, body: values });
+        await updatePartnership.mutateAsync({ params: { id: editing.id }, body: values });
         toast.success("Partnership updated");
-        setItems((prev) => prev?.map((x) => (x.id === updated.id ? updated : x)) ?? null);
       } else {
-        const created = await call(api, endpoints.managedPartnerships.create, { body: values });
+        await createPartnership.mutateAsync({ body: values });
         toast.success("Partnership added");
-        setItems((prev) => (prev ? [created, ...prev] : [created]));
       }
       setFormOpen(false);
     } catch (e) {
@@ -112,8 +103,7 @@ export default function ManagedPartnershipsSection() {
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
-      await call(api, endpoints.managedPartnerships.remove, { params: { id: deleteTarget.id } });
-      setItems((prev) => prev?.filter((p) => p.id !== deleteTarget.id) ?? null);
+      await removePartnership.mutateAsync({ params: { id: deleteTarget.id } });
       setDeleteTarget(null);
       toast.success("Partnership removed.");
     } catch (e) {
@@ -146,6 +136,9 @@ export default function ManagedPartnershipsSection() {
         </div>
         <div className="p-4 space-y-4">
           <div className={`space-y-2${loading ? " opacity-60" : ""}`}>
+            {itemsQuery.error && !items && (
+              <QueryError what="partnerships" error={itemsQuery.error} onRetry={() => void itemsQuery.refetch()} />
+            )}
             {loading && !items && <Skeleton className="h-40 w-full" />}
             {items?.length === 0 && (
               <p className="text-sm text-muted-foreground py-4 text-center">No managed partnerships yet.</p>

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -35,6 +35,7 @@ import SongUploadForm from "./SongUploadForm";
 import { MAX_FILE_BYTES } from "@/lib/chunkedSongUpload";
 import { toast } from "sonner";
 import { fx } from "@/test/fixtures";
+import { renderWithQueryClient } from "@/test/render";
 
 const EXPECTED_UPLOAD_DIVISIONS = [
   "Classic",
@@ -66,7 +67,7 @@ function mockLoadedSelfForm() {
 }
 
 function renderForm() {
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter>
       <SongUploadForm variant="self" />
     </MemoryRouter>
@@ -187,7 +188,7 @@ describe("SongUploadForm — uploading", () => {
     );
     uploadSongInChunks.mockResolvedValue(undefined);
     const onUploaded = vi.fn();
-    render(
+    renderWithQueryClient(
       <MemoryRouter>
         <SongUploadForm
           variant="self"
@@ -232,7 +233,7 @@ describe("SongUploadForm — uploading", () => {
       )
     );
     uploadSongInChunks.mockResolvedValue(undefined);
-    render(
+    renderWithQueryClient(
       <MemoryRouter>
         <SongUploadForm variant="self" onBehalf={{ userId: "u9", label: "Dana Fox", eventId: "ev-1" }} />
       </MemoryRouter>
@@ -268,7 +269,7 @@ describe("SongUploadForm — uploading", () => {
     apiGet.mockReset();
     apiGet.mockResolvedValue([]);
     uploadSongInChunks.mockResolvedValue(undefined);
-    render(
+    renderWithQueryClient(
       <MemoryRouter>
         <SongUploadForm variant="self" onBehalf={{ userId: "u9", label: "Dana Fox", eventId: "ev-1" }} />
       </MemoryRouter>
@@ -290,7 +291,7 @@ describe("SongUploadForm — uploading", () => {
       new UploadRefused("This entity already has a song submitted for Classic", 409, "ENTITY_SLOT_TAKEN")
     );
     const onUploaded = vi.fn();
-    render(
+    renderWithQueryClient(
       <MemoryRouter>
         <SongUploadForm
           variant="self"

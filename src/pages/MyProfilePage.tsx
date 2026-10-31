@@ -1,10 +1,10 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointMutation } from "@/api/queries";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -29,9 +29,9 @@ const profileSchema = z.object({
 type ProfileForm = z.infer<typeof profileSchema>;
 
 export default function MyProfilePage() {
-  const api = useApiClient();
   const { me, loading, error, reload } = useAuthMe();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const updateMe = useEndpointMutation(endpoints.auth.updateMe);
+  const isSubmitting = updateMe.isPending;
 
   const form = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
@@ -47,9 +47,8 @@ export default function MyProfilePage() {
   }, [me, form]);
 
   const onSubmit = form.handleSubmit(async (values) => {
-    setIsSubmitting(true);
     try {
-      await call(api, endpoints.auth.updateMe, { body: {
+      await updateMe.mutateAsync({ body: {
         firstName: values.firstName,
         lastName: values.lastName,
       } });
@@ -57,8 +56,6 @@ export default function MyProfilePage() {
       toast.success("Profile updated");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to update profile");
-    } finally {
-      setIsSubmitting(false);
     }
   });
 

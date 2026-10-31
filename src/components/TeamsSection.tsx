@@ -1,12 +1,13 @@
 import { createTeamBodySchema, type ApiTeam } from "@/schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { z } from "zod";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
+import QueryError from "@/components/QueryError";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -30,10 +31,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 type TeamForm = z.infer<typeof createTeamBodySchema>;
 
 export default function TeamsSection() {
-  const api = useApiClient();
-
-  const [teams, setTeams] = useState<ApiTeam[] | null>(null);
-  const [teamsLoading, setTeamsLoading] = useState(true);
+  const teamsQuery = useEndpointQuery(endpoints.teams.list);
+  const teams = teamsQuery.data ?? null;
+  const teamsLoading = teamsQuery.isFetching;
+  // Songs show their team's identifier, so a change refreshes them too.
+  const teamReads = [endpoints.teams.list, endpoints.songs.list];
+  const createTeam = useEndpointMutation(endpoints.teams.create, { invalidates: teamReads });
+  const updateTeam = useEndpointMutation(endpoints.teams.update, { invalidates: teamReads });
+  const removeTeam = useEndpointMutation(endpoints.teams.remove, { invalidates: teamReads });
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ApiTeam | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ApiTeam | null>(null);
@@ -44,18 +49,6 @@ export default function TeamsSection() {
     resolver: zodResolver(createTeamBodySchema),
     defaultValues: { identifier: "" },
   });
-
-  const loadTeams = useCallback(() => {
-    setTeamsLoading(true);
-    call(api, endpoints.teams.list)
-      .then(setTeams)
-      .catch((e: Error) => toast.error(e.message))
-      .finally(() => setTeamsLoading(false));
-  }, [api]);
-
-  useEffect(() => {
-    loadTeams();
-  }, [loadTeams]);
 
   const openCreate = () => {
     setEditing(null);
@@ -73,17 +66,15 @@ export default function TeamsSection() {
     setIsFormSubmitting(true);
     try {
       if (editing) {
-        const updated = await call(api, endpoints.teams.update, { params: { id: editing.id }, body: {
+        await updateTeam.mutateAsync({ params: { id: editing.id }, body: {
           identifier: values.identifier,
         } });
         toast.success("Team updated");
-        setTeams((prev) => prev?.map((x) => (x.id === updated.id ? updated : x)) ?? null);
       } else {
-        const created = await call(api, endpoints.teams.create, { body: {
+        await createTeam.mutateAsync({ body: {
           identifier: values.identifier,
         } });
         toast.success("Team added");
-        setTeams((prev) => (prev ? [created, ...prev] : [created]));
       }
       setFormOpen(false);
     } catch (e) {
@@ -97,8 +88,7 @@ export default function TeamsSection() {
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
-      await call(api, endpoints.teams.remove, { params: { id: deleteTarget.id } });
-      setTeams((prev) => prev?.filter((t) => t.id !== deleteTarget.id) ?? null);
+      await removeTeam.mutateAsync({ params: { id: deleteTarget.id } });
       setDeleteTarget(null);
       toast.success("Team removed.");
     } catch (e) {
@@ -126,6 +116,9 @@ export default function TeamsSection() {
         </div>
         <div className="p-4 space-y-4">
           <div className={`space-y-2${teamsLoading ? " opacity-60" : ""}`}>
+            {teamsQuery.error && !teams && (
+              <QueryError what="teams" error={teamsQuery.error} onRetry={() => void teamsQuery.refetch()} />
+            )}
             {teamsLoading && !teams && <Skeleton className="h-40 w-full" />}
             {teams?.length === 0 && (
               <p className="text-sm text-muted-foreground py-4 text-center">No teams yet.</p>

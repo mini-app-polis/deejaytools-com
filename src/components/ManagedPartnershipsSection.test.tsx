@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -35,6 +35,7 @@ vi.mock("sonner", () => ({
 import { toast } from "sonner";
 import ManagedPartnershipsSection from "./ManagedPartnershipsSection";
 import { fx } from "@/test/fixtures";
+import { renderWithQueryClient } from "@/test/render";
 
 beforeEach(() => {
   apiGet.mockReset();
@@ -46,7 +47,7 @@ beforeEach(() => {
 });
 
 function renderSection() {
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter>
       <ManagedPartnershipsSection />
     </MemoryRouter>
@@ -173,15 +174,18 @@ describe("ManagedPartnershipsSection — managing partnerships", () => {
     expect(screen.getByText(MP2_LABEL)).toBeInTheDocument();
   });
 
-  it("reports a failure to load", async () => {
+  it("reports a failure to load inline", async () => {
     apiGet.mockRejectedValue(new Error("list down"));
     renderSection();
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("list down"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load partnerships: list down");
   });
 
-  it("adds a partnership with trimmed names and shows it first", async () => {
+  it("adds a partnership with trimmed names and shows the refetched list", async () => {
     withItems([MP2]);
-    apiPost.mockResolvedValue(MP1);
+    apiPost.mockImplementation(async () => {
+      withItems([MP1, MP2]);
+      return MP1;
+    });
     const user = userEvent.setup();
     renderSection();
 
@@ -200,6 +204,7 @@ describe("ManagedPartnershipsSection — managing partnerships", () => {
     );
     expect(toast.success).toHaveBeenCalledWith("Partnership added");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await screen.findByText(MP1_LABEL);
     const labels = screen.getAllByText(/\(Leader\)/).map((n) => n.textContent);
     expect(labels).toEqual([MP1_LABEL, MP2_LABEL]);
   });
@@ -222,7 +227,10 @@ describe("ManagedPartnershipsSection — managing partnerships", () => {
 
   it("edits a partnership with a PATCH pre-filled from the row", async () => {
     withItems([MP1, MP2]);
-    apiPatch.mockResolvedValue({ ...MP1, follower_first_name: "Faye" });
+    apiPatch.mockImplementation(async () => {
+      withItems([{ ...MP1, follower_first_name: "Faye" }, MP2]);
+      return { ...MP1, follower_first_name: "Faye" };
+    });
     const user = userEvent.setup();
     renderSection();
 
@@ -250,7 +258,9 @@ describe("ManagedPartnershipsSection — managing partnerships", () => {
 
   it("deletes a partnership after confirmation", async () => {
     withItems([MP1, MP2]);
-    apiDel.mockResolvedValue(undefined);
+    apiDel.mockImplementation(async () => {
+      withItems([MP1]);
+    });
     const user = userEvent.setup();
     renderSection();
 

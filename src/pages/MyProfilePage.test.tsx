@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -54,6 +54,7 @@ vi.mock("sonner", () => ({
 
 import { toast } from "sonner";
 import MyProfilePage from "./MyProfilePage";
+import { renderWithQueryClient } from "@/test/render";
 
 beforeEach(() => {
   apiGet.mockReset();
@@ -84,7 +85,7 @@ beforeEach(() => {
 });
 
 function renderPage() {
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter>
       <MyProfilePage />
     </MemoryRouter>

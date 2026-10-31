@@ -1,9 +1,12 @@
 import { useAuth } from "@clerk/clerk-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointQuery } from "@/api/queries";
+import { queryKey, type KeyedEndpoint } from "@/api/queryKeys";
+import QueryError from "@/components/QueryError";
 import { Button } from "@/components/ui/button";
 import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Input } from "@/components/ui/input";
@@ -11,7 +14,6 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDivisions } from "@/hooks/useDivisions";
 import type { ApiManagedPartnership, ApiPartner } from "@/schemas";
-import type { AuthMe as MeResponse } from "@/hooks/useAuthMe";
 import {
   MAX_FILE_BYTES,
   UploadRefused,
@@ -29,6 +31,9 @@ function uploadDivisionGroups(groups: readonly (readonly string[])[]) {
 }
 
 type Partner = Pick<ApiPartner, "id" | "first_name" | "last_name" | "partner_role">;
+
+// A stable empty list while a query has no data, so effects over it hold.
+const NO_ROWS: readonly never[] = [];
 
 function formatMB(bytes: number): string { return (bytes / (1024 * 1024)).toFixed(1); }
 function isIOS(): boolean {
@@ -63,15 +68,10 @@ export type SongUploadFormProps = {
 };
 
 export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUploadFormProps) {
-  const api = useApiClient();
+  const queryClient = useQueryClient();
   const { getToken } = useAuth();
   const { groups: divisionGroups, loading: divisionsLoading, error: divisionsError } = useDivisions();
   const uploadGroups = useMemo(() => uploadDivisionGroups(divisionGroups), [divisionGroups]);
-
-  const [partners, setPartners] = useState<Partner[]>([]);
-  const [managedPartnerships, setManagedPartnerships] = useState<ApiManagedPartnership[]>([]);
-  const [me, setMe] = useState<MeResponse | null>(null);
-  const [loading, setLoading] = useState(true);
 
   const [file, setFile] = useState<File | null>(null);
   const [division, setDivision] = useState("");
@@ -89,34 +89,39 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
   const onBehalfUserId = onBehalf?.userId;
   const onBehalfEventId = onBehalf?.eventId;
 
+  // Whose partners to offer: the dancer's at an event (for its staff), a
+  // user's (for an admin), or the signed-in dancer's own.
+  const forSelf = onBehalfUserId === undefined;
+  const eventPartnersQuery = useEndpointQuery(endpoints.events.personPartners, {
+    params: { id: onBehalfEventId ?? "", userId: onBehalfUserId ?? "" },
+    enabled: !forSelf && !!onBehalfEventId,
+  });
+  const userPartnersQuery = useEndpointQuery(endpoints.admin.userPartners, {
+    params: { id: onBehalfUserId ?? "" },
+    enabled: !forSelf && !onBehalfEventId,
+  });
+  const ownPartnersQuery = useEndpointQuery(endpoints.partners.list, { enabled: forSelf });
+  const partnersQuery = forSelf ? ownPartnersQuery : onBehalfEventId ? eventPartnersQuery : userPartnersQuery;
+  const meQuery = useEndpointQuery(endpoints.auth.me, { enabled: forSelf });
+  const managedQuery = useEndpointQuery(endpoints.managedPartnerships.list, {
+    enabled: variant === "managed" && forSelf,
+  });
+  const partners: readonly Partner[] = partnersQuery.data ?? NO_ROWS;
+  const me = forSelf ? (meQuery.data ?? null) : null;
+  const managedPartnerships: readonly ApiManagedPartnership[] = managedQuery.data ?? NO_ROWS;
+  const loading = partnersQuery.isLoading || meQuery.isLoading || managedQuery.isLoading;
+  // Partnerships failing to load leaves the rest of the form usable.
+  const loadError = partnersQuery.error ?? meQuery.error;
+
+  // Preselect the first partner and partnership once they load.
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    Promise.all([
-      onBehalfUserId !== undefined
-        ? onBehalfEventId
-          ? call(api, endpoints.events.personPartners, {
-              params: { id: onBehalfEventId, userId: onBehalfUserId },
-            })
-          : call(api, endpoints.admin.userPartners, { params: { id: onBehalfUserId } })
-        : call(api, endpoints.partners.list),
-      onBehalfUserId !== undefined ? Promise.resolve(null) : call(api, endpoints.auth.me),
-      variant === "managed" && onBehalfUserId === undefined
-        ? call(api, endpoints.managedPartnerships.list).catch(() => [])
-        : Promise.resolve([] as ApiManagedPartnership[]),
-    ])
-      .then(([p, m, mp]) => {
-        if (cancelled) return;
-        setPartners(p);
-        setMe(m);
-        setManagedPartnerships(mp);
-        if (p.length > 0) setSelectedPartnerId((cur) => (cur === "" ? p[0].id : cur));
-        if (mp.length > 0) setSelectedManagedPartnershipId((cur) => (cur === "" ? mp[0].id : cur));
-      })
-      .catch((e: Error) => toast.error(e.message))
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [api, variant, onBehalfUserId, onBehalfEventId]);
+    if (partners.length > 0) setSelectedPartnerId((cur) => (cur === "" ? partners[0].id : cur));
+  }, [partners]);
+  useEffect(() => {
+    if (managedPartnerships.length > 0) {
+      setSelectedManagedPartnershipId((cur) => (cur === "" ? managedPartnerships[0].id : cur));
+    }
+  }, [managedPartnerships]);
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -173,6 +178,17 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
           ? "Song uploaded and submitted to the event, ready for check-in."
           : "Song uploaded successfully."
       );
+      // The upload goes through its own fetch loop, so the lists it adds to
+      // are refreshed here.
+      const added: readonly KeyedEndpoint<never>[] = [
+        endpoints.songs.list,
+        endpoints.eventSongSubmissions.list,
+        endpoints.events.songSubmissions,
+        endpoints.admin.songs,
+      ];
+      for (const ep of added) {
+        void queryClient.invalidateQueries({ queryKey: queryKey(ep) });
+      }
       setFile(null);
       setDivision("");
       setRoutineName("");
@@ -197,6 +213,19 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
       setIsSubmitting(false);
     }
   };
+
+  if (loadError && !loading) {
+    return (
+      <QueryError
+        what="the upload form"
+        error={loadError}
+        onRetry={() => {
+          if (partnersQuery.error) void partnersQuery.refetch();
+          if (meQuery.error) void meQuery.refetch();
+        }}
+      />
+    );
+  }
 
   if (loading) {
     return (
@@ -279,7 +308,13 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
       ) : (
         <div className="space-y-2">
           <Label>Partnership</Label>
-          {managedPartnerships.length === 0 ? (
+          {managedQuery.error && !managedQuery.data ? (
+            <QueryError
+              what="your managed partnerships"
+              error={managedQuery.error}
+              onRetry={() => void managedQuery.refetch()}
+            />
+          ) : managedPartnerships.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               You have no managed partnerships yet. Add them on{" "}
               <Link to="/my-profile" className="underline">My Profile</Link>.

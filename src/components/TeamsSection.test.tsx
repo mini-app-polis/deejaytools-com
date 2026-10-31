@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -35,6 +35,7 @@ vi.mock("sonner", () => ({
 import { toast } from "sonner";
 import TeamsSection from "./TeamsSection";
 import { fx } from "@/test/fixtures";
+import { renderWithQueryClient } from "@/test/render";
 
 beforeEach(() => {
   apiGet.mockReset();
@@ -46,7 +47,7 @@ beforeEach(() => {
 });
 
 function renderSection() {
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter>
       <TeamsSection />
     </MemoryRouter>
@@ -138,15 +139,20 @@ describe("TeamsSection — managing teams", () => {
     );
   });
 
-  it("reports a failure to load teams", async () => {
+  it("reports a failure to load teams inline", async () => {
     apiGet.mockRejectedValue(new Error("teams down"));
     renderSection();
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("teams down"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load teams: teams down");
+    expect(screen.queryByText(/no teams yet/i)).not.toBeInTheDocument();
   });
 
-  it("adds a team and puts it at the top of the list", async () => {
+  it("adds a team and shows the list the server returns", async () => {
     withTeams([ROCKETS]);
-    apiPost.mockResolvedValue(fx.team({ id: "t9", identifier: "Swing Kids" }));
+    const created = fx.team({ id: "t9", identifier: "Swing Kids" });
+    apiPost.mockImplementation(async () => {
+      withTeams([created, ROCKETS]);
+      return created;
+    });
     const user = userEvent.setup();
     renderSection();
 
@@ -160,6 +166,7 @@ describe("TeamsSection — managing teams", () => {
     );
     expect(toast.success).toHaveBeenCalledWith("Team added");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await screen.findByText("Swing Kids");
     const names = screen.getAllByText(/^(Swing Kids|Rockets)$/).map((n) => n.textContent);
     expect(names).toEqual(["Swing Kids", "Rockets"]);
   });
@@ -182,9 +189,12 @@ describe("TeamsSection — managing teams", () => {
     expect(apiPost).not.toHaveBeenCalled();
   });
 
-  it("renames a team in place with a PATCH", async () => {
+  it("renames a team with a PATCH", async () => {
     withTeams([ROCKETS, COMETS]);
-    apiPatch.mockResolvedValue({ ...ROCKETS, identifier: "Red Rockets" });
+    apiPatch.mockImplementation(async () => {
+      withTeams([{ ...ROCKETS, identifier: "Red Rockets" }, COMETS]);
+      return { ...ROCKETS, identifier: "Red Rockets" };
+    });
     const user = userEvent.setup();
     renderSection();
 
@@ -208,7 +218,9 @@ describe("TeamsSection — managing teams", () => {
 
   it("deletes a team after confirmation", async () => {
     withTeams([ROCKETS, COMETS]);
-    apiDel.mockResolvedValue(undefined);
+    apiDel.mockImplementation(async () => {
+      withTeams([COMETS]);
+    });
     const user = userEvent.setup();
     renderSection();
 

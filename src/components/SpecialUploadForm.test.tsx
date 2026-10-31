@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -36,6 +36,7 @@ vi.mock("@/lib/chunkedSongUpload", async (importOriginal) => ({
 import SpecialUploadForm from "./SpecialUploadForm";
 import { fx } from "@/test/fixtures";
 import { toast } from "sonner";
+import { renderWithQueryClient } from "@/test/render";
 
 const TEAM_A = fx.team({ id: "team-a", identifier: "Swing Kids" });
 const TEAM_B = fx.team({ id: "team-b", identifier: "Rockets" });
@@ -64,7 +65,7 @@ function renderForm(teams: unknown[] | (() => Promise<unknown>) = [TEAM_A, TEAM_
     }
     return Promise.resolve([]);
   });
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter>
       <SpecialUploadForm />
     </MemoryRouter>
@@ -236,9 +237,11 @@ describe("SpecialUploadForm", () => {
     expect(screen.getByRole("button", { name: "Upload song" })).toBeEnabled();
   });
 
-  it("reports a failure to load teams and still renders the form", async () => {
+  it("still renders the form when teams fail to load, and says so where teams are picked", async () => {
+    const user = userEvent.setup();
     renderForm(() => Promise.reject(new Error("teams down")));
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("teams down"));
-    expect(await screen.findByRole("radiogroup", { name: "Division" })).toBeInTheDocument();
+    const divisions = await screen.findByRole("radiogroup", { name: "Division" });
+    await user.click(within(divisions).getByRole("radio", { name: "Teams" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load your teams: teams down");
   });
 });
