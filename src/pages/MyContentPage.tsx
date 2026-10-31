@@ -158,6 +158,8 @@ export default function MyContentPage() {
       setCheckins((prev) => prev?.filter((c) => c.id !== checkinId) ?? null);
       setPendingWithdrawId(null);
       toast.success("Withdrawn from queue.");
+      // Entries behind the withdrawn one move up; reload for their positions.
+      loadCheckins();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to withdraw.");
       setPendingWithdrawId(null);
