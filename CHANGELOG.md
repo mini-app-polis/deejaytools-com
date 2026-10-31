@@ -1,3 +1,19 @@
+# [2.21.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.20.0...v2.21.0) (2026-10-31)
+
+
+### Bug Fixes
+
+* **deps:** bump @hookform/resolvers ([2eb58c2](https://github.com/mini-app-polis/deejaytools-com/commit/2eb58c281529f685129c388f39dd24845d691095))
+* **deps:** bump the minor-and-patch group across 1 directory with 6 updates ([dfe0c24](https://github.com/mini-app-polis/deejaytools-com/commit/dfe0c245d1266f07d187157701bad10de5faf78d))
+
+
+### Features
+
+* **data:** move the admin, manager and polling screens onto TanStack Query ([e44deaf](https://github.com/mini-app-polis/deejaytools-com/commit/e44deaf7409977656842f705ff457ffc656c6f39))
+* **data:** move the dancer pages and forms onto TanStack Query ([e9e250a](https://github.com/mini-app-polis/deejaytools-com/commit/e9e250a74e05b0ea7c6b130739a7022183947346))
+* **data:** move the public listing pages onto TanStack Query ([2293f1f](https://github.com/mini-app-polis/deejaytools-com/commit/2293f1f02a1754eb42d1fd3c50f2e3f241fd793d))
+* **data:** move the staff portal sections onto TanStack Query ([9d14e74](https://github.com/mini-app-polis/deejaytools-com/commit/9d14e74c71e8c0f99ee32bcca5006253c5878651))
+
 # [2.20.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.19.0...v2.20.0) (2026-10-31)
 
 
