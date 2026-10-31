@@ -47,7 +47,7 @@ export default function EventsPage() {
 
   // Events and sessions load independently: a sessions failure keeps the
   // events listed, without floor-trial counts, and says why.
-  const load = () => {
+  useEffect(() => {
     setLoading(true);
     setSessionsError(null);
     const eventsReq = call(api, endpoints.events.list)
@@ -60,10 +60,6 @@ export default function EventsPage() {
         setSessionsError(e.message);
       });
     void Promise.all([eventsReq, sessionsReq]).finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    load();
   }, [api]);
 
   if (loading && !events) {

@@ -48,7 +48,7 @@ export default function EventDetailPage() {
 
   // The event and its sessions load independently: a sessions failure keeps
   // the event on screen and shows the error in the sessions section.
-  const load = () => {
+  useEffect(() => {
     if (!id) return;
     setLoading(true);
     setSessionsError(null);
@@ -62,10 +62,6 @@ export default function EventDetailPage() {
         setSessionsError(e.message);
       });
     void Promise.all([eventReq, sessionsReq]).finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    load();
   }, [api, id]);
 
   if (!id) {

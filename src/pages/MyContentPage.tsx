@@ -7,7 +7,7 @@ import type {
 } from "@/schemas";
 import { isOpenEvent } from "@/schemas";
 import { songLabel, songPieces } from "@/lib/songLabel";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { useApiClient } from "@/api/client";
@@ -113,21 +113,21 @@ export default function MyContentPage() {
 
   // ── Data loaders ─────────────────────────────────────────────────────────────
 
-  const loadSongs = () => {
+  const loadSongs = useCallback(() => {
     setSongsLoading(true);
     call(api, endpoints.songs.list)
       .then(setSongs)
       .catch((e: Error) => toast.error(e.message))
       .finally(() => setSongsLoading(false));
-  };
+  }, [api]);
 
-  const loadCheckins = () => {
+  const loadCheckins = useCallback(() => {
     call(api, endpoints.checkins.mine)
       .then(setCheckins)
       .catch((e: Error) => toast.error(e.message));
-  };
+  }, [api]);
 
-  const loadEventsSection = () => {
+  const loadEventsSection = useCallback(() => {
     setEventsLoading(true);
     Promise.all([
       call(api, endpoints.events.list).catch(() => [] as ApiEvent[]),
@@ -139,9 +139,9 @@ export default function MyContentPage() {
         setEventSubmissions(subs);
       })
       .finally(() => setEventsLoading(false));
-  };
+  }, [api]);
 
-  const loadActiveSessions = () => {
+  const loadActiveSessions = useCallback(() => {
     call(api, endpoints.sessions.list)
       .then((all) =>
         setActiveSessions(
@@ -149,7 +149,7 @@ export default function MyContentPage() {
         )
       )
       .catch(() => setActiveSessions([]));
-  };
+  }, [api]);
 
   const handleWithdraw = async (checkinId: string) => {
     setWithdrawingId(checkinId);
@@ -171,7 +171,7 @@ export default function MyContentPage() {
     loadCheckins();
     loadEventsSection();
     loadActiveSessions();
-  }, [api]);
+  }, [loadSongs, loadCheckins, loadEventsSection, loadActiveSessions]);
 
   const submissionsByEventId = useMemo(() => {
     const map = new Map<string, ApiEventSongSubmission[]>();

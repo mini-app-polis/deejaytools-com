@@ -107,7 +107,6 @@ export default function ManagerPage() {
   );
   const cfSessionObj = sessions?.find((s) => s.id === cfSessionId) ?? null;
   const cfSessionDivisions = (cfSessionObj?.divisions ?? []).map((d) => d.division_name);
-  const cfSelectedSubmission = cfSubmissions?.find((s) => s.song_id === cfSongId) ?? null;
 
   const loadLiveQueues = useCallback(
     async (sessionId: string, silent = false) => {
@@ -218,11 +217,13 @@ export default function ManagerPage() {
     call(api, endpoints.admin.userEventSongSubmissions, { params: { id: cfSelectedUser.id, eventId: eventId } }).then(setCfSubmissions).catch(() => setCfSubmissions([]));
   }, [cfSelectedUser, cfSessionId, cfSessionObj?.event_id, api]);
 
-  useEffect(() => {
-    if (!cfSelectedSubmission) return;
-    const d = cfSelectedSubmission.division ?? "";
+  const selectCfSong = (songId: string) => {
+    setCfSongId(songId);
+    const submission = cfSubmissions?.find((s) => s.song_id === songId);
+    if (!submission) return;
+    const d = submission.division ?? "";
     setCfDivision(cfSessionDivisions.includes(d) ? d : "");
-  }, [cfSongId]);
+  };
 
   useEffect(() => {
     if (ufSelected) return;
@@ -247,10 +248,11 @@ export default function ManagerPage() {
     const active = sessions.filter(
       (s) => s.status === "checkin_open" || s.status === "in_progress"
     );
-    if (active.length === 1 && !lqSessionId) {
-      setLqSessionId(active[0]!.id);
+    if (active.length === 1) {
+      // Auto-select only while nothing is selected; a manual choice is kept.
+      setLqSessionId((cur) => cur || active[0]!.id);
     }
-  }, [sessions]); // intentionally omit lqSessionId — only auto-select on initial session load
+  }, [sessions]);
 
   useEffect(() => {
     if (!lqSessionId) return;
@@ -975,7 +977,7 @@ export default function ManagerPage() {
                           label: sub.song_label,
                         }))}
                         value={cfSongId}
-                        onChange={setCfSongId}
+                        onChange={selectCfSong}
                         disabled={!cfSessionId || cfSubmissions === null}
                       />
                     )}

@@ -130,7 +130,6 @@ describe("SongsPage — delete flow", () => {
   });
 
   it("shows a confirm prompt when the delete button is clicked", async () => {
-    const { toast } = await import("sonner");
     apiGet.mockResolvedValue([
       fx.song({
         id: "s1",

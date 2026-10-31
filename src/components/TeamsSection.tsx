@@ -1,6 +1,6 @@
 import { createTeamBodySchema, type ApiTeam } from "@/schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -45,17 +45,17 @@ export default function TeamsSection() {
     defaultValues: { identifier: "" },
   });
 
-  const loadTeams = () => {
+  const loadTeams = useCallback(() => {
     setTeamsLoading(true);
     call(api, endpoints.teams.list)
       .then(setTeams)
       .catch((e: Error) => toast.error(e.message))
       .finally(() => setTeamsLoading(false));
-  };
+  }, [api]);
 
   useEffect(() => {
     loadTeams();
-  }, [api]);
+  }, [loadTeams]);
 
   const openCreate = () => {
     setEditing(null);

@@ -1,6 +1,6 @@
-import { PartnerRoleSchema, type PartnerRole, type ApiPartner, type ApiPartnerAssociations } from "@/schemas";
+import { PartnerRoleSchema, type ApiPartner, type ApiPartnerAssociations } from "@/schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -65,17 +65,17 @@ export default function PartnersSection() {
     defaultValues: { first_name: "", last_name: "", partner_role: "follower", email: "" },
   });
 
-  const loadPartners = () => {
+  const loadPartners = useCallback(() => {
     setPartnersLoading(true);
     call(api, endpoints.partners.list)
       .then(setPartners)
       .catch((e: Error) => toast.error(e.message))
       .finally(() => setPartnersLoading(false));
-  };
+  }, [api]);
 
   useEffect(() => {
     loadPartners();
-  }, [api]);
+  }, [loadPartners]);
 
   const openCreate = () => {
     setEditing(null);

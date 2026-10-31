@@ -3,7 +3,7 @@ import {
   type ApiManagedPartnership,
 } from "@/schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -59,17 +59,17 @@ export default function ManagedPartnershipsSection() {
     defaultValues: emptyForm,
   });
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
     call(api, endpoints.managedPartnerships.list)
       .then(setItems)
       .catch((e: Error) => toast.error(e.message))
       .finally(() => setLoading(false));
-  };
+  }, [api]);
 
   useEffect(() => {
     load();
-  }, [api]);
+  }, [load]);
 
   const openCreate = () => {
     setEditing(null);
