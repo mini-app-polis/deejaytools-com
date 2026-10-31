@@ -1,3 +1,15 @@
+# [2.19.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.18.0...v2.19.0) (2026-10-31)
+
+
+### Bug Fixes
+
+* **submissions:** require can_withdraw only on the listed submissions schema ([e07c087](https://github.com/mini-app-polis/deejaytools-com/commit/e07c087714f75340b9dd9f441b92a52167c338ee))
+
+
+### Features
+
+* **submissions:** offer partner-shared submissions for check-in, show Remove only where can_withdraw ([2966f27](https://github.com/mini-app-polis/deejaytools-com/commit/2966f270c12b5c93ddf8abe2700d233b0833d0bf))
+
 # [2.18.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.17.1...v2.18.0) (2026-10-31)
 
 
