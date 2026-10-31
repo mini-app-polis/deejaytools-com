@@ -1,10 +1,10 @@
-# ADR-0002. The API contract lives in the web app
+# ADR-0002: The API contract lives in the web app
 
-Date: 2026-09-22
+**Date:** 2026-09-22
+**Status:** Accepted
+**Repo:** deejaytools-com
 
-## Status
-
-Accepted
+---
 
 ## Context
 
