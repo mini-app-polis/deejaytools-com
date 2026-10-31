@@ -12,8 +12,16 @@
  *   </Link>
  *
  *   <TableRow className={CLICKABLE_ROW_CLASS} onClick={...}>
- *     <TableCell>...</TableCell>
+ *     <TableCell>
+ *       <Link to={...} className={ROW_LINK_CLASS} onClick={(e) => e.stopPropagation()}>
+ *         Title
+ *       </Link>
+ *     </TableCell>
  *   </TableRow>
+ *
+ * A clickable row always carries a real <Link> in its primary cell: the row's
+ * onClick serves the mouse, the link serves Tab + Enter, screen readers and
+ * middle-click. The link stops propagation so one click navigates once.
  *
  * Tip: pair these with `group` so child text can react via `group-hover:`.
  * `CLICKABLE_CARD_CLASS` already includes `group`; `CLICKABLE_ROW_CLASS`
@@ -50,3 +58,11 @@ export const CLICKABLE_CARD_CLASS =
 export const CLICKABLE_ROW_CLASS =
   "group cursor-pointer transition-colors duration-200 " +
   "hover:bg-primary/10";
+
+/**
+ * The <Link> inside a clickable row's primary cell. Inherits the row's text
+ * colour and shows a focus ring when reached by keyboard.
+ */
+export const ROW_LINK_CLASS =
+  "rounded-sm text-inherit group-hover:text-primary " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";

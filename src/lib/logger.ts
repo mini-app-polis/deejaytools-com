@@ -5,9 +5,9 @@
  * written to console.* under the hood.
  *
  * logger.error additionally forwards to Sentry — captureException when an
- * Error instance is present in `error`, captureMessage otherwise. This
- * gives logger.error parity with API-side createLogger, which routes
- * through Sentry via Sentry.captureException in app.ts onError.
+ * Error instance is present in `error`, captureMessage otherwise — tagged
+ * with the service, category and event, so a logged error reaches Sentry
+ * even when the caller handles it.
  *
  * Do not call console.* directly anywhere else in src — use
  * this wrapper.

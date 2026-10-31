@@ -1,3 +1,4 @@
+import { lazy, Suspense, type ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import AdminGuard from "@/components/AdminGuard";
@@ -5,9 +6,8 @@ import EventRoleGuard from "@/components/EventRoleGuard";
 import ManagerGuard from "@/components/ManagerGuard";
 import Layout from "@/components/Layout";
 import RequireAuth from "@/components/RequireAuth";
+import RouteFallback from "@/components/RouteFallback";
 import LandingPage from "./LandingPage";
-import AdminPage from "./AdminPage";
-import ManagerPage from "./ManagerPage";
 import FloorTrialsPage from "./FloorTrialsPage";
 import EventDetailPage from "./EventDetailPage";
 import EventsPage from "./EventsPage";
@@ -28,9 +28,19 @@ import EventSubmissionsPage, { OpenSubmissionsRedirect } from "./EventSubmission
 import SongsPage from "./SongsPage";
 import FeedbackPage from "./FeedbackPage";
 import MyEventsPage from "./MyEventsPage";
-import CoordinatorPortalPage from "./CoordinatorPortalPage";
-import DjPortalPage from "./DjPortalPage";
-import EventManagerPortalPage from "./EventManagerPortalPage";
+
+// Admin, manager and per-event staff pages are split into their own chunks:
+// most visitors are dancers who never open them, so they stay out of the
+// main bundle and download on first visit to the route.
+const AdminPage = lazy(() => import("./AdminPage"));
+const ManagerPage = lazy(() => import("./ManagerPage"));
+const CoordinatorPortalPage = lazy(() => import("./CoordinatorPortalPage"));
+const DjPortalPage = lazy(() => import("./DjPortalPage"));
+const EventManagerPortalPage = lazy(() => import("./EventManagerPortalPage"));
+
+function Lazy({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<RouteFallback />}>{children}</Suspense>;
+}
 
 export default function App() {
   return (
@@ -151,7 +161,9 @@ export default function App() {
             path="events/:eventId/coordinator"
             element={
               <EventRoleGuard role="coordinator">
-                <CoordinatorPortalPage />
+                <Lazy>
+                  <CoordinatorPortalPage />
+                </Lazy>
               </EventRoleGuard>
             }
           />
@@ -159,7 +171,9 @@ export default function App() {
             path="events/:eventId/dj"
             element={
               <EventRoleGuard role="dj">
-                <DjPortalPage />
+                <Lazy>
+                  <DjPortalPage />
+                </Lazy>
               </EventRoleGuard>
             }
           />
@@ -167,7 +181,9 @@ export default function App() {
             path="events/:eventId/dj/:section"
             element={
               <EventRoleGuard role="dj">
-                <DjPortalPage />
+                <Lazy>
+                  <DjPortalPage />
+                </Lazy>
               </EventRoleGuard>
             }
           />
@@ -175,7 +191,9 @@ export default function App() {
             path="events/:eventId/manage"
             element={
               <EventRoleGuard role="event-manager">
-                <EventManagerPortalPage />
+                <Lazy>
+                  <EventManagerPortalPage />
+                </Lazy>
               </EventRoleGuard>
             }
           />
@@ -183,7 +201,9 @@ export default function App() {
             path="events/:eventId/manage/:section"
             element={
               <EventRoleGuard role="event-manager">
-                <EventManagerPortalPage />
+                <Lazy>
+                  <EventManagerPortalPage />
+                </Lazy>
               </EventRoleGuard>
             }
           />
@@ -198,7 +218,9 @@ export default function App() {
             path="admin/:section"
             element={
               <AdminGuard>
-                <AdminPage />
+                <Lazy>
+                  <AdminPage />
+                </Lazy>
               </AdminGuard>
             }
           />
@@ -207,7 +229,9 @@ export default function App() {
             path="manager/:section"
             element={
               <ManagerGuard>
-                <ManagerPage />
+                <Lazy>
+                  <ManagerPage />
+                </Lazy>
               </ManagerGuard>
             }
           />

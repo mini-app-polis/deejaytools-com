@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { epochToDateInTz, epochToTimeInTz, toEpochInTz } from "./zonedTime";
+import { epochToDateInTz, epochToTimeInTz, isSessionToday, toEpochInTz } from "./zonedTime";
 
 function wallClock(epoch: number, tz: string): string {
   return new Date(epoch).toLocaleString("en-US", {
@@ -82,5 +82,43 @@ describe("round-trip", () => {
     const epoch = toEpochInTz(date, time, tz);
     expect(epochToDateInTz(epoch, tz)).toBe(date);
     expect(epochToTimeInTz(epoch, tz)).toBe(time);
+  });
+});
+
+describe("isSessionToday", () => {
+  const TZ = "America/Chicago";
+  const at = (date: string, time: string) => toEpochInTz(date, time, TZ);
+  const session = (opens: number, starts: number, ends: number, tz: string | null = TZ) => ({
+    checkin_opens_at: opens,
+    floor_trial_starts_at: starts,
+    floor_trial_ends_at: ends,
+    event_timezone: tz,
+  });
+  const evening = session(at("2026-05-22", "21:00"), at("2026-05-22", "22:00"), at("2026-05-23", "01:30"));
+
+  it("counts a session that runs past midnight on both days, in the event's timezone", () => {
+    expect(isSessionToday(evening, at("2026-05-22", "20:00"))).toBe(true);
+    expect(isSessionToday(evening, at("2026-05-23", "00:30"))).toBe(true);
+    expect(isSessionToday(evening, at("2026-05-23", "12:00"))).toBe(true);
+    expect(isSessionToday(evening, at("2026-05-21", "23:59"))).toBe(false);
+    expect(isSessionToday(evening, at("2026-05-24", "00:00"))).toBe(false);
+  });
+
+  it("uses the event's date, not UTC's or the browser's", () => {
+    // 20:00 in Chicago is 01:00 the next day in UTC.
+    const night = session(at("2026-05-22", "19:00"), at("2026-05-22", "20:00"), at("2026-05-22", "23:00"));
+    expect(isSessionToday(night, at("2026-05-22", "08:00"))).toBe(true);
+    expect(isSessionToday(night, at("2026-05-23", "08:00"))).toBe(false);
+    // Auckland is a day ahead: 10:00 there on the 24th is the 23rd in UTC.
+    const nz = toEpochInTz("2026-05-24", "10:00", "Pacific/Auckland");
+    const morning = session(nz - 3_600_000, nz, nz + 3_600_000, "Pacific/Auckland");
+    expect(isSessionToday(morning, toEpochInTz("2026-05-24", "06:00", "Pacific/Auckland"))).toBe(true);
+    expect(isSessionToday(morning, toEpochInTz("2026-05-23", "22:00", "Pacific/Auckland"))).toBe(false);
+  });
+
+  it("falls back to the browser's timezone when the event has none", () => {
+    const now = Date.UTC(2026, 4, 23, 12);
+    expect(isSessionToday(session(now - 3_600_000, now, now + 3_600_000, null), now)).toBe(true);
+    expect(isSessionToday(session(now - 3 * 86_400_000, now - 3 * 86_400_000, now - 3 * 86_400_000 + 3_600_000, null), now)).toBe(false);
   });
 });

@@ -86,20 +86,22 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadBytesSent, setUploadBytesSent] = useState(0);
   const staffOnBehalf = Boolean(onBehalf?.eventId);
+  const onBehalfUserId = onBehalf?.userId;
+  const onBehalfEventId = onBehalf?.eventId;
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     Promise.all([
-      onBehalf
-        ? onBehalf.eventId
+      onBehalfUserId !== undefined
+        ? onBehalfEventId
           ? call(api, endpoints.events.personPartners, {
-              params: { id: onBehalf.eventId, userId: onBehalf.userId },
+              params: { id: onBehalfEventId, userId: onBehalfUserId },
             })
-          : call(api, endpoints.admin.userPartners, { params: { id: onBehalf.userId } })
+          : call(api, endpoints.admin.userPartners, { params: { id: onBehalfUserId } })
         : call(api, endpoints.partners.list),
-      onBehalf ? Promise.resolve(null) : call(api, endpoints.auth.me),
-      variant === "managed" && !onBehalf
+      onBehalfUserId !== undefined ? Promise.resolve(null) : call(api, endpoints.auth.me),
+      variant === "managed" && onBehalfUserId === undefined
         ? call(api, endpoints.managedPartnerships.list).catch(() => [])
         : Promise.resolve([] as ApiManagedPartnership[]),
     ])
@@ -114,7 +116,7 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
       .catch((e: Error) => toast.error(e.message))
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [api, variant, onBehalf?.userId, onBehalf?.eventId]);
+  }, [api, variant, onBehalfUserId, onBehalfEventId]);
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();

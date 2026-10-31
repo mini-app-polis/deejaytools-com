@@ -5,3 +5,7 @@ type: react-app
 
 # TEST-001/002/003/004 covered by react-app type scoping.
 # XSTACK-001 does not apply: it is Python-only since common-typescript-utils was retired.
+
+exemptions:
+  - rule: XSTACK-004
+    reason: "DEEJAYTOOLS_API, DEEJAYTOOLS_API_DEV and DEEJAYTOOLS_CLERK_PUBLISHABLE_KEY keep their Doppler names, without the VITE_ prefix. vite.config.ts reads each one by its exact name with loadEnv and maps it into the bundle through define, as import.meta.env.VITE_API_URL (DEEJAYTOOLS_API on production-branch builds, DEEJAYTOOLS_API_DEV otherwise) and import.meta.env.VITE_CLERK_PUBLISHABLE_KEY. envPrefix stays at Vite's default VITE_, so no other DEEJAYTOOLS_* variable, DEEJAYTOOLS_CLERK_SECRET_KEY included, can reach the bundle; widening envPrefix to DEEJAYTOOLS_ to make the names conform would expose exactly that. Application code reads them only by those VITE_ names. This is the same by-name mapping XSTACK-004 already allows for SENTRY_DSN_<PROJECT>."

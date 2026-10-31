@@ -18,6 +18,11 @@ const FIELD_INPUT_CLASS =
 
 const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
 
+/** How often the queues and the session refresh on their own. */
+const QUEUE_POLL_MS = 60_000;
+/** The longest the check-in clock goes without a tick. */
+const CLOCK_MAX_WAIT_MS = 60_000;
+
 export default function ApiSessionPage() {
   const { id } = useParams<{ id: string }>();
   const api = useApiClient();
@@ -40,6 +45,7 @@ export default function ApiSessionPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [now, setNow] = useState(Date.now());
+  const [pollFailed, setPollFailed] = useState(false);
 
   const loadSession = useCallback(() => {
     if (!id) return Promise.resolve(undefined);
@@ -115,14 +121,41 @@ export default function ApiSessionPage() {
     refresh();
   }, [refresh]);
 
+  const poll = useCallback(() => {
+    Promise.all([loadQueue(), loadSession()])
+      .then(() => setPollFailed(false))
+      .catch(() => setPollFailed(true));
+  }, [loadQueue, loadSession]);
+
   useEffect(() => {
     if (!id) return;
-    const t = setInterval(() => {
-      setNow(Date.now());
-      void Promise.all([loadQueue(), loadSession()]).catch(() => {});
-    }, 60_000);
+    const t = setInterval(poll, QUEUE_POLL_MS);
     return () => clearInterval(t);
-  }, [id, loadQueue, loadSession]);
+  }, [id, poll]);
+
+  // The clock behind the check-in window. It ticks at the window's next edge
+  // (check-in opening, or the floor trial ending), so Check in turns on or off
+  // as that moment passes, and at least every CLOCK_MAX_WAIT_MS otherwise. A
+  // tab coming back into view catches up at once, since browsers delay timers
+  // in hidden tabs.
+  const opensAt = session?.checkin_opens_at;
+  const endsAt = session?.floor_trial_ends_at;
+  useEffect(() => {
+    const edge = [opensAt, endsAt === undefined ? undefined : endsAt + 1].find(
+      (t): t is number => t !== undefined && t > now
+    );
+    const wait = edge === undefined ? CLOCK_MAX_WAIT_MS : Math.min(edge - now, CLOCK_MAX_WAIT_MS);
+    const t = setTimeout(() => setNow(Date.now()), wait);
+    return () => clearTimeout(t);
+  }, [now, opensAt, endsAt]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") setNow(Date.now());
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
 
   // Session's division names
   const sessionDivisions = useMemo(
@@ -488,6 +521,15 @@ export default function ApiSessionPage() {
 
       {/* ── Check-in action (top) ── */}
       {checkInBlock}
+
+      {pollFailed && (
+        <p role="status" className="text-sm text-amber-600 dark:text-amber-400 -mt-2">
+          Couldn&apos;t refresh the queue; it may be out of date. Trying again shortly.{" "}
+          <button type="button" className="underline hover:no-underline" onClick={poll}>
+            Retry now
+          </button>
+        </p>
+      )}
 
       <p className="text-xs text-muted-foreground -mt-2">
         <Link to="/how-it-works/the-queue" className="hover:underline">

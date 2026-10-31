@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
@@ -208,6 +208,21 @@ describe("EventDetailPage", () => {
     );
   });
 
+  it("keeps the event on screen and reports the sessions error when only sessions fail", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({ name: "Swing Fling" }));
+      if (path.startsWith("/v1/sessions")) return Promise.reject(new Error("Sessions unavailable"));
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Swing Fling" })).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(/sessions unavailable/i);
+    expect(screen.queryByText(/event not found/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/no sessions for this event/i)).not.toBeInTheDocument();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
   it("lists only active and upcoming sessions, tallying the rest in the heading", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
@@ -356,6 +371,55 @@ describe("EventDetailPage", () => {
       expect(screen.getByRole("heading", { name: /custom event/i })).toBeInTheDocument()
     );
     expect(apiGet).toHaveBeenCalledWith("/v1/events/custom-id");
+  });
+
+  it("ignores a late response for the previous :id", async () => {
+    let releaseA!: (ev: unknown) => void;
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-a") return new Promise((r) => { releaseA = r; });
+      if (path === "/v1/events/ev-b") return Promise.resolve(makeEvent({ id: "ev-b", name: "Event B" }));
+      return Promise.resolve([]);
+    });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/events/ev-a"]}>
+        <Link to="/events/ev-b">go to b</Link>
+        <Routes>
+          <Route path="/events/:id" element={<EventDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => expect(apiGet).toHaveBeenCalledWith("/v1/events/ev-a"));
+    await user.click(screen.getByRole("link", { name: "go to b" }));
+    expect(await screen.findByRole("heading", { name: "Event B" })).toBeInTheDocument();
+
+    releaseA(makeEvent({ id: "ev-a", name: "Event A" }));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.getByRole("heading", { name: "Event B" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Event A" })).not.toBeInTheDocument();
+  });
+
+  it("does not show the previous event while the next one loads", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-a") return Promise.resolve(makeEvent({ id: "ev-a", name: "Event A" }));
+      if (path === "/v1/events/ev-b") return Promise.reject(new Error("gone"));
+      return Promise.resolve([]);
+    });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/events/ev-a"]}>
+        <Link to="/events/ev-b">go to b</Link>
+        <Routes>
+          <Route path="/events/:id" element={<EventDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole("heading", { name: "Event A" })).toBeInTheDocument();
+    await user.click(screen.getByRole("link", { name: "go to b" }));
+    expect(await screen.findByText("Event not found.")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Event A" })).not.toBeInTheDocument();
   });
 
   it("passes event_id as a query param when fetching sessions", async () => {

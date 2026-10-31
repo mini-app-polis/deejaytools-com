@@ -43,25 +43,41 @@ export default function EventDetailPage() {
   const { isSignedIn } = useAuth();
   const [event, setEvent] = useState<ApiEvent | null>(null);
   const [sessions, setSessions] = useState<ApiSession[] | null>(null);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const load = () => {
-    if (!id) return;
-    setLoading(true);
-    Promise.all([
-      call(api, endpoints.events.get, { params: { id: id } }),
-      call(api, endpoints.sessions.list, { params: { eventId: id } }),
-    ])
-      .then(([ev, sess]) => {
-        setEvent(ev);
-        setSessions(sess);
-      })
-      .catch((e: Error) => toast.error(e.message))
-      .finally(() => setLoading(false));
-  };
-
+  // The event and its sessions load independently: a sessions failure keeps
+  // the event on screen and shows the error in the sessions section. A
+  // response for an earlier :id is dropped, and that event's details are
+  // cleared rather than shown under the new URL.
   useEffect(() => {
-    load();
+    if (!id) return;
+    let cancelled = false;
+    setLoading(true);
+    setSessionsError(null);
+    setEvent((cur) => (cur?.id === id ? cur : null));
+    const eventReq = call(api, endpoints.events.get, { params: { id: id } })
+      .then((ev) => {
+        if (!cancelled) setEvent(ev);
+      })
+      .catch((e: Error) => {
+        if (!cancelled) toast.error(e.message);
+      });
+    const sessionsReq = call(api, endpoints.sessions.list, { params: { eventId: id } })
+      .then((sess) => {
+        if (!cancelled) setSessions(sess);
+      })
+      .catch((e: Error) => {
+        if (cancelled) return;
+        setSessions(null);
+        setSessionsError(e.message);
+      });
+    void Promise.all([eventReq, sessionsReq]).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [api, id]);
 
   if (!id) {
@@ -129,6 +145,11 @@ export default function EventDetailPage() {
             as the Floor Trials page. Completed and cancelled trials stay in the
             heading's tally so the schedule is not silently understated, but
             they are not cards anyone can act on. */}
+        {sessionsError !== null && (
+          <p role="alert" className="text-sm text-destructive">
+            Couldn&apos;t load this event&apos;s sessions: {sessionsError}
+          </p>
+        )}
         {listedSessions?.length === 0 && (
           <p className="text-sm text-muted-foreground">
             {sessions && sessions.length > 0

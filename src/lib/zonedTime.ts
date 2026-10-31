@@ -93,3 +93,25 @@ export function epochToDateInTz(epoch: number, tz: string): string {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }
 }
+
+/**
+ * Whether a session is on today's date in its event's timezone. A session
+ * spans the days from check-in opening to the floor trial ending, so one
+ * that runs past midnight counts on both days. With no event timezone, the
+ * browser's is used.
+ */
+export function isSessionToday(
+  session: {
+    checkin_opens_at: number;
+    floor_trial_starts_at: number;
+    floor_trial_ends_at: number;
+    event_timezone?: string | null;
+  },
+  now: number
+): boolean {
+  const tz = session.event_timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const today = epochToDateInTz(now, tz);
+  const first = epochToDateInTz(Math.min(session.checkin_opens_at, session.floor_trial_starts_at), tz);
+  const last = epochToDateInTz(Math.max(session.floor_trial_starts_at, session.floor_trial_ends_at), tz);
+  return first <= today && today <= last;
+}

@@ -410,6 +410,15 @@ function field(label: string | RegExp) {
   return el.parentElement!.querySelector("input, select") as HTMLInputElement;
 }
 
+/** Press Tab until `el` has focus (bounded), then Enter. */
+async function tabToAndEnter(user: ReturnType<typeof userEvent.setup>, el: HTMLElement) {
+  for (let i = 0; i < 40 && document.activeElement !== el; i++) {
+    await user.tab();
+  }
+  expect(el).toHaveFocus();
+  await user.keyboard("{Enter}");
+}
+
 function renderWithDetailRoutes(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
@@ -462,6 +471,18 @@ describe("AdminPage — Events section", () => {
     await user.click(screen.getByRole("button", { name: "Close" }));
 
     await user.click(screen.getByText("Swing Fling"));
+    expect(await screen.findByText("event detail page")).toBeInTheDocument();
+  });
+
+  it("opens an event from its row by keyboard through a real link", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE] });
+    const user = userEvent.setup();
+    renderWithDetailRoutes("/admin/events");
+
+    const link = await screen.findByRole("link", { name: "Swing Fling" });
+    expect(link).toHaveAttribute("href", `/events/${EV_ACTIVE.id}`);
+    expect(link.closest("tr")).not.toBeNull();
+    await tabToAndEnter(user, link);
     expect(await screen.findByText("event detail page")).toBeInTheDocument();
   });
 
@@ -667,6 +688,27 @@ describe("AdminPage — Sessions section", () => {
     renderWithDetailRoutes("/admin/sessions");
 
     await user.click(await screen.findByText(SESS_OPEN_TITLE));
+    expect(await screen.findByText("session detail page")).toBeInTheDocument();
+  });
+
+  it("opens a session from its row by keyboard through a real link", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE], "/v1/sessions": [SESS_OPEN] });
+    const user = userEvent.setup();
+    renderWithDetailRoutes("/admin/sessions");
+
+    const link = await screen.findByRole("link", { name: SESS_OPEN_TITLE });
+    expect(link).toHaveAttribute("href", `/sessions/${SESS_OPEN.id}`);
+    await tabToAndEnter(user, link);
+    expect(await screen.findByText("session detail page")).toBeInTheDocument();
+  });
+
+  it("still opens a session when a non-link cell of the row is clicked", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE], "/v1/sessions": [SESS_OPEN] });
+    const user = userEvent.setup();
+    renderWithDetailRoutes("/admin/sessions");
+
+    const row = (await screen.findByRole("link", { name: SESS_OPEN_TITLE })).closest("tr")!;
+    await user.click(within(row).getByText("checkin_open"));
     expect(await screen.findByText("session detail page")).toBeInTheDocument();
   });
 
@@ -1106,7 +1148,7 @@ describe("AdminPage — Songs section", () => {
     renderPage("/admin/songs");
 
     await screen.findByText(SONG_A.song_label);
-    await user.type(screen.getByPlaceholderText(/search by song/i), "zzz");
+    await user.type(screen.getByRole("searchbox", { name: /search songs/i }), "zzz");
 
     expect(await screen.findByText('No songs match "zzz".')).toBeInTheDocument();
     const songCalls = apiGet.mock.calls.map(([p]) => p as string).filter((p) => p.startsWith("/v1/admin/songs"));
@@ -1374,7 +1416,7 @@ describe("AdminPage — Users section", () => {
     renderPage("/admin/users");
 
     await screen.findByText("alice@example.com");
-    await user.type(screen.getByPlaceholderText(/search by name or email/i), " nobody ");
+    await user.type(screen.getByRole("searchbox", { name: /search users/i }), " nobody ");
     expect(await screen.findByText('No users match "nobody".')).toBeInTheDocument();
     expect(apiGet).toHaveBeenCalledWith("/v1/admin/users?q=nobody");
   });

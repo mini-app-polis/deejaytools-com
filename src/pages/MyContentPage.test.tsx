@@ -326,8 +326,12 @@ describe("MyContentPage — Check-ins section", () => {
   });
 
   it("withdraws a check-in after confirming and removes it from the page", async () => {
-    withGets({ "/v1/checkins/mine": [CHECKIN] });
-    apiDel.mockResolvedValue({ withdrawn: true });
+    let mine = [CHECKIN];
+    withGets({ "/v1/checkins/mine": () => Promise.resolve(mine) });
+    apiDel.mockImplementation(() => {
+      mine = [];
+      return Promise.resolve({ withdrawn: true });
+    });
     const user = userEvent.setup();
     renderPage();
 
@@ -340,6 +344,34 @@ describe("MyContentPage — Check-ins section", () => {
     expect(toast.success).toHaveBeenCalledWith("Withdrawn from queue.");
     await waitFor(() =>
       expect(screen.queryByRole("heading", { name: /^check-ins$/i })).not.toBeInTheDocument()
+    );
+  });
+
+  it("reloads the remaining check-ins' positions after a withdrawal", async () => {
+    const ahead = fx.myCheckin({ ...CHECKIN, id: "ci-1", overallPosition: 2, divisionName: "Showcase" });
+    const behind = fx.myCheckin({ ...CHECKIN, id: "ci-2", overallPosition: 5, divisionName: "Classic", canWithdraw: true });
+    let mine = [ahead, behind];
+    withGets({ "/v1/checkins/mine": () => Promise.resolve(mine) });
+    apiDel.mockImplementation(() => {
+      mine = [{ ...behind, overallPosition: 4 }];
+      return Promise.resolve({ withdrawn: true });
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getAllByText("This entry is", { exact: false }).map((p) => p.textContent)).toEqual([
+        "This entry is #2 in line",
+        "This entry is #5 in line",
+      ])
+    );
+    await user.click(screen.getAllByRole("button", { name: /withdraw from queue/i })[0]!);
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Withdraw" }));
+
+    await waitFor(() =>
+      expect(screen.getAllByText("This entry is", { exact: false }).map((p) => p.textContent)).toEqual([
+        "This entry is #4 in line",
+      ])
     );
   });
 

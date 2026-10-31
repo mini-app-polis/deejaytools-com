@@ -31,8 +31,10 @@ test.beforeAll(async () => {
       await api.call("DELETE", `/v1/events/${e.id}`).catch(() => undefined);
     }
   }
-  // An event and a session under way, so the session page and the event's
-  // submission page have something to show.
+  // An event and a session under way, with an entry waiting in each queue, so
+  // the session page, the event's submission page and the manager's live
+  // queues have something to show. No Active slots: the scheduler leaves the
+  // entries where they are while the pages are scanned.
   const event = await api.call<{ id: string }>("POST", "/v1/events", {
     name: NAME,
     start_date: dateIn(TIMEZONE, -1),
@@ -49,14 +51,32 @@ test.beforeAll(async () => {
     floor_trial_ends_at: now + 7_200_000,
     active_priority_max: 0,
     active_non_priority_max: 0,
-    divisions: [{ division_name: "Classic", is_priority: false }],
+    divisions: [
+      { division_name: "Classic", is_priority: false },
+      { division_name: "Masters", is_priority: true },
+    ],
   });
   sessionId = session.id;
+  for (const division of ["Classic", "Masters"]) {
+    await api.call("POST", "/v1/admin/checkins", {
+      sessionId,
+      divisionName: division,
+      leaderFirstName: "Lead",
+      leaderLastName: `A11y${RUN_ID}${division}`,
+      followerFirstName: "Follow",
+      followerLastName: `A11y${RUN_ID}${division}`,
+      notes: NAME,
+    });
+  }
 });
 
 test.afterAll(async () => {
   if (!api) return;
+  // Deleting the event takes its session, check-ins and queue entries. The
+  // injected entries leave stub dancers behind; this removes them. It clears
+  // every injection, which is safe because the suites run one at a time.
   if (eventId) await api.call("DELETE", `/v1/events/${eventId}`).catch(() => undefined);
+  await api.call("DELETE", "/v1/admin/checkins/test").catch(() => undefined);
   await api.end();
 });
 
@@ -78,6 +98,7 @@ test("the main pages pass an automated accessibility scan", async ({ page }) => 
     ["/", h1],
     ["/how-it-works", h1],
     ["/events", h1],
+    [`/events/${eventId}`, h1],
     ["/floor-trials", h1],
   ];
   const signedIn: [string, (p: Page) => Locator][] = [
@@ -86,6 +107,7 @@ test("the main pages pass an automated accessibility scan", async ({ page }) => 
     ["/my-profile", h1],
     ["/event-submissions", h1],
     [`/event-submissions/${eventId}`, h1],
+    ["/sessions", h1],
     [`/sessions/${sessionId}`, h1],
     ["/manager/active-sessions", h1],
     ["/manager/checkin-for", h1],
@@ -106,7 +128,11 @@ test("the main pages pass an automated accessibility scan", async ({ page }) => 
       await page.goto(path);
       await expect(ready(page)).toBeVisible();
       // Pages dim their content (opacity-60) while they load; scanning then
-      // measures the dimmed text. Wait for it to settle.
+      // measures the dimmed text. A page can start a second load after its
+      // heading shows (Active Sessions loads the live queues once it has
+      // picked a session), so wait for the network to go quiet before
+      // checking that nothing is dimmed.
+      await page.waitForLoadState("networkidle");
       await expect(page.locator(".opacity-60")).toHaveCount(0);
       if (opens) {
         await page.getByRole("button", { name: opens[0], exact: true }).click();

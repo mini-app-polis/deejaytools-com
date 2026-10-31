@@ -18,9 +18,18 @@ name: site
 # Environment variables are baked into the bundle at build time, so a wrong
 # key or API URL in the Pages settings shows up here and nowhere else.
 #
+# The hostnames are repository variables, synced from Doppler by
+# mini-app-polis/infra (doppler/github.tf), so a domain change is made there:
+#   API_URL_DEVELOPMENT    the development API
+#   API_URL_PRODUCTION     the production API
+#   SITE_URL_DEVELOPMENT   the dev branch's pages.dev URL
+# (https:// is assumed when the value is a bare hostname). The smoke test
+# needs no site URL: it tests the deploy's own preview URL, which the
+# Cloudflare Pages check reports.
+#
 # On dev only, the end-to-end suite (e2e/, Playwright) then runs a real
 # browser against
-# the dev site's branch URL (dev.deejaytools-com.pages.dev), signed in as the
+# the dev site's branch URL (SITE_URL_DEVELOPMENT), signed in as the
 # contract test user through Clerk's development instance. It shares the
 # contract suite's configuration and concurrency group: both write to the
 # dev API, and must never run at once.
@@ -47,7 +56,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  API: ${{ github.ref == 'refs/heads/main' && 'https://api.deejaytools.com' || 'https://api-dev.deejaytools.com' }}
   CLERK_KEY: ${{ github.ref == 'refs/heads/main' && 'pk_live_' || 'pk_test_' }}
   WRONG_CLERK_KEY: ${{ github.ref == 'refs/heads/main' && 'pk_test_' || 'pk_live_' }}
   SHA: ${{ github.sha }}
@@ -106,9 +114,18 @@ jobs:
         id: smoke
         env:
           SITE: ${{ steps.deploy.outputs.site }}
+          API_URL_DEVELOPMENT: ${{ vars.API_URL_DEVELOPMENT }}
+          API_URL_PRODUCTION: ${{ vars.API_URL_PRODUCTION }}
         run: |
           set -euo pipefail
           fail() { echo "::error::$1"; exit 1; }
+          if [ "$GITHUB_REF" = refs/heads/main ]; then API="$API_URL_PRODUCTION"; else API="$API_URL_DEVELOPMENT"; fi
+          [ -n "$API" ] \
+            || fail "API_URL_DEVELOPMENT or API_URL_PRODUCTION is unset: they are synced from Doppler by mini-app-polis/infra."
+          # The bundle carries the API URL with its scheme and no trailing
+          # slash, so compare against the same form.
+          case "$API" in http://*|https://*) ;; *) API="https://$API" ;; esac
+          API="${API%/}"
 
           html=$(curl -fsSL --retry 3 "$SITE/") || fail "$SITE/ did not load."
           asset=$(grep -oE '/assets/index-[A-Za-z0-9_-]+\.js' <<<"$html" | head -n 1 || true)
@@ -140,12 +157,18 @@ jobs:
       group: contract-dev-api
       cancel-in-progress: false
     env:
-      E2E_BASE_URL: https://dev.deejaytools-com.pages.dev
+      E2E_BASE_URL: ${{ vars.SITE_URL_DEVELOPMENT }}
       CLERK_PUBLISHABLE_KEY: ${{ needs.smoke.outputs.publishable-key }}
       CLERK_SECRET_KEY: ${{ secrets.CONTRACT_CLERK_SECRET_KEY }}
       CONTRACT_API_URL: ${{ vars.CONTRACT_API_URL }}
       CONTRACT_USER_ID: ${{ vars.CONTRACT_USER_ID }}
     steps:
+      - name: Resolve the dev site URL
+        run: |
+          [ -n "$E2E_BASE_URL" ] \
+            || { echo "::error::SITE_URL_DEVELOPMENT is unset: it is synced from Doppler by mini-app-polis/infra."; exit 1; }
+          case "$E2E_BASE_URL" in http://*|https://*) ;; *) E2E_BASE_URL="https://$E2E_BASE_URL" ;; esac
+          echo "E2E_BASE_URL=${E2E_BASE_URL%/}" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
         with:
           ref: ${{ env.SHA }}

@@ -89,6 +89,22 @@ const LEGACY_SONG = fx.song({
   is_legacy: true,
 });
 
+// A song owned by someone else and listed because the caller is its linked
+// partner. The API lets the partner submit it (POST /v1/event-song-submissions
+// accepts a song shared with the caller) and withdraw a submission the caller
+// made (DELETE checks the submitter); the list endpoint returns only the
+// caller's own submissions, so every listed one is the caller's to remove.
+const SHARED_SONG = fx.song({
+  ...SONG,
+  id: "shared1",
+  user_id: "owner_u",
+  partner_id: "owner_partner_row",
+  display_name: "Partner Routine",
+  routine_name: "Partner Routine",
+  processed_filename: "2026_Classic_PartnerRoutine.mp3",
+  shared_with_me: true,
+});
+
 function mockApi(events: unknown[], songs: unknown[] = [SONG], submissions: unknown[] = []) {
   apiGet.mockImplementation((path: string) => {
     if (path === "/v1/events") return Promise.resolve(events);
@@ -278,6 +294,46 @@ describe("EventSubmissionsPage — event page", () => {
     await waitFor(() => {
       expect(apiDel).toHaveBeenCalledWith("/v1/event-song-submissions/sub1");
     });
+  });
+
+  it("offers a song shared by a linked partner and submits it", async () => {
+    mockApi([EVENT], [SHARED_SONG]);
+    apiPost.mockResolvedValue(fx.eventSongSubmission());
+    const user = userEvent.setup();
+    renderAt("/event-submissions/ev1");
+
+    await pickSong(user, /Partner Routine/);
+    await user.click(screen.getByRole("button", { name: /^submit$/i }));
+
+    await waitFor(() => {
+      expect(apiPost).toHaveBeenCalledWith("/v1/event-song-submissions", {
+        event_id: "ev1",
+        song_id: "shared1",
+        division: "Classic",
+      });
+    });
+  });
+
+  it("lists the caller's submission of a shared song with Remove, and withdraws it", async () => {
+    mockApi(
+      [EVENT],
+      [SHARED_SONG],
+      [{ id: "sub_shared", event_id: "ev1", song_id: "shared1", song_label: "2026_Classic_PartnerRoutine.mp3", division: "Classic", created_at: 1 }]
+    );
+    apiDel.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderAt("/event-submissions/ev1");
+
+    expect(await screen.findByText("Your submissions")).toBeInTheDocument();
+    expect(screen.getByText("2026_Classic_PartnerRoutine.mp3")).toBeInTheDocument();
+    // Submitted already, so not offered again.
+    expect(screen.getByText(/every song in your library is already submitted/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^remove$/i }));
+    await waitFor(() => {
+      expect(apiDel).toHaveBeenCalledWith("/v1/event-song-submissions/sub_shared");
+    });
+    expect(toastMocks.success).toHaveBeenCalledWith("Song removed from Spring Classic.");
   });
 
   it("flags a submission whose song is no longer in the library, and lets it be removed", async () => {

@@ -209,6 +209,19 @@ function routeGets(routes: GetRoutes) {
   });
 }
 
+/**
+ * Routes /v1/admin/users so the search for `slowQuery` hangs until released,
+ * and every other search answers at once with `fast`.
+ */
+function slowUserSearch(slowQuery: string, fast: unknown[]) {
+  let release!: (rows: unknown[]) => void;
+  routeGets({
+    "/v1/admin/users": (path: string) =>
+      path.endsWith(`?q=${slowQuery}`) ? new Promise((r) => { release = r; }) : fast,
+  });
+  return (rows: unknown[]) => release(rows);
+}
+
 function resetAll() {
   apiGet.mockReset();
   apiPost.mockReset();
@@ -263,6 +276,35 @@ describe("ManagerPage — Active Sessions", () => {
     expect(screen.getByRole("link", { name: /open guide/i })).toHaveAttribute("href", "/manager/guide");
   });
 
+  it("picks today's sessions by the event's date, including one that runs past midnight", async () => {
+    // 00:30 on May 24 in Chicago.
+    vi.setSystemTime(Date.UTC(2026, 4, 24, 5, 30));
+    const overnight = fx.session({
+      id: "overnight",
+      status: "in_progress",
+      event_timezone: TZ,
+      checkin_opens_at: Date.UTC(2026, 4, 24, 1, 0),
+      floor_trial_starts_at: Date.UTC(2026, 4, 24, 2, 0),
+      floor_trial_ends_at: Date.UTC(2026, 4, 24, 7, 0),
+    });
+    // May 23 in Chicago all day, though it ends on May 24 in UTC.
+    const yesterday = fx.session({
+      id: "yesterday",
+      status: "completed",
+      event_timezone: TZ,
+      checkin_opens_at: Date.UTC(2026, 4, 23, 22, 0),
+      floor_trial_starts_at: Date.UTC(2026, 4, 23, 23, 0),
+      floor_trial_ends_at: Date.UTC(2026, 4, 24, 1, 0),
+    });
+    routeGets({ "/v1/sessions": [yesterday, overnight] });
+    renderPage();
+
+    const group = await screen.findByRole("radiogroup", { name: "Session" });
+    expect(within(group).getAllByRole("radio").map((r) => r.textContent)).toEqual([
+      "Saturday - 9:00 PM - May 23, 2026",
+    ]);
+  });
+
   it("lists today's sessions live-first and waits for a choice when more than one is live", async () => {
     const live2 = fx.session({ id: "live2", status: "in_progress", event_timezone: TZ, floor_trial_starts_at: NOW + 60 * 60_000 });
     const done = fx.session({ id: "done", status: "completed", event_timezone: TZ, floor_trial_starts_at: NOW - 60 * 60_000 });
@@ -283,7 +325,15 @@ describe("ManagerPage — Active Sessions", () => {
     routeGets({
       "/v1/sessions": [LIVE],
       "/v1/partners/leading-pairs": [fx.leadingPair({ id: "pair-9", display_name: "Pair From Map" })],
-      "/v1/songs": [fx.song({ id: "song-9", processed_filename: "pair_classic_2026.mp3" })],
+      "/v1/songs": [
+        fx.song({
+          id: "song-9",
+          partnership_label: "Pair",
+          division: "Classic",
+          routine_name: "Opener",
+          processed_filename: "Pair_Classic_2026_Opener_v03.mp3",
+        }),
+      ],
       "/v1/queue/live/active/staff": [
         fx.queueEntry({ queueEntryId: "a2", position: 2, entityLabel: "Second Pair", songDisplayName: "Song Two" }),
         fx.queueEntry({
@@ -304,8 +354,9 @@ describe("ManagerPage — Active Sessions", () => {
     expect(await screen.findByText("Pair From Map")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: LIVE_TITLE })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByText("2 slots")).toBeInTheDocument();
-    // Song label falls back to the song catalog when the entry has no display name.
-    expect(screen.getByText("Classic · pair_classic_2026.mp3")).toBeInTheDocument();
+    // Song label falls back to the song catalog's label (no season year) when
+    // the entry has no display name.
+    expect(screen.getByText("Classic · Pair - Classic - Opener - v03")).toBeInTheDocument();
     expect(screen.getByText("Pair_Classic.mp3")).toBeInTheDocument();
     expect(screen.getByText("Note: Starts on the 5")).toBeInTheDocument();
     expect(screen.getByText("Classic · Song Two")).toBeInTheDocument();
@@ -332,7 +383,6 @@ describe("ManagerPage — Active Sessions", () => {
   it.each([
     ["Run complete", "/v1/queue/complete", { completed: true }],
     ["Run incomplete", "/v1/queue/incomplete", { rotated: true }],
-    ["Withdraw", "/v1/queue/withdraw", { withdrawn: true }],
   ])("'%s' posts the entry to %s and reloads the queues", async (label, path, ack) => {
     routeGets({
       "/v1/sessions": [LIVE],
@@ -348,6 +398,54 @@ describe("ManagerPage — Active Sessions", () => {
 
     await waitFor(() => expect(apiPost).toHaveBeenCalledWith(path, { queueEntryId: "a1" }));
     await waitFor(() => expect(queueCalls("active/staff")).toBe(before + 1));
+  });
+
+  it("asks before withdrawing, and withdraws only once confirmed", async () => {
+    routeGets({
+      "/v1/sessions": [LIVE],
+      "/v1/queue/live/active/staff": [fx.queueEntry({ queueEntryId: "a1", position: 1, entityLabel: "Pair One" })],
+    });
+    apiPost.mockResolvedValue({ withdrawn: true });
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText("Pair One");
+    await user.click(screen.getByRole("button", { name: "Withdraw" }));
+    const dialog = await screen.findByRole("dialog", { name: /withdraw from the queue/i });
+    expect(dialog).toHaveTextContent("Pair One (Classic) will be removed from the queue");
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(apiPost).not.toHaveBeenCalled();
+
+    const before = queueCalls("active/staff");
+    await user.click(screen.getByRole("button", { name: "Withdraw" }));
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Withdraw" }));
+    await waitFor(() => expect(apiPost).toHaveBeenCalledWith("/v1/queue/withdraw", { queueEntryId: "a1" }));
+    await waitFor(() => expect(queueCalls("active/staff")).toBe(before + 1));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("locks the queue actions while one is in flight, so a double click moves one place", async () => {
+    routeGets({
+      "/v1/sessions": [LIVE],
+      "/v1/queue/live/non-priority": [
+        fx.queueEntry({ queueEntryId: "n1", position: 1, entityLabel: "First" }),
+        fx.queueEntry({ queueEntryId: "n2", position: 2, entityLabel: "Second" }),
+      ],
+    });
+    let release!: (v: unknown) => void;
+    apiPost.mockImplementation(() => new Promise((r) => { release = r; }));
+    const user = userEvent.setup();
+    renderPage();
+
+    const first = (await screen.findByText("First")).parentElement!;
+    await user.dblClick(within(first).getByRole("button", { name: "Move down" }));
+    expect(apiPost).toHaveBeenCalledTimes(1);
+    for (const b of screen.getAllByRole("button", { name: /move down|withdraw/i })) expect(b).toBeDisabled();
+
+    await act(async () => release({ moved: true }));
+    await waitFor(() => expect(within(first).getByRole("button", { name: "Move down" })).toBeEnabled());
+    expect(apiPost).toHaveBeenCalledTimes(1);
   });
 
   it("moves a waiting entry down", async () => {
@@ -380,6 +478,7 @@ describe("ManagerPage — Active Sessions", () => {
 
     await screen.findByText("Leader & Follower");
     await user.click(screen.getByRole("button", { name: "Withdraw" }));
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Withdraw" }));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Entry already withdrawn"));
   });
 
@@ -501,7 +600,7 @@ describe("ManagerPage — Upload For", () => {
     renderPage("/manager/upload-for");
 
     expect(await screen.findByText("Type a name or email to search.")).toBeInTheDocument();
-    await user.type(screen.getByPlaceholderText(/search by name or email/i), "ali");
+    await user.type(screen.getByRole("searchbox", { name: /user to upload for/i }), "ali");
 
     expect(await screen.findByRole("button", { name: /alice smith/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /\(no name\)/i })).toBeInTheDocument();
@@ -526,6 +625,22 @@ describe("ManagerPage — Upload For", () => {
     fail = true;
     await user.type(box, "z");
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("search down"));
+  });
+
+  it("ignores a late result for an earlier query", async () => {
+    const releaseSlow = slowUserSearch("al", [ALICE]);
+    const user = userEvent.setup();
+    renderPage("/manager/upload-for");
+
+    const box = await screen.findByPlaceholderText(/search by name or email/i);
+    await user.type(box, "al");
+    await waitFor(() => expect(apiGet).toHaveBeenCalledWith("/v1/admin/users?q=al"));
+    await user.type(box, "ice");
+    expect(await screen.findByRole("button", { name: /alice smith/i })).toBeInTheDocument();
+
+    await act(async () => releaseSlow([fx.adminUser({ id: "u-bob", email: "bob@example.com", first_name: "Bob", last_name: "Stale" })]));
+    expect(screen.queryByRole("button", { name: /bob stale/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /alice smith/i })).toBeInTheDocument();
   });
 
   it("opens the upload form on behalf of the chosen user, and can switch back", async () => {
@@ -583,6 +698,22 @@ describe("ManagerPage — CheckIn For", () => {
     await user.type(await screen.findByPlaceholderText(/search by name or email/i), "alice");
     await user.click(await screen.findByRole("button", { name: /alice smith/i }));
   }
+
+  it("ignores a late user-search result for an earlier query", async () => {
+    const releaseSlow = slowUserSearch("al", [ALICE]);
+    const user = userEvent.setup();
+    renderPage("/manager/checkin-for");
+
+    const box = await screen.findByPlaceholderText(/search by name or email/i);
+    await user.type(box, "al");
+    await waitFor(() => expect(apiGet).toHaveBeenCalledWith("/v1/admin/users?q=al"));
+    await user.type(box, "ice");
+    expect(await screen.findByRole("button", { name: /alice smith/i })).toBeInTheDocument();
+
+    await act(async () => releaseSlow([fx.adminUser({ id: "u-bob", email: "bob@example.com", first_name: "Bob", last_name: "Stale" })]));
+    expect(screen.queryByRole("button", { name: /bob stale/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /alice smith/i })).toBeInTheDocument();
+  });
 
   it("checks a user in to a live session with their submitted song and its division", async () => {
     routeGets({
@@ -682,7 +813,7 @@ describe("ManagerPage — CheckIn For", () => {
 
     await pickAlice(user);
     await user.click(screen.getByRole("button", { name: "Change user" }));
-    const box = screen.getByPlaceholderText(/search by name or email/i);
+    const box = screen.getByLabelText(/user to check in/i);
     expect(box).toHaveValue("");
 
     fail = true;

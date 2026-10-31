@@ -6,6 +6,9 @@ import { SessionInfoHeader } from "@/components/SessionInfoHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChoiceGroup } from "@/components/ui/choice-group";
+import { useQueueActions, WithdrawEntryDialog } from "@/components/staff/queueActions";
+import { useAuthMe } from "@/hooks/useAuthMe";
+import { richestEventRole } from "@/lib/eventRoles";
 import { compareSessionChrono } from "@/lib/chronoSort";
 import { formatSessionTitle } from "@/lib/sessionFormat";
 import { cn } from "@/lib/utils";
@@ -27,20 +30,19 @@ function formatAgo(ms: number): string {
   return `${Math.floor(m / 60)}h ago`;
 }
 
-type QueueAction =
-  | typeof endpoints.queue.complete
-  | typeof endpoints.queue.incomplete
-  | typeof endpoints.queue.moveDown
-  | typeof endpoints.queue.withdraw;
-
 /**
  * The live floor-trial queue for one of the event's sessions: the active
  * slots and both waiting queues, with run complete, run incomplete, move
- * down and withdraw. Every action names a queue entry of this event's
+ * down and withdraw. Each entry shows its song label; a DJ also sees the
+ * song's processed filename. Every action names a queue entry of this event's
  * session, which the API resolves to the event before deciding.
  */
 export default function LiveQueueSection({ event }: { event: ApiEvent }) {
   const api = useApiClient();
+  // A DJ finds the song's file in the event's Drive folder by its processed
+  // filename, so DJs see it under the song; other staff see the label only.
+  const { eventRoles } = useAuthMe();
+  const showFilename = richestEventRole(eventRoles, event.id) === "dj";
   const [sessions, setSessions] = useState<ApiSession[] | null>(null);
   const [sessionId, setSessionId] = useState("");
   const [active, setActive] = useState<ApiQueueEntry[]>([]);
@@ -128,14 +130,7 @@ export default function LiveQueueSection({ event }: { event: ApiEvent }) {
 
   const session = sessions?.find((s) => s.id === sessionId) ?? null;
 
-  const act = async (ep: QueueAction, queueEntryId: string) => {
-    try {
-      await call(api, ep as typeof endpoints.queue.complete, { body: { queueEntryId } });
-      await loadQueues(sessionRef.current);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Action failed");
-    }
-  };
+  const actions = useQueueActions(api, () => loadQueues(sessionRef.current));
 
   const renderRow = (row: ApiQueueEntry, list: ApiQueueEntry[], isActiveQueue: boolean) => {
     const isSlotOne = isActiveQueue && row.position === 1;
@@ -155,23 +150,33 @@ export default function LiveQueueSection({ event }: { event: ApiEvent }) {
           <p className="text-muted-foreground truncate">
             {row.divisionName} · {row.songDisplayName ?? row.songId ?? "—"}
           </p>
-          {row.songProcessedFilename && (
+          {showFilename && row.songProcessedFilename && (
             <p className="text-xs text-muted-foreground break-all font-mono">{row.songProcessedFilename}</p>
           )}
           {row.notes && <p className="text-xs text-muted-foreground italic">Note: {row.notes}</p>}
           <div className="flex gap-2 flex-wrap pt-2 border-t border-border/40 mt-1.5">
             {isActiveQueue && (
               <>
-                <Button size="sm" onClick={() => void act(endpoints.queue.complete, row.queueEntryId)}>
+                <Button size="sm" disabled={actions.busy} onClick={() => void actions.run(endpoints.queue.complete, row.queueEntryId)}>
                   Run complete
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => void act(endpoints.queue.incomplete, row.queueEntryId)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={actions.busy}
+                  onClick={() => void actions.run(endpoints.queue.incomplete, row.queueEntryId)}
+                >
                   Run incomplete
                 </Button>
               </>
             )}
             {!isLast && (
-              <Button size="sm" variant="outline" onClick={() => void act(endpoints.queue.moveDown, row.queueEntryId)}>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={actions.busy}
+                onClick={() => void actions.run(endpoints.queue.moveDown, row.queueEntryId)}
+              >
                 Move down
               </Button>
             )}
@@ -179,7 +184,8 @@ export default function LiveQueueSection({ event }: { event: ApiEvent }) {
               size="sm"
               variant="ghost"
               className="text-destructive hover:text-destructive"
-              onClick={() => void act(endpoints.queue.withdraw, row.queueEntryId)}
+              disabled={actions.busy}
+              onClick={() => actions.requestWithdraw(row)}
             >
               Withdraw
             </Button>
@@ -269,6 +275,14 @@ export default function LiveQueueSection({ event }: { event: ApiEvent }) {
           </div>
         </div>
       )}
+
+      <WithdrawEntryDialog
+        entry={actions.pendingWithdraw}
+        label={actions.pendingWithdraw?.entityLabel ?? ""}
+        busy={actions.busy}
+        onCancel={actions.cancelWithdraw}
+        onConfirm={() => void actions.confirmWithdraw()}
+      />
     </div>
   );
 }

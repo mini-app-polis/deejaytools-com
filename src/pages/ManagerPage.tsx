@@ -23,7 +23,10 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { formatSessionTitle } from "@/lib/sessionFormat";
+import { isSessionToday } from "@/lib/zonedTime";
+import { songLabel } from "@/lib/songLabel";
 import ManagerGuideSection from "@/components/manager/ManagerGuideSection";
+import { useQueueActions, WithdrawEntryDialog } from "@/components/staff/queueActions";
 import { cn } from "@/lib/utils";
 
 const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
@@ -107,7 +110,6 @@ export default function ManagerPage() {
   );
   const cfSessionObj = sessions?.find((s) => s.id === cfSessionId) ?? null;
   const cfSessionDivisions = (cfSessionObj?.divisions ?? []).map((d) => d.division_name);
-  const cfSelectedSubmission = cfSubmissions?.find((s) => s.song_id === cfSongId) ?? null;
 
   const loadLiveQueues = useCallback(
     async (sessionId: string, silent = false) => {
@@ -193,19 +195,27 @@ export default function ManagerPage() {
     if (cfSelectedUser) return;
     const q = cfUserQuery.trim();
     if (!q) { setCfUserResults([]); return; }
+    // A response for an earlier query is dropped, so results always match
+    // what is typed; the cleanup also ends that query's "searching" state.
+    let cancelled = false;
     const t = setTimeout(async () => {
       setCfSearching(true);
       try {
         const rows = await call(api, endpoints.admin.users, { params: { q: q } });
-        setCfUserResults(rows);
+        if (!cancelled) setCfUserResults(rows);
       } catch (e) {
+        if (cancelled) return;
         toast.error(e instanceof Error ? e.message : "Search failed");
         setCfUserResults([]);
       } finally {
-        setCfSearching(false);
+        if (!cancelled) setCfSearching(false);
       }
     }, 250);
-    return () => clearTimeout(t);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+      setCfSearching(false);
+    };
   }, [cfUserQuery, cfSelectedUser, api]);
 
   useEffect(() => {
@@ -218,28 +228,36 @@ export default function ManagerPage() {
     call(api, endpoints.admin.userEventSongSubmissions, { params: { id: cfSelectedUser.id, eventId: eventId } }).then(setCfSubmissions).catch(() => setCfSubmissions([]));
   }, [cfSelectedUser, cfSessionId, cfSessionObj?.event_id, api]);
 
-  useEffect(() => {
-    if (!cfSelectedSubmission) return;
-    const d = cfSelectedSubmission.division ?? "";
+  const selectCfSong = (songId: string) => {
+    setCfSongId(songId);
+    const submission = cfSubmissions?.find((s) => s.song_id === songId);
+    if (!submission) return;
+    const d = submission.division ?? "";
     setCfDivision(cfSessionDivisions.includes(d) ? d : "");
-  }, [cfSongId]);
+  };
 
   useEffect(() => {
     if (ufSelected) return;
     const q = ufQuery.trim();
     if (!q) { setUfResults([]); return; }
+    // As above: a response for an earlier query is dropped.
+    let cancelled = false;
     const t = setTimeout(async () => {
       setUfSearching(true);
       try {
         const rows = await call(api, endpoints.admin.users, { params: { q: q } });
-        setUfResults(rows);
+        if (!cancelled) setUfResults(rows);
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Search failed");
+        if (!cancelled) toast.error(e instanceof Error ? e.message : "Search failed");
       } finally {
-        setUfSearching(false);
+        if (!cancelled) setUfSearching(false);
       }
     }, 250);
-    return () => clearTimeout(t);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+      setUfSearching(false);
+    };
   }, [ufQuery, ufSelected, api]);
 
   useEffect(() => {
@@ -247,10 +265,11 @@ export default function ManagerPage() {
     const active = sessions.filter(
       (s) => s.status === "checkin_open" || s.status === "in_progress"
     );
-    if (active.length === 1 && !lqSessionId) {
-      setLqSessionId(active[0]!.id);
+    if (active.length === 1) {
+      // Auto-select only while nothing is selected; a manual choice is kept.
+      setLqSessionId((cur) => cur || active[0]!.id);
     }
-  }, [sessions]); // intentionally omit lqSessionId — only auto-select on initial session load
+  }, [sessions]);
 
   useEffect(() => {
     if (!lqSessionId) return;
@@ -280,7 +299,7 @@ export default function ManagerPage() {
   const songMap = useMemo(() => {
     const m = new Map<string, string>();
     for (const s of lqSongs) {
-      m.set(s.id, s.processed_filename?.trim() || s.routine_name?.trim() || s.division?.trim() || s.id);
+      m.set(s.id, songLabel(s));
     }
     return m;
   }, [lqSongs]);
@@ -312,16 +331,9 @@ export default function ManagerPage() {
 
   const activeSessionOptions = useMemo(() => {
     if (!sessions) return [];
-    const now = new Date();
+    const now = Date.now();
     return sessions
-      .filter((s) => {
-        const d = new Date(s.floor_trial_starts_at);
-        return (
-          d.getFullYear() === now.getFullYear() &&
-          d.getMonth() === now.getMonth() &&
-          d.getDate() === now.getDate()
-        );
-      })
+      .filter((s) => isSessionToday(s, now))
       .sort((a, b) => {
         const isLive = (s: ApiSession) =>
           s.status === "checkin_open" || s.status === "in_progress";
@@ -345,32 +357,16 @@ export default function ManagerPage() {
   const renderSongLabel = (row: ApiQueueEntry) =>
     row.songDisplayName ?? (row.songId ? (songMap.get(row.songId) ?? row.songId) : "—");
 
-  type QueueActionEndpoint =
-    | typeof endpoints.queue.complete
-    | typeof endpoints.queue.incomplete
-    | typeof endpoints.queue.moveDown
-    | typeof endpoints.queue.withdraw;
-
-  const queueAction = async (ep: QueueActionEndpoint, body: { queueEntryId: string }) => {
-    try {
-      await call(api, ep as typeof endpoints.queue.complete, { body });
-      await loadLiveQueues(lqSessionRef.current);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Action failed");
-    }
-  };
+  const queueActions = useQueueActions(api, () => loadLiveQueues(lqSessionRef.current));
 
   const handleComplete = (queueEntryId: string) =>
-    queueAction(endpoints.queue.complete, { queueEntryId });
+    void queueActions.run(endpoints.queue.complete, queueEntryId);
 
   const handleIncomplete = (queueEntryId: string) =>
-    queueAction(endpoints.queue.incomplete, { queueEntryId });
+    void queueActions.run(endpoints.queue.incomplete, queueEntryId);
 
   const handleMoveDown = (queueEntryId: string) =>
-    queueAction(endpoints.queue.moveDown, { queueEntryId });
-
-  const handleWithdraw = (queueEntryId: string) =>
-    queueAction(endpoints.queue.withdraw, { queueEntryId });
+    void queueActions.run(endpoints.queue.moveDown, queueEntryId);
 
   const submitCheckinFor = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -527,14 +523,14 @@ export default function ManagerPage() {
                                 </p>
                               )}
                               <div className="flex gap-2 flex-wrap pt-2 border-t border-border/40 mt-1.5">
-                                <Button size="sm" onClick={() => handleComplete(row.queueEntryId)}>
+                                <Button size="sm" disabled={queueActions.busy} onClick={() => handleComplete(row.queueEntryId)}>
                                   Run complete
                                 </Button>
-                                <Button size="sm" variant="outline" onClick={() => handleIncomplete(row.queueEntryId)}>
+                                <Button size="sm" variant="outline" disabled={queueActions.busy} onClick={() => handleIncomplete(row.queueEntryId)}>
                                   Run incomplete
                                 </Button>
                                 {!isLast && (
-                                  <Button size="sm" variant="outline" onClick={() => handleMoveDown(row.queueEntryId)}>
+                                  <Button size="sm" variant="outline" disabled={queueActions.busy} onClick={() => handleMoveDown(row.queueEntryId)}>
                                     Move down
                                   </Button>
                                 )}
@@ -542,7 +538,8 @@ export default function ManagerPage() {
                                   size="sm"
                                   variant="ghost"
                                   className="text-destructive hover:text-destructive"
-                                  onClick={() => handleWithdraw(row.queueEntryId)}
+                                  disabled={queueActions.busy}
+                                  onClick={() => queueActions.requestWithdraw(row)}
                                 >
                                   Withdraw
                                 </Button>
@@ -594,7 +591,7 @@ export default function ManagerPage() {
                                 )}
                                 <div className="flex gap-2 pt-2 border-t border-border/40 mt-1.5">
                                   {!isLast && (
-                                    <Button size="sm" variant="outline" onClick={() => handleMoveDown(row.queueEntryId)}>
+                                    <Button size="sm" variant="outline" disabled={queueActions.busy} onClick={() => handleMoveDown(row.queueEntryId)}>
                                       Move down
                                     </Button>
                                   )}
@@ -602,7 +599,8 @@ export default function ManagerPage() {
                                     size="sm"
                                     variant="ghost"
                                     className="text-destructive hover:text-destructive"
-                                    onClick={() => handleWithdraw(row.queueEntryId)}
+                                    disabled={queueActions.busy}
+                                    onClick={() => queueActions.requestWithdraw(row)}
                                   >
                                     Withdraw
                                   </Button>
@@ -652,7 +650,7 @@ export default function ManagerPage() {
                                 )}
                                 <div className="flex gap-2 pt-2 border-t border-border/40 mt-1.5">
                                   {!isLast && (
-                                    <Button size="sm" variant="outline" onClick={() => handleMoveDown(row.queueEntryId)}>
+                                    <Button size="sm" variant="outline" disabled={queueActions.busy} onClick={() => handleMoveDown(row.queueEntryId)}>
                                       Move down
                                     </Button>
                                   )}
@@ -660,7 +658,8 @@ export default function ManagerPage() {
                                     size="sm"
                                     variant="ghost"
                                     className="text-destructive hover:text-destructive"
-                                    onClick={() => handleWithdraw(row.queueEntryId)}
+                                    disabled={queueActions.busy}
+                                    onClick={() => queueActions.requestWithdraw(row)}
                                   >
                                     Withdraw
                                   </Button>
@@ -676,6 +675,13 @@ export default function ManagerPage() {
 
             </div>
           )}
+          <WithdrawEntryDialog
+            entry={queueActions.pendingWithdraw}
+            label={queueActions.pendingWithdraw ? renderEntityLabel(queueActions.pendingWithdraw) : ""}
+            busy={queueActions.busy}
+            onCancel={queueActions.cancelWithdraw}
+            onConfirm={() => void queueActions.confirmWithdraw()}
+          />
         </TabsContent>
 
         {/* ── Event Songs tab ── */}
@@ -814,6 +820,8 @@ export default function ManagerPage() {
                   Find the user you're uploading for. The song is created exactly as if they uploaded it themselves.
                 </p>
                 <Input
+                  type="search"
+                  aria-label="Search for the user to upload for"
                   placeholder="Search by name or email…"
                   value={ufQuery}
                   onChange={(e) => setUfQuery(e.target.value)}
@@ -881,6 +889,8 @@ export default function ManagerPage() {
                   Find the user you&apos;re checking in for. The check-in is recorded exactly as if they did it themselves.
                 </p>
                 <Input
+                  type="search"
+                  aria-label="Search for the user to check in"
                   placeholder="Search by name or email…"
                   value={cfUserQuery}
                   onChange={(e) => setCfUserQuery(e.target.value)}
@@ -971,7 +981,7 @@ export default function ManagerPage() {
                           label: sub.song_label,
                         }))}
                         value={cfSongId}
-                        onChange={setCfSongId}
+                        onChange={selectCfSong}
                         disabled={!cfSessionId || cfSubmissions === null}
                       />
                     )}

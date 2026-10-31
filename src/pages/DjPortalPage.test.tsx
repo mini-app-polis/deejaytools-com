@@ -105,7 +105,9 @@ describe("DjPortalPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Run complete" }));
     await waitFor(() => expect(apiPost).toHaveBeenCalledWith("/v1/queue/complete", { queueEntryId: "qe-1" }));
     apiPost.mockResolvedValue({ withdrawn: true });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Withdraw" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Withdraw" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Withdraw" }));
     await waitFor(() => expect(apiPost).toHaveBeenCalledWith("/v1/queue/withdraw", { queueEntryId: "qe-1" }));
     expect(allPaths().some((p) => p.startsWith("/v1/admin"))).toBe(false);
   });
@@ -204,6 +206,8 @@ describe("DjPortalPage", () => {
     expect(await screen.findByRole("link", { name: /Open the event's folder/ })).toHaveAttribute("href", url);
     expect(screen.queryByRole("link", { name: /Open Shared with me/ })).toBeNull();
     expect(apiGet).toHaveBeenCalledWith("/v1/events/ev-1/drive-folder");
+    // The season year is not shown to event staff.
+    expect(screen.queryByText(/season/i)).toBeNull();
   });
 
   it("points to Shared with me while the folder is not shared yet", async () => {
@@ -217,6 +221,7 @@ describe("DjPortalPage", () => {
       "https://drive.google.com/drive/shared-with-me"
     );
     expect(screen.getByText(/can take a few minutes to appear/)).toBeInTheDocument();
+    expect(screen.queryByText(/season/i)).toBeNull();
   });
 
   it("points to Shared with me when the folder cannot be read", async () => {

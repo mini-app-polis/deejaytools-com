@@ -34,6 +34,19 @@ describe("useApiVersion", () => {
     await waitFor(() => expect(result.current).toEqual({ version: "1.2.3", commit: null }));
   });
 
+  it("treats an empty commit as no commit", async () => {
+    respond(200, { version: "1.2.3", commit: "" });
+    const { result } = renderHook(() => useApiVersion());
+    await waitFor(() => expect(result.current).toEqual({ version: "1.2.3", commit: null }));
+  });
+
+  it("stays null when the body breaks the contract", async () => {
+    respond(200, { data: { version: "1.2.3", commit: null } });
+    const { result } = renderHook(() => useApiVersion());
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    expect(result.current).toBeNull();
+  });
+
   it("stays null when the API has no /version", async () => {
     respond(404, { error: { code: "NOT_FOUND", message: "Not found" } });
     const { result } = renderHook(() => useApiVersion());

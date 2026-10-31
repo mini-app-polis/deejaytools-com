@@ -203,6 +203,33 @@ describe("EventsPage", () => {
     });
   });
 
+  it("still lists the events and reports the sessions error when only sessions fail", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events") {
+        return Promise.resolve([
+          makeEvent({
+            id: "ev1",
+            name: "Summer Nationals",
+            startDate: "2026-06-01",
+            endDate: "2026-06-05",
+            status: "upcoming",
+          }),
+        ]);
+      }
+      return Promise.reject(new Error("Sessions unavailable"));
+    });
+
+    renderPage();
+
+    expect(await screen.findByRole("link", { name: /summer nationals/i })).toHaveAttribute(
+      "href",
+      "/events/ev1"
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(/sessions unavailable/i);
+    expect(screen.queryByText(/floor trials:/i)).not.toBeInTheDocument();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
   it("renders each event as a card link to /events/:id, with no table", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events") {

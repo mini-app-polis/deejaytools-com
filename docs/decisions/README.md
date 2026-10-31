@@ -15,3 +15,4 @@ cited with that repository's name first, as in `api-deejaytools ADR-0006`.
 
 - [ADR-0001 — Browser observability stack](./ADR-0001-browser-observability-stack.md)
 - [ADR-0002 — The API contract lives in the web app](./ADR-0002-api-contract.md)
+- [ADR-0003 — Shared data fetching with TanStack Query](./ADR-0003-shared-data-fetching-with-tanstack-query.md)

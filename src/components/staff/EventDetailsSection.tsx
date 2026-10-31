@@ -22,8 +22,9 @@ const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
 
 /**
  * Edit or delete the event: PATCH and DELETE /v1/events/:id, as the admin
- * Events page sends them, for this event only. Creating events stays with
- * the admins.
+ * Events page sends them, for this event only. Creating events and setting
+ * the season year stay with the admins: the season year is not shown to
+ * event staff, and the PATCH leaves it as it is.
  */
 export default function EventDetailsSection({
   event,
@@ -39,7 +40,6 @@ export default function EventDetailsSection({
   const [name, setName] = useState(event.name);
   const [startDate, setStartDate] = useState(event.start_date);
   const [endDate, setEndDate] = useState(event.end_date);
-  const [seasonYear, setSeasonYear] = useState(event.season_year);
   const [timezone, setTimezone] = useState(event.timezone);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -51,8 +51,6 @@ export default function EventDetailsSection({
     if (!startDate) { toast.error("Start date is required"); return; }
     if (!endDate) { toast.error("End date is required"); return; }
     if (endDate < startDate) { toast.error("End date must be on or after start date"); return; }
-    const season = seasonYear.trim();
-    if (season && !/^\d{4}$/.test(season)) { toast.error("Season year must be four digits"); return; }
     setSaving(true);
     try {
       const updated = await call(api, endpoints.events.update, {
@@ -62,7 +60,6 @@ export default function EventDetailsSection({
           start_date: startDate,
           end_date: endDate,
           timezone,
-          season_year: season || undefined,
         },
       });
       onUpdated(updated);
@@ -113,17 +110,10 @@ export default function EventDetailsSection({
                   onChange={(e) => setEndDate(e.target.value)} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="ev-season" className={FIELD_LABEL_CLASS}>Season year</label>
-                <input id="ev-season" inputMode="numeric" className={FIELD_INPUT_CLASS} value={seasonYear}
-                  onChange={(e) => setSeasonYear(e.target.value)} />
-              </div>
-              <div>
-                <label htmlFor="ev-tz" className={FIELD_LABEL_CLASS}>Timezone</label>
-                <input id="ev-tz" className={FIELD_INPUT_CLASS} value={timezone}
-                  onChange={(e) => setTimezone(e.target.value)} />
-              </div>
+            <div>
+              <label htmlFor="ev-tz" className={FIELD_LABEL_CLASS}>Timezone</label>
+              <input id="ev-tz" className={FIELD_INPUT_CLASS} value={timezone}
+                onChange={(e) => setTimezone(e.target.value)} />
             </div>
             <Button type="submit" disabled={saving}>
               {saving ? "Saving…" : "Save changes"}

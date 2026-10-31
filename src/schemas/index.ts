@@ -21,6 +21,21 @@ export const ApiDivisionsSchema = z.object({
 export type ApiDivisions = z.infer<typeof ApiDivisionsSchema>;
 
 /**
+ * GET /version: the running API deploy. Public, unversioned and outside the
+ * `{data}` envelope. `version` is the API's package version, which moves only
+ * when the API releases; `commit` is the commit the deploy was built from,
+ * null outside Railway (an empty value reads as null too).
+ */
+export const ApiVersionSchema = z.object({
+  version: z.string().min(1),
+  commit: z
+    .string()
+    .nullable()
+    .transform((c) => c || null),
+});
+export type ApiVersion = z.infer<typeof ApiVersionSchema>;
+
+/**
  * Divisions where the entity is ordered amateur-first rather than
  * leader-first, because the pairing is a pro with an amateur and the amateur
  * is the competitor being scored.
