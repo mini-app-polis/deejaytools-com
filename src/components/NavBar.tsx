@@ -23,7 +23,8 @@ const SIGNED_IN_ITEMS: NavItem[] = [
   { to: "/my-profile", label: "My Profile" },
 ];
 
-// Superuser (admin-only) sections. Test Inject moved to the Manager bar.
+// Admin pages (events, sessions, songs, users, run history, test check-in),
+// shown in the Superuser bar to admins only.
 const SUPERUSER_ITEMS: NavItem[] = [
   { to: "/admin/events", label: "Events" },
   { to: "/admin/sessions", label: "Sessions" },
@@ -33,7 +34,8 @@ const SUPERUSER_ITEMS: NavItem[] = [
   { to: "/admin/test-checkin", label: "Test Checkin" },
 ];
 
-// Manager sections. Visible to managers and admins.
+// Manager pages (active sessions, event songs, upload/check-in on behalf of
+// others, guide), shown in the Manager bar. Currently admin-only (showManagerBar).
 const MANAGER_ITEMS: NavItem[] = [
   { to: "/manager/active-sessions", label: "Active Sessions" },
   { to: "/manager/event-songs", label: "Event Songs" },

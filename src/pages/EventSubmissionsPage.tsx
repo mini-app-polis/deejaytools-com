@@ -1,4 +1,4 @@
-import type { ApiEvent, ApiEventSongSubmission, ApiSong } from "@/schemas";
+import type { ApiEvent, ApiListedEventSongSubmission, ApiSong } from "@/schemas";
 import { ROUND_SPLIT_DIVISION, isOpenEvent, type SubmissionRound } from "@/schemas";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
@@ -181,7 +181,7 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
 
-  const [submissions, setSubmissions] = useState<ApiEventSongSubmission[]>([]);
+  const [submissions, setSubmissions] = useState<ApiListedEventSongSubmission[]>([]);
   const [submissionsLoading, setSubmissionsLoading] = useState(true);
   // While set, the list on screen is not the real one: submitting is blocked
   // so a song already entered is not entered twice.
@@ -237,7 +237,7 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
   const retrySubmissions = useCallback(() => setSubmissionsAttempt((n) => n + 1), []);
 
   const submissionBySongId = useMemo(() => {
-    const map = new Map<string, ApiEventSongSubmission>();
+    const map = new Map<string, ApiListedEventSongSubmission>();
     for (const s of submissions) map.set(s.song_id, s);
     return map;
   }, [submissions]);
@@ -301,7 +301,7 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
     }
   };
 
-  const handleRemove = async (submission: ApiEventSongSubmission) => {
+  const handleRemove = async (submission: ApiListedEventSongSubmission) => {
     setBusySongId(submission.song_id);
     try {
       await call(api, endpoints.eventSongSubmissions.remove, { params: { id: submission.id } });
@@ -506,16 +506,18 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
                         </p>
                       )}
                     </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="shrink-0 border-destructive/50 text-destructive hover:bg-destructive-strong hover:text-destructive-foreground"
-                      disabled={busy || submissionsLoading}
-                      onClick={() => void handleRemove(submission)}
-                    >
-                      {busy ? "Removing…" : "Remove"}
-                    </Button>
+                    {submission.can_withdraw && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0 border-destructive/50 text-destructive hover:bg-destructive-strong hover:text-destructive-foreground"
+                        disabled={busy || submissionsLoading}
+                        onClick={() => void handleRemove(submission)}
+                      >
+                        {busy ? "Removing…" : "Remove"}
+                      </Button>
+                    )}
                   </div>
                 );
               })}

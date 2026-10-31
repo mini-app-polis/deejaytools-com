@@ -573,6 +573,13 @@ export const ApiEventSongSubmissionSchema = z.object({
 });
 export type ApiEventSongSubmission = z.infer<typeof ApiEventSongSubmissionSchema>;
 
+/** GET /v1/event-song-submissions — also lists a linked partner's submissions of shared songs. */
+export const ApiListedEventSongSubmissionSchema = ApiEventSongSubmissionSchema.extend({
+  /** False for a partner's submission of a shared song: listed so it can be checked in, not withdrawn. */
+  can_withdraw: z.boolean(),
+});
+export type ApiListedEventSongSubmission = z.infer<typeof ApiListedEventSongSubmissionSchema>;
+
 export const createEventSongSubmissionBodySchema = z.object({
   event_id: z.string().min(1),
   song_id: z.string().min(1),

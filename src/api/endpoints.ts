@@ -12,6 +12,7 @@ import {
   ApiEventPersonSchema,
   ApiEventSchema,
   ApiEventSongSubmissionSchema,
+  ApiListedEventSongSubmissionSchema,
   ApiEventStaffSchema,
   ApiLeadingPairSchema,
   ApiManagedPartnershipSchema,
@@ -376,13 +377,13 @@ export const endpoints = {
   },
 
   eventSongSubmissions: {
-    list: endpoint<{ eventId?: string } | void, void, z.infer<typeof ApiEventSongSubmissionSchema>[]>({
+    list: endpoint<{ eventId?: string } | void, void, z.infer<typeof ApiListedEventSongSubmissionSchema>[]>({
       id: "eventSongSubmissions.list", method: "GET", access: "user",
       path: (p) =>
         p && p.eventId
           ? `/v1/event-song-submissions?event_id=${encodeURIComponent(p.eventId)}`
           : "/v1/event-song-submissions",
-      response: z.array(ApiEventSongSubmissionSchema),
+      response: z.array(ApiListedEventSongSubmissionSchema),
     }),
     create: endpoint<void, z.input<typeof createEventSongSubmissionBodySchema>, z.infer<typeof ApiEventSongSubmissionSchema>>({
       id: "eventSongSubmissions.create", method: "POST", access: "user",
