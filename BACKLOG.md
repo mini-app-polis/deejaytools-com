@@ -1,43 +1,15 @@
 # Backlog
 
-Deferred features and known gaps. Not bugs — things that were intentionally
-left out of the initial build and need to come back.
-
----
-
-## Recently completed
-
-- **api-deejaytools ADR-0005 floor-trial queue model.** Schema, helpers, routes, and
-  frontend updated. Replaces the original `floor_slots` design with
-  three queues, audit trail, and run-history tables. See
-  `api-deejaytools/docs/decisions/ADR-0005-floor-trial-queue-model.md`
-  (made in deejaytools-api, since ported).
-- **Comprehensive error logging.** Every API route handler that maps an
-  exception to a 4xx/5xx response logs the underlying error with a
-  route-specific event name (`queue_withdraw_failed`,
-  `checkin_create_failed`, `admin_checkin_inject_failed`, etc.) so
-  production failures are debuggable without losing the user-facing
-  status. The current list is in
-  api-deejaytools' [`docs/TROUBLESHOOTING.md`](https://github.com/mini-app-polis/api-deejaytools/blob/main/docs/TROUBLESHOOTING.md#useful-log-events).
-- **Frontend test suite.** This repo now has Vitest set up with
-  pure-function tests (Node env) and component tests (jsdom env)
-  covering the api client, auth hooks, route guards, NavBar, and the
-  critical pages (FloorTrials, SessionDetail, Songs/AddSong, Landing,
-  Partners). Integrated into CI via `pnpm test:coverage`.
-- **Public-readable session detail.** Visitors can browse Floor Trials
-  and individual session pages without signing in; the check-in form
-  is replaced with a "Sign in to check in" CTA when unauthenticated.
-- **Sentry release tagging (frontend).** The app injects
-  `VITE_APP_VERSION` via `vite.config.ts` and passes it to
-  `Sentry.init` in `src/lib/instrument.ts`.
+Deferred features and known gaps. Not bugs — things deliberately left out
+that need to come back.
 
 ---
 
 ## Floor trial UX — full revisit
 
-The events, sessions, and queue flows were migrated from the old platform
-but not redesigned. The whole floor trial experience needs a UX pass once
-there is real usage to react to. This includes:
+The events, sessions, and queue flows work but have not had a dedicated UX
+pass. The whole floor trial experience needs one once there is real usage
+to react to. This includes:
 
 - Session creation and management UI
 - Check-in flow from the user's perspective
@@ -47,28 +19,18 @@ Priority: when floor trial work resumes.
 
 ---
 
-## Admin-configurable divisions list
-
-Song upload uses a hardcoded list of 15 WCS divisions in the frontend.
-The right solution is an admin-managed divisions table with a CRUD UI.
-
-Defer until floor trial UX revisit — session divisions and song divisions
-should be managed from the same place.
-
----
-
 ## Contract test coverage
 
-API-side coverage lives in api-deejaytools (its `tests/` and the
-`conformance/` suite). This repo's live contract suite
+API-side coverage lives in api-deejaytools. This repo's live contract suite
 (`pnpm test:contract`) checks every endpoint the app calls against
 `src/schemas`.
 
-Remaining intentional gaps in this repo:
+Component and page tests cover the UI, with coverage held to the floor
+in `vitest.config.ts`; the e2e suite (`e2e/`) covers the core journeys
+in a real browser. The intentional gap in this repo:
 
-- `src/pages/AdminPage.tsx` — large, tab-heavy admin surface
-  whose API endpoints are all tested. Manual QA covers the UI side.
-- `src/components/ui/*` — shadcn primitives (third-party).
+- `src/components/ui/*` — shadcn primitives (third-party), which have no
+  tests of their own; the custom `choice-group` does.
 
 ---
 
@@ -78,7 +40,7 @@ Store a Spotify playlist/track URL directly on the `Song` model.
 Add a `spotify_url` column and a `PATCH /v1/songs/:id` field for it.
 Display in the songs table as a link.
 
-Deferred from initial build.
+Not built.
 
 ---
 
@@ -86,8 +48,8 @@ Deferred from initial build.
 
 Items the conformance review surfaced as gaps that we've consciously
 chosen to defer rather than fix immediately. Each has a documented
-rationale and a revisit trigger. The API's deferrals and exemptions live
-in api-deejaytools' `evaluator.yaml`.
+rationale and a revisit trigger. The API records its own deferrals and
+exemptions in api-deejaytools.
 
 | Rule | Scope | Rationale | Revisit when |
 |------|-------|-----------|--------------|
@@ -97,8 +59,8 @@ in api-deejaytools' `evaluator.yaml`.
 
 ## Sentry — operational notes
 
-Both services are live and shipping errors to Sentry. This section is
-preserved as an operational reference for anyone tuning the setup.
+Both services ship errors to Sentry. This section is an operational
+reference for anyone tuning the setup.
 
 ### Current state
 
@@ -106,8 +68,7 @@ preserved as an operational reference for anyone tuning the setup.
   FastAPI integration), configured by `SENTRY_DSN_APIS` in Doppler `prd`
   (syncs to Railway). That DSN is the shared `apis` project, also used by
   api-kaianolevine-com; events carry the tag `service=api-deejaytools`.
-  Unhandled exceptions are captured by its `UnhandledErrorMiddleware`.
-- **Frontend: live.** `SENTRY_DSN_DEEJAYTOOLS` is set in Doppler `prd`
+- **Frontend.** `SENTRY_DSN_DEEJAYTOOLS` is set in Doppler `prd`
   (syncs to Cloudflare Pages). `src/lib/instrument.ts`
   initializes `@sentry/react`, and `src/main.tsx` wires React 19
   error hooks (`onUncaughtError`, `onCaughtError`, `onRecoverableError`)
@@ -127,8 +88,7 @@ preserved as an operational reference for anyone tuning the setup.
 - **What the frontend deliberately does NOT enable:** `tracesSampleRate`
   (performance monitoring) and `replaysSessionSampleRate` (session
   replay). Both share the 5,000-event quota with errors. Add only when
-  there's a specific reason to. (The API's init does set
-  `traces_sample_rate=1.0`; see api-deejaytools `main.py`.)
+  there's a specific reason to. (The API does sample traces.)
 
 ### Cost and failure-mode notes
 

@@ -36,12 +36,16 @@ src/
 ├── api/           HTTP client hook (the default way to talk to the API)
 ├── components/    Shared UI, guards, layout, domain sections
 │   ├── help/      HelpLayout, HelpSection, HelpStillStuck, helpTopics
-│   └── manager/   ManagerGuideSection (manager ops guide tab)
-├── hooks/         Cross-cutting React hooks (auth profile, API version)
+│   ├── manager/   ManagerGuideSection (manager ops guide tab)
+│   ├── staff/     Per-event staff portals and their sections
+│   └── ui/        shadcn primitives (+ the custom choice-group)
+├── hooks/         Cross-cutting React hooks (auth profile, divisions, staff events, API version)
 ├── lib/           Pure helpers — no React, safe to import anywhere
 ├── pages/         Route-level screens (+ colocated *.test.tsx)
 │   └── help/      Seven /how-it-works/* topic pages
-├── test/          Vitest global setup
+├── contract/      Live contract suite (`pnpm test:contract`)
+├── schemas/       zod schemas for API responses (`@/schemas`)
+├── test/          Vitest global setup and `fx.*` fixtures
 ├── main.tsx       Entry: Sentry → ClerkProvider → App
 ├── index.css      Tailwind + shadcn CSS variables
 └── vite-env.d.ts  Vite client types (`import.meta.env`, etc.)
@@ -90,7 +94,9 @@ One default-export component per route. Pages orchestrate fetching, local state,
 | `AuthSync.tsx` | One-shot POST `/v1/auth/sync` after sign-in |
 | `RequireAuth.tsx` | Clerk signed-in gate |
 | `AdminGuard.tsx` | Requires `role === "admin"` |
-| `ManagerGuard.tsx` | Requires admin **or** manager role |
+| `ManagerGuard.tsx` | Requires `role === "admin"` — the API has no global manager role |
+| `AuthMeError.tsx` | What the guards show, with a retry, when `GET /v1/auth/me` fails |
+| `MaintenancePage.tsx` | Replaces the whole app when the build has `VITE_MAINTENANCE=1` |
 | `EventRoleGuard.tsx` | Requires a staff role, or a richer one, on the event in `:eventId` |
 | `staff/` | Per-event staff portals: `StaffPortal` (shell + section tabs), `portalSections.tsx` (which sections each portal has) and one component per section |
 | `SongUploadForm.tsx` | Chunked upload form (self + managed variants) |
@@ -107,7 +113,7 @@ One default-export component per route. Pages orchestrate fetching, local state,
 
 | File | Purpose |
 |------|---------|
-| `useAuthMe.ts` | Fetches `/v1/auth/me`, exposes `me`, `loading`, `isAdmin`, `eventRoles` |
+| `useAuthMe.ts` | Reads the one shared `/v1/auth/me` record; exposes `me`, `loading`, `error`, `reload`, `isAdmin`, `eventRoles` (§5) |
 | `useDivisions.ts` | Reads the competition divisions from the public `GET /v1/divisions`, once per page load and shared by every caller; works before sign-in |
 | `useStaffEvents.ts` | Joins `eventRoles` to the events list: each staff event with its richest role |
 | `useApiVersion.ts` | Fetches the API's public `GET /version` once (shown in the nav) |
@@ -116,14 +122,23 @@ One default-export component per route. Pages orchestrate fetching, local state,
 
 | Module | One-line purpose |
 |--------|------------------|
+| `authSyncStatus.ts` | Whether this tab's `POST /v1/auth/sync` has settled; `useAuthMe` waits on it after `USER_NOT_SYNCED` |
 | `chronoSort.ts` | Bucketed chronological sort for sessions/events (active → upcoming → past) |
 | `chunkedSongUpload.ts` | 5 MB chunked POST to `/v1/songs/upload/chunk` with retries |
-| `clickable.ts` | Shared Tailwind class strings for clickable cards and table rows |
+| `clickable.ts` | Shared Tailwind class strings for clickable cards, table rows and the link in a clickable row |
 | `env.ts` | `isProdHost()` — true on `deejaytools.com` / `www.deejaytools.com` |
+| `eventDates.ts` | Parses and formats an event's calendar dates as local dates |
+| `eventRoles.ts` | Per-event staff role ranking, labels and portal paths |
+| `floorTrials.ts` | Buckets sessions into active / upcoming / completed / cancelled and formats the counts |
 | `instrument.ts` | Sentry browser init (no-op without `SENTRY_DSN_DEEJAYTOOLS`) |
 | `logger.ts` | Structured console logger; `error` also forwards to Sentry |
+| `personSearch.ts` | Minimum length, debounce and labels for the event people search |
+| `seasonYear.ts` | Default season year from a date (seasons roll over on October 1) |
 | `sessionFormat.ts` | Session title and time formatting with optional IANA timezone |
+| `songLabel.ts` | A song's display label and version |
+| `submittableSongs.ts` | Which of a user's songs may be submitted to an event |
 | `utils.ts` | `cn()` — `twMerge(clsx(...))` for class merging |
+| `zonedTime.ts` | Wall-clock ↔ epoch conversions in an IANA timezone (session editor) |
 
 ### Config files (repo root)
 
@@ -133,6 +148,7 @@ One default-export component per route. Pages orchestrate fetching, local state,
 | `vite.config.ts` | `@/` alias, API proxy, `VITE_APP_VERSION` injection |
 | `vitest.config.ts` | Test runner; default `node` env, jsdom opt-in per file |
 | `vitest.contract.config.ts` | Live contract suite (`pnpm test:contract`) — see §3 |
+| `playwright.config.ts` | End-to-end suite (`pnpm test:e2e`, `e2e/`) against a deployed dev site |
 
 ---
 
@@ -167,10 +183,14 @@ There is no refresh logic here — Clerk owns session lifetime.
 Responses are JSON envelopes, typed in `src/api/envelope.ts`:
 
 - Success: `{ data: T, meta?: … }` → returns `data`
-- Error: `{ error: { message, … } }` → throws `new Error(error.message)`
-- Non-JSON failure → throws `Request failed: <status>`
+- Error: `{ error: { code, message, … } }` → throws an `ApiError` (status and code attached) whose message is the client's friendly text for that code, or the server's `message`
+- 5xx without an error envelope → `ApiError` with a "server unavailable" message
+- 2xx the client cannot read → `ApiError` saying so
+- Any other non-JSON failure → `ApiError` `Request failed: <status>`
 
-**5xx handling:** before throwing, the client calls `Sentry.captureException` with URL and status. **4xx are not sent to Sentry** — validation, auth, and not-found are expected user-facing failures, often caught and shown as toasts.
+`del()` returns `undefined` for a `204`.
+
+**Sentry:** before throwing, the client calls `Sentry.captureException` with URL and status for a 5xx or an unreadable 2xx. **4xx are not sent to Sentry** — validation, auth, and not-found are expected user-facing failures, often caught and shown as toasts.
 
 ### Call sites that bypass the client
 
@@ -178,7 +198,7 @@ Four places use raw `fetch` instead of `useApiClient()`:
 
 | Location | Why |
 |----------|-----|
-| **`AuthSync.tsx`** | Runs as a side-effect component; could use the client, but intentionally uses raw `fetch` with an explicit token from `getToken()` and does not need envelope parsing for its fire-and-forget sync POST. Failures are logged, not surfaced to UI. |
+| **`AuthSync.tsx`** | Runs as a side-effect component; uses raw `fetch` with an explicit token from `getToken()` for its fire-and-forget sync POST. Failures are logged, not surfaced to UI, except an email already linked to another sign-in, which shows a toast. |
 | **`lib/chunkedSongUpload.ts`** | Not a React hook — receives `getToken` as a callback. Builds `FormData` per chunk, implements its own retry/backoff, and must re-fetch a fresh token on each attempt. Cannot call `useApiClient()`. |
 | **`FeedbackPage.tsx`** | **Unauthenticated** endpoint — no Clerk token. Submits JSON to `POST /v1/feedback` for anonymous bug reports. |
 | **`hooks/useApiVersion.ts`** | `GET /version` is public, unversioned and not in the envelope. It is in the catalog as `meta.version`, declared `envelope: false`, and called through `call()` with `bareJsonTransport` (`api/bareTransport.ts`), which returns the body without unwrapping `{data}`. |
@@ -238,9 +258,9 @@ Defined in `pages/App.tsx`. Pattern: public landing **outside** `Layout`; everyt
 ### Guards (behavior)
 
 - **`RequireAuth`** — `<SignedOut>` → redirect `/`. No role check.
-- **`AdminGuard`** — waits for `useAuthMe().loading`, then requires `isAdmin && me`; else redirect `/`. Shows skeleton while loading.
-- **`ManagerGuard`** — same loading pattern; requires `isAdmin && me`. The manager area is admin-only: the API's global roles are `user` and `admin`, and staff roles are per event.
-- **`EventRoleGuard`** — same loading pattern; requires the role it names, or a richer one (event manager, then DJ, then coordinator), in `eventRoles` for the `:eventId` in the URL. The global admin role does not count. The API checks every portal call again against the same event.
+- **`AdminGuard`** — waits for `useAuthMe().loading`, then requires `isAdmin && me`; else redirect `/`. Shows skeleton while loading, and `AuthMeError` (with a retry) when the record failed to load.
+- **`ManagerGuard`** — same loading and error pattern; requires `isAdmin && me`. The manager area is admin-only: the API's global roles are `user` and `admin`, and staff roles are per event.
+- **`EventRoleGuard`** — same loading and error pattern; requires the role it names, or a richer one (event manager, then DJ, then coordinator), in `eventRoles` for the `:eventId` in the URL. The global admin role does not count. The API checks every portal call again against the same event.
 
 ### Per-event staff portals
 
@@ -272,13 +292,13 @@ export const MANAGER_SECTIONS = [
 ] as const;
 ```
 
-`guide` renders `ManagerGuideSection` (floor-trial ops reference). NavBar lists **Guide** last in `MANAGER_ITEMS` (`/manager/guide`); the bare `/manager` redirect still lands on `active-sessions`.
+`guide` renders `ManagerGuideSection` (floor-trial ops reference). NavBar lists **Guide** last in `MANAGER_ITEMS` (`/manager/guide`); the bare `/manager` redirect lands on `active-sessions`.
 
 Each page reads `:section` from `useParams`, validates against its `*_SECTIONS` array, and falls back to a default (`events` / `active-sessions`) when the slug is missing or unknown — so `/admin/foo` shows the default section instead of a blank screen.
 
 **Run History** (`/admin/runs`): event and session card-button grids (defaults to **All events** / **All sessions**), **Show future events** toggle (off by default), division and partnership summary chips (client-side AND filters), and a flat newest-first run list grouped by `entity_key` on the backend.
 
-Radix `<Tabs value={section}>` wraps the content panes; the **tab strip was removed** from the page body. Navigation is the **NavBar sub-bars** (`SUPERUSER_ITEMS` / `MANAGER_ITEMS`), whose `to` paths match the section slugs exactly (`/admin/events`, `/manager/active-sessions`, etc.).
+Radix `<Tabs value={section}>` wraps the content panes; there is **no tab strip** in the page body. Navigation is the **NavBar sub-bars** (`SUPERUSER_ITEMS` / `MANAGER_ITEMS`), whose `to` paths match the section slugs exactly (`/admin/events`, `/manager/active-sessions`, etc.).
 
 ### Landing page consequence
 
@@ -292,24 +312,27 @@ Because `/` renders **outside** `Layout`:
 ## 5. Auth state — `useAuthMe()`
 
 ```ts
-const { me, loading, reload, isAdmin, eventRoles } = useAuthMe();
+const { me, loading, error, reload, isAdmin, eventRoles } = useAuthMe();
 ```
+
+Every caller (nav bar, guards, pages) reads one module-level store, so `GET /v1/auth/me` is fetched once per page load however many callers are mounted, a failure is toasted once, and `reload()` updates them all. The store is keyed by the Clerk user id: signing out clears it, and a different account never sees the previous one's record. Only the newest request may write its answer. On a brand-new account `/me` can answer `USER_NOT_SYNCED` before `AuthSync` has created the users row; the hook then waits for the sync (`lib/authSyncStatus.ts`) and asks once more.
 
 | Field | Meaning |
 |-------|---------|
 | `me` | `ApiAuthMe` from `GET /v1/auth/me`, or `null` |
-| `loading` | `true` until Clerk is loaded **and** (signed out **or** `me` is populated) |
-| `reload()` | Re-fetch profile (after profile edits) |
+| `loading` | `true` until Clerk is loaded and, when signed in, until this account's first answer arrives |
+| `error` | Why the last request failed, or `null`; with `loading` false, so a guard can offer a retry |
+| `reload()` | Re-fetch the record (after a change to the caller's profile or event roles) |
 | `isAdmin` | `me?.role === "admin"` |
 | `eventRoles` | `me.event_roles`: the caller's `{ event_id, role }` staff roles; `[]` when none or signed out |
 
 ### Why `loading` is computed that way
 
 ```ts
-const loading = !isLoaded || fetching || (isSignedIn === true && me === null);
+loading: !isLoaded || (owner !== null && (!current || shared.loading)),
 ```
 
-Clerk can report `isSignedIn: true` before `/v1/auth/me` returns. Without the third clause, `AdminGuard` would see `loading: false`, `isAdmin: false`, and redirect a legitimate admin to `/` before the fetch starts. The hook keeps guards in a loading state until `me` exists or the user is confirmed signed out.
+Clerk can report a signed-in user before `/v1/auth/me` returns, and the store can still hold nothing (or another account's record) until this caller's effect starts the load. Without the second clause, `AdminGuard` would see `loading: false`, `isAdmin: false`, and redirect a legitimate admin to `/`. The hook keeps guards in a loading state until this account's record arrives, its request fails, or the user is confirmed signed out.
 
 ### Divisions — `useDivisions()`
 
@@ -331,12 +354,13 @@ Used by `SongUploadForm` (and manager “upload for” flows). Bypasses the API 
 
 ### Flow
 
-1. Generate `uploadId` (`crypto.randomUUID()`).
-2. Slice file into chunks; POST each to `/v1/songs/upload/chunk` as `FormData` (`chunk`, `upload_id`, `chunk_index`, `total_chunks`, `original_filename`, `mime_type`, plus caller fields from `buildFormFields()`).
-3. **Fresh Clerk token** on every attempt (`getToken()` passed in from the form).
-4. **401 → immediate throw** (no retry) — surfaces the server's `error.message` (or `Upload failed (401)`).
-5. Other failures → retry with **linear backoff** (`1000 * attempt` ms between attempts).
-6. Network errors → retry with message built from the underlying error.
+1. Check the file can be read (first and last byte) — an empty file or an unread cloud placeholder fails here, before any request.
+2. Generate `uploadId` (`crypto.randomUUID()`).
+3. Slice file into chunks; POST each to `/v1/songs/upload/chunk` as `FormData` (`chunk`, `upload_id`, `chunk_index`, `total_chunks`, `original_filename`, `mime_type`, plus caller fields from `buildFormFields()`).
+4. **Fresh Clerk token** on every attempt (`getToken()` passed in from the form).
+5. **Retryable refusals** — 5xx, 408, and 429 other than `TOO_MANY_UPLOADS` (`isRetryableRefusal`) — retry with **linear backoff** (`1000 * attempt` ms between attempts). Every other refusal, 401 included, throws at once with the server's `error.message` (or `Upload failed (<status>)`).
+6. Network errors → re-check the file (an unreadable file throws at once), otherwise retry with a message built from the underlying error.
+7. Each accepted chunk's response is checked against the catalog (`checkEndpoint`).
 
 ### Progress stages (`UploadStage`)
 
@@ -354,10 +378,12 @@ Used by `SongUploadForm` (and manager “upload for” flows). Bypasses the API 
 
 | Condition | Message |
 |-----------|---------|
+| Empty file | `"<name>" is empty (0 bytes).` |
+| File cannot be read (e.g. a cloud placeholder) | `"<name>" couldn't be read from disk. …` (names iCloud Drive, Google Drive, Dropbox) |
 | No token from Clerk | `Your session expired. Please sign in again and retry the upload.` |
 | Network failure | `Upload failed (<ErrorName>: <message>) — the connection may have dropped. Retrying…` |
 | HTTP error with JSON body | Server's `error.message` |
-| HTTP **401** with JSON body | Same as above — server's `error.message` (aborts immediately, no retry) |
+| Non-retryable refusal (e.g. **401**) | Same as above — server's `error.message` (aborts immediately, no retry) |
 | HTTP error without parseable body | `Upload failed (<status>)` |
 
 **Client-side validation** in `SongUploadForm` / `SpecialUploadForm` (before upload starts):
@@ -404,7 +430,7 @@ Installed shadcn primitives: `badge`, `button`, `card`, `dialog`, `form`, `input
 - **Variants** — `class-variance-authority` (`cva`) in components like `button.tsx`.
 - **Icons** — `lucide-react`.
 - **Toasts** — `import { toast } from "sonner"`; global `<Toaster richColors closeButton position="top-center" />` in `App.tsx`. There is no shadcn toast component in this project.
-- **Click affordances** — `CLICKABLE_CARD_CLASS` / `CLICKABLE_ROW_CLASS` from `lib/clickable.ts` for consistent hover on cards and table rows.
+- **Click affordances** — `CLICKABLE_CARD_CLASS` / `CLICKABLE_ROW_CLASS` from `lib/clickable.ts` for consistent hover on cards and table rows. A clickable card is a `<Link>`; a clickable row keeps its `onClick` for the mouse and puts a `<Link>` (`ROW_LINK_CLASS`) in its primary cell, so the row is reachable with Tab and Enter.
 
 ---
 
@@ -427,6 +453,7 @@ Installed shadcn primitives: `badge`, `button`, `card`, `dialog`, `form`, `input
   - Imports `@testing-library/jest-dom/vitest`
   - Registers `afterEach(cleanup)` from Testing Library
   - Stubs Radix pointer/scroll APIs jsdom lacks
+- Mocks `useDivisions` with the list already loaded, so a test's API mock need not serve `/v1/divisions`
 
 Default environment is **`node`** so pure tests do not pull DOM deps.
 
@@ -478,7 +505,7 @@ expect(apiGet).toHaveBeenCalledWith("/v1/sessions/s1");
 
 ## 9. Polling and refresh cadence
 
-Two screens poll on an interval. **Do not shorten these casually** — they trade API load against freshness.
+Three screens poll on an interval. **Do not shorten these casually** — they trade API load against freshness.
 
 ### `SessionDetailPage` — 60 seconds
 
@@ -506,6 +533,9 @@ Plus a **1 second** `lqNowTick` interval only to refresh the “Updated Xs ago�
 |---------|----------|-----------|
 | Public session detail | 60s | Low urgency, many passive viewers |
 | Manager live queue | 8s | Operational tool; stale queue causes wrong decisions |
+| Staff portal live queue (`components/staff/LiveQueueSection.tsx`) | 8s (`POLL_MS`), plus a 1s label tick | Same as the manager live queue |
+
+`SessionInfoHeader` also re-renders every 30s to keep its time-relative text current; it does not fetch.
 
 ---
 
