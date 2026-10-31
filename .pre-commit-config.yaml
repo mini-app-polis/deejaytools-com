@@ -5,3 +5,15 @@ repos:
     rev: v8.28.0
     hooks:
       - id: gitleaks
+  # ESLint on staged TypeScript, with the repo's own eslint.config.js and the
+  # ESLint version pinned in pnpm-lock.yaml, so it matches `pnpm lint` and CI.
+  # A local hook rather than a mirrored one: the config's plugins resolve from
+  # node_modules, so run `pnpm install` once after cloning. Scoped to src/ and
+  # e2e/, the directories `pnpm lint` checks.
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint
+        entry: pnpm exec eslint
+        language: system
+        files: ^(src|e2e)/.*\.(ts|tsx)$
