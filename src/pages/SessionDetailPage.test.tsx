@@ -183,7 +183,7 @@ const sampleSongs = [
 ];
 
 function makeSubmission(songId: string) {
-  return fx.eventSongSubmission({
+  return fx.listedEventSongSubmission({
     id: `sub_${songId}`,
     event_id: "event-1",
     event_name: "GNDC",

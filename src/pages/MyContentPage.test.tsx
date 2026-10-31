@@ -112,7 +112,7 @@ describe("MyContentPage — Events section", () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/event-song-submissions") {
         return Promise.resolve([
-          fx.eventSongSubmission({
+          fx.listedEventSongSubmission({
             id: "sub1",
             event_id: "ev1",
             event_name: "Spring Classic",
@@ -563,9 +563,9 @@ describe("MyContentPage — events and sessions details", () => {
     withGets({
       "/v1/events": [active, done, EVENT],
       "/v1/event-song-submissions": [
-        fx.eventSongSubmission({ id: "a", event_id: "act", song_label: "Live Song", division: null }),
-        fx.eventSongSubmission({ id: "b", event_id: "done", song_label: "Old Song" }),
-        fx.eventSongSubmission({ id: "c", event_id: "ev1", song_label: "Spring Song", division: "Classic" }),
+        fx.listedEventSongSubmission({ id: "a", event_id: "act", song_label: "Live Song", division: null }),
+        fx.listedEventSongSubmission({ id: "b", event_id: "done", song_label: "Old Song" }),
+        fx.listedEventSongSubmission({ id: "c", event_id: "ev1", song_label: "Spring Song", division: "Classic" }),
       ],
     });
     renderPage();

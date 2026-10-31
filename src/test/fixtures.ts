@@ -9,6 +9,7 @@ import {
   ApiEventPersonSchema,
   ApiEventSchema,
   ApiEventSongSubmissionSchema,
+  ApiListedEventSongSubmissionSchema,
   ApiEventStaffSchema,
   ApiLeadingPairSchema,
   ApiManagedPartnershipSchema,
@@ -121,6 +122,11 @@ export const fx = {
     follower_first_name: "Fay", follower_last_name: "Follower", created_at: T, updated_at: T,
   }),
   eventSongSubmission: factory(ApiEventSongSubmissionSchema, {
+    id: "sub-1", event_id: "ev-1", event_name: "Test Event", event_start_date: "2026-06-01",
+    event_status: "upcoming", song_id: "song-1", song_label: "Song", division: null,
+    round: "prelims_and_finals", created_at: T,
+  }),
+  listedEventSongSubmission: factory(ApiListedEventSongSubmissionSchema, {
     id: "sub-1", event_id: "ev-1", event_name: "Test Event", event_start_date: "2026-06-01",
     event_status: "upcoming", song_id: "song-1", song_label: "Song", division: null,
     round: "prelims_and_finals", created_at: T, can_withdraw: true,

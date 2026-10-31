@@ -112,7 +112,7 @@ function mockApi(events: unknown[], songs: unknown[] = [SONG], submissions: unkn
     if (path.startsWith("/v1/event-song-submissions")) {
       return Promise.resolve(
         submissions.map((s) =>
-          fx.eventSongSubmission(s as Parameters<typeof fx.eventSongSubmission>[0])
+          fx.listedEventSongSubmission(s as Parameters<typeof fx.listedEventSongSubmission>[0])
         )
       );
     }

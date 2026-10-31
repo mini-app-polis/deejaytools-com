@@ -570,10 +570,15 @@ export const ApiEventSongSubmissionSchema = z.object({
   division: z.string().nullable(),
   round: z.enum(SUBMISSION_ROUNDS),
   created_at: z.number(),
+});
+export type ApiEventSongSubmission = z.infer<typeof ApiEventSongSubmissionSchema>;
+
+/** GET /v1/event-song-submissions — also lists a linked partner's submissions of shared songs. */
+export const ApiListedEventSongSubmissionSchema = ApiEventSongSubmissionSchema.extend({
   /** False for a partner's submission of a shared song: listed so it can be checked in, not withdrawn. */
   can_withdraw: z.boolean(),
 });
-export type ApiEventSongSubmission= z.infer<typeof ApiEventSongSubmissionSchema>;
+export type ApiListedEventSongSubmission = z.infer<typeof ApiListedEventSongSubmissionSchema>;
 
 export const createEventSongSubmissionBodySchema = z.object({
   event_id: z.string().min(1),
