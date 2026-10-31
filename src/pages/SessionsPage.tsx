@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { CLICKABLE_CARD_CLASS, CLICKABLE_ROW_CLASS } from "@/lib/clickable";
+import { CLICKABLE_CARD_CLASS, CLICKABLE_ROW_CLASS, ROW_LINK_CLASS } from "@/lib/clickable";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareSessionChrono } from "@/lib/chronoSort";
 import { cn } from "@/lib/utils";
@@ -136,9 +136,8 @@ export default function SessionsPage() {
               </TableRow>
             )}
             {sortedSessions?.map((s) => (
-              // The whole row is the click target — matches EventsPage and the
-              // mobile card layout above. Replaces the previous Open button
-              // column, which was redundant with row navigation.
+              // The whole row is the mouse target, matching the mobile card
+              // layout above; the title is a real link so Tab + Enter reach it.
               <TableRow
                 key={s.id}
                 className={CLICKABLE_ROW_CLASS}
@@ -146,7 +145,13 @@ export default function SessionsPage() {
               >
                 <TableCell className="font-medium">
                   <span className="flex flex-wrap items-center gap-2">
-                    {formatSessionTitle(s, s.event_timezone)}
+                    <Link
+                      to={`/sessions/${s.id}`}
+                      className={ROW_LINK_CLASS}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {formatSessionTitle(s, s.event_timezone)}
+                    </Link>
                     {s.event_timezone && (
                       <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
                         {formatTimezoneAbbr(s.event_timezone, s.floor_trial_starts_at)}

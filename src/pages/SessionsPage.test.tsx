@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
@@ -151,6 +152,33 @@ describe("SessionsPage", () => {
       // At least one link should point to the session detail page.
       expect(links.some((l) => l.getAttribute("href") === "/sessions/abc-123")).toBe(true);
     });
+  });
+
+  it("opens a session from its table row with Tab and Enter", async () => {
+    apiGet.mockResolvedValue([
+      makeSession({ id: "abc-123", status: "scheduled", startsAt: "2026-05-22T08:00:00" }),
+    ]);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/sessions"]}>
+        <Routes>
+          <Route path="/sessions" element={<SessionsPage />} />
+          <Route path="/sessions/:id" element={<p>Session detail page</p>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const table = await screen.findByRole("table");
+    const rowLink = await within(table).findByRole("link");
+    expect(rowLink).toHaveAttribute("href", "/sessions/abc-123");
+
+    // Tab through the page until the row's link has focus.
+    for (let i = 0; i < 10 && document.activeElement !== rowLink; i++) {
+      await user.tab();
+    }
+    expect(rowLink).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(await screen.findByText("Session detail page")).toBeInTheDocument();
   });
 
   it("renders multiple sessions", async () => {

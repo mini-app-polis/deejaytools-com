@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   type ApiEvent,
@@ -13,7 +13,7 @@ import { useApiClient } from "@/api/client";
 import { call, endpoints } from "@/api/endpoints";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import { useDivisions } from "@/hooks/useDivisions";
-import { CLICKABLE_ROW_CLASS } from "@/lib/clickable";
+import { CLICKABLE_ROW_CLASS, ROW_LINK_CLASS } from "@/lib/clickable";
 import { seasonYearFromDateString } from "@/lib/seasonYear";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -888,7 +888,15 @@ export default function AdminPage() {
       className={CLICKABLE_ROW_CLASS}
       onClick={() => navigate(`/events/${ev.id}`)}
     >
-      <TableCell className="font-medium">{ev.name}</TableCell>
+      <TableCell className="font-medium">
+        <Link
+          to={`/events/${ev.id}`}
+          className={ROW_LINK_CLASS}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {ev.name}
+        </Link>
+      </TableCell>
       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
         {ev.start_date}
       </TableCell>
@@ -926,7 +934,15 @@ export default function AdminPage() {
         className={CLICKABLE_ROW_CLASS}
         onClick={() => navigate(`/sessions/${s.id}`)}
       >
-        <TableCell className="font-medium">{formatSessionTitle(s, s.event_timezone)}</TableCell>
+        <TableCell className="font-medium">
+          <Link
+            to={`/sessions/${s.id}`}
+            className={ROW_LINK_CLASS}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {formatSessionTitle(s, s.event_timezone)}
+          </Link>
+        </TableCell>
         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
           {eventName}
         </TableCell>

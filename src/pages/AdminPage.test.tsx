@@ -410,6 +410,15 @@ function field(label: string | RegExp) {
   return el.parentElement!.querySelector("input, select") as HTMLInputElement;
 }
 
+/** Press Tab until `el` has focus (bounded), then Enter. */
+async function tabToAndEnter(user: ReturnType<typeof userEvent.setup>, el: HTMLElement) {
+  for (let i = 0; i < 40 && document.activeElement !== el; i++) {
+    await user.tab();
+  }
+  expect(el).toHaveFocus();
+  await user.keyboard("{Enter}");
+}
+
 function renderWithDetailRoutes(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
@@ -462,6 +471,18 @@ describe("AdminPage — Events section", () => {
     await user.click(screen.getByRole("button", { name: "Close" }));
 
     await user.click(screen.getByText("Swing Fling"));
+    expect(await screen.findByText("event detail page")).toBeInTheDocument();
+  });
+
+  it("opens an event from its row by keyboard through a real link", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE] });
+    const user = userEvent.setup();
+    renderWithDetailRoutes("/admin/events");
+
+    const link = await screen.findByRole("link", { name: "Swing Fling" });
+    expect(link).toHaveAttribute("href", `/events/${EV_ACTIVE.id}`);
+    expect(link.closest("tr")).not.toBeNull();
+    await tabToAndEnter(user, link);
     expect(await screen.findByText("event detail page")).toBeInTheDocument();
   });
 
@@ -667,6 +688,27 @@ describe("AdminPage — Sessions section", () => {
     renderWithDetailRoutes("/admin/sessions");
 
     await user.click(await screen.findByText(SESS_OPEN_TITLE));
+    expect(await screen.findByText("session detail page")).toBeInTheDocument();
+  });
+
+  it("opens a session from its row by keyboard through a real link", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE], "/v1/sessions": [SESS_OPEN] });
+    const user = userEvent.setup();
+    renderWithDetailRoutes("/admin/sessions");
+
+    const link = await screen.findByRole("link", { name: SESS_OPEN_TITLE });
+    expect(link).toHaveAttribute("href", `/sessions/${SESS_OPEN.id}`);
+    await tabToAndEnter(user, link);
+    expect(await screen.findByText("session detail page")).toBeInTheDocument();
+  });
+
+  it("still opens a session when a non-link cell of the row is clicked", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE], "/v1/sessions": [SESS_OPEN] });
+    const user = userEvent.setup();
+    renderWithDetailRoutes("/admin/sessions");
+
+    const row = (await screen.findByRole("link", { name: SESS_OPEN_TITLE })).closest("tr")!;
+    await user.click(within(row).getByText("checkin_open"));
     expect(await screen.findByText("session detail page")).toBeInTheDocument();
   });
 
