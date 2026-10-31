@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
@@ -28,6 +28,7 @@ import EventsPage from "./EventsPage";
 import { toast } from "sonner";
 import type { EventStatus, SessionStatus } from "@/schemas";
 import { fx } from "@/test/fixtures";
+import { renderWithQueryClient } from "@/test/render";
 
 // ---------------------------------------------------------------------------
 // Setup + teardown
@@ -75,7 +76,7 @@ function makeSession(opts: { id: string; eventId: string | null; status?: Sessio
 }
 
 function renderPage() {
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter>
       <EventsPage />
     </MemoryRouter>
@@ -187,7 +188,7 @@ describe("EventsPage", () => {
     expect(screen.queryByText("completed")).toBeNull();
   });
 
-  it("shows toast error when API fails", async () => {
+  it("shows a failed events load inline, not as an empty listing", async () => {
     const errorMsg = "Failed to load events";
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events") {
@@ -198,9 +199,8 @@ describe("EventsPage", () => {
 
     renderPage();
 
-    await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith(errorMsg);
-    });
+    expect(await screen.findByRole("alert")).toHaveTextContent(`Couldn't load events: ${errorMsg}`);
+    expect(screen.queryByText(/no current or upcoming events/i)).not.toBeInTheDocument();
   });
 
   it("still lists the events and reports the sessions error when only sessions fail", async () => {

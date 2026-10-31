@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -41,6 +41,7 @@ import EventDetailPage from "./EventDetailPage";
 import { toast } from "sonner";
 import type { EventStatus, SessionStatus } from "@/schemas";
 import { fx } from "@/test/fixtures";
+import { renderWithQueryClient } from "@/test/render";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -99,7 +100,7 @@ function makeDivision(division: string, entities: ReturnType<typeof makeEntity>[
 // ---------------------------------------------------------------------------
 
 function renderPage(id = "ev-1") {
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter initialEntries={[`/events/${id}`]}>
       <Routes>
         <Route path="/events/:id" element={<EventDetailPage />} />
@@ -187,13 +188,19 @@ describe("EventDetailPage", () => {
     }
   });
 
-  it("shows toast error when the API call fails", async () => {
+  it("shows a failed load inline, not as a missing event", async () => {
     apiGet.mockRejectedValue(new Error("Network failure"));
     renderPage();
 
-    await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith("Network failure")
-    );
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load the event: Network failure");
+    expect(screen.queryByText("Event not found.")).not.toBeInTheDocument();
+  });
+
+  it("says the event was not found when the API answers 404", async () => {
+    apiGet.mockRejectedValue(Object.assign(new Error("Event not found"), { status: 404 }));
+    renderPage();
+
+    expect(await screen.findByText("Event not found.")).toBeInTheDocument();
   });
 
   it("shows 'Event not found.' when the event request fails with 404", async () => {
@@ -381,7 +388,7 @@ describe("EventDetailPage", () => {
       return Promise.resolve([]);
     });
     const user = userEvent.setup();
-    render(
+    renderWithQueryClient(
       <MemoryRouter initialEntries={["/events/ev-a"]}>
         <Link to="/events/ev-b">go to b</Link>
         <Routes>
@@ -407,7 +414,7 @@ describe("EventDetailPage", () => {
       return Promise.resolve([]);
     });
     const user = userEvent.setup();
-    render(
+    renderWithQueryClient(
       <MemoryRouter initialEntries={["/events/ev-a"]}>
         <Link to="/events/ev-b">go to b</Link>
         <Routes>
@@ -418,7 +425,7 @@ describe("EventDetailPage", () => {
 
     expect(await screen.findByRole("heading", { name: "Event A" })).toBeInTheDocument();
     await user.click(screen.getByRole("link", { name: "go to b" }));
-    expect(await screen.findByText("Event not found.")).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load the event: gone");
     expect(screen.queryByRole("heading", { name: "Event A" })).not.toBeInTheDocument();
   });
 
@@ -595,7 +602,7 @@ describe("EventDetailPage — entered entities", () => {
     expect(apiGet).not.toHaveBeenCalledWith("/v1/events/ev-1/entities");
   });
 
-  it("surfaces a toast when the entity fetch fails", async () => {
+  it("shows a failed entity fetch inline", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
       if (path === "/v1/events/ev-1/entities") {
@@ -605,6 +612,8 @@ describe("EventDetailPage — entered entities", () => {
     });
     renderPage();
 
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Entities unavailable"));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Couldn't load who's entered: Entities unavailable"
+    );
   });
 });

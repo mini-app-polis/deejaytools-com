@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fx } from "@/test/fixtures";
@@ -21,9 +21,10 @@ vi.mock("@/hooks/useAuthMe", () => ({
 }));
 
 import MyEventsPage from "./MyEventsPage";
+import { renderWithQueryClient } from "@/test/render";
 
 function renderPage() {
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter>
       <MyEventsPage />
     </MemoryRouter>
@@ -66,6 +67,15 @@ describe("MyEventsPage", () => {
     renderPage();
     expect(await screen.findByText("Spring Swing")).toBeInTheDocument();
     expect(screen.getAllByRole("link")).toHaveLength(1);
+  });
+
+  it("keeps the portals and says so when the events list fails to load", async () => {
+    eventRoles = [{ event_id: "ev-1", role: "dj" }];
+    apiGet.mockRejectedValue(new Error("events down"));
+    renderPage();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load the event details: events down");
+    expect(screen.getByText("Event").closest("a")).toHaveAttribute("href", "/events/ev-1/dj");
+    expect(screen.queryByText(/aren.t on the staff of any event/)).toBeNull();
   });
 
   it("explains when the caller is on no event's staff, without fetching", async () => {

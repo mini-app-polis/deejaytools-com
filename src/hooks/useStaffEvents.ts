@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { ApiEvent, ApiEventRole, EventStaffRole } from "@/schemas";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointQuery } from "@/api/queries";
 import { staffEventsOf } from "@/lib/eventRoles";
 
 export type StaffEvent = {
@@ -16,30 +16,17 @@ export type StaffEvent = {
  * The events the caller is on the staff of, each with the role whose portal
  * it opens, joined to the public events list for names and dates.
  *
- * Fetches nothing for a caller with no event roles.
+ * Fetches nothing for a caller with no event roles. If the events list fails
+ * to load, every staff event is still listed, without its event, and `error`
+ * says why — a failure never hides the caller's portals.
  */
 export function useStaffEvents(eventRoles: readonly ApiEventRole[]) {
-  const api = useApiClient();
   const staff = useMemo(() => staffEventsOf(eventRoles), [eventRoles]);
   const hasRoles = staff.length > 0;
-  const [events, setEvents] = useState<ApiEvent[] | null>(null);
-
-  // Keyed on the roles themselves: a reloaded caller record (after an event
-  // is renamed or a role granted) reads the list again.
-  useEffect(() => {
-    if (!hasRoles) return;
-    let cancelled = false;
-    call(api, endpoints.events.list)
-      .then((rows) => {
-        if (!cancelled) setEvents(rows);
-      })
-      .catch(() => {
-        if (!cancelled) setEvents([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, hasRoles, staff]);
+  // The events list is shared with every other screen that reads it; an
+  // event change invalidates it there.
+  const eventsQuery = useEndpointQuery(endpoints.events.list, { enabled: hasRoles });
+  const events = eventsQuery.data ?? null;
 
   const items = useMemo<StaffEvent[]>(() => {
     const byId = new Map((events ?? []).map((e) => [e.id, e]));
@@ -52,5 +39,10 @@ export function useStaffEvents(eventRoles: readonly ApiEventRole[]) {
     );
   }, [staff, events]);
 
-  return { items, loading: hasRoles && events === null };
+  return {
+    items,
+    loading: hasRoles && eventsQuery.isLoading,
+    error: hasRoles && !events ? eventsQuery.error : null,
+    retry: () => void eventsQuery.refetch(),
+  };
 }
