@@ -394,7 +394,7 @@ Add new shadcn components with the CLI from the repo root (see cheatsheet §10).
 
 ### `components/ui/` inventory
 
-Installed shadcn primitives: `badge`, `button`, `card`, `dialog`, `dropdown-menu`, `form`, `input`, `label`, `select`, `separator`, `skeleton`, `table`, `tabs`.
+Installed shadcn primitives: `badge`, `button`, `card`, `dialog`, `form`, `input`, `label`, `select`, `separator`, `skeleton`, `table`, `tabs`.
 
 **`choice-group.tsx` is custom** — a segmented control built for this app, not from the shadcn registry.
 
