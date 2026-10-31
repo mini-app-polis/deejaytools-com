@@ -276,7 +276,7 @@ describe("EventSubmissionsPage — event page", () => {
     mockApi(
       [EVENT],
       [SONG, SONG_SHOWCASE],
-      [{ id: "sub1", event_id: "ev1", song_id: "song1", song_label: "2026_Classic_MyRoutine.mp3", division: "Classic", created_at: 1 }]
+      [{ id: "sub1", event_id: "ev1", song_id: "song1", song_label: "2026_Classic_MyRoutine.mp3", division: "Classic", created_at: 1, can_withdraw: true }]
     );
     apiDel.mockResolvedValue(undefined);
     const user = userEvent.setup();
@@ -318,7 +318,7 @@ describe("EventSubmissionsPage — event page", () => {
     mockApi(
       [EVENT],
       [SHARED_SONG],
-      [{ id: "sub_shared", event_id: "ev1", song_id: "shared1", song_label: "2026_Classic_PartnerRoutine.mp3", division: "Classic", created_at: 1 }]
+      [{ id: "sub_shared", event_id: "ev1", song_id: "shared1", song_label: "2026_Classic_PartnerRoutine.mp3", division: "Classic", created_at: 1, can_withdraw: true }]
     );
     apiDel.mockResolvedValue(undefined);
     const user = userEvent.setup();
@@ -336,11 +336,24 @@ describe("EventSubmissionsPage — event page", () => {
     expect(toastMocks.success).toHaveBeenCalledWith("Song removed from Spring Classic.");
   });
 
+  it("lists a partner's submission of a shared song without Remove", async () => {
+    mockApi(
+      [EVENT],
+      [SHARED_SONG],
+      [{ id: "sub_partner", event_id: "ev1", song_id: "shared1", song_label: "2026_Classic_PartnerRoutine.mp3", division: "Classic", created_at: 1, can_withdraw: false }]
+    );
+    renderAt("/event-submissions/ev1");
+
+    expect(await screen.findByText("Your submissions")).toBeInTheDocument();
+    expect(screen.getByText("2026_Classic_PartnerRoutine.mp3")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^remove$/i })).not.toBeInTheDocument();
+  });
+
   it("flags a submission whose song is no longer in the library, and lets it be removed", async () => {
     mockApi(
       [EVENT],
       [SONG],
-      [{ id: "orphan_sub", event_id: "ev1", song_id: "missing_song", song_label: "2025_Classic_GoneRoutine.mp3", division: "Classic", created_at: 1 }]
+      [{ id: "orphan_sub", event_id: "ev1", song_id: "missing_song", song_label: "2025_Classic_GoneRoutine.mp3", division: "Classic", created_at: 1, can_withdraw: true }]
     );
     renderAt("/event-submissions/ev1");
 
@@ -399,7 +412,7 @@ describe("EventSubmissionsPage — failed loads", () => {
     mockApi(
       [EVENT],
       [SONG, SONG_SHOWCASE],
-      [{ id: "sub1", event_id: "ev1", song_id: "song1", song_label: "2026_Classic_MyRoutine.mp3", division: "Classic", created_at: 1 }]
+      [{ id: "sub1", event_id: "ev1", song_id: "song1", song_label: "2026_Classic_MyRoutine.mp3", division: "Classic", created_at: 1, can_withdraw: true }]
     );
     const served = apiGet.getMockImplementation()!;
     apiGet.mockImplementation((path: string) =>

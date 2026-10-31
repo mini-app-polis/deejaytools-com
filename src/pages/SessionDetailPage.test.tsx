@@ -1131,8 +1131,8 @@ describe("SessionDetailPage — loading", () => {
 // The API lets the caller check it in for themselves when the song has a
 // submission to the session's event; the entity is the owner's pair with
 // their partner row, which POST /v1/pairs/find-or-create returns for a row
-// linked to the caller. The picker offers songs among the caller's own
-// submissions (GET /v1/event-song-submissions lists only those).
+// linked to the caller. The picker offers songs among the submissions listed
+// by GET /v1/event-song-submissions: the caller's and their partner's.
 const sharedSong = {
   id: "song_shared",
   user_id: "user_owner",
@@ -1174,6 +1174,20 @@ describe("SessionDetailPage — a song shared by a linked partner", () => {
     expect(apiPost).toHaveBeenCalledWith("/v1/pairs/find-or-create", {
       partner_id: "owner_partner_row",
     });
+  });
+
+  it("offers a shared song only the partner submitted", async () => {
+    signedIn = true;
+    stubGets({
+      session: openCheckinWindowSession(),
+      songs: [sharedSong],
+      pairs: [],
+      eventSubmissions: [{ ...makeSubmission("song_shared"), can_withdraw: false }],
+    });
+    renderAt();
+
+    await openFormAndPick(/Shared Routine/i);
+    expect(screen.getByRole("radio", { name: /Shared Routine/i })).toBeChecked();
   });
 
   it("does not offer a shared song that is not among the caller's submissions to the event", async () => {
