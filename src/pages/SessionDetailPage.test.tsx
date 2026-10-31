@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -1190,5 +1190,77 @@ describe("SessionDetailPage — a song shared by a linked partner", () => {
       (await screen.findAllByText(/haven't added any songs to this event yet/i)).length
     ).toBeGreaterThan(0);
     expect(screen.queryByRole("radio", { name: /Shared Routine/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("SessionDetailPage — clock and polling", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function soonSession(opensInMs: number) {
+    const nowMs = Date.now();
+    return makeSession({
+      eventName: "GNDC",
+      checkinOpensAt: new Date(nowMs + opensInMs).toISOString(),
+      floorTrialStartsAt: new Date(nowMs + opensInMs + 3_600_000).toISOString(),
+      floorTrialEndsAt: new Date(nowMs + opensInMs + 4 * 3_600_000).toISOString(),
+      divisions: [{ division_name: "Classic", is_priority: true }],
+    });
+  }
+
+  it("enables Check in as the window opens, without waiting for the next poll", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    signedIn = true;
+    stubGets({
+      session: soonSession(30_000),
+      songs: [{ id: "song1", routine_name: "Song One", division: "Classic", partner_id: null }],
+      eventSubmissions: [makeSubmission("song1")],
+    });
+    renderAt();
+
+    const [button] = await screen.findAllByRole("button", { name: "Check in" });
+    expect(button).toBeDisabled();
+    expect(screen.getAllByText(/^Check-in opens /).length).toBeGreaterThan(0);
+    const gets = apiGet.mock.calls.length;
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "Check in" })[0]).toBeEnabled());
+    // The clock ticked on its own; nothing was fetched for it.
+    expect(apiGet.mock.calls.length).toBe(gets);
+  });
+
+  it("says when a background refresh fails, without blocking the page, and retries", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    signedIn = true;
+    vi.mocked(toast.error).mockClear();
+    const session = openCheckinWindowSession();
+    stubGets({
+      session,
+      songs: [{ id: "song1", routine_name: "Song One", division: "Classic", partner_id: null }],
+      eventSubmissions: [makeSubmission("song1")],
+    });
+    renderAt();
+    expect(await screen.findByText("No one on deck.")).toBeInTheDocument();
+
+    const ok = apiGet.getMockImplementation()!;
+    apiGet.mockImplementation((path: string) =>
+      path.includes("/waiting") ? Promise.reject(new Error("offline")) : ok(path)
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    const notice = await screen.findByRole("status");
+    expect(notice).toHaveTextContent(/couldn't refresh the queue/i);
+    expect(toast.error).not.toHaveBeenCalled();
+    // The page stays usable: the queues and the check-in action are still there.
+    expect(screen.getByText("No one on deck.")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Check in" })[0]).toBeEnabled();
+
+    apiGet.mockImplementation(ok);
+    fireEvent.click(within(notice).getByRole("button", { name: "Retry now" }));
+    await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
   });
 });
