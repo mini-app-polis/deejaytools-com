@@ -1,18 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   type ApiAdminUser,
   type ApiAdminEventSongSubmission,
-  type ApiEvent,
-  type ApiEventSongSubmission,
   type ApiQueueEntry,
-  type ApiLeadingPair,
   type ApiSession,
-  type ApiSong,
 } from "@/schemas";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
+import QueryError from "@/components/QueryError";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useLiveQueues } from "@/hooks/useLiveQueues";
 import SongUploadForm from "@/components/SongUploadForm";
 import { SessionInfoHeader } from "@/components/SessionInfoHeader";
 import { Button } from "@/components/ui/button";
@@ -30,6 +29,9 @@ import { useQueueActions, WithdrawEntryDialog } from "@/components/staff/queueAc
 import { cn } from "@/lib/utils";
 
 const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
+
+// A stable empty list while a query has no data, so memos over it hold.
+const NO_ROWS: readonly never[] = [];
 
 export const MANAGER_SECTIONS = ["active-sessions", "event-songs", "upload-for", "checkin-for", "guide"] as const;
 export type ManagerSection = (typeof MANAGER_SECTIONS)[number];
@@ -49,20 +51,16 @@ function formatAgo(ms: number): string {
 }
 
 export default function ManagerPage() {
-  const api = useApiClient();
   const { section: rawSection } = useParams<{ section: string }>();
   const section: ManagerSection = isManagerSection(rawSection)
     ? rawSection
     : DEFAULT_MANAGER_SECTION;
 
-  const [sessions, setSessions] = useState<ApiSession[] | null>(null);
+  const sessionsQuery = useEndpointQuery(endpoints.sessions.list);
+  const sessions = sessionsQuery.data ?? null;
 
-  const [esEvents, setEsEvents] = useState<ApiEvent[]>([]);
-  const [esEventsLoading, setEsEventsLoading] = useState(false);
   const [esEventId, setEsEventId] = useState("");
   const [esShowPast, setEsShowPast] = useState(false);
-  const [esSubmissions, setEsSubmissions] = useState<ApiAdminEventSongSubmission[]>([]);
-  const [esSubmissionsLoading, setEsSubmissionsLoading] = useState(false);
   const [esCollapsedDivisions, setEsCollapsedDivisions] = useState<Set<string>>(new Set());
 
   const toggleDivision = (division: string) =>
@@ -74,36 +72,31 @@ export default function ManagerPage() {
     });
 
   const [cfUserQuery, setCfUserQuery] = useState("");
-  const [cfUserResults, setCfUserResults] = useState<ApiAdminUser[]>([]);
-  const [cfSearching, setCfSearching] = useState(false);
   const [cfSelectedUser, setCfSelectedUser] = useState<ApiAdminUser | null>(null);
   const [cfSessionId, setCfSessionId] = useState("");
-  const [cfSubmissions, setCfSubmissions] = useState<ApiEventSongSubmission[] | null>(null);
   const [cfSongId, setCfSongId] = useState("");
   const [cfDivision, setCfDivision] = useState("");
   const [cfSubmitting, setCfSubmitting] = useState(false);
 
   const [ufQuery, setUfQuery] = useState("");
-  const [ufResults, setUfResults] = useState<Array<{ id: string; email: string; first_name: string | null; last_name: string | null }>>([]);
-  const [ufSearching, setUfSearching] = useState(false);
   const [ufSelected, setUfSelected] = useState<{ id: string; email: string; first_name: string | null; last_name: string | null } | null>(null);
 
   const [lqSessionId, setLqSessionId] = useState("");
-  const [lqActive, setLqActive] = useState<ApiQueueEntry[]>([]);
-  const [lqPriority, setLqPriority] = useState<ApiQueueEntry[]>([]);
-  const [lqNonPriority, setLqNonPriority] = useState<ApiQueueEntry[]>([]);
-  const [lqPairs, setLqPairs] = useState<ApiLeadingPair[]>([]);
-  const [lqSongs, setLqSongs] = useState<ApiSong[]>([]);
-  const [lqLoading, setLqLoading] = useState(false);
-  const [lqUpdatedAt, setLqUpdatedAt] = useState<number | null>(null);
-  const [lqRefreshFailed, setLqRefreshFailed] = useState(false);
+  const {
+    active: lqActive,
+    priority: lqPriority,
+    nonPriority: lqNonPriority,
+    loading: lqLoading,
+    updatedAt: lqUpdatedAt,
+    refreshFailed: lqRefreshFailed,
+    loadError: lqLoadError,
+    refresh: refreshLiveQueues,
+  } = useLiveQueues(lqSessionId);
+  // Only a fallback for labels the queue rows leave out, so a failure here
+  // leaves the ids showing rather than blocking the queue.
+  const lqPairs = useEndpointQuery(endpoints.partners.leadingPairs).data ?? NO_ROWS;
+  const lqSongs = useEndpointQuery(endpoints.songs.list).data ?? NO_ROWS;
   const [lqNowTick, setLqNowTick] = useState(() => Date.now());
-  const lqSessionRef = useRef(lqSessionId);
-  lqSessionRef.current = lqSessionId;
-
-  const loadSessions = useCallback(() => {
-    call(api, endpoints.sessions.list).then(setSessions).catch(() => setSessions([]));
-  }, [api]);
 
   const cfActiveSessions = (sessions ?? []).filter(
     (s) => s.status === "checkin_open" || s.status === "in_progress"
@@ -111,122 +104,45 @@ export default function ManagerPage() {
   const cfSessionObj = sessions?.find((s) => s.id === cfSessionId) ?? null;
   const cfSessionDivisions = (cfSessionObj?.divisions ?? []).map((d) => d.division_name);
 
-  const loadLiveQueues = useCallback(
-    async (sessionId: string, silent = false) => {
-      if (!sessionId) return;
-      if (!silent) setLqLoading(true);
-      try {
-        const [active, priority, nonPriority] = await Promise.all([
-          call(api, endpoints.queue.activeStaff, { params: { sessionId: sessionId } }),
-          call(api, endpoints.queue.priority, { params: { sessionId: sessionId } }),
-          call(api, endpoints.queue.nonPriority, { params: { sessionId: sessionId } }),
-        ]);
-        setLqActive(active);
-        setLqPriority(priority);
-        setLqNonPriority(nonPriority);
-        setLqUpdatedAt(Date.now());
-        setLqRefreshFailed(false);
-      } catch (e) {
-        setLqRefreshFailed(true);
-        if (!silent) toast.error(e instanceof Error ? e.message : "Failed to load queues");
-      } finally {
-        if (!silent) setLqLoading(false);
-      }
-    },
-    [api]
-  );
+  const esEventsQuery = useEndpointQuery(endpoints.events.list, { enabled: section === "event-songs" });
+  const esEvents = esEventsQuery.data ?? NO_ROWS;
+  const esEventsLoading = esEventsQuery.isLoading;
 
-  const loadLqExtras = useCallback(async () => {
-    const [pairs, songs] = await Promise.all([
-      call(api, endpoints.partners.leadingPairs),
-      call(api, endpoints.songs.list),
-    ]);
-    setLqPairs(pairs);
-    setLqSongs(songs);
-  }, [api]);
-
-  useEffect(() => {
-    loadSessions();
-    void loadLqExtras().catch(() => {});
-  }, [loadSessions, loadLqExtras]);
-
-  useEffect(() => {
-    if (section !== "event-songs") return;
-    let cancelled = false;
-    setEsEventsLoading(true);
-    call(api, endpoints.events.list)
-      .catch(() => [] as ApiEvent[])
-      .then((evs) => {
-        if (!cancelled) setEsEvents(evs);
-      })
-      .finally(() => {
-        if (!cancelled) setEsEventsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, section]);
-
-  useEffect(() => {
-    if (section !== "event-songs" || !esEventId) {
-      setEsSubmissions([]);
-      return;
-    }
-    let cancelled = false;
-    setEsSubmissionsLoading(true);
-    call(api, endpoints.admin.eventSongSubmissions, { params: { eventId: esEventId } })
-      .catch(() => [] as ApiAdminEventSongSubmission[])
-      .then((rows) => {
-        if (!cancelled) setEsSubmissions(rows);
-      })
-      .finally(() => {
-        if (!cancelled) setEsSubmissionsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, section, esEventId]);
+  const esSubmissionsQuery = useEndpointQuery(endpoints.admin.eventSongSubmissions, {
+    params: { eventId: esEventId },
+    enabled: section === "event-songs" && !!esEventId,
+  });
+  const esSubmissions = esSubmissionsQuery.data ?? NO_ROWS;
+  const esSubmissionsLoading = esSubmissionsQuery.isFetching;
 
   useEffect(() => {
     setEsCollapsedDivisions(new Set());
   }, [esEventId]);
 
-  useEffect(() => {
-    if (cfSelectedUser) return;
-    const q = cfUserQuery.trim();
-    if (!q) { setCfUserResults([]); return; }
-    // A response for an earlier query is dropped, so results always match
-    // what is typed; the cleanup also ends that query's "searching" state.
-    let cancelled = false;
-    const t = setTimeout(async () => {
-      setCfSearching(true);
-      try {
-        const rows = await call(api, endpoints.admin.users, { params: { q: q } });
-        if (!cancelled) setCfUserResults(rows);
-      } catch (e) {
-        if (cancelled) return;
-        toast.error(e instanceof Error ? e.message : "Search failed");
-        setCfUserResults([]);
-      } finally {
-        if (!cancelled) setCfSearching(false);
-      }
-    }, 250);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-      setCfSearching(false);
-    };
-  }, [cfUserQuery, cfSelectedUser, api]);
+  // User searches run for the trimmed text once typing pauses; the query key
+  // keeps the results matched to what was searched for.
+  const cfSearchQ = useDebouncedValue(cfUserQuery.trim(), 250);
+  const cfUsersQuery = useEndpointQuery(endpoints.admin.users, {
+    params: { q: cfSearchQ },
+    enabled: !cfSelectedUser && !!cfSearchQ,
+  });
+  const cfUserResults = cfUserQuery.trim() && cfSearchQ ? (cfUsersQuery.data ?? []) : [];
+  const cfSearching = cfUsersQuery.isFetching;
 
+  // A new user or session starts the song and division choice again.
   useEffect(() => {
     setCfSongId("");
     setCfDivision("");
-    setCfSubmissions(null);
-    if (!cfSelectedUser || !cfSessionId) return;
-    const eventId = cfSessionObj?.event_id ?? null;
-    if (!eventId) { setCfSubmissions([]); return; }
-    call(api, endpoints.admin.userEventSongSubmissions, { params: { id: cfSelectedUser.id, eventId: eventId } }).then(setCfSubmissions).catch(() => setCfSubmissions([]));
-  }, [cfSelectedUser, cfSessionId, cfSessionObj?.event_id, api]);
+  }, [cfSelectedUser, cfSessionId, cfSessionObj?.event_id]);
+
+  const cfEventId = cfSessionObj?.event_id ?? null;
+  const cfSubmissionsQuery = useEndpointQuery(endpoints.admin.userEventSongSubmissions, {
+    params: { id: cfSelectedUser?.id ?? "", eventId: cfEventId ?? "" },
+    enabled: !!cfSelectedUser && !!cfSessionId && !!cfEventId,
+  });
+  // null until the user and session are chosen and their songs have loaded.
+  const cfSubmissions =
+    !cfSelectedUser || !cfSessionId ? null : !cfEventId ? [] : (cfSubmissionsQuery.data ?? null);
 
   const selectCfSong = (songId: string) => {
     setCfSongId(songId);
@@ -236,29 +152,17 @@ export default function ManagerPage() {
     setCfDivision(cfSessionDivisions.includes(d) ? d : "");
   };
 
-  useEffect(() => {
-    if (ufSelected) return;
-    const q = ufQuery.trim();
-    if (!q) { setUfResults([]); return; }
-    // As above: a response for an earlier query is dropped.
-    let cancelled = false;
-    const t = setTimeout(async () => {
-      setUfSearching(true);
-      try {
-        const rows = await call(api, endpoints.admin.users, { params: { q: q } });
-        if (!cancelled) setUfResults(rows);
-      } catch (e) {
-        if (!cancelled) toast.error(e instanceof Error ? e.message : "Search failed");
-      } finally {
-        if (!cancelled) setUfSearching(false);
-      }
-    }, 250);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-      setUfSearching(false);
-    };
-  }, [ufQuery, ufSelected, api]);
+  const ufSearchQ = useDebouncedValue(ufQuery.trim(), 250);
+  const ufUsersQuery = useEndpointQuery(endpoints.admin.users, {
+    params: { q: ufSearchQ },
+    enabled: !ufSelected && !!ufSearchQ,
+  });
+  const ufResults = ufQuery.trim() && ufSearchQ ? (ufUsersQuery.data ?? []) : [];
+  const ufSearching = ufUsersQuery.isFetching;
+
+  const createCheckin = useEndpointMutation(endpoints.checkins.create, {
+    invalidates: [endpoints.queue.activeStaff, endpoints.queue.priority, endpoints.queue.nonPriority],
+  });
 
   useEffect(() => {
     if (!sessions) return;
@@ -270,19 +174,6 @@ export default function ManagerPage() {
       setLqSessionId((cur) => cur || active[0]!.id);
     }
   }, [sessions]);
-
-  useEffect(() => {
-    if (!lqSessionId) return;
-    setLqUpdatedAt(null);
-    setLqRefreshFailed(false);
-    void loadLiveQueues(lqSessionId);
-  }, [lqSessionId, loadLiveQueues]);
-
-  useEffect(() => {
-    if (!lqSessionId) return;
-    const id = setInterval(() => void loadLiveQueues(lqSessionId, true), 8000);
-    return () => clearInterval(id);
-  }, [lqSessionId, loadLiveQueues]);
 
   useEffect(() => {
     if (!lqSessionId) return;
@@ -357,7 +248,7 @@ export default function ManagerPage() {
   const renderSongLabel = (row: ApiQueueEntry) =>
     row.songDisplayName ?? (row.songId ? (songMap.get(row.songId) ?? row.songId) : "—");
 
-  const queueActions = useQueueActions(api, () => loadLiveQueues(lqSessionRef.current));
+  const queueActions = useQueueActions();
 
   const handleComplete = (queueEntryId: string) =>
     void queueActions.run(endpoints.queue.complete, queueEntryId);
@@ -376,7 +267,7 @@ export default function ManagerPage() {
     if (!cfDivision) { toast.error("Select a division"); return; }
     setCfSubmitting(true);
     try {
-      await call(api, endpoints.checkins.create, { body: {
+      await createCheckin.mutateAsync({ body: {
         sessionId: cfSessionId,
         songId: cfSongId,
         divisionName: cfDivision,
@@ -421,7 +312,9 @@ export default function ManagerPage() {
           {/* Session selector */}
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
             <div className="w-full sm:w-72">
-              {sessions === null ? null : activeSessionOptions.length === 0 ? (
+              {sessionsQuery.error && !sessions ? (
+                <QueryError what="sessions" error={sessionsQuery.error} onRetry={() => void sessionsQuery.refetch()} />
+              ) : sessions === null ? null : activeSessionOptions.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   No floor-trial sessions scheduled for today. When one is scheduled for today, it&apos;ll appear here to manage.
                 </p>
@@ -444,7 +337,7 @@ export default function ManagerPage() {
             {lqSessionId && (
               <button
                 type="button"
-                onClick={() => void loadLiveQueues(lqSessionId)}
+                onClick={() => void refreshLiveQueues()}
                 disabled={lqLoading}
                 title="Refresh now"
                 className={cn(
@@ -467,7 +360,11 @@ export default function ManagerPage() {
             <p className="text-sm text-muted-foreground">Choose a session above to manage its queue.</p>
           )}
 
-          {lqSessionId && (
+          {lqSessionId && lqLoadError && (
+            <QueryError what="the queues" error={lqLoadError} onRetry={() => void refreshLiveQueues()} />
+          )}
+
+          {lqSessionId && !lqLoadError && (
             <div className={`space-y-4 ${lqLoading ? "opacity-60" : ""}`}>
               {lqSession && <SessionInfoHeader session={lqSession} showTitle={false} />}
 
@@ -711,7 +608,9 @@ export default function ManagerPage() {
                     Show past events
                   </label>
                 </div>
-                {esEventsLoading ? (
+                {esEventsQuery.error && !esEventsQuery.data ? (
+                  <QueryError what="events" error={esEventsQuery.error} onRetry={() => void esEventsQuery.refetch()} />
+                ) : esEventsLoading ? (
                   <Skeleton className="h-24 w-full" />
                 ) : esVisibleEvents.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No events to show.</p>
@@ -750,7 +649,13 @@ export default function ManagerPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className={`space-y-6${esSubmissionsLoading ? " opacity-60" : ""}`}>
-                    {esSubmissionsLoading && esSubmissions.length === 0 ? (
+                    {esSubmissionsQuery.error && !esSubmissionsQuery.data ? (
+                      <QueryError
+                        what="submitted songs"
+                        error={esSubmissionsQuery.error}
+                        onRetry={() => void esSubmissionsQuery.refetch()}
+                      />
+                    ) : esSubmissionsLoading && esSubmissions.length === 0 ? (
                       <Skeleton className="h-24 w-full" />
                     ) : esSubmissions.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
@@ -827,7 +732,9 @@ export default function ManagerPage() {
                   onChange={(e) => setUfQuery(e.target.value)}
                   autoFocus
                 />
-                {ufSearching ? (
+                {ufUsersQuery.error && ufSearchQ && !ufSearching ? (
+                  <QueryError what="users" error={ufUsersQuery.error} onRetry={() => void ufUsersQuery.refetch()} />
+                ) : ufSearching ? (
                   <Skeleton className="h-24 w-full" />
                 ) : ufResults.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
@@ -861,7 +768,7 @@ export default function ManagerPage() {
                     Upload For:{" "}
                     {[ufSelected.first_name, ufSelected.last_name].filter(Boolean).join(" ").trim() || ufSelected.email}
                   </CardTitle>
-                  <Button variant="outline" size="sm" onClick={() => { setUfSelected(null); setUfResults([]); setUfQuery(""); }}>
+                  <Button variant="outline" size="sm" onClick={() => { setUfSelected(null); setUfQuery(""); }}>
                     Change user
                   </Button>
                 </div>
@@ -896,7 +803,9 @@ export default function ManagerPage() {
                   onChange={(e) => setCfUserQuery(e.target.value)}
                   autoFocus
                 />
-                {cfSearching ? (
+                {cfUsersQuery.error && cfSearchQ && !cfSearching ? (
+                  <QueryError what="users" error={cfUsersQuery.error} onRetry={() => void cfUsersQuery.refetch()} />
+                ) : cfSearching ? (
                   <Skeleton className="h-24 w-full" />
                 ) : cfUserResults.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
@@ -913,7 +822,6 @@ export default function ManagerPage() {
                           onClick={() => {
                             setCfSelectedUser(u);
                             setCfUserQuery("");
-                            setCfUserResults([]);
                           }}
                           className="w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50"
                         >
@@ -943,7 +851,6 @@ export default function ManagerPage() {
                       setCfSessionId("");
                       setCfSongId("");
                       setCfDivision("");
-                      setCfSubmissions(null);
                     }}
                   >
                     Change user
@@ -969,6 +876,12 @@ export default function ManagerPage() {
                     <label className={FIELD_LABEL_CLASS}>Song</label>
                     {cfSessionObj && !cfSessionObj.event_id ? (
                       <p className="text-sm text-muted-foreground">This session has no event</p>
+                    ) : cfSubmissionsQuery.error && cfSubmissions === null ? (
+                      <QueryError
+                        what="this user's songs"
+                        error={cfSubmissionsQuery.error}
+                        onRetry={() => void cfSubmissionsQuery.refetch()}
+                      />
                     ) : cfSubmissions !== null && cfSubmissions.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
                         No songs submitted to this event for this user

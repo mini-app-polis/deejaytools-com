@@ -18,7 +18,7 @@ export type SongPartition = {
  * remove it. Filtering it out would leave the submission with no UI to undo it.
  */
 export function partitionSubmittableSongs(
-  songs: ApiSong[],
+  songs: readonly ApiSong[],
   isAlreadySubmitted: (songId: string) => boolean
 ): SongPartition {
   const submittable = songs.filter((s) => !s.is_legacy || isAlreadySubmitted(s.id));

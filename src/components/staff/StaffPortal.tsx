@@ -1,8 +1,10 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { type ReactNode } from "react";
 import { Navigate, NavLink, useParams } from "react-router-dom";
-import { toast } from "sonner";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointQuery } from "@/api/queries";
+import { queryKey } from "@/api/queryKeys";
+import QueryError from "@/components/QueryError";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatEventDateRange } from "@/lib/eventDates";
@@ -33,28 +35,14 @@ export default function StaffPortal({
   portalSegment: string;
   sections: PortalSection[];
 }) {
-  const api = useApiClient();
+  const queryClient = useQueryClient();
   const { eventId = "", section: rawSection } = useParams<{ eventId: string; section: string }>();
-  const [event, setEvent] = useState<ApiEvent | null>(null);
-  const [loadFailed, setLoadFailed] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    setEvent(null);
-    setLoadFailed(false);
-    call(api, endpoints.events.get, { params: { id: eventId } })
-      .then((ev) => {
-        if (!cancelled) setEvent(ev);
-      })
-      .catch((e: Error) => {
-        if (cancelled) return;
-        setLoadFailed(true);
-        toast.error(e.message);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, eventId]);
+  const eventQuery = useEndpointQuery(endpoints.events.get, { params: { id: eventId } });
+  const event = eventQuery.data ?? null;
+  const loadFailed = !event && !!eventQuery.error;
+  // A section that saves the event hands back what the API stored.
+  const setEvent = (next: ApiEvent) =>
+    queryClient.setQueryData(queryKey(endpoints.events.get, { id: eventId }), next);
 
   const base = `/events/${encodeURIComponent(eventId)}/${portalSegment}`;
   const current = sections.find((s) => s.slug === rawSection);
@@ -100,8 +88,8 @@ export default function StaffPortal({
 
       {event ? (
         <div key={active.slug}>{active.render(event, setEvent)}</div>
-      ) : loadFailed ? (
-        <p className="text-sm text-muted-foreground">This event couldn&apos;t be loaded.</p>
+      ) : loadFailed && eventQuery.error ? (
+        <QueryError what="this event" error={eventQuery.error} onRetry={() => void eventQuery.refetch()} />
       ) : (
         <Skeleton className="h-40 w-full" />
       )}

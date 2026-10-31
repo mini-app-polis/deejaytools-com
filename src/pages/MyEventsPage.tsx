@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import AuthMeError from "@/components/AuthMeError";
+import QueryError from "@/components/QueryError";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import { useStaffEvents } from "@/hooks/useStaffEvents";
@@ -14,7 +15,7 @@ import { cn } from "@/lib/utils";
  */
 export default function MyEventsPage() {
   const { me, eventRoles, loading: meLoading, error, reload } = useAuthMe();
-  const { items, loading } = useStaffEvents(eventRoles);
+  const { items, loading, error: eventsError, retry } = useStaffEvents(eventRoles);
 
   if (!me && error) {
     return <AuthMeError message={error} onRetry={() => void reload()} />;
@@ -32,6 +33,7 @@ export default function MyEventsPage() {
   return (
     <div className="space-y-6">
       <h1 className="page-title text-2xl">My events</h1>
+      {eventsError && <QueryError what="the event details" error={eventsError} onRetry={retry} />}
       {items.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           You aren&apos;t on the staff of any event. An organizer adds you to an event&apos;s staff.

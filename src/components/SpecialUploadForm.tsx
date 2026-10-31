@@ -1,9 +1,12 @@
 import { useAuth } from "@clerk/clerk-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointQuery } from "@/api/queries";
+import { queryKey } from "@/api/queryKeys";
+import QueryError from "@/components/QueryError";
 import { Button } from "@/components/ui/button";
 import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Input } from "@/components/ui/input";
@@ -15,6 +18,9 @@ import {
   uploadSongInChunks,
   type UploadStage,
 } from "@/lib/chunkedSongUpload";
+
+// A stable empty list while the teams have not loaded, so the effect over it holds.
+const NO_TEAMS: readonly ApiTeam[] = [];
 
 const SPECIAL_DIVISION_OPTIONS = ["Teams", "Cabaret", "Exhibition", "My Division Is Not Listed"];
 
@@ -31,11 +37,12 @@ function isIOS(): boolean {
 }
 
 export default function SpecialUploadForm() {
-  const api = useApiClient();
+  const queryClient = useQueryClient();
   const { getToken } = useAuth();
 
-  const [teams, setTeams] = useState<ApiTeam[]>([]);
-  const [loading, setLoading] = useState(true);
+  const teamsQuery = useEndpointQuery(endpoints.teams.list);
+  const teams = teamsQuery.data ?? NO_TEAMS;
+  const loading = teamsQuery.isLoading;
 
   const [file, setFile] = useState<File | null>(null);
   const [division, setDivision] = useState("");
@@ -50,23 +57,10 @@ export default function SpecialUploadForm() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadBytesSent, setUploadBytesSent] = useState(0);
 
+  // Preselect the first team once the teams load.
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    call(api, endpoints.teams.list)
-      .then((t) => {
-        if (cancelled) return;
-        setTeams(t);
-        if (t.length > 0) setSelectedTeamId((cur) => (cur === "" ? t[0].id : cur));
-      })
-      .catch((e: Error) => toast.error(e.message))
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [api]);
+    if (teams.length > 0) setSelectedTeamId((cur) => (cur === "" ? teams[0].id : cur));
+  }, [teams]);
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,6 +114,8 @@ export default function SpecialUploadForm() {
       });
 
       toast.success("Song uploaded successfully.");
+      // The upload goes through its own fetch loop, so the song list is refreshed here.
+      void queryClient.invalidateQueries({ queryKey: queryKey(endpoints.songs.list) });
       setFile(null);
       setDivision("");
       setEntityName("");
@@ -169,7 +165,9 @@ export default function SpecialUploadForm() {
       {division === "Teams" && (
         <div className="space-y-2">
           <Label>Team</Label>
-          {teams.length === 0 ? (
+          {teamsQuery.error && !teamsQuery.data ? (
+            <QueryError what="your teams" error={teamsQuery.error} onRetry={() => void teamsQuery.refetch()} />
+          ) : teams.length === 0 ? (
             <p className="text-sm text-amber-600 dark:text-amber-500">
               You need a team to upload. Add one on the{" "}
               <Link to="/my-profile" className="underline font-medium">My Profile</Link> page.

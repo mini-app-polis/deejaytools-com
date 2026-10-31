@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -35,6 +35,7 @@ vi.mock("sonner", () => ({
 import { toast } from "sonner";
 import PartnersSection from "./PartnersSection";
 import { fx } from "@/test/fixtures";
+import { renderWithQueryClient } from "@/test/render";
 
 beforeEach(() => {
   apiGet.mockReset();
@@ -46,7 +47,7 @@ beforeEach(() => {
 });
 
 function renderSection() {
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter>
       <PartnersSection />
     </MemoryRouter>
@@ -109,17 +110,22 @@ describe("PartnersSection — list rendering", () => {
 
 describe("PartnersSection — create partner", () => {
   it("opens the add dialog and creates a partner", async () => {
+    let partners: unknown[] = [];
     apiGet.mockImplementation((path: string) => {
-      if (path === "/v1/partners") return Promise.resolve([]);
+      if (path === "/v1/partners") return Promise.resolve(partners);
       return Promise.resolve(undefined);
     });
-    apiPost.mockResolvedValue(fx.partner({
+    const created = fx.partner({
       id: "p-new",
       first_name: "Carol",
       last_name: "Lee",
       partner_role: "leader",
       email: null,
-    }));
+    });
+    apiPost.mockImplementation(async () => {
+      partners = [created];
+      return created;
+    });
 
     const user = userEvent.setup();
     renderSection();
@@ -160,8 +166,9 @@ describe("PartnersSection — create partner", () => {
 
 describe("PartnersSection — delete confirm flow", () => {
   it("checks associations then deletes the partner", async () => {
+    let partners = mockPartners;
     apiGet.mockImplementation((path: string) => {
-      if (path === "/v1/partners") return Promise.resolve(mockPartners);
+      if (path === "/v1/partners") return Promise.resolve(partners);
       if (path === "/v1/partners/p1/associations") {
         return Promise.resolve({
           song_count: 0,
@@ -171,7 +178,9 @@ describe("PartnersSection — delete confirm flow", () => {
       }
       return Promise.resolve(undefined);
     });
-    apiDel.mockResolvedValue(undefined);
+    apiDel.mockImplementation(async () => {
+      partners = mockPartners.slice(1);
+    });
 
     const user = userEvent.setup();
     renderSection();
@@ -210,9 +219,9 @@ function mockGets(associations: Associations | Error = {
   song_count: 0,
   has_active_checkin: false,
   has_checkin_history: false,
-}) {
+}, partners: unknown[] = mockPartners) {
   apiGet.mockImplementation((path: string) => {
-    if (path === "/v1/partners") return Promise.resolve(mockPartners);
+    if (path === "/v1/partners") return Promise.resolve(partners);
     if (path === "/v1/partners/p1/associations") {
       return associations instanceof Error ? Promise.reject(associations) : Promise.resolve(associations);
     }
@@ -231,21 +240,22 @@ async function openDeleteFor(user: ReturnType<typeof userEvent.setup>, name: Reg
 }
 
 describe("PartnersSection — loading", () => {
-  it("reports a failure to load partners", async () => {
+  it("reports a failure to load partners inline", async () => {
     apiGet.mockRejectedValue(new Error("Network down"));
     renderSection();
-    await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith("Network down");
-    });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load partners: Network down");
+    expect(screen.queryByText(/no partners yet/i)).not.toBeInTheDocument();
   });
 });
 
 describe("PartnersSection — edit partner", () => {
   it("opens prefilled, saves trimmed changes, and clears an emptied email to null", async () => {
     mockGets();
-    apiPatch.mockResolvedValue(
-      fx.partner({ ...mockPartners[0], last_name: "Smythe", email: null })
-    );
+    const updated = fx.partner({ ...mockPartners[0], last_name: "Smythe", email: null });
+    apiPatch.mockImplementation(async () => {
+      mockGets(undefined, [updated, ...mockPartners.slice(1)]);
+      return updated;
+    });
     const user = userEvent.setup();
     renderSection();
 

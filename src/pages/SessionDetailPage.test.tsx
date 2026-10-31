@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -47,6 +47,7 @@ vi.mock("@clerk/clerk-react", () => ({
 import SessionDetailPage from "./SessionDetailPage";
 import { toast } from "sonner";
 import { fx } from "@/test/fixtures";
+import { renderWithQueryClient } from "@/test/render";
 
 // ---------------------------------------------------------------------------
 // Fixtures + helpers
@@ -197,7 +198,7 @@ function makeSubmission(songId: string) {
 }
 
 function renderAt(id = "s1") {
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter initialEntries={[`/sessions/${id}`]}>
       <Routes>
         <Route path="/sessions/:id" element={<SessionDetailPage />} />
@@ -1112,14 +1113,21 @@ describe("SessionDetailPage — submitting a check-in", () => {
 });
 
 describe("SessionDetailPage — loading", () => {
-  it("reports a failure to load and says the session was not found", async () => {
+  it("shows a failed load inline, with a retry", async () => {
     signedIn = true;
-    vi.mocked(toast.error).mockClear();
-    apiGet.mockImplementation(() => Promise.reject(new Error("Session not found")));
+    apiGet.mockImplementation(() => Promise.reject(new Error("offline")));
+    renderAt();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load the session: offline");
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+
+  it("says the session was not found when the API answers 404", async () => {
+    signedIn = true;
+    apiGet.mockImplementation(() => Promise.reject(Object.assign(new Error("Session not found"), { status: 404 })));
     renderAt();
 
     expect(await screen.findByText("Session not found.")).toBeInTheDocument();
-    expect(toast.error).toHaveBeenCalledWith("Session not found");
   });
 });
 

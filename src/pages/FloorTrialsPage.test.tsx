@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
 
@@ -27,6 +27,7 @@ vi.mock("sonner", () => ({
 import FloorTrialsPage from "./FloorTrialsPage";
 import type { SessionStatus } from "@/schemas";
 import { fx } from "@/test/fixtures";
+import { renderWithQueryClient } from "@/test/render";
 
 // ---------------------------------------------------------------------------
 // Setup + cleanup
@@ -66,7 +67,7 @@ function makeSession(opts: {
 }
 
 function renderPage() {
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter>
       <FloorTrialsPage />
     </MemoryRouter>
@@ -74,6 +75,16 @@ function renderPage() {
 }
 
 describe("FloorTrialsPage", () => {
+  it("shows a failed load inline, not as no sessions", async () => {
+    apiGet.mockImplementation((path: string) =>
+      path === "/v1/sessions" ? Promise.reject(new Error("sessions down")) : Promise.resolve([])
+    );
+    renderPage();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load floor trials: sessions down");
+    expect(screen.queryByText(/no upcoming sessions right now/i)).not.toBeInTheDocument();
+  });
+
   it("shows scheduled, checkin_open, and in_progress sessions", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/sessions") {

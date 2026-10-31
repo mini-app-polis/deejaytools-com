@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fx } from "@/test/fixtures";
@@ -24,6 +24,7 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 vi.mock("@clerk/clerk-react", () => ({ useAuth: () => ({ getToken: vi.fn() }) }));
 
 import DjPortalPage from "./DjPortalPage";
+import { renderWithQueryClient } from "@/test/render";
 
 const NOW = Date.now();
 const liveSession = fx.session({
@@ -56,7 +57,7 @@ function routeGet(path: string): Promise<unknown> {
 }
 
 function renderAt(section: string) {
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter initialEntries={[`/events/ev-1/dj/${section}`]}>
       <Routes>
         <Route path="/events/:eventId/dj" element={<DjPortalPage />} />
@@ -78,7 +79,7 @@ beforeEach(() => {
 
 describe("DjPortalPage", () => {
   it("lands on the live queue from the bare portal URL and shows the DJ sections", async () => {
-    render(
+    renderWithQueryClient(
       <MemoryRouter initialEntries={["/events/ev-1/dj"]}>
         <Routes>
           <Route path="/events/:eventId/dj" element={<DjPortalPage />} />

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
+import QueryError from "@/components/QueryError";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,10 +40,17 @@ function noPriorityDivisions(): Record<string, boolean> {
  * event.
  */
 export default function EventSessionsSection({ event }: { event: ApiEvent }) {
-  const api = useApiClient();
   const { divisions: divisionList } = useDivisions();
   const tz = event.timezone;
-  const [sessions, setSessions] = useState<ApiSession[] | null>(null);
+  const sessionsQuery = useEndpointQuery(endpoints.sessions.list, { params: { eventId: event.id } });
+  const sessions = sessionsQuery.data ?? null;
+  // A session's changes show on every session list and on the session itself.
+  const sessionReads = [endpoints.sessions.list, endpoints.sessions.get];
+  const createSession = useEndpointMutation(endpoints.sessions.create, { invalidates: sessionReads });
+  const updateSession = useEndpointMutation(endpoints.sessions.update, { invalidates: sessionReads });
+  const setSessionDivisions = useEndpointMutation(endpoints.sessions.setDivisions, { invalidates: sessionReads });
+  const setSessionStatus = useEndpointMutation(endpoints.sessions.setStatus, { invalidates: sessionReads });
+  const removeSession = useEndpointMutation(endpoints.sessions.remove, { invalidates: sessionReads });
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -57,19 +65,6 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
   const [divisionPriority, setDivisionPriority] = useState<Record<string, boolean>>(noPriorityDivisions);
   const [pendingDelete, setPendingDelete] = useState<ApiSession | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-
-  const load = useCallback(() => {
-    call(api, endpoints.sessions.list, { params: { eventId: event.id } })
-      .then(setSessions)
-      .catch((e: Error) => {
-        setSessions((prev) => prev ?? []);
-        toast.error(e.message);
-      });
-  }, [api, event.id]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   const sorted = useMemo(
     () => (sessions ?? []).slice().sort((a, b) => compareSessionChrono(a, b)),
@@ -169,7 +164,7 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
     try {
       if (editId) {
         try {
-          await call(api, endpoints.sessions.update, { params: { id: editId }, body: fields });
+          await updateSession.mutateAsync({ params: { id: editId }, body: fields });
         } catch (err) {
           throw new Error(
             `Failed to update session fields: ${err instanceof Error ? err.message : String(err)}`,
@@ -177,7 +172,7 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
           );
         }
         try {
-          await call(api, endpoints.sessions.setDivisions, { params: { id: editId }, body: { divisions } });
+          await setSessionDivisions.mutateAsync({ params: { id: editId }, body: { divisions } });
         } catch (err) {
           throw new Error(
             `Session fields saved, but failed to update divisions: ${err instanceof Error ? err.message : String(err)}`,
@@ -186,12 +181,11 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
         }
         toast.success("Session updated");
       } else {
-        await call(api, endpoints.sessions.create, { body: { ...fields, divisions } });
+        await createSession.mutateAsync({ body: { ...fields, divisions } });
         toast.success("Session created");
       }
       setDialogOpen(false);
       setEditId(null);
-      load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save session");
     } finally {
@@ -202,8 +196,7 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
   const setStatus = async (s: ApiSession, status: SessionStatus) => {
     setBusyId(s.id);
     try {
-      const updated = await call(api, endpoints.sessions.setStatus, { params: { id: s.id }, body: { status } });
-      setSessions((prev) => prev?.map((x) => (x.id === updated.id ? { ...x, ...updated } : x)) ?? null);
+      await setSessionStatus.mutateAsync({ params: { id: s.id }, body: { status } });
       toast.success("Status updated");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to set status");
@@ -218,9 +211,8 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
     setPendingDelete(null);
     setBusyId(s.id);
     try {
-      await call(api, endpoints.sessions.remove, { params: { id: s.id } });
+      await removeSession.mutateAsync({ params: { id: s.id } });
       toast.success("Session deleted");
-      setSessions((prev) => prev?.filter((x) => x.id !== s.id) ?? null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to delete session");
     } finally {
@@ -234,7 +226,9 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
         New session
       </Button>
 
-      {sessions === null ? (
+      {sessionsQuery.error && sessions === null ? (
+        <QueryError what="sessions" error={sessionsQuery.error} onRetry={() => void sessionsQuery.refetch()} />
+      ) : sessions === null ? (
         <Skeleton className="h-32 w-full" />
       ) : sorted.length === 0 ? (
         <p className="text-sm text-muted-foreground">This event has no sessions yet.</p>

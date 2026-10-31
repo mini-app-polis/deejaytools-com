@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -41,9 +41,10 @@ vi.mock("@clerk/clerk-react", () => ({
 import AddSongPage from "./AddSongPage";
 import { toast } from "sonner";
 import { fx } from "@/test/fixtures";
+import { renderWithQueryClient } from "@/test/render";
 
 function renderPage() {
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter>
       <AddSongPage />
     </MemoryRouter>
@@ -109,7 +110,7 @@ describe("AddSongPage — mode toggle", () => {
   });
 });
 
-describe("AddSongPage — managed partnerships load is non-fatal", () => {
+describe("AddSongPage — a managed partnerships failure is contained", () => {
   beforeEach(() => {
     apiGet.mockReset();
     apiPost.mockReset();
@@ -143,9 +144,10 @@ describe("AddSongPage — managed partnerships load is non-fatal", () => {
     expect(screen.getByRole("radio", { name: /bob jones/i })).toHaveAttribute("aria-checked", "true");
 
     await user.click(screen.getByRole("button", { name: /upload for a managed partnership/i }));
-    expect(
-      await screen.findByText(/you have no managed partnerships yet/i)
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Couldn't load your managed partnerships: Managed partnerships unavailable"
+    );
+    expect(screen.queryByText(/you have no managed partnerships yet/i)).not.toBeInTheDocument();
   });
 });
 

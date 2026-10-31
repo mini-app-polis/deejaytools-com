@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import { useMemo, useState } from "react";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointQuery } from "@/api/queries";
+import QueryError from "@/components/QueryError";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDateTimeShort, formatSessionTitle } from "@/lib/sessionFormat";
-import type { ApiEvent, ApiRun, ApiSession } from "@/schemas";
+import type { ApiEvent } from "@/schemas";
 
 const RUNS_FETCH_LIMIT = 500;
 const ALL = "__all__";
@@ -17,40 +17,27 @@ const ALL = "__all__";
  * event needs the global scope, which no event's staff holds.
  */
 export default function RunHistorySection({ event }: { event: ApiEvent }) {
-  const api = useApiClient();
-  const [sessions, setSessions] = useState<ApiSession[]>([]);
+  const sessionsQuery = useEndpointQuery(endpoints.sessions.list, { params: { eventId: event.id } });
+  const sessions = sessionsQuery.data ?? [];
   const [sessionId, setSessionId] = useState<string>(ALL);
   const [division, setDivision] = useState<string>(ALL);
-  const [runs, setRuns] = useState<ApiRun[] | null>(null);
 
-  useEffect(() => {
-    call(api, endpoints.sessions.list, { params: { eventId: event.id } })
-      .then(setSessions)
-      .catch(() => setSessions([]));
-  }, [api, event.id]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setRuns(null);
+  const query = useMemo(() => {
     const params = new URLSearchParams();
     params.set("limit", String(RUNS_FETCH_LIMIT));
     if (sessionId !== ALL) params.set("session_id", sessionId);
     else params.set("event_id", event.id);
-    call(api, endpoints.runs.list, { params: { query: params.toString() } })
-      .then((rows) => {
-        if (cancelled) return;
-        setRuns(rows);
-        setDivision(ALL);
-      })
-      .catch((e: Error) => {
-        if (cancelled) return;
-        setRuns([]);
-        toast.error(e.message);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, event.id, sessionId]);
+    return params.toString();
+  }, [event.id, sessionId]);
+  const runsQuery = useEndpointQuery(endpoints.runs.list, { params: { query } });
+  const runs = runsQuery.data ?? null;
+
+  // Another session's runs start with every division showing.
+  const [divisionFor, setDivisionFor] = useState(query);
+  if (divisionFor !== query) {
+    setDivisionFor(query);
+    setDivision(ALL);
+  }
 
   const divisions = useMemo(() => {
     const counts = new Map<string, number>();
@@ -71,6 +58,9 @@ export default function RunHistorySection({ event }: { event: ApiEvent }) {
         <CardTitle>Run history</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {sessionsQuery.error && !sessionsQuery.data && (
+          <QueryError what="the sessions" error={sessionsQuery.error} onRetry={() => void sessionsQuery.refetch()} />
+        )}
         {sessions.length > 0 && (
           <ChoiceGroup
             ariaLabel="Session"
@@ -82,7 +72,9 @@ export default function RunHistorySection({ event }: { event: ApiEvent }) {
             onChange={setSessionId}
           />
         )}
-        {runs === null ? (
+        {runsQuery.error && runs === null ? (
+          <QueryError what="run history" error={runsQuery.error} onRetry={() => void runsQuery.refetch()} />
+        ) : runs === null ? (
           <Skeleton className="h-24 w-full" />
         ) : runs.length === 0 ? (
           <p className="text-sm text-muted-foreground">No runs recorded yet.</p>

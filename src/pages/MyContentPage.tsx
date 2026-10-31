@@ -1,17 +1,12 @@
-import type {
-  ApiEvent,
-  ApiEventSongSubmission,
-  ApiMyCheckin,
-  ApiSession,
-  ApiSong,
-} from "@/schemas";
+import type { ApiEventSongSubmission, ApiMyCheckin } from "@/schemas";
 import { isOpenEvent } from "@/schemas";
 import { songLabel, songPieces } from "@/lib/songLabel";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { toast } from "sonner";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
+import QueryError from "@/components/QueryError";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -79,8 +74,10 @@ function queueStatusBadge(checkin: ApiMyCheckin) {
   return <Badge variant="secondary">In queue</Badge>;
 }
 
+// A stable empty list while a query has no data, so memos over it hold.
+const NO_ROWS: readonly never[] = [];
+
 export default function MyContentPage() {
-  const api = useApiClient();
   const { hash } = useLocation();
 
   // Deep links such as /my-content#checkins arrive from the help pages. This page is
@@ -93,73 +90,51 @@ export default function MyContentPage() {
     el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
   }, [hash]);
 
-  // ── Songs state ──────────────────────────────────────────────────────────────
-  const [songs, setSongs] = useState<ApiSong[]>([]);
-  const [songsLoading, setSongsLoading] = useState(true);
+  // ── Songs ────────────────────────────────────────────────────────────────────
+  const songsQuery = useEndpointQuery(endpoints.songs.list);
+  const songs = songsQuery.data ?? NO_ROWS;
+  const songsLoading = songsQuery.isFetching;
   const [pendingDeleteSongId, setPendingDeleteSongId] = useState<string | null>(null);
   const [deletingSongId, setDeletingSongId] = useState<string | null>(null);
+  const removeSong = useEndpointMutation(endpoints.songs.remove, {
+    invalidates: [endpoints.songs.list, endpoints.eventSongSubmissions.list],
+  });
 
-  // ── Check-ins state ──────────────────────────────────────────────────────────
-  const [checkins, setCheckins] = useState<ApiMyCheckin[] | null>(null);
+  // ── Check-ins ────────────────────────────────────────────────────────────────
+  const checkinsQuery = useEndpointQuery(endpoints.checkins.mine);
+  const checkins = checkinsQuery.data ?? null;
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
   const [pendingWithdrawId, setPendingWithdrawId] = useState<string | null>(null);
+  // Entries behind a withdrawn one move up, so positions and queues refetch.
+  const withdrawCheckin = useEndpointMutation(endpoints.checkins.withdraw, {
+    invalidates: [endpoints.checkins.mine, endpoints.queue.active, endpoints.queue.waiting],
+  });
 
-  // ── Events / submissions state ────────────────────────────────────────────────
-  const [availableEvents, setAvailableEvents] = useState<ApiEvent[]>([]);
-  const [eventSubmissions, setEventSubmissions] = useState<ApiEventSongSubmission[]>([]);
-  const [eventsLoading, setEventsLoading] = useState(true);
+  // ── Events / submissions ─────────────────────────────────────────────────────
+  const eventsQuery = useEndpointQuery(endpoints.events.list);
+  const submissionsQuery = useEndpointQuery(endpoints.eventSongSubmissions.list);
+  const availableEvents = useMemo(
+    () => (eventsQuery.data ?? NO_ROWS).filter((e) => e.status !== "completed"),
+    [eventsQuery.data]
+  );
+  const eventSubmissions = submissionsQuery.data ?? NO_ROWS;
+  const eventsLoading = eventsQuery.isLoading || submissionsQuery.isLoading;
+  const eventsError = eventsQuery.error ?? submissionsQuery.error;
 
-  const [activeSessions, setActiveSessions] = useState<ApiSession[] | null>(null);
-
-  // ── Data loaders ─────────────────────────────────────────────────────────────
-
-  const loadSongs = useCallback(() => {
-    setSongsLoading(true);
-    call(api, endpoints.songs.list)
-      .then(setSongs)
-      .catch((e: Error) => toast.error(e.message))
-      .finally(() => setSongsLoading(false));
-  }, [api]);
-
-  const loadCheckins = useCallback(() => {
-    call(api, endpoints.checkins.mine)
-      .then(setCheckins)
-      .catch((e: Error) => toast.error(e.message));
-  }, [api]);
-
-  const loadEventsSection = useCallback(() => {
-    setEventsLoading(true);
-    Promise.all([
-      call(api, endpoints.events.list).catch(() => [] as ApiEvent[]),
-      call(api, endpoints.eventSongSubmissions.list)
-        .catch(() => [] as ApiEventSongSubmission[]),
-    ])
-      .then(([evs, subs]) => {
-        setAvailableEvents(evs.filter((e) => e.status !== "completed"));
-        setEventSubmissions(subs);
-      })
-      .finally(() => setEventsLoading(false));
-  }, [api]);
-
-  const loadActiveSessions = useCallback(() => {
-    call(api, endpoints.sessions.list)
-      .then((all) =>
-        setActiveSessions(
-          all.filter((s) => s.status === "checkin_open" || s.status === "in_progress")
-        )
-      )
-      .catch(() => setActiveSessions([]));
-  }, [api]);
+  const sessionsQuery = useEndpointQuery(endpoints.sessions.list);
+  const activeSessions = useMemo(
+    () =>
+      sessionsQuery.data?.filter((s) => s.status === "checkin_open" || s.status === "in_progress") ??
+      null,
+    [sessionsQuery.data]
+  );
 
   const handleWithdraw = async (checkinId: string) => {
     setWithdrawingId(checkinId);
     try {
-      await call(api, endpoints.checkins.withdraw, { params: { id: checkinId } });
-      setCheckins((prev) => prev?.filter((c) => c.id !== checkinId) ?? null);
+      await withdrawCheckin.mutateAsync({ params: { id: checkinId } });
       setPendingWithdrawId(null);
       toast.success("Withdrawn from queue.");
-      // Entries behind the withdrawn one move up; reload for their positions.
-      loadCheckins();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to withdraw.");
       setPendingWithdrawId(null);
@@ -167,13 +142,6 @@ export default function MyContentPage() {
       setWithdrawingId(null);
     }
   };
-
-  useEffect(() => {
-    loadSongs();
-    loadCheckins();
-    loadEventsSection();
-    loadActiveSessions();
-  }, [loadSongs, loadCheckins, loadEventsSection, loadActiveSessions]);
 
   const submissionsByEventId = useMemo(() => {
     const map = new Map<string, ApiEventSongSubmission[]>();
@@ -221,8 +189,7 @@ export default function MyContentPage() {
   const handleDeleteSong = async (id: string) => {
     setDeletingSongId(id);
     try {
-      await call(api, endpoints.songs.remove, { params: { id: id } });
-      setSongs((prev) => prev.filter((s) => s.id !== id));
+      await removeSong.mutateAsync({ params: { id } });
       setPendingDeleteSongId(null);
       toast.success("Song removed.");
     } catch (err) {
@@ -236,6 +203,18 @@ export default function MyContentPage() {
   return (
     <div className="space-y-6">
       <h1 className="page-title text-2xl">My Content</h1>
+
+      {sessionsQuery.error && !sessionsQuery.data && (
+        <QueryError
+          what="active floor trials"
+          error={sessionsQuery.error}
+          onRetry={() => void sessionsQuery.refetch()}
+        />
+      )}
+
+      {checkinsQuery.error && !checkinsQuery.data && (
+        <QueryError what="your check-ins" error={checkinsQuery.error} onRetry={() => void checkinsQuery.refetch()} />
+      )}
 
       {sortedActiveSessions.length > 0 && (
         <div className="rounded-lg border bg-card">
@@ -396,7 +375,16 @@ export default function MyContentPage() {
           </div>
         </div>
         <div className="p-4 space-y-3">
-          {eventsLoading ? (
+          {eventsError && !(eventsQuery.data && submissionsQuery.data) ? (
+            <QueryError
+              what="your event songs"
+              error={eventsError}
+              onRetry={() => {
+                if (eventsQuery.error) void eventsQuery.refetch();
+                if (submissionsQuery.error) void submissionsQuery.refetch();
+              }}
+            />
+          ) : eventsLoading ? (
             <Skeleton className="h-24 w-full" />
           ) : eventsWithSongs.length === 0 ? (
             <p className="text-sm text-muted-foreground">
@@ -463,7 +451,10 @@ export default function MyContentPage() {
         <div className="p-4 space-y-4">
           <div className={`space-y-3${songsLoading ? " opacity-60" : ""}`}>
             {songsLoading && songs.length === 0 && <Skeleton className="h-40 w-full" />}
-            {songs.length === 0 && !songsLoading && (
+            {songsQuery.error && !songsQuery.data && (
+              <QueryError what="your songs" error={songsQuery.error} onRetry={() => void songsQuery.refetch()} />
+            )}
+            {songsQuery.data && songs.length === 0 && !songsLoading && (
               <p className="text-sm text-muted-foreground py-4 text-center">
                 No songs yet.{" "}
                 <Link to="/songs/add" className="underline">

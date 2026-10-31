@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { SignedIn, SignedOut, SignInButton, useAuth, useUser } from "@clerk/clerk-react";
-import type { ApiSession, ApiQueueEntry, ApiLeadingPair, ApiSong, ApiEventSongSubmission, ApiMyCheckin } from "@/schemas";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import type { ApiLeadingPair, ApiQueueEntry } from "@/schemas";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
+import QueryError from "@/components/QueryError";
 import { SessionInfoHeader } from "@/components/SessionInfoHeader";
 import { Button } from "@/components/ui/button";
 import { ChoiceGroup } from "@/components/ui/choice-group";
@@ -20,22 +21,16 @@ const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
 
 /** How often the queues and the session refresh on their own. */
 const QUEUE_POLL_MS = 60_000;
+
+// A stable empty list while a query has no data, so memos over it hold.
+const NO_ROWS: readonly never[] = [];
 /** The longest the check-in clock goes without a tick. */
 const CLOCK_MAX_WAIT_MS = 60_000;
 
 export default function ApiSessionPage() {
   const { id } = useParams<{ id: string }>();
-  const api = useApiClient();
   const { user } = useUser();
   const { isSignedIn } = useAuth();
-  const [session, setSession] = useState<ApiSession | null>(null);
-  const [active, setActive] = useState<ApiQueueEntry[]>([]);
-  const [waiting, setWaiting] = useState<ApiQueueEntry[]>([]);
-  const [pairs, setPairs] = useState<ApiLeadingPair[]>([]);
-  const [songs, setSongs] = useState<ApiSong[]>([]);
-  const [myCheckins, setMyCheckins] = useState<ApiMyCheckin[]>([]);
-  const [eventSubmissions, setEventSubmissions] = useState<ApiEventSongSubmission[] | null>(null);
-  const [loading, setLoading] = useState(true);
   const [checkinOpen, setCheckinOpen] = useState(false);
 
   // Check-in form — song-first
@@ -45,93 +40,53 @@ export default function ApiSessionPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [now, setNow] = useState(Date.now());
-  const [pollFailed, setPollFailed] = useState(false);
 
-  const loadSession = useCallback(() => {
-    if (!id) return Promise.resolve(undefined);
-    return call(api, endpoints.sessions.get, { params: { id: id } }).then((s) => {
-      setSession(s);
-      return s;
-    });
-  }, [api, id]);
+  // The session and its queues are public and refresh on their own.
+  const polled = { params: { sessionId: id ?? "" }, enabled: !!id, refetchInterval: QUEUE_POLL_MS };
+  const sessionQuery = useEndpointQuery(endpoints.sessions.get, {
+    params: { id: id ?? "" },
+    enabled: !!id,
+    refetchInterval: QUEUE_POLL_MS,
+  });
+  const activeQuery = useEndpointQuery(endpoints.queue.active, polled);
+  const waitingQuery = useEndpointQuery(endpoints.queue.waiting, polled);
+  const session = sessionQuery.data ?? null;
+  const active = activeQuery.data ?? NO_ROWS;
+  const waiting = waitingQuery.data ?? NO_ROWS;
+  const polledQueries = [sessionQuery, activeQuery, waitingQuery];
+  const loading = polledQueries.some((q) => q.isLoading);
+  // A failed refresh leaves what was loaded on screen and says so.
+  const pollFailed = polledQueries.some((q) => q.isError && q.data !== undefined);
+  const poll = () => polledQueries.forEach((q) => void q.refetch());
 
-  const loadQueue = useCallback(async () => {
-    if (!id) return;
-    const [a, w] = await Promise.all([
-      call(api, endpoints.queue.active, { params: { sessionId: id } }),
-      call(api, endpoints.queue.waiting, { params: { sessionId: id } }),
-    ]);
-    setActive(a);
-    setWaiting(w);
-  }, [api, id]);
+  // /v1/partners/leading-pairs, /v1/songs and /v1/checkins/mine all require
+  // auth — skipped for a signed-out visitor. The session info and queues stay visible.
+  const signedIn = !!isSignedIn;
+  const pairsQuery = useEndpointQuery(endpoints.partners.leadingPairs, { enabled: signedIn });
+  const songsQuery = useEndpointQuery(endpoints.songs.list, { enabled: signedIn });
+  const myCheckinsQuery = useEndpointQuery(endpoints.checkins.mine, { enabled: signedIn });
+  const eventId = session?.event_id ?? null;
+  const submissionsQuery = useEndpointQuery(endpoints.eventSongSubmissions.list, {
+    params: { eventId: eventId ?? "" },
+    enabled: signedIn && eventId !== null,
+  });
+  const pairs = (signedIn && pairsQuery.data) || NO_ROWS;
+  const songs = (signedIn && songsQuery.data) || NO_ROWS;
+  const myCheckins = (signedIn && myCheckinsQuery.data) || NO_ROWS;
+  // null when unknown, including when they fail to load: the picker then offers
+  // every song and the API decides.
+  const eventSubmissions = (signedIn && eventId !== null && submissionsQuery.data) || null;
+  const yourDataQueries = [pairsQuery, songsQuery, myCheckinsQuery];
+  const yourDataError = signedIn
+    ? (yourDataQueries.find((q) => q.error && q.data === undefined)?.error ?? null)
+    : null;
 
-  const loadMyCheckins = useCallback(async () => {
-    if (!isSignedIn) {
-      setMyCheckins([]);
-      return;
-    }
-    const mine = await call(api, endpoints.checkins.mine);
-    setMyCheckins(mine);
-  }, [api, isSignedIn]);
-
-  const loadExtras = useCallback(
-    async (eventId?: string | null) => {
-      // /v1/partners/leading-pairs and /v1/songs both require auth — skip when
-      // viewing as a signed-out visitor. The session info and queues stay visible.
-      if (!isSignedIn) {
-        setPairs([]);
-        setSongs([]);
-        setMyCheckins([]);
-        setEventSubmissions(null);
-        return;
-      }
-
-      const submissionsPromise =
-        eventId != null
-          ? call(api, endpoints.eventSongSubmissions.list, { params: { eventId: eventId } })
-              .catch(() => null)
-          : Promise.resolve(null);
-
-      const [p, s, subs, mine] = await Promise.all([
-        call(api, endpoints.partners.leadingPairs),
-        call(api, endpoints.songs.list),
-        submissionsPromise,
-        call(api, endpoints.checkins.mine),
-      ]);
-      setPairs(p);
-      setSongs(s);
-      setEventSubmissions(subs);
-      setMyCheckins(mine);
-    },
-    [api, isSignedIn]
-  );
-
-  const refresh = useCallback(() => {
-    if (!id) return;
-    setLoading(true);
-    loadSession()
-      .then((loadedSession) =>
-        Promise.all([loadQueue(), loadExtras(loadedSession?.event_id ?? null)])
-      )
-      .catch((e: Error) => toast.error(e.message))
-      .finally(() => setLoading(false));
-  }, [id, loadExtras, loadQueue, loadSession]);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  const poll = useCallback(() => {
-    Promise.all([loadQueue(), loadSession()])
-      .then(() => setPollFailed(false))
-      .catch(() => setPollFailed(true));
-  }, [loadQueue, loadSession]);
-
-  useEffect(() => {
-    if (!id) return;
-    const t = setInterval(poll, QUEUE_POLL_MS);
-    return () => clearInterval(t);
-  }, [id, poll]);
+  const createPair = useEndpointMutation(endpoints.pairs.findOrCreate, {
+    invalidates: [endpoints.partners.leadingPairs],
+  });
+  const createCheckin = useEndpointMutation(endpoints.checkins.create, {
+    invalidates: [endpoints.queue.active, endpoints.queue.waiting, endpoints.sessions.get, endpoints.checkins.mine],
+  });
 
   // The clock behind the check-in window. It ticks at the window's next edge
   // (check-in opening, or the floor trial ending), so Check in turns on or off
@@ -375,14 +330,14 @@ export default function ApiSessionPage() {
       // If the song has a partner but no pair row exists yet, create it transparently
       let pairId: string | null = derivedPair?.id ?? null;
       if (!isManaged && !pairId && selectedSong?.partner_id) {
-        const created = await call(api, endpoints.pairs.findOrCreate, { body: {
+        const created = await createPair.mutateAsync({ body: {
           partner_id: selectedSong.partner_id,
         } });
         pairId = created.id;
       }
 
       // Exactly one entity field must be non-null or createCheckinBodySchema rejects the request.
-      await call(api, endpoints.checkins.create, { body: {
+      await createCheckin.mutateAsync({ body: {
         sessionId: id,
         divisionName: fDivision,
         entityPairId: !isManaged ? pairId : null,
@@ -394,7 +349,6 @@ export default function ApiSessionPage() {
       } });
       toast.success("Checked in");
       setCheckinOpen(false);
-      await Promise.all([loadQueue(), loadSession(), loadMyCheckins()]);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Check-in failed";
       if (msg.includes("already has a live")) {
@@ -421,6 +375,11 @@ export default function ApiSessionPage() {
   }
 
   if (!session) {
+    // An ApiError carries the HTTP status; a 404 is an answer, not a failure.
+    const notFound = (sessionQuery.error as { status?: number } | null)?.status === 404;
+    if (sessionQuery.error && !notFound) {
+      return <QueryError what="the session" error={sessionQuery.error} onRetry={() => void sessionQuery.refetch()} />;
+    }
     return <p className="text-muted-foreground">Session not found.</p>;
   }
 
@@ -521,6 +480,14 @@ export default function ApiSessionPage() {
 
       {/* ── Check-in action (top) ── */}
       {checkInBlock}
+
+      {yourDataError && (
+        <QueryError
+          what="your songs and check-ins"
+          error={yourDataError}
+          onRetry={() => yourDataQueries.forEach((q) => q.error && void q.refetch())}
+        />
+      )}
 
       {pollFailed && (
         <p role="status" className="text-sm text-amber-600 dark:text-amber-400 -mt-2">

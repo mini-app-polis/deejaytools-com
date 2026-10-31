@@ -1,12 +1,14 @@
 import { PartnerRoleSchema, type ApiPartner, type ApiPartnerAssociations } from "@/schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useApiClient } from "@/api/client";
 import { call, endpoints } from "@/api/endpoints";
+import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
+import QueryError from "@/components/QueryError";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,8 +52,14 @@ type DeleteAssociations = ApiPartnerAssociations;
 export default function PartnersSection() {
   const api = useApiClient();
 
-  const [partners, setPartners] = useState<PartnerRow[] | null>(null);
-  const [partnersLoading, setPartnersLoading] = useState(true);
+  const partnersQuery = useEndpointQuery(endpoints.partners.list);
+  const partners = partnersQuery.data ?? null;
+  const partnersLoading = partnersQuery.isFetching;
+  // A partner's name shows on songs and pairs, so a change refreshes those too.
+  const partnerReads = [endpoints.partners.list, endpoints.partners.leadingPairs, endpoints.songs.list];
+  const createPartner = useEndpointMutation(endpoints.partners.create, { invalidates: partnerReads });
+  const updatePartner = useEndpointMutation(endpoints.partners.update, { invalidates: partnerReads });
+  const removePartner = useEndpointMutation(endpoints.partners.remove, { invalidates: partnerReads });
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<PartnerRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PartnerRow | null>(null);
@@ -64,18 +72,6 @@ export default function PartnersSection() {
     resolver: zodResolver(partnerSchema),
     defaultValues: { first_name: "", last_name: "", partner_role: "follower", email: "" },
   });
-
-  const loadPartners = useCallback(() => {
-    setPartnersLoading(true);
-    call(api, endpoints.partners.list)
-      .then(setPartners)
-      .catch((e: Error) => toast.error(e.message))
-      .finally(() => setPartnersLoading(false));
-  }, [api]);
-
-  useEffect(() => {
-    loadPartners();
-  }, [loadPartners]);
 
   const openCreate = () => {
     setEditing(null);
@@ -98,23 +94,21 @@ export default function PartnersSection() {
     setIsFormSubmitting(true);
     try {
       if (editing) {
-        const updated = await call(api, endpoints.partners.update, { params: { id: editing.id }, body: {
+        await updatePartner.mutateAsync({ params: { id: editing.id }, body: {
           first_name: values.first_name.trim(),
           last_name: values.last_name.trim(),
           partner_role: values.partner_role,
           email: values.email?.trim() ? values.email.trim() : null,
         } });
         toast.success("Partner updated");
-        setPartners((prev) => prev?.map((x) => (x.id === updated.id ? updated : x)) ?? null);
       } else {
-        const created = await call(api, endpoints.partners.create, { body: {
+        await createPartner.mutateAsync({ body: {
           first_name: values.first_name.trim(),
           last_name: values.last_name.trim(),
           partner_role: values.partner_role,
           ...(values.email?.trim() ? { email: values.email.trim() } : {}),
         } });
         toast.success("Partner added");
-        setPartners((prev) => (prev ? [created, ...prev] : [created]));
       }
       setFormOpen(false);
     } catch (e) {
@@ -142,8 +136,7 @@ export default function PartnersSection() {
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
-      await call(api, endpoints.partners.remove, { params: { id: deleteTarget.id } });
-      setPartners((prev) => prev?.filter((p) => p.id !== deleteTarget.id) ?? null);
+      await removePartner.mutateAsync({ params: { id: deleteTarget.id } });
       setDeleteTarget(null);
       setDeleteAssociations(null);
       toast.success("Partner removed.");
@@ -173,6 +166,9 @@ export default function PartnersSection() {
         </div>
         <div className="p-4 space-y-4">
           <div className={`space-y-2${partnersLoading ? " opacity-60" : ""}`}>
+            {partnersQuery.error && !partners && (
+              <QueryError what="partners" error={partnersQuery.error} onRetry={() => void partnersQuery.refetch()} />
+            )}
             {partnersLoading && !partners && <Skeleton className="h-40 w-full" />}
             {partners?.length === 0 && (
               <p className="text-sm text-muted-foreground py-4 text-center">No partners yet.</p>

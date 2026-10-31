@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
@@ -24,6 +24,7 @@ vi.mock("sonner", () => ({
 import MyContentPage from "./MyContentPage";
 import { fx } from "@/test/fixtures";
 import { toast } from "sonner";
+import { renderWithQueryClient } from "@/test/render";
 
 const EVENT = fx.event({
   id: "ev1",
@@ -62,7 +63,7 @@ function defaultApiGet(path: string) {
 }
 
 function renderPage() {
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter>
       <MyContentPage />
     </MemoryRouter>
@@ -81,7 +82,7 @@ describe("MyContentPage — hash deep links", () => {
   });
 
   it("scrolls to the Songs section for /my-content#songs", async () => {
-    render(
+    renderWithQueryClient(
       <MemoryRouter initialEntries={["/my-content#songs"]}>
         <MyContentPage />
       </MemoryRouter>
@@ -164,7 +165,7 @@ describe("MyContentPage — Events section", () => {
     expect(screen.queryByRole("link", { name: "Submit to The Open" })).not.toBeInTheDocument();
   });
 
-  it("still renders Check-ins and Songs when event-song-submissions rejects", async () => {
+  it("still renders Check-ins and Songs when event-song-submissions rejects, and says the events failed", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/event-song-submissions") {
         return Promise.reject(new Error("not found"));
@@ -179,9 +180,8 @@ describe("MyContentPage — Events section", () => {
     });
     expect(screen.queryByRole("heading", { name: /^check-ins$/i })).toBeNull();
     expect(screen.getByRole("heading", { name: /^events$/i })).toBeInTheDocument();
-    expect(
-      await screen.findByText(/you haven't added songs to any events yet/i)
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load your event songs: not found");
+    expect(screen.queryByText(/you haven't added songs to any events yet/i)).toBeNull();
     expect(screen.queryByText("Spring Classic")).toBeNull();
   });
 
@@ -194,7 +194,7 @@ describe("MyContentPage — Events section", () => {
       expect(screen.getByRole("heading", { name: /^events$/i })).toBeInTheDocument();
     });
     expect(
-      screen.getByText(/you haven't added songs to any events yet/i)
+      await screen.findByText(/you haven't added songs to any events yet/i)
     ).toBeInTheDocument();
     expect(screen.queryByText("Spring Classic")).toBeNull();
   });
@@ -266,6 +266,7 @@ function withGets(overrides: Record<string, unknown | (() => Promise<unknown>)>)
 
 function resetMocks() {
   apiGet.mockReset();
+  apiGet.mockImplementation(defaultApiGet);
   apiDel.mockReset();
   vi.mocked(toast.error).mockClear();
   vi.mocked(toast.success).mockClear();
@@ -417,7 +418,7 @@ describe("MyContentPage — Check-ins section", () => {
   it("reports a failure to load check-ins", async () => {
     withGets({ "/v1/checkins/mine": () => Promise.reject(new Error("checkins down")) });
     renderPage();
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("checkins down"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load your check-ins: checkins down");
     expect(screen.queryByRole("heading", { name: /^check-ins$/i })).not.toBeInTheDocument();
   });
 });
@@ -490,8 +491,11 @@ describe("MyContentPage — Songs section", () => {
   });
 
   it("deletes a song after confirming", async () => {
-    withGets({ "/v1/songs": [UPLOADED] });
-    apiDel.mockResolvedValue(undefined);
+    let songs = [UPLOADED];
+    withGets({ "/v1/songs": () => Promise.resolve(songs) });
+    apiDel.mockImplementation(async () => {
+      songs = [];
+    });
     const user = userEvent.setup();
     renderPage();
 
@@ -550,7 +554,8 @@ describe("MyContentPage — Songs section", () => {
   it("reports a failure to load songs", async () => {
     withGets({ "/v1/songs": () => Promise.reject(new Error("songs down")) });
     renderPage();
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("songs down"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load your songs: songs down");
+    expect(screen.queryByText(/no songs yet/i)).not.toBeInTheDocument();
   });
 });
 
@@ -608,5 +613,45 @@ describe("MyContentPage — events and sessions details", () => {
     renderPage();
     await screen.findByRole("heading", { name: /^songs$/i });
     expect(screen.queryByRole("heading", { name: /^active floor trials$/i })).toBeNull();
+  });
+});
+
+describe("MyContentPage — retrying a failed load", () => {
+  beforeEach(() => {
+    apiGet.mockReset();
+  });
+
+  /** Fails the given paths until `recover()`, answering the rest as usual. */
+  function failPaths(paths: string[]) {
+    let fail = true;
+    apiGet.mockImplementation((path: string) =>
+      fail && paths.includes(path) ? Promise.reject(new Error("down")) : defaultApiGet(path)
+    );
+    return () => {
+      fail = false;
+    };
+  }
+
+  const calls = (path: string) => apiGet.mock.calls.filter(([p]) => p === path).length;
+
+  it.each([
+    ["active floor trials", ["/v1/sessions"]],
+    ["your check-ins", ["/v1/checkins/mine"]],
+    ["your event songs", ["/v1/events", "/v1/event-song-submissions"]],
+    ["your songs", ["/v1/songs"]],
+  ])("retries %s from the inline error", async (what, paths) => {
+    const recover = failPaths(paths);
+    const user = userEvent.setup();
+    renderPage();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(`Couldn't load ${what}: down`);
+    const before = paths.map(calls);
+    recover();
+    await user.click(within(alert).getByRole("button", { name: "Try again" }));
+
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    // Every query that failed is fetched again.
+    expect(paths.map(calls)).toEqual(before.map((n) => n + 1));
   });
 });

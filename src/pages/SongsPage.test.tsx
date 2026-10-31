@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -25,9 +25,10 @@ vi.mock("sonner", () => ({
 
 import SongsPage from "./SongsPage";
 import { fx } from "@/test/fixtures";
+import { renderWithQueryClient } from "@/test/render";
 
 function renderPage() {
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter>
       <SongsPage />
     </MemoryRouter>
@@ -47,6 +48,14 @@ describe("SongsPage", () => {
       expect(screen.getByRole("heading", { name: /my songs/i })).toBeInTheDocument()
     );
     expect(screen.getByRole("link", { name: /add song/i })).toBeInTheDocument();
+  });
+
+  it("shows a failed load inline instead of an empty list", async () => {
+    apiGet.mockRejectedValue(new Error("songs down"));
+    renderPage();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load your songs: songs down");
+    expect(screen.queryByText(/no songs yet/i)).not.toBeInTheDocument();
   });
 
   it("shows an empty state when there are no songs", async () => {
@@ -170,7 +179,7 @@ describe("SongsPage — delete flow", () => {
     const apiDel = vi.fn();
     apiClient.del = apiDel;
 
-    apiGet.mockResolvedValue([
+    let songs = [
       fx.song({
         id: "s1",
         partner_id: null,
@@ -182,8 +191,11 @@ describe("SongsPage — delete flow", () => {
         partner_first_name: null,
         partner_last_name: null,
       }),
-    ]);
-    apiDel.mockResolvedValue(undefined);
+    ];
+    apiGet.mockImplementation(() => Promise.resolve(songs));
+    apiDel.mockImplementation(async () => {
+      songs = [];
+    });
 
     renderPage();
 
@@ -211,8 +223,10 @@ describe("SongsPage — delete flow", () => {
       expect(toast.success).toHaveBeenCalledWith("Song removed.");
     });
 
-    // The song filename should be gone from the document.
-    expect(screen.queryByText("Classic - The Open 2025")).not.toBeInTheDocument();
+    // The list refetches without the song.
+    await waitFor(() =>
+      expect(screen.queryByText("Classic - The Open 2025")).not.toBeInTheDocument()
+    );
 
     // apiDel should have been called with the correct path.
     expect(apiDel).toHaveBeenCalledWith("/v1/songs/s1");

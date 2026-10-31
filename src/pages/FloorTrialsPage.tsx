@@ -1,9 +1,7 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { toast } from "sonner";
-import type { ApiEvent, ApiSession } from "@/schemas";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointQuery } from "@/api/queries";
+import QueryError from "@/components/QueryError";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -48,35 +46,14 @@ function sessionStatusBadge(status: string) {
 }
 
 export default function FloorTrialsPage() {
-  const api = useApiClient();
-  const [sessions, setSessions] = useState<ApiSession[] | null>(null);
-  const [events, setEvents] = useState<ApiEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const fetchData = () => {
-      setLoading(true);
-      Promise.all([
-        call(api, endpoints.sessions.list),
-        call(api, endpoints.events.list),
-      ])
-        .then(([s, e]) => {
-          if (cancelled) return;
-          setSessions(s);
-          setEvents(e);
-        })
-        .catch((err: Error) => !cancelled && toast.error(err.message))
-        .finally(() => !cancelled && setLoading(false));
-    };
-
-    fetchData();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [api]);
+  const sessionsQuery = useEndpointQuery(endpoints.sessions.list);
+  const eventsQuery = useEndpointQuery(endpoints.events.list);
+  const sessions = sessionsQuery.data ?? null;
+  const events = eventsQuery.data ?? [];
+  const loading = sessionsQuery.isFetching || eventsQuery.isFetching;
+  // The list needs both: the sessions, and their events' names and timezones.
+  const loadError =
+    (!sessionsQuery.data && sessionsQuery.error) || (!eventsQuery.data && eventsQuery.error) || null;
 
   // Show active and upcoming sessions only — completed and cancelled sessions
   // are not relevant to regular users. Sort by start time ascending.
@@ -88,7 +65,7 @@ export default function FloorTrialsPage() {
   const eventNameById = new Map(events.map((e) => [e.id, e.name]));
   const eventTimezoneById = new Map(events.map((e) => [e.id, e.timezone]));
 
-  if (loading && sessions === null) {
+  if (sessionsQuery.isLoading || eventsQuery.isLoading) {
     return (
       <div className="space-y-3">
         <Skeleton className="h-8 w-48" />
@@ -111,7 +88,16 @@ export default function FloorTrialsPage() {
         </p>
       </div>
 
-      {todaySessions.length === 0 ? (
+      {loadError ? (
+        <QueryError
+          what="floor trials"
+          error={loadError}
+          onRetry={() => {
+            if (sessionsQuery.error) void sessionsQuery.refetch();
+            if (eventsQuery.error) void eventsQuery.refetch();
+          }}
+        />
+      ) : todaySessions.length === 0 ? (
         <p className="text-sm text-muted-foreground py-8 text-center">
           No upcoming sessions right now.{" "}
           <Link to="/how-it-works/floor-trials" className="text-primary underline underline-offset-2">

@@ -1,11 +1,11 @@
-import type { ApiEvent, ApiListedEventSongSubmission, ApiSong } from "@/schemas";
+import type { ApiEvent, ApiListedEventSongSubmission } from "@/schemas";
 import { ROUND_SPLIT_DIVISION, isOpenEvent, type SubmissionRound } from "@/schemas";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { useApiClient } from "@/api/client";
 import { useDivisions } from "@/hooks/useDivisions";
-import { call, endpoints } from "@/api/endpoints";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -26,6 +26,9 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { partitionSubmittableSongs } from "@/lib/submittableSongs";
 import { songLabel } from "@/lib/songLabel";
+
+// A stable empty list while a query has no data, so memos over it hold.
+const NO_ROWS: readonly never[] = [];
 
 const ROUND_OPTIONS: { value: SubmissionRound; label: string }[] = [
   { value: "prelims_and_finals", label: "Prelims & Finals" },
@@ -102,28 +105,27 @@ export default function EventSubmissionsPage() {
 }
 
 function EventPicker() {
-  const api = useApiClient();
   const navigate = useNavigate();
-  const [events, setEvents] = useState<ApiEvent[]>([]);
-  const [loading, setLoading] = useState(true);
+  const eventsQuery = useEndpointQuery(endpoints.events.list);
+  const events = useMemo(
+    () => (eventsQuery.data ?? NO_ROWS).filter((e) => e.status !== "completed"),
+    [eventsQuery.data]
+  );
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    call(api, endpoints.events.list)
-      .catch(() => [] as ApiEvent[])
-      .then((evs) => {
-        if (!cancelled) setEvents(evs.filter((e) => e.status !== "completed"));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [api]);
+  if (eventsQuery.isLoading) return <LoadingSkeleton />;
 
-  if (loading) return <LoadingSkeleton />;
+  if (eventsQuery.error && !eventsQuery.data) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Event submissions" />
+        <LoadError
+          what="the events"
+          message={errorMessage(eventsQuery.error)}
+          onRetry={() => void eventsQuery.refetch()}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -173,20 +175,24 @@ function EventPicker() {
 
 function EventSubmissionForm({ eventId }: { eventId: string }) {
   const { divisions, error: divisionsError, retry: retryDivisions } = useDivisions();
-  const api = useApiClient();
+  const eventsQuery = useEndpointQuery(endpoints.events.list);
+  const songsQuery = useEndpointQuery(endpoints.songs.list);
+  const event = useMemo(
+    () => eventsQuery.data?.find((e) => e.id === eventId && e.status !== "completed") ?? null,
+    [eventsQuery.data, eventId]
+  );
+  const songs = songsQuery.data ?? NO_ROWS;
+  const loading = eventsQuery.isLoading || songsQuery.isLoading;
+  const loadFailure = eventsQuery.error ?? songsQuery.error;
+  const loadError = loadFailure && !(eventsQuery.data && songsQuery.data) ? errorMessage(loadFailure) : null;
 
-  const [event, setEvent] = useState<ApiEvent | null>(null);
-  const [songs, setSongs] = useState<ApiSong[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loadAttempt, setLoadAttempt] = useState(0);
-
-  const [submissions, setSubmissions] = useState<ApiListedEventSongSubmission[]>([]);
-  const [submissionsLoading, setSubmissionsLoading] = useState(true);
+  const submissionsQuery = useEndpointQuery(endpoints.eventSongSubmissions.list, { params: { eventId } });
+  const submissions = submissionsQuery.data ?? NO_ROWS;
+  const submissionsLoading = submissionsQuery.isFetching;
   // While set, the list on screen is not the real one: submitting is blocked
   // so a song already entered is not entered twice.
-  const [submissionsError, setSubmissionsError] = useState<string | null>(null);
-  const [submissionsAttempt, setSubmissionsAttempt] = useState(0);
+  const submissionsError = submissionsQuery.error ? errorMessage(submissionsQuery.error) : null;
+  const retrySubmissions = () => void submissionsQuery.refetch();
   const [busySongId, setBusySongId] = useState<string | null>(null);
 
   const [selectedSongId, setSelectedSongId] = useState("");
@@ -194,47 +200,13 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
   const [round, setRound] = useState<SubmissionRound>("prelims_and_finals");
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setLoadError(null);
-    Promise.all([call(api, endpoints.events.list), call(api, endpoints.songs.list)])
-      .then(([evs, songRows]) => {
-        if (cancelled) return;
-        setEvent(evs.find((e) => e.id === eventId && e.status !== "completed") ?? null);
-        setSongs(songRows);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setLoadError(errorMessage(err));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, eventId, loadAttempt]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setSubmissionsLoading(true);
-    setSubmissionsError(null);
-    call(api, endpoints.eventSongSubmissions.list, { params: { eventId } })
-      .then((rows) => {
-        if (!cancelled) setSubmissions(rows);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setSubmissionsError(errorMessage(err));
-      })
-      .finally(() => {
-        if (!cancelled) setSubmissionsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, eventId, submissionsAttempt]);
-
-  const retrySubmissions = useCallback(() => setSubmissionsAttempt((n) => n + 1), []);
+  const submissionReads = [endpoints.eventSongSubmissions.list, endpoints.events.songSubmissions];
+  const createSubmission = useEndpointMutation(endpoints.eventSongSubmissions.create, {
+    invalidates: submissionReads,
+  });
+  const removeSubmission = useEndpointMutation(endpoints.eventSongSubmissions.remove, {
+    invalidates: submissionReads,
+  });
 
   const submissionBySongId = useMemo(() => {
     const map = new Map<string, ApiListedEventSongSubmission>();
@@ -283,7 +255,7 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
     if (!event || !selectedSongId || !division.trim()) return;
     setSubmitting(true);
     try {
-      await call(api, endpoints.eventSongSubmissions.create, {
+      await createSubmission.mutateAsync({
         body: {
           event_id: event.id,
           song_id: selectedSongId,
@@ -293,7 +265,6 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
       });
       resetForm();
       toast.success(`Song added to ${event.name}.`);
-      retrySubmissions();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to add song.");
     } finally {
@@ -304,8 +275,7 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
   const handleRemove = async (submission: ApiListedEventSongSubmission) => {
     setBusySongId(submission.song_id);
     try {
-      await call(api, endpoints.eventSongSubmissions.remove, { params: { id: submission.id } });
-      setSubmissions((prev) => prev.filter((s) => s.id !== submission.id));
+      await removeSubmission.mutateAsync({ params: { id: submission.id } });
       toast.success(event ? `Song removed from ${event.name}.` : "Song removed.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to remove song.");
@@ -323,7 +293,10 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
         <LoadError
           what="this event and your songs"
           message={loadError}
-          onRetry={() => setLoadAttempt((n) => n + 1)}
+          onRetry={() => {
+            if (eventsQuery.error) void eventsQuery.refetch();
+            if (songsQuery.error) void songsQuery.refetch();
+          }}
         />
       </div>
     );
@@ -542,22 +515,15 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
  * event page when exactly one is open, and to the event picker otherwise.
  */
 export function OpenSubmissionsRedirect() {
-  const api = useApiClient();
-  const [target, setTarget] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    call(api, endpoints.events.list)
-      .catch(() => [] as ApiEvent[])
-      .then((evs) => {
-        if (cancelled) return;
-        const open = evs.filter((e) => e.status !== "completed" && isOpenEvent(e.name));
-        setTarget(open.length === 1 ? `/event-submissions/${open[0].id}` : "/event-submissions");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [api]);
+  const eventsQuery = useEndpointQuery(endpoints.events.list);
+  // A failed load forwards to the picker, which says what failed.
+  let target: string | null = null;
+  if (eventsQuery.data) {
+    const open = eventsQuery.data.filter((e) => e.status !== "completed" && isOpenEvent(e.name));
+    target = open.length === 1 ? `/event-submissions/${open[0].id}` : "/event-submissions";
+  } else if (eventsQuery.error) {
+    target = "/event-submissions";
+  }
 
   return target ? <Navigate to={target} replace /> : <LoadingSkeleton />;
 }

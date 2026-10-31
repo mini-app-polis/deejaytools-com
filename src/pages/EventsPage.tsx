@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { toast } from "sonner";
-import type { ApiEvent, ApiSession, EventStatus } from "@/schemas";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import type { EventStatus } from "@/schemas";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointQuery } from "@/api/queries";
+import QueryError from "@/components/QueryError";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,34 +34,20 @@ function eventStatusBadge(status: EventStatus) {
 
 
 export default function EventsPage() {
-  const api = useApiClient();
-  const [events, setEvents] = useState<ApiEvent[] | null>(null);
   // Sessions are fetched alongside events purely to count each event's floor
   // trials. GET /v1/sessions is public and server-cached, and FloorTrialsPage
-  // already loads the same pair, so this costs a warm cache hit rather than a
-  // new per-event round trip.
-  const [sessions, setSessions] = useState<ApiSession[] | null>(null);
-  const [sessionsError, setSessionsError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
+  // reads the same pair from the shared query cache, so this costs a cache hit
+  // rather than a new per-event round trip.
   // Events and sessions load independently: a sessions failure keeps the
   // events listed, without floor-trial counts, and says why.
-  useEffect(() => {
-    setLoading(true);
-    setSessionsError(null);
-    const eventsReq = call(api, endpoints.events.list)
-      .then(setEvents)
-      .catch((e: Error) => toast.error(e.message));
-    const sessionsReq = call(api, endpoints.sessions.list)
-      .then(setSessions)
-      .catch((e: Error) => {
-        setSessions(null);
-        setSessionsError(e.message);
-      });
-    void Promise.all([eventsReq, sessionsReq]).finally(() => setLoading(false));
-  }, [api]);
+  const eventsQuery = useEndpointQuery(endpoints.events.list);
+  const sessionsQuery = useEndpointQuery(endpoints.sessions.list);
+  const events = eventsQuery.data ?? null;
+  const sessions = sessionsQuery.data ?? null;
+  const sessionsError = sessionsQuery.error && !sessions ? sessionsQuery.error.message : null;
+  const loading = eventsQuery.isFetching || sessionsQuery.isFetching;
 
-  if (loading && !events) {
+  if (eventsQuery.isLoading) {
     return (
       <div className="space-y-3">
         <Skeleton className="h-8 w-48" />
@@ -94,7 +79,11 @@ export default function EventsPage() {
         </p>
       </div>
 
-      {sessionsError !== null && (
+      {eventsQuery.error && !events && (
+        <QueryError what="events" error={eventsQuery.error} onRetry={() => void eventsQuery.refetch()} />
+      )}
+
+      {events && sessionsError !== null && (
         <p role="alert" className="text-sm text-destructive">
           Couldn&apos;t load floor trials, so counts are not shown: {sessionsError}
         </p>

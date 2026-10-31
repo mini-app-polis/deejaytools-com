@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import type { ApiSong } from "@/schemas";
 import { songLabel, songPieces } from "@/lib/songLabel";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
+import QueryError from "@/components/QueryError";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,31 +18,20 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function SongsPage() {
-  const api = useApiClient();
-
-  const [songs, setSongs] = useState<ApiSong[]>([]);
-  const [loading, setLoading] = useState(true);
+  const songsQuery = useEndpointQuery(endpoints.songs.list);
+  const songs = songsQuery.data ?? [];
+  const loading = songsQuery.isFetching;
+  const removeSong = useEndpointMutation(endpoints.songs.remove, {
+    invalidates: [endpoints.songs.list, endpoints.eventSongSubmissions.list],
+  });
 
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    call(api, endpoints.songs.list)
-      .then((s) => { if (!cancelled) setSongs(s); })
-      .catch((e: Error) => toast.error(e.message))
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => {
-      cancelled = true;
-    };
-  }, [api]);
-
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     try {
-      await call(api, endpoints.songs.remove, { params: { id: id } });
-      setSongs((prev) => prev.filter((s) => s.id !== id));
+      await removeSong.mutateAsync({ params: { id } });
       setPendingDeleteId(null);
       toast.success("Song removed.");
     } catch (err) {
@@ -55,7 +44,7 @@ export default function SongsPage() {
 
   const pendingSong = songs.find((s) => s.id === pendingDeleteId);
 
-  if (loading) {
+  if (songsQuery.isLoading) {
     return (
       <div className="space-y-3">
         <Skeleton className="h-8 w-48" />
@@ -101,7 +90,10 @@ export default function SongsPage() {
       </Dialog>
 
       <div className={`space-y-3${loading ? " opacity-60" : ""}`}>
-        {songs.length === 0 && (
+        {songsQuery.error && !songsQuery.data && (
+          <QueryError what="your songs" error={songsQuery.error} onRetry={() => void songsQuery.refetch()} />
+        )}
+        {songsQuery.data && songs.length === 0 && (
           <p className="text-sm text-muted-foreground py-4 text-center">
             No songs yet.{" "}
             <Link to="/songs/add" className="underline">

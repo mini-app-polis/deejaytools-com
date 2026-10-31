@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointQuery } from "@/api/queries";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,39 +43,37 @@ export default function PersonPicker({
   /** Said after the line about who appears here. */
   hint?: string;
 }) {
-  const api = useApiClient();
   const [text, setText] = useState("");
-  const [search, setSearch] = useState<Search>({ status: "idle" });
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const refocus = useRef(false);
 
-  useEffect(() => {
-    const q = personSearchQuery(text);
-    if (q === null) {
-      setSearch({ status: "idle" });
-      return;
-    }
-    let cancelled = false;
-    setSearch({ status: "loading" });
-    const timer = setTimeout(() => {
-      call(api, endpoints.events.people, { params: { id: eventId, q } })
-        .then((results) => {
-          if (cancelled) return;
-          setSearch({ status: "done", results });
-          setActive(results.length > 0 ? 0 : -1);
-        })
-        .catch((err: unknown) => {
-          if (cancelled) return;
-          setSearch({ status: "error", message: err instanceof Error ? err.message : "Search failed" });
-        });
-    }, PERSON_SEARCH_DEBOUNCE_MS);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [api, eventId, text]);
+  // The search runs once typing pauses; until then the box reads as searching.
+  const q = personSearchQuery(text);
+  const settledQ = useDebouncedValue(q, PERSON_SEARCH_DEBOUNCE_MS);
+  const settled = q !== null && settledQ === q;
+  const peopleQuery = useEndpointQuery(endpoints.events.people, {
+    params: { id: eventId, q: settledQ ?? "" },
+    enabled: settled,
+  });
+  const search: Search =
+    q === null
+      ? { status: "idle" }
+      : !settled || peopleQuery.isFetching
+        ? { status: "loading" }
+        : peopleQuery.error
+          ? { status: "error", message: peopleQuery.error.message }
+          : peopleQuery.data
+            ? { status: "done", results: peopleQuery.data }
+            : { status: "loading" };
+
+  // New results start with the first one highlighted.
+  const [activeFor, setActiveFor] = useState(peopleQuery.data);
+  if (activeFor !== peopleQuery.data) {
+    setActiveFor(peopleQuery.data);
+    setActive(peopleQuery.data && peopleQuery.data.length > 0 ? 0 : -1);
+  }
 
   useEffect(() => {
     if (value === null && refocus.current) {

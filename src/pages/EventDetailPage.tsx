@@ -1,10 +1,9 @@
 import { SignedIn, SignedOut, SignInButton, useAuth } from "@clerk/clerk-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { toast } from "sonner";
-import type { ApiEvent, ApiEventDivisionEntities, ApiSession } from "@/schemas";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointQuery } from "@/api/queries";
+import QueryError from "@/components/QueryError";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -39,52 +38,26 @@ function sessionStatusBadge(status: string) {
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const api = useApiClient();
   const { isSignedIn } = useAuth();
-  const [event, setEvent] = useState<ApiEvent | null>(null);
-  const [sessions, setSessions] = useState<ApiSession[] | null>(null);
-  const [sessionsError, setSessionsError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
 
   // The event and its sessions load independently: a sessions failure keeps
-  // the event on screen and shows the error in the sessions section. A
-  // response for an earlier :id is dropped, and that event's details are
-  // cleared rather than shown under the new URL.
-  useEffect(() => {
-    if (!id) return;
-    let cancelled = false;
-    setLoading(true);
-    setSessionsError(null);
-    setEvent((cur) => (cur?.id === id ? cur : null));
-    const eventReq = call(api, endpoints.events.get, { params: { id: id } })
-      .then((ev) => {
-        if (!cancelled) setEvent(ev);
-      })
-      .catch((e: Error) => {
-        if (!cancelled) toast.error(e.message);
-      });
-    const sessionsReq = call(api, endpoints.sessions.list, { params: { eventId: id } })
-      .then((sess) => {
-        if (!cancelled) setSessions(sess);
-      })
-      .catch((e: Error) => {
-        if (cancelled) return;
-        setSessions(null);
-        setSessionsError(e.message);
-      });
-    void Promise.all([eventReq, sessionsReq]).finally(() => {
-      if (!cancelled) setLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, id]);
+  // the event on screen and shows the error in the sessions section. Each is
+  // keyed by :id, so another event's details never show under this URL.
+  const eventQuery = useEndpointQuery(endpoints.events.get, { params: { id: id ?? "" }, enabled: !!id });
+  const sessionsQuery = useEndpointQuery(endpoints.sessions.list, {
+    params: { eventId: id ?? "" },
+    enabled: !!id,
+  });
+  const event = eventQuery.data ?? null;
+  const sessions = sessionsQuery.data ?? null;
+  const sessionsError = sessionsQuery.error && !sessions ? sessionsQuery.error.message : null;
+  const loading = eventQuery.isFetching || sessionsQuery.isFetching;
 
   if (!id) {
     return <p className="text-muted-foreground">Missing event id.</p>;
   }
 
-  if (loading && !event) {
+  if (eventQuery.isLoading) {
     return (
       <div className="space-y-3">
         <Skeleton className="h-6 w-40" />
@@ -94,6 +67,11 @@ export default function EventDetailPage() {
   }
 
   if (!event) {
+    // An ApiError carries the HTTP status; a 404 is an answer, not a failure.
+    const notFound = (eventQuery.error as { status?: number } | null)?.status === 404;
+    if (eventQuery.error && !notFound) {
+      return <QueryError what="the event" error={eventQuery.error} onRetry={() => void eventQuery.refetch()} />;
+    }
     return <p className="text-muted-foreground">Event not found.</p>;
   }
 
@@ -219,9 +197,13 @@ function countsLabel(entryCount: number, songCount: number): string {
  * one row: enough to see the field, never enough to learn a routine.
  */
 function EnteredEntities({ eventId, isSignedIn }: { eventId: string; isSignedIn: boolean }) {
-  const api = useApiClient();
-  const [divisions, setDivisions] = useState<ApiEventDivisionEntities[] | null>(null);
-  const [loading, setLoading] = useState(false);
+  // The endpoint is requireAuth — signed out there is nothing to fetch.
+  const entitiesQuery = useEndpointQuery(endpoints.events.entities, {
+    params: { id: eventId },
+    enabled: isSignedIn,
+  });
+  const divisions = isSignedIn ? (entitiesQuery.data ?? null) : null;
+  const loading = entitiesQuery.isFetching;
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const toggleDivision = (division: string) =>
@@ -231,30 +213,6 @@ function EnteredEntities({ eventId, isSignedIn }: { eventId: string; isSignedIn:
       else next.add(division);
       return next;
     });
-
-  useEffect(() => {
-    // The endpoint is requireAuth — signed out there is nothing to fetch, and a
-    // 401 toast would be noise on a page that otherwise renders fine.
-    if (!isSignedIn) {
-      setDivisions(null);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    call(api, endpoints.events.entities, { params: { id: eventId } })
-      .then((rows) => {
-        if (!cancelled) setDivisions(rows);
-      })
-      .catch((e: Error) => {
-        if (!cancelled) toast.error(e.message);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, eventId, isSignedIn]);
 
   // An entity entered in two divisions is two rows but one competitor, so the
   // heading counts distinct entities rather than summing the section counts.
@@ -296,6 +254,13 @@ function EnteredEntities({ eventId, isSignedIn }: { eventId: string; isSignedIn:
       </SignedOut>
 
       <SignedIn>
+        {entitiesQuery.error && divisions === null && (
+          <QueryError
+            what="who's entered"
+            error={entitiesQuery.error}
+            onRetry={() => void entitiesQuery.refetch()}
+          />
+        )}
         {loading && divisions === null && <Skeleton className="h-24 w-full" />}
         {divisions?.length === 0 && (
           <p className="text-sm text-muted-foreground">No music submitted for this event yet.</p>

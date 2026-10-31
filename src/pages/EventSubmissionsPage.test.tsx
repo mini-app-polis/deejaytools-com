@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -33,6 +33,7 @@ vi.mock("@/hooks/useDivisions", () => ({ useDivisions: useDivisionsMock }));
 import EventSubmissionsPage, { OpenSubmissionsRedirect } from "./EventSubmissionsPage";
 import { fx } from "@/test/fixtures";
 import { LOADED_DIVISIONS } from "@/test/divisions";
+import { renderWithQueryClient } from "@/test/render";
 
 const EVENT = fx.event({
   id: "ev1",
@@ -121,7 +122,7 @@ function mockApi(events: unknown[], songs: unknown[] = [SONG], submissions: unkn
 }
 
 function renderAt(path: string) {
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/event-submissions" element={<EventSubmissionsPage />} />
@@ -174,6 +175,21 @@ describe("EventSubmissionsPage — picker", () => {
   it("says when no events are available", async () => {
     mockApi([]);
     renderAt("/event-submissions");
+    expect(await screen.findByText(/no upcoming events are available/i)).toBeInTheDocument();
+  });
+
+  it("says the events couldn't load, not that none are available, and retries", async () => {
+    let fail = true;
+    apiGet.mockImplementation((path: string) =>
+      path === "/v1/events" && fail ? Promise.reject(new Error("events down")) : Promise.resolve([])
+    );
+    const user = userEvent.setup();
+    renderAt("/event-submissions");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load the events: events down");
+    expect(screen.queryByText(/no upcoming events are available/i)).not.toBeInTheDocument();
+    fail = false;
+    await user.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText(/no upcoming events are available/i)).toBeInTheDocument();
   });
 });
