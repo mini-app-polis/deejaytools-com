@@ -1,4 +1,7 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useCallback, useId, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 import { ContractViolation } from "@/api/contract";
 import { checkEndpoint, endpoints } from "@/api/endpoints";
 
@@ -7,7 +10,34 @@ const API_BASE = import.meta.env.VITE_API_URL ?? "";
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const ACCEPT_TYPES = ["image/png", "image/jpeg"] as const;
 
-type FeedbackType = "bug" | "feature" | "general";
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Subject and message are required by the inputs themselves; the email is
+// checked here only when the person has opted in to being contacted.
+const feedbackSchema = z
+  .object({
+    type: z.enum(["bug", "feature", "general"]),
+    subject: z.string(),
+    message: z.string(),
+    openToContact: z.boolean(),
+    contactName: z.string(),
+    contactEmail: z.string(),
+  })
+  .superRefine((v, ctx) => {
+    if (!v.openToContact) return;
+    const email = v.contactEmail.trim();
+    if (!email) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["contactEmail"],
+        message: "Please enter an email or uncheck the contact permission.",
+      });
+    } else if (!EMAIL_PATTERN.test(email)) {
+      ctx.addIssue({ code: "custom", path: ["contactEmail"], message: "Please enter a valid email address." });
+    }
+  });
+type FeedbackForm = z.infer<typeof feedbackSchema>;
+type FeedbackType = FeedbackForm["type"];
 
 const TYPE_OPTIONS: { value: FeedbackType; label: string }[] = [
   { value: "bug", label: "Bug" },
@@ -16,17 +46,29 @@ const TYPE_OPTIONS: { value: FeedbackType; label: string }[] = [
 ];
 
 export default function FeedbackPage() {
-  const [type, setType] = useState<FeedbackType>("general");
-  const [subject, setSubject] = useState("");
-  const [message, setMessage] = useState("");
-  const [openToContact, setOpenToContact] = useState(false);
-  const [contactName, setContactName] = useState("");
-  const [contactEmail, setContactEmail] = useState("");
+  const {
+    register,
+    handleSubmit: validate,
+    setValue,
+    watch,
+    formState: { errors, isSubmitting: submitting },
+  } = useForm<FeedbackForm>({
+    resolver: zodResolver(feedbackSchema),
+    defaultValues: {
+      type: "general",
+      subject: "",
+      message: "",
+      openToContact: false,
+      contactName: "",
+      contactEmail: "",
+    },
+  });
+  const type = watch("type");
+  const openToContact = watch("openToContact");
   const [screenshotDataUrl, setScreenshotDataUrl] = useState<string | null>(null);
   const [screenshotPreviewUrl, setScreenshotPreviewUrl] = useState<string | null>(null);
   const [screenshotError, setScreenshotError] = useState<string | null>(null);
   const [fileInputKey, setFileInputKey] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
@@ -89,27 +131,14 @@ export default function FeedbackPage() {
     if (file) processFile(file);
   }
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
-
-    if (openToContact) {
-      const trimmed = contactEmail.trim();
-      if (!trimmed) {
-        setError("Please enter an email or uncheck the contact permission.");
-        return;
-      }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-        setError("Please enter a valid email address.");
-        return;
-      }
-    }
+  // Runs only once the fields pass the schema; a contact-email problem is
+  // shown from the form's errors, in the same place as a send failure.
+  async function send({ type, subject, message, openToContact, contactName, contactEmail }: FeedbackForm) {
     if (screenshotError) {
       setError("Fix the screenshot issue before submitting.");
       return;
     }
 
-    setSubmitting(true);
     try {
       const body: Record<string, unknown> = {
         type,
@@ -146,10 +175,15 @@ export default function FeedbackPage() {
       setError(
         err instanceof ContractViolation ? err.message : "Network error. Please try again."
       );
-    } finally {
-      setSubmitting(false);
     }
   }
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    setError(null);
+    void validate(send)(e);
+  }
+
+  const shownError = errors.contactEmail?.message ?? error;
 
   if (success) {
     return (
@@ -204,7 +238,7 @@ export default function FeedbackPage() {
                 <button
                   key={opt.value}
                   type="button"
-                  onClick={() => setType(opt.value)}
+                  onClick={() => setValue("type", opt.value)}
                   className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                     selected
                       ? "bg-primary text-primary-foreground shadow-sm"
@@ -229,8 +263,7 @@ export default function FeedbackPage() {
           <input
             id="feedback-subject"
             type="text"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
+            {...register("subject")}
             required
             maxLength={255}
             className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -248,8 +281,7 @@ export default function FeedbackPage() {
           </label>
           <textarea
             id="feedback-message"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            {...register("message")}
             required
             rows={5}
             className="w-full resize-y rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -262,14 +294,14 @@ export default function FeedbackPage() {
           <label className="flex cursor-pointer items-start gap-2.5 text-sm text-foreground/85">
             <input
               type="checkbox"
-              checked={openToContact}
-              onChange={(e) => {
-                setOpenToContact(e.target.checked);
-                if (!e.target.checked) {
-                  setContactName("");
-                  setContactEmail("");
-                }
-              }}
+              {...register("openToContact", {
+                onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+                  if (!e.target.checked) {
+                    setValue("contactName", "");
+                    setValue("contactEmail", "", { shouldValidate: true });
+                  }
+                },
+              })}
               className="mt-0.5 h-4 w-4 shrink-0 rounded border-border bg-input accent-primary"
             />
             <span>I&apos;m open to being contacted about this feedback</span>
@@ -288,8 +320,7 @@ export default function FeedbackPage() {
                 <input
                   id="feedback-contact-name"
                   type="text"
-                  value={contactName}
-                  onChange={(e) => setContactName(e.target.value)}
+                  {...register("contactName")}
                   maxLength={255}
                   className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
                   placeholder="How should we address you?"
@@ -305,8 +336,7 @@ export default function FeedbackPage() {
                 <input
                   id="feedback-contact-email"
                   type="email"
-                  value={contactEmail}
-                  onChange={(e) => setContactEmail(e.target.value)}
+                  {...register("contactEmail")}
                   className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
                   placeholder="you@example.com"
                 />
@@ -385,9 +415,9 @@ export default function FeedbackPage() {
         </div>
 
         {/* Error */}
-        {error && (
+        {shownError && (
           <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {error}
+            {shownError}
           </p>
         )}
 

@@ -62,9 +62,9 @@ vi.mock("@/hooks/useApiVersion", () => ({
 
 import NavBar from "./NavBar";
 
-function renderNav() {
+function renderNav(path = "/") {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[path]}>
       <NavBar />
     </MemoryRouter>
   );
@@ -162,6 +162,64 @@ describe("NavBar — mobile menu", () => {
     const helpLinks = screen.getAllByRole("link", { name: /^help$/i });
     expect(helpLinks.length).toBeGreaterThan(0);
     expect(helpLinks.some((link) => link.getAttribute("href") === "/how-it-works")).toBe(true);
+  });
+
+  it("lists the Manager and Superuser sections for an admin, and closes when a link is followed", async () => {
+    signedIn = true;
+    isAdmin = true;
+    const user = userEvent.setup();
+    renderNav();
+    // Desktop sub-bars are always in the DOM; the mobile menu adds a second copy.
+    expect(screen.getAllByRole("link", { name: "Active Sessions" })).toHaveLength(1);
+    expect(screen.getAllByRole("link", { name: "Test Checkin" })).toHaveLength(1);
+
+    await user.click(screen.getByRole("button", { name: /toggle menu/i }));
+    expect(screen.getAllByRole("link", { name: "Active Sessions" })).toHaveLength(2);
+    expect(screen.getAllByRole("link", { name: "Test Checkin" })).toHaveLength(2);
+
+    await user.click(screen.getAllByRole("link", { name: "Test Checkin" })[1]);
+    expect(screen.getAllByRole("link", { name: "Test Checkin" })).toHaveLength(1);
+  });
+
+  it("closes the menu when the toggle is pressed again", async () => {
+    signedIn = false;
+    isAdmin = false;
+    const user = userEvent.setup();
+    renderNav();
+    const toggle = screen.getByRole("button", { name: /toggle menu/i });
+
+    await user.click(toggle);
+    expect(screen.getAllByRole("link", { name: /^contact$/i })).toHaveLength(2);
+    await user.click(toggle);
+    expect(screen.getAllByRole("link", { name: /^contact$/i })).toHaveLength(1);
+  });
+
+  it.each([
+    ["Floor Trials", "/floor-trials"],
+    ["My Content", "/my-content"],
+    ["My events", "/my-events"],
+    ["Help", "/how-it-works"],
+    ["Contact", "/feedback"],
+    ["Fall Fling · DJ", "/events/ev-2/dj"],
+    ["Guide", "/manager/guide"],
+    ["Users", "/admin/users"],
+  ])("closes after following the mobile %s link", async (name, href) => {
+    signedIn = true;
+    isAdmin = true;
+    eventRoles = [{ event_id: "ev-2", role: "dj" }];
+    staffEvents = [{ eventId: "ev-2", role: "dj", event: { name: "Fall Fling" } }];
+    const user = userEvent.setup();
+    renderNav();
+    const before = screen.getAllByRole("link", { name }).length;
+
+    await user.click(screen.getByRole("button", { name: /toggle menu/i }));
+    const links = screen.getAllByRole("link", { name });
+    expect(links).toHaveLength(before + 1);
+    const mobile = links[links.length - 1];
+    expect(mobile).toHaveAttribute("href", href);
+    await user.click(mobile);
+
+    expect(screen.getAllByRole("link", { name })).toHaveLength(before);
   });
 
   it("shows Help in the mobile nav for signed-in users", async () => {
@@ -342,5 +400,49 @@ describe("NavBar — event staff", () => {
     await user.click(screen.getByRole("button", { name: /toggle menu/i }));
     expect(screen.getAllByRole("link", { name: /^my events$/i })).toHaveLength(2);
     expect(screen.getAllByRole("link", { name: "Fall Fling · DJ" })).toHaveLength(2);
+  });
+});
+
+describe("NavBar — active route", () => {
+  it("marks the current page's link in the main nav, the sub-bars and the mobile menu", async () => {
+    signedIn = true;
+    isAdmin = true;
+    const user = userEvent.setup();
+    renderNav("/admin/users");
+
+    const users = screen.getByRole("link", { name: "Users" });
+    expect(users).toHaveAttribute("aria-current", "page");
+    expect(users.className).toContain("text-primary");
+    expect(screen.getByRole("link", { name: "Songs" })).not.toHaveAttribute("aria-current");
+
+    await user.click(screen.getByRole("button", { name: /toggle menu/i }));
+    const mobileUsers = screen.getAllByRole("link", { name: "Users" })[1];
+    expect(mobileUsers).toHaveAttribute("aria-current", "page");
+    expect(mobileUsers.className).toContain("bg-primary/10");
+  });
+
+  it("marks a public page in the desktop nav", () => {
+    signedIn = false;
+    isAdmin = false;
+    renderNav("/floor-trials");
+
+    const link = screen.getByRole("link", { name: /^floor trials$/i });
+    expect(link).toHaveAttribute("aria-current", "page");
+    expect(link.className).toContain("text-primary");
+  });
+});
+
+describe("NavBar — staff event without a loaded event", () => {
+  it("labels the entry 'Event' until the events list has the event", () => {
+    signedIn = true;
+    isAdmin = false;
+    eventRoles = [{ event_id: "ev-9", role: "coordinator" }];
+    staffEvents = [{ eventId: "ev-9", role: "coordinator", event: null }];
+    renderNav();
+
+    expect(screen.getByRole("link", { name: "Event · Coordinator" })).toHaveAttribute(
+      "href",
+      "/events/ev-9/coordinator"
+    );
   });
 });

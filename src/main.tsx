@@ -2,10 +2,12 @@
 import { Sentry } from "@/lib/instrument";
 
 import { ClerkProvider } from "@clerk/clerk-react";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import AppErrorBoundary from "./components/AppErrorBoundary";
 import MaintenancePage from "./components/MaintenancePage";
+import { queryClient } from "./api/queryClient";
 import App from "./pages/App";
 import "./index.css";
 
@@ -38,7 +40,9 @@ createRoot(container, {
         <MaintenancePage />
       ) : (
         <ClerkProvider publishableKey={key}>
-          <App />
+          <QueryClientProvider client={queryClient}>
+            <App />
+          </QueryClientProvider>
         </ClerkProvider>
       )}
     </AppErrorBoundary>

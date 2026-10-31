@@ -103,7 +103,7 @@ Automatically on release:
 | 2. Typecheck | `pnpm typecheck` |
 | 3. Lint | `pnpm lint` |
 | 4. Tests + coverage | `pnpm test:coverage` |
-| 5. Build | `pnpm build` |
+| 5. Build | `pnpm build`, with `DEEJAYTOOLS_CLERK_PUBLISHABLE_KEY` set (any `pk_test_…` key; CI uses a placeholder) — without one the build drops the app |
 
 CI does **not** deploy ([`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)).
 

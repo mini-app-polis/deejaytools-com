@@ -415,24 +415,42 @@ describe("UploadForSection", () => {
 });
 
 describe("EventDetailsSection", () => {
-  it("refuses an incomplete or inconsistent event", () => {
+  it("refuses an incomplete or inconsistent event", async () => {
     inRouter(<EventDetailsSection event={event} onUpdated={vi.fn()} />);
     const save = screen.getByRole("button", { name: "Save changes" });
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: " " } });
     fireEvent.click(save);
-    expect(toastError).toHaveBeenLastCalledWith("Name is required");
+    await waitFor(() => expect(toastError).toHaveBeenLastCalledWith("Name is required"));
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "X" } });
     fireEvent.change(screen.getByLabelText("Start date"), { target: { value: "" } });
     fireEvent.click(save);
-    expect(toastError).toHaveBeenLastCalledWith("Start date is required");
+    await waitFor(() => expect(toastError).toHaveBeenLastCalledWith("Start date is required"));
     fireEvent.change(screen.getByLabelText("Start date"), { target: { value: "2026-06-05" } });
     fireEvent.change(screen.getByLabelText("End date"), { target: { value: "" } });
     fireEvent.click(save);
-    expect(toastError).toHaveBeenLastCalledWith("End date is required");
+    await waitFor(() => expect(toastError).toHaveBeenLastCalledWith("End date is required"));
     fireEvent.change(screen.getByLabelText("End date"), { target: { value: "2026-06-01" } });
     fireEvent.click(save);
-    expect(toastError).toHaveBeenLastCalledWith("End date must be on or after start date");
+    await waitFor(() =>
+      expect(toastError).toHaveBeenLastCalledWith("End date must be on or after start date")
+    );
     expect(apiPatch).not.toHaveBeenCalled();
+  });
+
+  it("sends the trimmed name with the dates and timezone", async () => {
+    apiPatch.mockResolvedValue(event);
+    inRouter(<EventDetailsSection event={event} onUpdated={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "  Spring Swing  " } });
+    fireEvent.change(screen.getByLabelText("Start date"), { target: { value: "2026-06-05" } });
+    fireEvent.change(screen.getByLabelText("End date"), { target: { value: "2026-06-05" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(apiPatch).toHaveBeenCalled());
+    expect(apiPatch.mock.calls[0]![1]).toEqual({
+      name: "Spring Swing",
+      start_date: "2026-06-05",
+      end_date: "2026-06-05",
+      timezone: event.timezone,
+    });
   });
 
   it("offers no season year field, and leaves the season out of the update", async () => {

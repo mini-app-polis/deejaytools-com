@@ -139,6 +139,28 @@ describe("FeedbackPage", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("clears the contact email error once the email is fixed, or when the user opts out", async () => {
+    const user = userEvent.setup();
+    render(<FeedbackPage />);
+
+    await fillRequired(user);
+    const optIn = screen.getByRole("checkbox", { name: /open to being contacted/i });
+    await user.click(optIn);
+    await user.type(screen.getByLabelText(/best email/i), "kai@");
+    fireEvent.submit(screen.getByRole("button", { name: "Submit feedback" }).closest("form")!);
+    expect(await screen.findByText("Please enter a valid email address.")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/best email/i), "example.com");
+    await waitFor(() => expect(screen.queryByText("Please enter a valid email address.")).not.toBeInTheDocument());
+
+    await user.clear(screen.getByLabelText(/best email/i));
+    expect(await screen.findByText("Please enter an email or uncheck the contact permission.")).toBeInTheDocument();
+    await user.click(optIn);
+    await waitFor(() =>
+      expect(screen.queryByText("Please enter an email or uncheck the contact permission.")).not.toBeInTheDocument()
+    );
+  });
+
   it("attaches a PNG screenshot as a data URL, previews it, and can remove it", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ data: null }));
     const user = userEvent.setup();
