@@ -263,6 +263,35 @@ describe("ManagerPage — Active Sessions", () => {
     expect(screen.getByRole("link", { name: /open guide/i })).toHaveAttribute("href", "/manager/guide");
   });
 
+  it("picks today's sessions by the event's date, including one that runs past midnight", async () => {
+    // 00:30 on May 24 in Chicago.
+    vi.setSystemTime(Date.UTC(2026, 4, 24, 5, 30));
+    const overnight = fx.session({
+      id: "overnight",
+      status: "in_progress",
+      event_timezone: TZ,
+      checkin_opens_at: Date.UTC(2026, 4, 24, 1, 0),
+      floor_trial_starts_at: Date.UTC(2026, 4, 24, 2, 0),
+      floor_trial_ends_at: Date.UTC(2026, 4, 24, 7, 0),
+    });
+    // May 23 in Chicago all day, though it ends on May 24 in UTC.
+    const yesterday = fx.session({
+      id: "yesterday",
+      status: "completed",
+      event_timezone: TZ,
+      checkin_opens_at: Date.UTC(2026, 4, 23, 22, 0),
+      floor_trial_starts_at: Date.UTC(2026, 4, 23, 23, 0),
+      floor_trial_ends_at: Date.UTC(2026, 4, 24, 1, 0),
+    });
+    routeGets({ "/v1/sessions": [yesterday, overnight] });
+    renderPage();
+
+    const group = await screen.findByRole("radiogroup", { name: "Session" });
+    expect(within(group).getAllByRole("radio").map((r) => r.textContent)).toEqual([
+      "Saturday - 9:00 PM - May 23, 2026",
+    ]);
+  });
+
   it("lists today's sessions live-first and waits for a choice when more than one is live", async () => {
     const live2 = fx.session({ id: "live2", status: "in_progress", event_timezone: TZ, floor_trial_starts_at: NOW + 60 * 60_000 });
     const done = fx.session({ id: "done", status: "completed", event_timezone: TZ, floor_trial_starts_at: NOW - 60 * 60_000 });

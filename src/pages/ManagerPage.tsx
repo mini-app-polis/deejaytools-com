@@ -23,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { formatSessionTitle } from "@/lib/sessionFormat";
+import { isSessionToday } from "@/lib/zonedTime";
 import ManagerGuideSection from "@/components/manager/ManagerGuideSection";
 import { useQueueActions, WithdrawEntryDialog } from "@/components/staff/queueActions";
 import { cn } from "@/lib/utils";
@@ -315,16 +316,9 @@ export default function ManagerPage() {
 
   const activeSessionOptions = useMemo(() => {
     if (!sessions) return [];
-    const now = new Date();
+    const now = Date.now();
     return sessions
-      .filter((s) => {
-        const d = new Date(s.floor_trial_starts_at);
-        return (
-          d.getFullYear() === now.getFullYear() &&
-          d.getMonth() === now.getMonth() &&
-          d.getDate() === now.getDate()
-        );
-      })
+      .filter((s) => isSessionToday(s, now))
       .sort((a, b) => {
         const isLive = (s: ApiSession) =>
           s.status === "checkin_open" || s.status === "in_progress";
