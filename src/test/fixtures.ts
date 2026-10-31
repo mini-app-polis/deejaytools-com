@@ -123,7 +123,7 @@ export const fx = {
   eventSongSubmission: factory(ApiEventSongSubmissionSchema, {
     id: "sub-1", event_id: "ev-1", event_name: "Test Event", event_start_date: "2026-06-01",
     event_status: "upcoming", song_id: "song-1", song_label: "Song", division: null,
-    round: "prelims_and_finals", created_at: T,
+    round: "prelims_and_finals", created_at: T, can_withdraw: true,
   }),
   adminEventSongSubmission: factory(ApiAdminEventSongSubmissionSchema, {
     id: "sub-1", event_id: "ev-1", event_name: "Test Event", division: null,

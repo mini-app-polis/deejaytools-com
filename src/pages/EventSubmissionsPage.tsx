@@ -506,16 +506,18 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
                         </p>
                       )}
                     </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="shrink-0 border-destructive/50 text-destructive hover:bg-destructive-strong hover:text-destructive-foreground"
-                      disabled={busy || submissionsLoading}
-                      onClick={() => void handleRemove(submission)}
-                    >
-                      {busy ? "Removing…" : "Remove"}
-                    </Button>
+                    {submission.can_withdraw && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0 border-destructive/50 text-destructive hover:bg-destructive-strong hover:text-destructive-foreground"
+                        disabled={busy || submissionsLoading}
+                        onClick={() => void handleRemove(submission)}
+                      >
+                        {busy ? "Removing…" : "Remove"}
+                      </Button>
+                    )}
                   </div>
                 );
               })}
