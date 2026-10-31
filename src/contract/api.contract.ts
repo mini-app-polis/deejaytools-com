@@ -21,6 +21,7 @@
  * CONTRACT_USER_ID; the test user must be an admin in that environment).
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { bareJsonTransport } from "@/api/bareTransport";
 import { allEndpoints, checkEndpoint, endpoints } from "@/api/endpoints";
 import { SessionStatusSchema } from "@/schemas";
 import { ClerkTestSession } from "./clerk";
@@ -149,7 +150,7 @@ beforeAll(async () => {
   strictContracts();
   session = await ClerkTestSession.start(cfg.clerkSecretKey, cfg.userId);
   api = makeClient(cfg.apiUrl, session);
-  ledger = new Ledger(api);
+  ledger = new Ledger(api, bareJsonTransport(cfg.apiUrl));
   for (const [id, reason] of Object.entries(NOT_EXERCISED)) ledger.skip({ id }, reason);
 
   // auth.sync goes through fetch in the app (it runs before the client is
@@ -289,6 +290,12 @@ describe("access", () => {
 });
 
 describe("contract", () => {
+  it("meta", async () => {
+    // Outside the envelope: a {data} wrapper would fail the schema here.
+    const { version } = await ledger.hit(endpoints.meta.version);
+    expect(version).not.toBe("");
+  });
+
   it("profile", async () => {
     const me = await ledger.hit(endpoints.auth.me);
     await ledger.hit(endpoints.auth.updateMe, {

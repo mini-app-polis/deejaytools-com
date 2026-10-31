@@ -154,11 +154,18 @@ export class Ledger {
   private readonly hits = new Set<string>();
   private readonly skips = new Map<string, string>();
 
-  constructor(private readonly client: Transport) {}
+  /**
+   * `client` serves the enveloped endpoints; `bare` serves those declared
+   * `envelope: false`, as the app calls them.
+   */
+  constructor(
+    private readonly client: Transport,
+    private readonly bare: Transport
+  ) {}
 
   /** Call an endpoint through the validating `call()` and record it. */
   async hit<P, B, R>(ep: Endpoint<P, B, R>, ...args: CallArgs<P, B>): Promise<R> {
-    const out = await call(this.client, ep, ...args);
+    const out = await call(ep.envelope === false ? this.bare : this.client, ep, ...args);
     this.hits.add(ep.id);
     return out;
   }

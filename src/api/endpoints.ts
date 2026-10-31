@@ -27,6 +27,7 @@ import {
   ApiTeamSchema,
   ApiTestInjectionCreatedSchema,
   ApiTestInjectionSchema,
+  ApiVersionSchema,
   createCheckinBodySchema,
   createEventSongSubmissionBodySchema,
   createManagedPartnershipBodySchema,
@@ -72,6 +73,12 @@ export interface Endpoint<P, B, R> {
   /** The response's schema; `null` for a 204 with no body. */
   readonly response: Schema<R> | null;
   readonly transport?: "client" | "fetch";
+  /**
+   * `false` for the API's unversioned meta routes, which answer with the bare
+   * body rather than the `{data}` envelope. Call one through a transport that
+   * does not unwrap (`bareJsonTransport`).
+   */
+  readonly envelope?: false;
 }
 
 function endpoint<P = void, B = void, R = void>(e: Endpoint<P, B, R>): Endpoint<P, B, R> {
@@ -85,6 +92,13 @@ const withQuery = (base: string, query?: string) => (query ? `${base}?${query}` 
 type Body = Record<string, unknown>;
 
 export const endpoints = {
+  meta: {
+    version: endpoint<void, void, z.infer<typeof ApiVersionSchema>>({
+      id: "meta.version", method: "GET", access: "public", envelope: false,
+      path: () => "/version", response: ApiVersionSchema,
+    }),
+  },
+
   auth: {
     me: endpoint<void, void, z.infer<typeof ApiAuthMeSchema>>({
       id: "auth.me", method: "GET", access: "user",

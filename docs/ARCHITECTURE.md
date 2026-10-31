@@ -181,13 +181,13 @@ Four places use raw `fetch` instead of `useApiClient()`:
 | **`AuthSync.tsx`** | Runs as a side-effect component; could use the client, but intentionally uses raw `fetch` with an explicit token from `getToken()` and does not need envelope parsing for its fire-and-forget sync POST. Failures are logged, not surfaced to UI. |
 | **`lib/chunkedSongUpload.ts`** | Not a React hook — receives `getToken` as a callback. Builds `FormData` per chunk, implements its own retry/backoff, and must re-fetch a fresh token on each attempt. Cannot call `useApiClient()`. |
 | **`FeedbackPage.tsx`** | **Unauthenticated** endpoint — no Clerk token. Submits JSON to `POST /v1/feedback` for anonymous bug reports. |
-| **`hooks/useApiVersion.ts`** | `GET /version` is public, unversioned and not in the envelope, so it is not in the catalog. |
+| **`hooks/useApiVersion.ts`** | `GET /version` is public, unversioned and not in the envelope. It is in the catalog as `meta.version`, declared `envelope: false`, and called through `call()` with `bareJsonTransport` (`api/bareTransport.ts`), which returns the body without unwrapping `{data}`. |
 
-For any new authenticated JSON call, use `useApiClient()`. Only bypass it when you have one of the reasons above. `AuthSync`, the chunk uploader and `FeedbackPage` still take their path from the catalog and validate the response with `checkEndpoint()`.
+For any new authenticated JSON call, use `useApiClient()`. Only bypass it when you have one of the reasons above. `AuthSync`, the chunk uploader and `FeedbackPage` still take their path from the catalog and validate the response with `checkEndpoint()`; `useApiVersion` validates through `call()`.
 
 ### Endpoint catalog (`api/endpoints.ts`) and response validation (`api/contract.ts`)
 
-Every API call the app makes is declared once in `endpoints.ts`: method, access (`public` / `user` / `admin` / `event-staff`), path builder, and the zod schema the response must satisfy. `call(api, endpoints.x.y, { params, body })` builds the path, sends the request and validates the response; no `/v1/` path appears anywhere else in `src/`.
+Every API call the app makes is declared once in `endpoints.ts`: method, access (`public` / `user` / `admin` / `event-staff`), path builder, and the zod schema the response must satisfy. `call(api, endpoints.x.y, { params, body })` builds the path, sends the request and validates the response; no `/v1/` path appears anywhere else in `src/`. Endpoints declared `envelope: false` (the unversioned `GET /version`) answer with a bare body and are called through `bareJsonTransport` instead of the API client.
 
 A response that fails its schema is a contract violation. In dev and tests it throws `ContractViolation`; in production it is reported to Sentry (tagged `contract_endpoint`) and the raw data is used, so harmless drift never breaks a page but never goes unnoticed. Unit-test API mocks are built with the `fx.*` factories in `src/test/fixtures.ts`, which parse through the same schemas.
 

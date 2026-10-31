@@ -106,14 +106,21 @@ describe("endpoint paths", () => {
     }
   });
 
-  it("gives every endpoint a unique id and a path that starts with /v1/", () => {
+  it("gives every endpoint a unique id, and every enveloped one a path under /v1/", () => {
     const all = allEndpoints();
     const ids = all.map((e) => e.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const ep of all) {
       const sample = ep.path({ id: "x", sessionId: "x", eventId: "x" });
-      expect(sample.startsWith("/v1/")).toBe(true);
+      expect(sample.startsWith("/v1/")).toBe(ep.envelope !== false);
     }
+  });
+
+  it("declares only the unversioned meta routes outside the envelope", () => {
+    const bare = allEndpoints().filter((e) => e.envelope === false);
+    expect(bare.map((e) => [e.id, e.method, e.access, e.path(undefined)])).toEqual([
+      ["meta.version", "GET", "public", "/version"],
+    ]);
   });
 
   it("marks only the three deliberately out-of-client calls as fetch transport", () => {
