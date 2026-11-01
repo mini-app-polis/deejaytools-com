@@ -35,7 +35,7 @@ const { getTokenMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("@clerk/clerk-react", () => ({
-  useAuth: () => ({ getToken: getTokenMock }),
+  useAuth: () => ({ getToken: getTokenMock, isLoaded: true, isSignedIn: true, userId: "u1" }),
 }));
 
 import AddSongPage from "./AddSongPage";

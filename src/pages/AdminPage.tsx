@@ -200,9 +200,8 @@ export default function AdminPage() {
     ? rawSection
     : DEFAULT_ADMIN_SECTION;
   // Identifies the current admin so the Users tab can hide the role
-  // toggle on their own row (the API also rejects self-demotion). reloadMe
-  // refreshes the nav bar's staff events after an event changes.
-  const { me, reload: reloadMe } = useAuthMe();
+  // toggle on their own row (the API also rejects self-demotion).
+  const { me } = useAuthMe();
 
   // ── Events tab ──────────────────────────────────────────────────────────────
   const [evDialogOpen, setEvDialogOpen] = useState(false);
@@ -376,11 +375,12 @@ export default function AdminPage() {
   const tcData = tcQuery.data ?? null;
 
   const createEvent = useEndpointMutation(endpoints.events.create, { invalidates: [endpoints.events.list] });
+  // The nav bar lists the caller's staff events by name, from their record.
   const updateEvent = useEndpointMutation(endpoints.events.update, {
-    invalidates: [endpoints.events.list, endpoints.sessions.list],
+    invalidates: [endpoints.events.list, endpoints.sessions.list, endpoints.auth.me],
   });
   const removeEvent = useEndpointMutation(endpoints.events.remove, {
-    invalidates: [endpoints.events.list, endpoints.sessions.list],
+    invalidates: [endpoints.events.list, endpoints.sessions.list, endpoints.auth.me],
   });
   const createSession = useEndpointMutation(endpoints.sessions.create, { invalidates: [endpoints.sessions.list] });
   const updateSession = useEndpointMutation(endpoints.sessions.update, { invalidates: [endpoints.sessions.list] });
@@ -532,7 +532,6 @@ export default function AdminPage() {
     try {
       await removeEvent.mutateAsync({ params: { id } });
       toast.success("Event deleted");
-      void reloadMe();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Delete failed");
     }
@@ -575,7 +574,6 @@ export default function AdminPage() {
           season_year: trimmedSeason || undefined,
         } });
         toast.success("Event updated");
-        void reloadMe();
       } else {
         // Create mode — POST; the list refetches.
         await createEvent.mutateAsync({ body: {

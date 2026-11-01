@@ -20,7 +20,7 @@ vi.mock("sonner", () => ({
 }));
 
 vi.mock("@clerk/clerk-react", () => ({
-  useAuth: () => ({ getToken: vi.fn() }),
+  useAuth: () => ({ getToken: vi.fn(), isLoaded: true, isSignedIn: true, userId: "u1" }),
 }));
 
 // The chunk loop has its own tests (chunkedSongUpload.test, AddSongPage.test);

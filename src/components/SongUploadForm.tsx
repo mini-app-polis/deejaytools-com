@@ -15,6 +15,7 @@ import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuthMeQuery } from "@/hooks/useAuthMe";
 import { useDivisions } from "@/hooks/useDivisions";
 import type { ApiManagedPartnership, ApiPartner } from "@/schemas";
 import { toastFirstError } from "@/lib/formErrors";
@@ -153,7 +154,7 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
   });
   const ownPartnersQuery = useEndpointQuery(endpoints.partners.list, { enabled: forSelf });
   const partnersQuery = forSelf ? ownPartnersQuery : onBehalfEventId ? eventPartnersQuery : userPartnersQuery;
-  const meQuery = useEndpointQuery(endpoints.auth.me, { enabled: forSelf });
+  const meQuery = useAuthMeQuery({ enabled: forSelf });
   const managedQuery = useEndpointQuery(endpoints.managedPartnerships.list, {
     enabled: variant === "managed" && forSelf,
   });

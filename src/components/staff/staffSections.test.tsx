@@ -24,10 +24,12 @@ const { apiGet, apiPost, apiPatch, apiPut, apiDel, apiClient, toastError, toastS
 vi.mock("@/api/client", () => ({ useApiClient: () => apiClient }));
 vi.mock("sonner", () => ({ toast: { error: toastError, success: toastSuccess } }));
 vi.mock("@clerk/clerk-react", () => ({ useAuth: () => ({ getToken: vi.fn() }) }));
-const reloadMe = vi.hoisted(() => vi.fn());
 /** The caller's staff roles, as their /v1/auth/me record lists them. */
 const me = vi.hoisted(() => ({ eventRoles: [] as { event_id: string; role: string }[] }));
-vi.mock("@/hooks/useAuthMe", () => ({ useAuthMe: () => ({ reload: reloadMe, eventRoles: me.eventRoles }) }));
+vi.mock("@/hooks/useAuthMe", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/hooks/useAuthMe")>()),
+  useAuthMe: () => ({ eventRoles: me.eventRoles }),
+}));
 
 import CheckinForSection from "./CheckinForSection";
 import EventDetailsSection from "./EventDetailsSection";
@@ -39,6 +41,7 @@ import RunHistorySection from "./RunHistorySection";
 import StaffPortal from "./StaffPortal";
 import UploadForSection from "./UploadForSection";
 import { renderWithQueryClient } from "@/test/render";
+import type { QueryClient } from "@tanstack/react-query";
 
 const event = fx.event({ id: "ev-1", name: "Fall Fling", timezone: "America/Chicago" });
 const NOW = Date.now();
@@ -48,6 +51,15 @@ const live = (id: string) =>
     checkin_opens_at: NOW - 3_600_000, floor_trial_starts_at: NOW - 60_000, floor_trial_ends_at: NOW + 3_600_000,
     divisions: [{ id: "d-1", division_name: "Classic", is_priority: false, sort_order: 0, priority_run_limit: null }],
   });
+
+/**
+ * Puts the caller's /v1/auth/me record in the cache, as the nav bar would
+ * have, and returns whether it has since been invalidated.
+ */
+function seedMe(client: QueryClient): () => boolean {
+  client.setQueryData(["auth.me", "user_me"], fx.authMe({ id: "user_me" }));
+  return () => client.getQueryState(["auth.me", "user_me"])?.isInvalidated ?? false;
+}
 
 function inRouter(node: React.ReactNode) {
   return renderWithQueryClient(
@@ -61,7 +73,7 @@ function inRouter(node: React.ReactNode) {
 }
 
 beforeEach(() => {
-  for (const fn of [apiGet, apiPost, apiPatch, apiPut, apiDel, toastError, toastSuccess, reloadMe]) fn.mockReset();
+  for (const fn of [apiGet, apiPost, apiPatch, apiPut, apiDel, toastError, toastSuccess]) fn.mockReset();
   me.eventRoles = [];
   apiGet.mockResolvedValue([]);
 });
@@ -486,7 +498,7 @@ describe("EventDetailsSection", () => {
   it("toasts a failed save or delete", async () => {
     apiPatch.mockRejectedValue(new Error("bad tz"));
     apiDel.mockRejectedValue(new Error("not yours"));
-    inRouter(<EventDetailsSection event={event} onUpdated={vi.fn()} />);
+    const meInvalidated = seedMe(inRouter(<EventDetailsSection event={event} onUpdated={vi.fn()} />).queryClient);
     fireEvent.change(screen.getByLabelText("Timezone"), { target: { value: "Mars/Base" } });
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("bad tz"));
@@ -496,22 +508,25 @@ describe("EventDetailsSection", () => {
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("not yours"));
     expect(screen.queryByText("my events page")).toBeNull();
-    expect(reloadMe).not.toHaveBeenCalled();
+    expect(meInvalidated()).toBe(false);
   });
 
   it("refreshes the caller's record after a save and after a delete", async () => {
     apiPatch.mockResolvedValue({ ...event, name: "Fall Fling II" });
     apiDel.mockResolvedValue({ deleted: true });
-    inRouter(<EventDetailsSection event={event} onUpdated={vi.fn()} />);
+    const { queryClient } = inRouter(<EventDetailsSection event={event} onUpdated={vi.fn()} />);
+    let meInvalidated = seedMe(queryClient);
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Fall Fling II" } });
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith("Event updated"));
-    expect(reloadMe).toHaveBeenCalledTimes(1);
+    expect(meInvalidated()).toBe(true);
+
+    meInvalidated = seedMe(queryClient);
 
     fireEvent.click(screen.getByRole("button", { name: "Delete event" }));
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete" }));
     expect(await screen.findByText("my events page")).toBeInTheDocument();
-    expect(reloadMe).toHaveBeenCalledTimes(2);
+    expect(meInvalidated()).toBe(true);
   });
 });
 
@@ -538,19 +553,32 @@ describe("EventStaffSection", () => {
   it("toasts a failed revoke and keeps the row", async () => {
     apiGet.mockResolvedValue([fx.eventStaff({ user_id: "u2", role: "dj", email: "d@example.com" })]);
     apiDel.mockRejectedValue(new Error("Admin access required"));
-    inRouter(<EventStaffSection event={event} />);
+    const meInvalidated = seedMe(inRouter(<EventStaffSection event={event} />).queryClient);
     fireEvent.click(await screen.findByRole("button", { name: "Remove d@example.com as DJ" }));
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("Admin access required"));
     expect(screen.getByText("d@example.com")).toBeInTheDocument();
-    expect(reloadMe).not.toHaveBeenCalled();
+    expect(meInvalidated()).toBe(false);
   });
 
   it("refreshes the caller's record after a revoke, which may be their own", async () => {
     apiGet.mockResolvedValue([fx.eventStaff({ user_id: "u2", role: "dj", email: "d@example.com" })]);
     apiDel.mockResolvedValue({ deleted: true });
-    inRouter(<EventStaffSection event={event} />);
+    const meInvalidated = seedMe(inRouter(<EventStaffSection event={event} />).queryClient);
     fireEvent.click(await screen.findByRole("button", { name: "Remove d@example.com as DJ" }));
-    await waitFor(() => expect(reloadMe).toHaveBeenCalledOnce());
+    await waitFor(() => expect(meInvalidated()).toBe(true));
+  });
+
+  it("refreshes the caller's record after a grant, which may be their own", async () => {
+    apiGet.mockImplementation((p: string) =>
+      Promise.resolve(p.startsWith("/v1/events/ev-1/people?") ? [fx.eventPerson({ user_id: "user_x", display_name: "Xavier" })] : [])
+    );
+    apiPut.mockResolvedValue(fx.eventStaff({ user_id: "user_x", role: "coordinator", email: "x@example.com" }));
+    const meInvalidated = seedMe(inRouter(<EventStaffSection event={event} />).queryClient);
+    await pickPerson("Person", "xa", /^Xavier/);
+    fireEvent.click(screen.getByRole("radio", { name: "Coordinator" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to staff" }));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalled());
+    expect(meInvalidated()).toBe(true);
   });
 });
 

@@ -6,7 +6,6 @@ import { z } from "zod";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
 import QueryError from "@/components/QueryError";
-import { useAuthMe } from "@/hooks/useAuthMe";
 import PersonPicker from "@/components/staff/PersonPicker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,12 +43,15 @@ function personLabel(s: ApiEventStaff): string {
  * the event's own staff routes.
  */
 export default function EventStaffSection({ event }: { event: ApiEvent }) {
-  // A grant or revoke may be the caller's own, which changes their portals.
-  const { reload: reloadMe } = useAuthMe();
   const staffQuery = useEndpointQuery(endpoints.events.staff, { params: { id: event.id } });
   const staff = staffQuery.data ?? null;
-  const grantStaff = useEndpointMutation(endpoints.events.grantStaff, { invalidates: [endpoints.events.staff] });
-  const revokeStaff = useEndpointMutation(endpoints.events.revokeStaff, { invalidates: [endpoints.events.staff] });
+  // A grant or revoke may be the caller's own, which changes their portals.
+  const grantStaff = useEndpointMutation(endpoints.events.grantStaff, {
+    invalidates: [endpoints.events.staff, endpoints.auth.me],
+  });
+  const revokeStaff = useEndpointMutation(endpoints.events.revokeStaff, {
+    invalidates: [endpoints.events.staff, endpoints.auth.me],
+  });
   const {
     handleSubmit,
     reset,
@@ -71,7 +73,6 @@ export default function EventStaffSection({ event }: { event: ApiEvent }) {
       });
       toast.success(`${personLabel(row)} is now ${EVENT_ROLE_LABELS[row.role]}`);
       reset();
-      void reloadMe();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Grant failed");
     }
@@ -85,7 +86,6 @@ export default function EventStaffSection({ event }: { event: ApiEvent }) {
         params: { id: event.id, userId: s.user_id, role: s.role },
       });
       toast.success(`Removed ${personLabel(s)} as ${EVENT_ROLE_LABELS[s.role]}`);
-      void reloadMe();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Revoke failed");
     } finally {

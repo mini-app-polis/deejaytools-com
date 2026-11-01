@@ -55,6 +55,7 @@ vi.mock("sonner", () => ({
 import { toast } from "sonner";
 import MyProfilePage from "./MyProfilePage";
 import { renderWithQueryClient } from "@/test/render";
+import type { QueryClient } from "@tanstack/react-query";
 
 beforeEach(() => {
   apiGet.mockReset();
@@ -83,6 +84,15 @@ beforeEach(() => {
   vi.mocked(toast.success).mockReset();
   vi.mocked(toast.error).mockReset();
 });
+
+/**
+ * Puts the caller's /v1/auth/me record in the cache, as the nav bar would
+ * have, and returns whether it has since been invalidated.
+ */
+function seedMe(client: QueryClient): () => boolean {
+  client.setQueryData(["auth.me", "user_1"], meState.me);
+  return () => client.getQueryState(["auth.me", "user_1"])?.isInvalidated ?? false;
+}
 
 function renderPage() {
   return renderWithQueryClient(
@@ -115,7 +125,7 @@ describe("MyProfilePage", () => {
       updated_at: 3,
     });
     const user = userEvent.setup();
-    renderPage();
+    const meInvalidated = seedMe(renderPage().queryClient);
 
     await waitFor(() => {
       expect(screen.getByLabelText(/^first name$/i)).toHaveValue("Alice");
@@ -136,8 +146,8 @@ describe("MyProfilePage", () => {
         lastName: "Lovelace",
       });
     });
-    expect(reload).toHaveBeenCalled();
-    expect(toast.success).toHaveBeenCalledWith("Profile updated");
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Profile updated"));
+    expect(meInvalidated()).toBe(true);
   });
 
   it("shows a skeleton instead of the form while the profile is loading", () => {
@@ -198,13 +208,13 @@ describe("MyProfilePage", () => {
   it("toasts the API's message when the update fails", async () => {
     apiPatch.mockRejectedValue(new Error("Name too long"));
     const user = userEvent.setup();
-    renderPage();
+    const meInvalidated = seedMe(renderPage().queryClient);
     await waitFor(() => expect(screen.getByLabelText(/^first name$/i)).toHaveValue("Alice"));
 
     await user.click(screen.getByRole("button", { name: /save changes/i }));
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Name too long"));
-    expect(reload).not.toHaveBeenCalled();
+    expect(meInvalidated()).toBe(false);
     expect(toast.success).not.toHaveBeenCalled();
   });
 

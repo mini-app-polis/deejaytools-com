@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointMutation } from "@/api/queries";
-import { useAuthMe } from "@/hooks/useAuthMe";
 import { toastFirstError } from "@/lib/formErrors";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -52,15 +51,14 @@ export default function EventDetailsSection({
   onUpdated: (next: ApiEvent) => void;
 }) {
   const navigate = useNavigate();
-  // Event names and timezones show on the event and session lists too.
+  // Event names and timezones show on the event and session lists too, and
+  // the nav bar lists the caller's staff events by name, from their record.
   const updateEvent = useEndpointMutation(endpoints.events.update, {
-    invalidates: [endpoints.events.list, endpoints.sessions.list],
+    invalidates: [endpoints.events.list, endpoints.sessions.list, endpoints.auth.me],
   });
   const removeEvent = useEndpointMutation(endpoints.events.remove, {
-    invalidates: [endpoints.events.list, endpoints.sessions.list],
+    invalidates: [endpoints.events.list, endpoints.sessions.list, endpoints.auth.me],
   });
-  // The nav bar lists the caller's staff events by name, from their record.
-  const { reload: reloadMe } = useAuthMe();
   const {
     register,
     handleSubmit,
@@ -90,7 +88,6 @@ export default function EventDetailsSection({
       });
       onUpdated(updated);
       toast.success("Event updated");
-      void reloadMe();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save event");
     }
@@ -102,7 +99,6 @@ export default function EventDetailsSection({
     try {
       await removeEvent.mutateAsync({ params: { id: event.id } });
       toast.success("Event deleted");
-      void reloadMe();
       navigate("/my-events", { replace: true });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Delete failed");
