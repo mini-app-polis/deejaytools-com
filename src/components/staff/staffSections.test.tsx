@@ -101,21 +101,21 @@ describe("EventSessionsSection", () => {
 
     fireEvent.change(pmax, { target: { value: "-1" } });
     submitForm();
-    expect(toastError).toHaveBeenLastCalledWith("Active cap (priority) must be a non-negative number");
+    await waitFor(() => expect(toastError).toHaveBeenLastCalledWith("Active cap (priority) must be a non-negative number"));
 
     fireEvent.change(pmax, { target: { value: "2" } });
     fireEvent.change(npmax, { target: { value: "-1" } });
     submitForm();
-    expect(toastError).toHaveBeenLastCalledWith("Active cap (non-priority) must be a non-negative number");
+    await waitFor(() => expect(toastError).toHaveBeenLastCalledWith("Active cap (non-priority) must be a non-negative number"));
 
     fireEvent.change(npmax, { target: { value: "3" } });
     submitForm();
-    expect(toastError).toHaveBeenLastCalledWith("Non-priority cap must be ≤ priority cap");
+    await waitFor(() => expect(toastError).toHaveBeenLastCalledWith("Non-priority cap must be ≤ priority cap"));
 
     fireEvent.change(npmax, { target: { value: "1" } });
     fireEvent.change(runLimit, { target: { value: "-2" } });
     submitForm();
-    expect(toastError).toHaveBeenLastCalledWith("Priority run limit must be a non-negative number");
+    await waitFor(() => expect(toastError).toHaveBeenLastCalledWith("Priority run limit must be a non-negative number"));
     expect(apiPost).not.toHaveBeenCalled();
   });
 

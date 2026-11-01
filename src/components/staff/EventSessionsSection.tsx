@@ -1,4 +1,6 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
@@ -15,6 +17,8 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { compareSessionChrono } from "@/lib/chronoSort";
+import { toastFirstError } from "@/lib/formErrors";
+import { sessionFormSchema, type SessionForm } from "@/lib/sessionForm";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { epochToTimeInTz, toEpochInTz } from "@/lib/zonedTime";
 import { useDivisions } from "@/hooks/useDivisions";
@@ -54,15 +58,30 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [date, setDate] = useState(event.start_date);
-  const [startTime, setStartTime] = useState("07:00");
-  const [checkinOffsetMins, setCheckinOffsetMins] = useState("30");
-  const [durationMins, setDurationMins] = useState("120");
-  const [priorityMax, setPriorityMax] = useState("6");
-  const [nonPriorityMax, setNonPriorityMax] = useState("4");
-  const [priorityRunLimit, setPriorityRunLimit] = useState("1");
-  const [divisionPriority, setDivisionPriority] = useState<Record<string, boolean>>(noPriorityDivisions);
+  const newSessionForm = (): SessionForm => ({
+    date: event.start_date,
+    startTime: "07:00",
+    checkinOffsetMins: "30",
+    durationMins: "120",
+    priorityMax: "6",
+    nonPriorityMax: "4",
+    priorityRunLimit: "1",
+    divisionPriority: noPriorityDivisions(),
+  });
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { isSubmitting: submitting },
+  } = useForm<SessionForm>({
+    resolver: zodResolver(sessionFormSchema(divisionList.length > 0)),
+    defaultValues: newSessionForm(),
+  });
+  const date = watch("date");
+  const startTime = watch("startTime");
+  const divisionPriority = watch("divisionPriority");
   const [pendingDelete, setPendingDelete] = useState<ApiSession | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -73,30 +92,13 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
 
   const openCreate = () => {
     setEditId(null);
-    setDate(event.start_date);
-    setStartTime("07:00");
-    setCheckinOffsetMins("30");
-    setDurationMins("120");
-    setPriorityMax("6");
-    setNonPriorityMax("4");
-    setPriorityRunLimit("1");
-    setDivisionPriority(noPriorityDivisions());
+    reset(newSessionForm());
     setDialogOpen(true);
   };
 
   const openEdit = (s: ApiSession) => {
     const sTz = s.event_timezone ?? tz;
     setEditId(s.id);
-    setDate(s.date ?? event.start_date);
-    setStartTime(epochToTimeInTz(s.floor_trial_starts_at, sTz));
-    setCheckinOffsetMins(
-      String(Math.max(0, Math.round((s.floor_trial_starts_at - s.checkin_opens_at) / 60_000)))
-    );
-    setDurationMins(
-      String(Math.max(1, Math.round((s.floor_trial_ends_at - s.floor_trial_starts_at) / 60_000)))
-    );
-    setPriorityMax(String(s.active_priority_max ?? 6));
-    setNonPriorityMax(String(s.active_non_priority_max ?? 4));
     const flags = noPriorityDivisions();
     let runLimit = 1;
     for (const d of s.divisions ?? []) {
@@ -104,35 +106,25 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
       const limit = d.priority_run_limit ?? 0;
       if (d.is_priority && limit > 0) runLimit = limit;
     }
-    setDivisionPriority(flags);
-    setPriorityRunLimit(String(runLimit));
+    reset({
+      date: s.date ?? event.start_date,
+      startTime: epochToTimeInTz(s.floor_trial_starts_at, sTz),
+      checkinOffsetMins: String(Math.max(0, Math.round((s.floor_trial_starts_at - s.checkin_opens_at) / 60_000))),
+      durationMins: String(Math.max(1, Math.round((s.floor_trial_ends_at - s.floor_trial_starts_at) / 60_000))),
+      priorityMax: String(s.active_priority_max ?? 6),
+      nonPriorityMax: String(s.active_non_priority_max ?? 4),
+      priorityRunLimit: String(runLimit),
+      divisionPriority: flags,
+    });
     setDialogOpen(true);
   };
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!date) { toast.error("Date is required"); return; }
-    if (!startTime) { toast.error("Start time is required"); return; }
-    if (divisionList.length === 0) { toast.error("The division list has not loaded yet"); return; }
-    const pMax = Number(priorityMax);
-    const npMax = Number(nonPriorityMax);
-    if (Number.isNaN(pMax) || pMax < 0) {
-      toast.error("Active cap (priority) must be a non-negative number");
-      return;
-    }
-    if (Number.isNaN(npMax) || npMax < 0) {
-      toast.error("Active cap (non-priority) must be a non-negative number");
-      return;
-    }
-    if (npMax > pMax) {
-      toast.error("Non-priority cap must be ≤ priority cap");
-      return;
-    }
-    const runLimitNum = Number(priorityRunLimit);
-    if (Number.isNaN(runLimitNum) || runLimitNum < 0) {
-      toast.error("Priority run limit must be a non-negative number");
-      return;
-    }
+  // The schema has checked the fields, so the numbers parse and are in range.
+  const submit = async (v: SessionForm) => {
+    const { date, startTime, checkinOffsetMins, durationMins, divisionPriority } = v;
+    const pMax = Number(v.priorityMax);
+    const npMax = Number(v.nonPriorityMax);
+    const runLimitNum = Number(v.priorityRunLimit);
 
     const floorStartsAt = toEpochInTz(date, startTime, tz);
     const checkinOpensAt = floorStartsAt - Number(checkinOffsetMins) * 60_000;
@@ -160,7 +152,6 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
       active_non_priority_max: npMax,
     };
 
-    setSubmitting(true);
     try {
       if (editId) {
         try {
@@ -188,8 +179,6 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
       setEditId(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save session");
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -291,11 +280,10 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
             <DialogTitle>{editId ? "Edit session" : "New session"}</DialogTitle>
             <DialogDescription>{event.name}</DialogDescription>
           </DialogHeader>
-          <form onSubmit={submit} className="space-y-4">
+          <form onSubmit={(e) => void handleSubmit(submit, toastFirstError)(e)} className="space-y-4">
             <div>
               <label htmlFor="staff-sess-date" className={FIELD_LABEL_CLASS}>Date</label>
-              <input id="staff-sess-date" type="date" className={FIELD_INPUT_CLASS} value={date}
-                onChange={(e) => setDate(e.target.value)} required />
+              <input id="staff-sess-date" type="date" className={FIELD_INPUT_CLASS} {...register("date")} required />
             </div>
             <div>
               <label htmlFor="staff-sess-start" className={FIELD_LABEL_CLASS}>
@@ -304,14 +292,12 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
                   ({formatTimezoneAbbr(tz, date && startTime ? toEpochInTz(date, startTime, tz) : undefined)})
                 </span>
               </label>
-              <input id="staff-sess-start" type="time" className={FIELD_INPUT_CLASS} value={startTime}
-                onChange={(e) => setStartTime(e.target.value)} required />
+              <input id="staff-sess-start" type="time" className={FIELD_INPUT_CLASS} {...register("startTime")} required />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label htmlFor="staff-sess-checkin" className={FIELD_LABEL_CLASS}>Check-in opens</label>
-                <select id="staff-sess-checkin" className={FIELD_INPUT_CLASS} value={checkinOffsetMins}
-                  onChange={(e) => setCheckinOffsetMins(e.target.value)}>
+                <select id="staff-sess-checkin" className={FIELD_INPUT_CLASS} {...register("checkinOffsetMins")}>
                   <option value="0">Same as start</option>
                   <option value="15">15 min before</option>
                   <option value="30">30 min before</option>
@@ -323,8 +309,7 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
               </div>
               <div>
                 <label htmlFor="staff-sess-duration" className={FIELD_LABEL_CLASS}>Floor trial duration</label>
-                <select id="staff-sess-duration" className={FIELD_INPUT_CLASS} value={durationMins}
-                  onChange={(e) => setDurationMins(e.target.value)}>
+                <select id="staff-sess-duration" className={FIELD_INPUT_CLASS} {...register("durationMins")}>
                   {[60, 90, 120, 150, 180, 210, 240, 270, 300].map((m) => (
                     <option key={m} value={String(m)}>{m % 60 === 0 ? `${m / 60} hour${m === 60 ? "" : "s"}` : `${m / 60} hours`}</option>
                   ))}
@@ -334,19 +319,16 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label htmlFor="staff-sess-pmax" className={FIELD_LABEL_CLASS}>Active cap (priority)</label>
-                <input id="staff-sess-pmax" type="number" min={0} className={FIELD_INPUT_CLASS} value={priorityMax}
-                  onChange={(e) => setPriorityMax(e.target.value)} />
+                <input id="staff-sess-pmax" type="number" min={0} className={FIELD_INPUT_CLASS} {...register("priorityMax")} />
               </div>
               <div>
                 <label htmlFor="staff-sess-npmax" className={FIELD_LABEL_CLASS}>Active cap (non-priority)</label>
-                <input id="staff-sess-npmax" type="number" min={0} className={FIELD_INPUT_CLASS} value={nonPriorityMax}
-                  onChange={(e) => setNonPriorityMax(e.target.value)} />
+                <input id="staff-sess-npmax" type="number" min={0} className={FIELD_INPUT_CLASS} {...register("nonPriorityMax")} />
               </div>
             </div>
             <div>
               <label htmlFor="staff-sess-runlimit" className={FIELD_LABEL_CLASS}>Priority run limit</label>
-              <input id="staff-sess-runlimit" type="number" min={0} className={FIELD_INPUT_CLASS} value={priorityRunLimit}
-                onChange={(e) => setPriorityRunLimit(e.target.value)} />
+              <input id="staff-sess-runlimit" type="number" min={0} className={FIELD_INPUT_CLASS} {...register("priorityRunLimit")} />
               <p className="text-xs text-muted-foreground mt-1">
                 Number of runs that count as priority for each priority division.
               </p>
@@ -359,7 +341,7 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
                     <input
                       type="checkbox"
                       checked={divisionPriority[d] ?? false}
-                      onChange={() => setDivisionPriority((prev) => ({ ...prev, [d]: !prev[d] }))}
+                      onChange={() => setValue("divisionPriority", { ...divisionPriority, [d]: !divisionPriority[d] })}
                     />
                     <span>{d}</span>
                     {divisionPriority[d] && <span className="text-xs text-primary font-medium">priority</span>}

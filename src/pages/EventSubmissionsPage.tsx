@@ -1,8 +1,11 @@
 import type { ApiEvent, ApiListedEventSongSubmission } from "@/schemas";
-import { ROUND_SPLIT_DIVISION, isOpenEvent, type SubmissionRound } from "@/schemas";
+import { ROUND_SPLIT_DIVISION, SUBMISSION_ROUNDS, isOpenEvent, type SubmissionRound } from "@/schemas";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
+import { z } from "zod";
 import { useDivisions } from "@/hooks/useDivisions";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
@@ -173,6 +176,16 @@ function EventPicker() {
   );
 }
 
+// Submit stays disabled until a song and a division are picked, so a refused
+// submit has nothing to say.
+const submissionSchema = z.object({
+  songId: z.string().min(1),
+  division: z.string().refine((d) => d.trim() !== ""),
+  round: z.enum(SUBMISSION_ROUNDS),
+});
+type SubmissionForm = z.infer<typeof submissionSchema>;
+const EMPTY_SUBMISSION: SubmissionForm = { songId: "", division: "", round: "prelims_and_finals" };
+
 function EventSubmissionForm({ eventId }: { eventId: string }) {
   const { divisions, error: divisionsError, retry: retryDivisions } = useDivisions();
   const eventsQuery = useEndpointQuery(endpoints.events.list);
@@ -195,10 +208,17 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
   const retrySubmissions = () => void submissionsQuery.refetch();
   const [busySongId, setBusySongId] = useState<string | null>(null);
 
-  const [selectedSongId, setSelectedSongId] = useState("");
-  const [division, setDivision] = useState("");
-  const [round, setRound] = useState<SubmissionRound>("prelims_and_finals");
-  const [submitting, setSubmitting] = useState(false);
+  const {
+    handleSubmit: validate,
+    reset,
+    setValue,
+    watch,
+    formState: { isSubmitting: submitting },
+  } = useForm<SubmissionForm>({ resolver: zodResolver(submissionSchema), defaultValues: EMPTY_SUBMISSION });
+  const selectedSongId = watch("songId");
+  const division = watch("division");
+  const round = watch("round");
+  const setRound = (r: SubmissionRound) => setValue("round", r);
 
   const submissionReads = [endpoints.eventSongSubmissions.list, endpoints.events.songSubmissions];
   const createSubmission = useEndpointMutation(endpoints.eventSongSubmissions.create, {
@@ -229,11 +249,11 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
   const showRoundField = roundsAllowed && division === ROUND_SPLIT_DIVISION;
 
   const handleSongChange = (songId: string) => {
-    setSelectedSongId(songId);
+    setValue("songId", songId);
     const song = songs.find((s) => s.id === songId);
     // A new song is a fresh entry: re-derive the division from it and drop any
     // override, rather than silently carrying the previous song's division.
-    setDivision(song?.division?.trim() ?? "");
+    setValue("division", song?.division?.trim() ?? "");
     // Round belongs to the division that was showing when it was chosen. Left
     // alone, a Finals Only pick survives a hop through a non-Classic song and
     // is posted for the next Classic song without ever being displayed.
@@ -241,34 +261,25 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
   };
 
   const handleDivisionChange = (value: string) => {
-    setDivision(value);
+    setValue("division", value);
     setRound("prelims_and_finals");
   };
 
-  const resetForm = () => {
-    setSelectedSongId("");
-    setDivision("");
-    setRound("prelims_and_finals");
-  };
-
-  const handleSubmit = async () => {
-    if (!event || !selectedSongId || !division.trim()) return;
-    setSubmitting(true);
+  const submit = async ({ songId, division, round }: SubmissionForm) => {
+    if (!event) return;
     try {
       await createSubmission.mutateAsync({
         body: {
           event_id: event.id,
-          song_id: selectedSongId,
+          song_id: songId,
           division,
           ...(showRoundField ? { round } : {}),
         },
       });
-      resetForm();
+      reset(EMPTY_SUBMISSION);
       toast.success(`Song added to ${event.name}.`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to add song.");
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -435,7 +446,7 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
                 </div>
               )}
 
-              <Button type="button" disabled={!canSubmit} onClick={() => void handleSubmit()}>
+              <Button type="button" disabled={!canSubmit} onClick={() => void validate(submit)()}>
                 {submitting ? "Submitting…" : "Submit"}
               </Button>
             </div>

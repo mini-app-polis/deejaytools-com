@@ -145,7 +145,7 @@ describe("SongUploadForm — checks before uploading", () => {
     renderForm();
     await screen.findByLabelText(/audio file/i);
     submit();
-    expect(toast.error).toHaveBeenCalledWith("Please select an audio file.");
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Please select an audio file."));
     expect(uploadSongInChunks).not.toHaveBeenCalled();
   });
 
@@ -155,8 +155,8 @@ describe("SongUploadForm — checks before uploading", () => {
     chooseFile(audioFile(MAX_FILE_BYTES + 1));
     chooseDivision("Classic");
     submit();
-    expect(toast.error).toHaveBeenCalledWith(
-      "That file is too large. Please choose an audio file under 100 MB."
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith("That file is too large. Please choose an audio file under 100 MB.")
     );
     expect(uploadSongInChunks).not.toHaveBeenCalled();
   });
@@ -166,7 +166,7 @@ describe("SongUploadForm — checks before uploading", () => {
     await screen.findByLabelText(/audio file/i);
     chooseFile(audioFile());
     submit();
-    expect(toast.error).toHaveBeenCalledWith("Please select a division.");
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Please select a division."));
     expect(uploadSongInChunks).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,9 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useMemo, useState } from "react";
+import { useForm, type FieldErrors } from "react-hook-form";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
+import { z } from "zod";
 import { SignedIn, SignedOut, SignInButton, useAuth, useUser } from "@clerk/clerk-react";
 import type { ApiLeadingPair, ApiQueueEntry } from "@/schemas";
 import { endpoints } from "@/api/endpoints";
@@ -11,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toastFirstError } from "@/lib/formErrors";
 import { formatDateTimeShort } from "@/lib/sessionFormat";
 import { songLabel } from "@/lib/songLabel";
 
@@ -27,6 +31,14 @@ const NO_ROWS: readonly never[] = [];
 /** The longest the check-in clock goes without a tick. */
 const CLOCK_MAX_WAIT_MS = 60_000;
 
+const checkinSchema = z.object({
+  songId: z.string().min(1, "Pick a song"),
+  division: z.string().min(1, "Pick a division"),
+  notes: z.string(),
+});
+type CheckinForm = z.infer<typeof checkinSchema>;
+const EMPTY_CHECKIN: CheckinForm = { songId: "", division: "", notes: "" };
+
 export default function ApiSessionPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useUser();
@@ -34,10 +46,16 @@ export default function ApiSessionPage() {
   const [checkinOpen, setCheckinOpen] = useState(false);
 
   // Check-in form — song-first
-  const [fSongId, setFSongId] = useState("");
-  const [fDivision, setFDivision] = useState("");
-  const [fNotes, setFNotes] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { isSubmitting: submitting },
+  } = useForm<CheckinForm>({ resolver: zodResolver(checkinSchema), defaultValues: EMPTY_CHECKIN });
+  const fSongId = watch("songId");
+  const fDivision = watch("division");
 
   const [now, setNow] = useState(Date.now());
 
@@ -166,12 +184,12 @@ export default function ApiSessionPage() {
     if (!selectedSong) return;
     const songDiv = selectedSong.division ?? "";
     if (songDiv && sessionDivisions.includes(songDiv)) {
-      setFDivision(songDiv);
+      setValue("division", songDiv);
     } else if (songDiv) {
       // Song division not in this session — clear so user must pick
-      setFDivision("");
+      setValue("division", "");
     }
-  }, [selectedSong, sessionDivisions]);
+  }, [selectedSong, sessionDivisions, setValue]);
 
 
   const pairMap = useMemo(() => {
@@ -305,27 +323,19 @@ export default function ApiSessionPage() {
     checkinSongs.length > 0;
 
   const openCheckin = () => {
-    setFSongId("");
-    setFDivision("");
-    setFNotes("");
+    reset(EMPTY_CHECKIN);
     setCheckinOpen(true);
   };
 
   const closeCheckin = () => setCheckinOpen(false);
 
-  const submitCheckin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!id || !user?.id) return;
+  // Without a session id or a signed-in dancer the form says nothing.
+  const refuseCheckin = (errors: FieldErrors<CheckinForm>) => {
+    if (id && user?.id) toastFirstError(errors);
+  };
 
-    if (!fSongId) {
-      toast.error("Pick a song");
-      return;
-    }
-    if (!fDivision) {
-      toast.error("Pick a division");
-      return;
-    }
-    setSubmitting(true);
+  const submitCheckin = async ({ songId, division, notes }: CheckinForm) => {
+    if (!id || !user?.id) return;
     try {
       // If the song has a partner but no pair row exists yet, create it transparently
       let pairId: string | null = derivedPair?.id ?? null;
@@ -339,13 +349,13 @@ export default function ApiSessionPage() {
       // Exactly one entity field must be non-null or createCheckinBodySchema rejects the request.
       await createCheckin.mutateAsync({ body: {
         sessionId: id,
-        divisionName: fDivision,
+        divisionName: division,
         entityPairId: !isManaged ? pairId : null,
         entityManagedPartnershipId: isManaged
           ? selectedSong!.managed_partnership_id
           : null,
-        songId: fSongId,
-        notes: fNotes.trim() || undefined,
+        songId,
+        notes: notes.trim() || undefined,
       } });
       toast.success("Checked in");
       setCheckinOpen(false);
@@ -356,8 +366,6 @@ export default function ApiSessionPage() {
       } else {
         toast.error(msg);
       }
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -624,7 +632,7 @@ export default function ApiSessionPage() {
               </Button>
             </div>
 
-            <form onSubmit={submitCheckin} className="space-y-4">
+            <form onSubmit={(e) => void handleSubmit(submitCheckin, refuseCheckin)(e)} className="space-y-4">
               {/* Song — drives everything else */}
               {noEventSongs ? (
                 <p className="text-sm text-muted-foreground">
@@ -650,7 +658,7 @@ export default function ApiSessionPage() {
                       label: songLabel(s),
                     }))}
                     value={fSongId}
-                    onChange={setFSongId}
+                    onChange={(v) => setValue("songId", v)}
                   />
                 </div>
               )}
@@ -701,7 +709,7 @@ export default function ApiSessionPage() {
                   ariaLabel="Division"
                   options={sessionDivisions.map((d) => ({ value: d, label: d }))}
                   value={fDivision}
-                  onChange={setFDivision}
+                  onChange={(v) => setValue("division", v)}
                 />
                 {selectedSong?.division && !divisionInSession && (
                   <p className="text-xs text-amber-600 mt-1">
@@ -718,8 +726,7 @@ export default function ApiSessionPage() {
                   id="checkin-notes"
                   className={FIELD_INPUT_CLASS}
                   rows={2}
-                  value={fNotes}
-                  onChange={(e) => setFNotes(e.target.value)}
+                  {...register("notes")}
                   placeholder="Any special instructions for the deejay"
                 />
               </div>

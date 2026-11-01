@@ -1,11 +1,15 @@
-import { useMemo, useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMemo } from "react";
+import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { z } from "zod";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
 import QueryError from "@/components/QueryError";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChoiceGroup } from "@/components/ui/choice-group";
+import { toastFirstError } from "@/lib/formErrors";
 import { formatSessionTitle } from "@/lib/sessionFormat";
 import type { ApiEvent } from "@/schemas";
 
@@ -13,6 +17,13 @@ const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
 
 // A stable empty list while a query has no data, so memos over it hold.
 const NO_ROWS: readonly never[] = [];
+
+const checkinForSchema = z.object({
+  sessionId: z.string().min(1, "Select a session"),
+  submissionId: z.string().min(1, "Select a song"),
+  division: z.string().min(1, "Select a division"),
+});
+type CheckinForForm = z.infer<typeof checkinForSchema>;
 
 /**
  * Check a dancer in to one of the event's open sessions, on their behalf:
@@ -28,10 +39,19 @@ export default function CheckinForSection({ event }: { event: ApiEvent }) {
   const submissionsQuery = useEndpointQuery(endpoints.events.songSubmissions, { params: { id: event.id } });
   const sessions = sessionsQuery.data ?? NO_ROWS;
   const submissions = submissionsQuery.data ?? NO_ROWS;
-  const [sessionId, setSessionId] = useState("");
-  const [submissionId, setSubmissionId] = useState("");
-  const [division, setDivision] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const {
+    handleSubmit,
+    setValue,
+    watch,
+    formState: { isSubmitting: submitting },
+  } = useForm<CheckinForForm>({
+    resolver: zodResolver(checkinForSchema),
+    defaultValues: { sessionId: "", submissionId: "", division: "" },
+  });
+  const sessionId = watch("sessionId");
+  const submissionId = watch("submissionId");
+  const division = watch("division");
+  const setDivision = (d: string) => setValue("division", d);
   const createCheckin = useEndpointMutation(endpoints.checkins.create, {
     invalidates: [endpoints.queue.activeStaff, endpoints.queue.priority, endpoints.queue.nonPriority],
   });
@@ -45,28 +65,22 @@ export default function CheckinForSection({ event }: { event: ApiEvent }) {
   const submission = submissions.find((s) => s.id === submissionId) ?? null;
 
   const pickSong = (id: string) => {
-    setSubmissionId(id);
+    setValue("submissionId", id);
     const d = submissions.find((s) => s.id === id)?.division ?? "";
     setDivision(sessionDivisions.includes(d) ? d : "");
   };
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!sessionId) { toast.error("Select a session"); return; }
+  const submit = async ({ sessionId, division }: CheckinForForm) => {
     if (!submission) { toast.error("Select a song"); return; }
-    if (!division) { toast.error("Select a division"); return; }
-    setSubmitting(true);
     try {
       await createCheckin.mutateAsync({
         body: { sessionId, songId: submission.song_id, divisionName: division, on_behalf_of_user_id: submission.owner_user_id },
       });
       toast.success(`Checked in ${submission.partnership_label}`);
-      setSubmissionId("");
-      setDivision("");
+      setValue("submissionId", "");
+      setValue("division", "");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Check-in failed");
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -76,7 +90,7 @@ export default function CheckinForSection({ event }: { event: ApiEvent }) {
         <CardTitle>Check in for a dancer</CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={(e) => void submit(e)} className="space-y-4 max-w-lg">
+        <form onSubmit={(e) => void handleSubmit(submit, toastFirstError)(e)} className="space-y-4 max-w-lg">
           <div>
             <span className={FIELD_LABEL_CLASS}>Session</span>
             {sessionsQuery.error && !sessionsQuery.data ? (
@@ -92,7 +106,7 @@ export default function CheckinForSection({ event }: { event: ApiEvent }) {
                 }))}
                 value={sessionId}
                 onChange={(id) => {
-                  setSessionId(id);
+                  setValue("sessionId", id);
                   setDivision("");
                 }}
               />

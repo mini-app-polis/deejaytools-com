@@ -1,7 +1,10 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
 import { keepPreviousData } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
+import { z } from "zod";
 import { type ApiEvent, type ApiSession } from "@/schemas";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
@@ -9,6 +12,8 @@ import QueryError from "@/components/QueryError";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import { useDivisions } from "@/hooks/useDivisions";
 import { CLICKABLE_ROW_CLASS, ROW_LINK_CLASS } from "@/lib/clickable";
+import { toastFirstError } from "@/lib/formErrors";
+import { adminSessionFormSchema, type AdminSessionForm } from "@/lib/sessionForm";
 import { seasonYearFromDateString } from "@/lib/seasonYear";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -101,6 +106,62 @@ const FIELD_INPUT_CLASS =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
 const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
 
+// ─── Forms ────────────────────────────────────────────────────────────────────
+
+/** The event dialog, checked in the order it reads; only the first problem is reported. */
+const eventFormSchema = z
+  .object({
+    name: z.string(),
+    startDate: z.string(),
+    endDate: z.string(),
+    seasonYear: z.string(),
+    timezone: z.string(),
+  })
+  .superRefine((v, ctx) => {
+    const fail = (path: string, message: string) => ctx.addIssue({ code: "custom", path: [path], message });
+    if (!v.name.trim()) return fail("name", "Name is required");
+    if (!v.startDate) return fail("startDate", "Start date is required");
+    if (!v.endDate) return fail("endDate", "End date is required");
+    if (v.endDate < v.startDate) return fail("endDate", "End date must be on or after start date");
+    const season = v.seasonYear.trim();
+    if (season && !/^\d{4}$/.test(season)) fail("seasonYear", "Season year must be four digits");
+  });
+type EventForm = z.infer<typeof eventFormSchema>;
+/** A test check-in: checked in the order the form reads; only the first problem is reported. */
+const testCheckinSchema = z
+  .object({
+    sessionId: z.string(),
+    division: z.string(),
+    leaderFirst: z.string(),
+    leaderLast: z.string(),
+    followerFirst: z.string(),
+    followerLast: z.string(),
+  })
+  .superRefine((v, ctx) => {
+    const fail = (path: string, message: string) => ctx.addIssue({ code: "custom", path: [path], message });
+    if (!v.sessionId) return fail("sessionId", "Select a session");
+    if (!v.division) return fail("division", "Select a division");
+    if (!v.leaderFirst.trim() || !v.leaderLast.trim()) {
+      return fail("leaderFirst", "Leader first and last name are required");
+    }
+    if (!v.followerFirst.trim() || !v.followerLast.trim()) {
+      fail("followerFirst", "Follower first and last name are required");
+    }
+  });
+type TestCheckinForm = z.infer<typeof testCheckinSchema>;
+
+/** Made-up dancers for the next test check-in, with fresh last names. */
+function testDancers() {
+  return {
+    leaderFirst: "Leader",
+    leaderLast: randomFourDigitTag(),
+    followerFirst: "Follower",
+    followerLast: randomFourDigitTag(),
+  };
+}
+
+const EMPTY_EVENT: EventForm = { name: "", startDate: "", endDate: "", seasonYear: "", timezone: "America/Chicago" };
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 /**
@@ -145,14 +206,18 @@ export default function AdminPage() {
 
   // ── Events tab ──────────────────────────────────────────────────────────────
   const [evDialogOpen, setEvDialogOpen] = useState(false);
-  const [evSubmitting, setEvSubmitting] = useState(false);
-  const [evName, setEvName] = useState("");
-  const [evStartDate, setEvStartDate] = useState("");
-  const [evEndDate, setEvEndDate] = useState("");
-  const [evSeasonYear, setEvSeasonYear] = useState("");
+  const {
+    register: evRegister,
+    handleSubmit: evValidate,
+    reset: evReset,
+    getValues: evGetValues,
+    setValue: evSetValue,
+    watch: evWatch,
+    formState: { isSubmitting: evSubmitting },
+  } = useForm<EventForm>({ resolver: zodResolver(eventFormSchema), defaultValues: EMPTY_EVENT });
+  const evStartDate = evWatch("startDate");
   /** True once the admin has typed in the season year field — blocks auto-suggest. */
   const [evSeasonTouched, setEvSeasonTouched] = useState(false);
-  const [evTimezone, setEvTimezone] = useState("America/Chicago");
   /**
    * When set, the Event dialog is in edit mode: submitting calls PATCH on
    * this id instead of POST. Cleared when the dialog closes.
@@ -162,10 +227,31 @@ export default function AdminPage() {
 
   // ── Sessions tab ────────────────────────────────────────────────────────────
   const [sessDialogOpen, setSessDialogOpen] = useState(false);
-  const [sessSubmitting, setSessSubmitting] = useState(false);
-  const [sessEventId, setSessEventId] = useState("");
-  const [sessDate, setSessDate] = useState("");
-  const [sessStartTime, setSessStartTime] = useState("07:00");
+  const {
+    register: sessRegister,
+    handleSubmit: sessValidate,
+    reset: sessReset,
+    setValue: sessSetValue,
+    watch: sessWatch,
+    formState: { isSubmitting: sessSubmitting },
+  } = useForm<AdminSessionForm>({
+    resolver: zodResolver(adminSessionFormSchema(divisionOptions.length > 0)),
+    defaultValues: {
+      eventId: "",
+      date: "",
+      startTime: "07:00",
+      checkinOffsetMins: "30",
+      durationMins: "120",
+      priorityMax: "6",
+      nonPriorityMax: "4",
+      priorityRunLimit: "1",
+      divisionPriority: {},
+    },
+  });
+  const sessEventId = sessWatch("eventId");
+  const sessDate = sessWatch("date");
+  const sessStartTime = sessWatch("startTime");
+  const sessDivisionPriority = sessWatch("divisionPriority");
   /** When set, the Session dialog is in edit mode (PATCH/PUT instead of POST). */
   const [sessEditId, setSessEditId] = useState<string | null>(null);
   /** Tracks the row currently mid-delete so its button can disable + show "Deleting…". */
@@ -173,15 +259,6 @@ export default function AdminPage() {
   /** Delete-confirmation dialog state — one per destructive action type. */
   const [pendingDeleteEventId, setPendingDeleteEventId] = useState<string | null>(null);
   const [pendingDeleteSession, setPendingDeleteSession] = useState<ApiSession | null>(null);
-  /** Minutes before start that check-in opens. 0 = same moment as start. */
-  const [sessCheckinOffsetMins, setSessCheckinOffsetMins] = useState("30");
-  /** Floor trial duration in minutes. */
-  const [sessDurationMins, setSessDurationMins] = useState("120");
-  const [sessPriorityMax, setSessPriorityMax] = useState("6");
-  const [sessNonPriorityMax, setSessNonPriorityMax] = useState("4");
-  const [sessPriorityRunLimit, setSessPriorityRunLimit] = useState("1");
-  // Per-division priority flags — all divisions always present, admin picks which are priority
-  const [sessDivisionPriority, setSessDivisionPriority] = useState<Record<string, boolean>>({});
   const [showSessionsCompleted, setShowSessionsCompleted] = useState(false);
   const [showSessionsCancelled, setShowSessionsCancelled] = useState(false);
 
@@ -214,17 +291,25 @@ export default function AdminPage() {
   const [adminSongsDivision, setAdminSongsDivision] = useState<string>("all");
 
   // ── Test Checkin tab ──────────────────────────────────────────────────────
-  const [tcSessionId, setTcSessionId] = useState("");
-  const [tcDivision, setTcDivision] = useState<string>("");
+  const [tcInitialDancers] = useState(testDancers);
+  const {
+    register: tcRegister,
+    handleSubmit: tcValidate,
+    getValues: tcGetValues,
+    reset: tcReset,
+    setValue: tcSetValue,
+    watch: tcWatch,
+    formState: { isSubmitting: tcSubmitting },
+  } = useForm<TestCheckinForm>({
+    resolver: zodResolver(testCheckinSchema),
+    defaultValues: { sessionId: "", division: "", ...tcInitialDancers },
+  });
+  const tcSessionId = tcWatch("sessionId");
+  const tcDivision = tcWatch("division");
   // A random division once the list loads, so each test checkin differs.
   useEffect(() => {
-    if (tcDivision === "" && divisionOptions.length > 0) setTcDivision(randomDivision(divisionOptions));
-  }, [tcDivision, divisionOptions]);
-  const [tcLeaderFirst, setTcLeaderFirst] = useState("Leader");
-  const [tcLeaderLast, setTcLeaderLast] = useState(() => randomFourDigitTag());
-  const [tcFollowerFirst, setTcFollowerFirst] = useState("Follower");
-  const [tcFollowerLast, setTcFollowerLast] = useState(() => randomFourDigitTag());
-  const [tcSubmitting, setTcSubmitting] = useState(false);
+    if (tcDivision === "" && divisionOptions.length > 0) tcSetValue("division", randomDivision(divisionOptions));
+  }, [tcDivision, divisionOptions, tcSetValue]);
   const [tcDeleting, setTcDeleting] = useState(false);
   const [pendingDeleteAllTestCheckins, setPendingDeleteAllTestCheckins] = useState(false);
 
@@ -455,38 +540,30 @@ export default function AdminPage() {
 
   const openEvDialog = () => {
     setEvEditId(null);
-    setEvName("");
-    setEvStartDate("");
-    setEvEndDate("");
-    setEvSeasonYear("");
+    evReset(EMPTY_EVENT);
     setEvSeasonTouched(false);
-    setEvTimezone("America/Chicago");
     setEvDialogOpen(true);
   };
 
   const openEvEditDialog = (ev: ApiEvent) => {
     setEvEditId(ev.id);
-    setEvName(ev.name);
-    setEvStartDate(ev.start_date);
-    setEvEndDate(ev.end_date);
-    setEvSeasonYear(ev.season_year);
+    evReset({
+      name: ev.name,
+      startDate: ev.start_date,
+      endDate: ev.end_date,
+      seasonYear: ev.season_year,
+      timezone: ev.timezone,
+    });
     setEvSeasonTouched(true);
-    setEvTimezone(ev.timezone);
     setEvDialogOpen(true);
   };
 
-  const submitEventDialog = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!evName.trim()) { toast.error("Name is required"); return; }
-    if (!evStartDate) { toast.error("Start date is required"); return; }
-    if (!evEndDate) { toast.error("End date is required"); return; }
-    if (evEndDate < evStartDate) { toast.error("End date must be on or after start date"); return; }
-    const trimmedSeason = evSeasonYear.trim();
-    if (trimmedSeason && !/^\d{4}$/.test(trimmedSeason)) {
-      toast.error("Season year must be four digits");
-      return;
-    }
-    setEvSubmitting(true);
+  const submitEventDialog = async (v: EventForm) => {
+    const evName = v.name;
+    const evStartDate = v.startDate;
+    const evEndDate = v.endDate;
+    const evTimezone = v.timezone;
+    const trimmedSeason = v.seasonYear.trim();
     try {
       if (evEditId) {
         // Edit mode — PATCH the existing event; the lists refetch.
@@ -512,16 +589,10 @@ export default function AdminPage() {
       }
       setEvDialogOpen(false);
       setEvEditId(null);
-      setEvName("");
-      setEvStartDate("");
-      setEvEndDate("");
-      setEvSeasonYear("");
+      evReset(EMPTY_EVENT);
       setEvSeasonTouched(false);
-      setEvTimezone("America/Chicago");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save event");
-    } finally {
-      setEvSubmitting(false);
     }
   };
 
@@ -529,15 +600,19 @@ export default function AdminPage() {
 
   const resetSessForm = () => {
     const defaultEvent = events?.[0];
-    setSessEventId(defaultEvent?.id ?? "");
-    setSessDate(defaultEvent?.start_date ?? "");
-    setSessStartTime("07:00");
-    setSessCheckinOffsetMins("30");
-    setSessDurationMins("120");
-    setSessPriorityMax("6");
-    setSessNonPriorityMax("4");
-    setSessPriorityRunLimit("1");
-    setSessDivisionPriority({});
+    // Check-in opens 30 minutes before the floor trial, which runs 2 hours.
+    sessReset({
+      eventId: defaultEvent?.id ?? "",
+      date: defaultEvent?.start_date ?? "",
+      startTime: "07:00",
+      checkinOffsetMins: "30",
+      durationMins: "120",
+      priorityMax: "6",
+      nonPriorityMax: "4",
+      priorityRunLimit: "1",
+      // Per-division priority flags — all divisions always present, admin picks which are priority
+      divisionPriority: {},
+    });
   };
 
   const openSessDialog = () => {
@@ -559,17 +634,6 @@ export default function AdminPage() {
       Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     setSessEditId(s.id);
-    setSessEventId(s.event_id ?? "");
-    setSessDate(s.date ?? "");
-    setSessStartTime(epochToTimeInTz(s.floor_trial_starts_at, tz));
-    setSessCheckinOffsetMins(
-      String(Math.max(0, Math.round((s.floor_trial_starts_at - s.checkin_opens_at) / 60_000)))
-    );
-    setSessDurationMins(
-      String(Math.max(1, Math.round((s.floor_trial_ends_at - s.floor_trial_starts_at) / 60_000)))
-    );
-    setSessPriorityMax(String(s.active_priority_max ?? 6));
-    setSessNonPriorityMax(String(s.active_non_priority_max ?? 4));
 
     // Per-division priority flags + the (single, shared) priority run limit.
     const flags: Record<string, boolean> = {};
@@ -583,8 +647,17 @@ export default function AdminPage() {
         runLimit = limit;
       }
     }
-    setSessDivisionPriority(flags);
-    setSessPriorityRunLimit(String(runLimit));
+    sessReset({
+      eventId: s.event_id ?? "",
+      date: s.date ?? "",
+      startTime: epochToTimeInTz(s.floor_trial_starts_at, tz),
+      checkinOffsetMins: String(Math.max(0, Math.round((s.floor_trial_starts_at - s.checkin_opens_at) / 60_000))),
+      durationMins: String(Math.max(1, Math.round((s.floor_trial_ends_at - s.floor_trial_starts_at) / 60_000))),
+      priorityMax: String(s.active_priority_max ?? 6),
+      nonPriorityMax: String(s.active_non_priority_max ?? 4),
+      priorityRunLimit: String(runLimit),
+      divisionPriority: flags,
+    });
 
     setSessDialogOpen(true);
   };
@@ -609,30 +682,15 @@ export default function AdminPage() {
   };
 
   const toggleDivisionPriority = (name: string) => {
-    setSessDivisionPriority((prev) => ({ ...prev, [name]: !prev[name] }));
+    sessSetValue("divisionPriority", { ...sessDivisionPriority, [name]: !sessDivisionPriority[name] });
   };
 
-  const submitSessionDialog = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!sessEventId) { toast.error("Select an event"); return; }
-    if (!sessDate) { toast.error("Date is required"); return; }
-    if (!sessStartTime) { toast.error("Start time is required"); return; }
-    if (divisionOptions.length === 0) { toast.error("The division list has not loaded yet"); return; }
-
-    const priorityMaxNum = Number(sessPriorityMax);
-    const nonPriorityMaxNum = Number(sessNonPriorityMax);
-    if (Number.isNaN(priorityMaxNum) || priorityMaxNum < 0) {
-      toast.error("Active cap (priority) must be a non-negative number");
-      return;
-    }
-    if (Number.isNaN(nonPriorityMaxNum) || nonPriorityMaxNum < 0) {
-      toast.error("Active cap (non-priority) must be a non-negative number");
-      return;
-    }
-    if (nonPriorityMaxNum > priorityMaxNum) {
-      toast.error("Non-priority cap must be ≤ priority cap");
-      return;
-    }
+  // The schema has checked the fields, so the numbers parse and are in range.
+  const submitSessionDialog = async (v: AdminSessionForm) => {
+    const { eventId: sessEventId, date: sessDate, startTime: sessStartTime } = v;
+    const sessDivisionPriority = v.divisionPriority;
+    const priorityMaxNum = Number(v.priorityMax);
+    const nonPriorityMaxNum = Number(v.nonPriorityMax);
 
     // Interpret the start time in the event's timezone so times are always
     // correct regardless of where the admin's browser is located.
@@ -641,14 +699,10 @@ export default function AdminPage() {
       Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     const floorStartsAt  = toEpochInTz(sessDate, sessStartTime, eventTz);
-    const checkinOpensAt = floorStartsAt - Number(sessCheckinOffsetMins) * 60_000;
-    const floorEndsAt    = floorStartsAt + Number(sessDurationMins) * 60_000;
+    const checkinOpensAt = floorStartsAt - Number(v.checkinOffsetMins) * 60_000;
+    const floorEndsAt    = floorStartsAt + Number(v.durationMins) * 60_000;
 
-    const priorityRunLimitNum = Number(sessPriorityRunLimit);
-    if (Number.isNaN(priorityRunLimitNum) || priorityRunLimitNum < 0) {
-      toast.error("Priority run limit must be a non-negative number");
-      return;
-    }
+    const priorityRunLimitNum = Number(v.priorityRunLimit);
 
     // Auto-generate session name from date
     const sessionName = new Date(`${sessDate}T12:00:00`).toLocaleDateString("en-US", {
@@ -666,7 +720,6 @@ export default function AdminPage() {
       priority_run_limit: (sessDivisionPriority[d] ?? false) ? priorityRunLimitNum : 0,
     }));
 
-    setSessSubmitting(true);
     try {
       if (sessEditId) {
         // Edit: PATCH the scalar fields first, then PUT divisions to overwrite
@@ -719,45 +772,30 @@ export default function AdminPage() {
       setSessEditId(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save session");
-    } finally {
-      setSessSubmitting(false);
     }
   };
 
-  const submitTestCheckin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!tcSessionId) { toast.error("Select a session"); return; }
-    if (!tcDivision) { toast.error("Select a division"); return; }
-    if (!tcLeaderFirst.trim() || !tcLeaderLast.trim()) {
-      toast.error("Leader first and last name are required");
-      return;
-    }
-    if (!tcFollowerFirst.trim() || !tcFollowerLast.trim()) {
-      toast.error("Follower first and last name are required");
-      return;
-    }
-    setTcSubmitting(true);
+  const submitTestCheckin = async (v: TestCheckinForm) => {
     try {
       const result = await injectCheckin.mutateAsync({ body: {
-        sessionId: tcSessionId,
-        divisionName: tcDivision,
-        leaderFirstName: tcLeaderFirst.trim(),
-        leaderLastName: tcLeaderLast.trim(),
-        followerFirstName: tcFollowerFirst.trim(),
-        followerLastName: tcFollowerLast.trim(),
+        sessionId: v.sessionId,
+        divisionName: v.division,
+        leaderFirstName: v.leaderFirst.trim(),
+        leaderLastName: v.leaderLast.trim(),
+        followerFirstName: v.followerFirst.trim(),
+        followerLastName: v.followerLast.trim(),
       } });
       toast.success(
         `Checked in to ${result.initialQueue === "priority" ? "priority" : "non-priority"} queue`
       );
-      setTcLeaderFirst("Leader");
-      setTcLeaderLast(randomFourDigitTag());
-      setTcFollowerFirst("Follower");
-      setTcFollowerLast(randomFourDigitTag());
-      setTcDivision(randomDivision(divisionOptions));
+      // The session stays picked for the next test check-in.
+      tcReset({
+        sessionId: tcGetValues("sessionId"),
+        division: randomDivision(divisionOptions),
+        ...testDancers(),
+      });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Check-in failed");
-    } finally {
-      setTcSubmitting(false);
     }
   };
 
@@ -1546,7 +1584,7 @@ export default function AdminPage() {
             Adds made-up test dancers with a placeholder song, ignoring the check-in window. Each
             submission adds one entry to the selected session&apos;s queue.
           </div>
-          <form onSubmit={submitTestCheckin} className="space-y-4 max-w-lg">
+          <form onSubmit={(e) => void tcValidate(submitTestCheckin, toastFirstError)(e)} className="space-y-4 max-w-lg">
             <div>
               <label className={FIELD_LABEL_CLASS}>Session</label>
               <ChoiceGroup
@@ -1559,7 +1597,7 @@ export default function AdminPage() {
                     label: formatSessionTitle(s, s.event_timezone),
                   }))}
                 value={tcSessionId}
-                onChange={setTcSessionId}
+                onChange={(id) => tcSetValue("sessionId", id)}
               />
             </div>
             <div>
@@ -1568,31 +1606,27 @@ export default function AdminPage() {
                 ariaLabel="Division"
                 options={divisionOptions.map((d) => ({ value: d, label: d }))}
                 value={tcDivision}
-                onChange={setTcDivision}
+                onChange={(d) => tcSetValue("division", d)}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label htmlFor="tc-leader-first-name" className={FIELD_LABEL_CLASS}>Leader first name</label>
-                <input id="tc-leader-first-name" className={FIELD_INPUT_CLASS} value={tcLeaderFirst}
-                  onChange={(e) => setTcLeaderFirst(e.target.value)} />
+                <input id="tc-leader-first-name" className={FIELD_INPUT_CLASS} {...tcRegister("leaderFirst")} />
               </div>
               <div>
                 <label htmlFor="tc-leader-last-name" className={FIELD_LABEL_CLASS}>Leader last name</label>
-                <input id="tc-leader-last-name" className={FIELD_INPUT_CLASS} value={tcLeaderLast}
-                  onChange={(e) => setTcLeaderLast(e.target.value)} />
+                <input id="tc-leader-last-name" className={FIELD_INPUT_CLASS} {...tcRegister("leaderLast")} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label htmlFor="tc-follower-first-name" className={FIELD_LABEL_CLASS}>Follower first name</label>
-                <input id="tc-follower-first-name" className={FIELD_INPUT_CLASS} value={tcFollowerFirst}
-                  onChange={(e) => setTcFollowerFirst(e.target.value)} />
+                <input id="tc-follower-first-name" className={FIELD_INPUT_CLASS} {...tcRegister("followerFirst")} />
               </div>
               <div>
                 <label htmlFor="tc-follower-last-name" className={FIELD_LABEL_CLASS}>Follower last name</label>
-                <input id="tc-follower-last-name" className={FIELD_INPUT_CLASS} value={tcFollowerLast}
-                  onChange={(e) => setTcFollowerLast(e.target.value)} />
+                <input id="tc-follower-last-name" className={FIELD_INPUT_CLASS} {...tcRegister("followerLast")} />
               </div>
             </div>
             <Button type="submit" disabled={tcSubmitting} size="lg" className="w-full sm:w-auto">
@@ -1864,13 +1898,12 @@ export default function AdminPage() {
               <h2 id="ev-dialog-title" className="text-lg font-semibold">{evEditId ? "Edit event" : "New event"}</h2>
               <Button type="button" variant="ghost" size="sm" aria-label="Close" onClick={() => setEvDialogOpen(false)}>✕</Button>
             </div>
-            <form onSubmit={submitEventDialog} className="space-y-4">
+            <form onSubmit={(e) => void evValidate(submitEventDialog, toastFirstError)(e)} className="space-y-4">
               <div>
                 <label htmlFor="ev-name" className={FIELD_LABEL_CLASS}>Name</label>
                 <input id="ev-name"
                   className={FIELD_INPUT_CLASS}
-                  value={evName}
-                  onChange={(e) => setEvName(e.target.value)}
+                  {...evRegister("name")}
                   autoFocus
                 />
               </div>
@@ -1880,15 +1913,16 @@ export default function AdminPage() {
                   <input id="ev-start-date"
                     type="date"
                     className={FIELD_INPUT_CLASS}
-                    value={evStartDate}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setEvStartDate(v);
-                      if (evEndDate && v > evEndDate) setEvEndDate(v);
-                      if (!evEditId && !evSeasonTouched && v) {
-                        setEvSeasonYear(seasonYearFromDateString(v));
-                      }
-                    }}
+                    {...evRegister("startDate", {
+                      onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+                        const v = e.target.value;
+                        const evEndDate = evGetValues("endDate");
+                        if (evEndDate && v > evEndDate) evSetValue("endDate", v);
+                        if (!evEditId && !evSeasonTouched && v) {
+                          evSetValue("seasonYear", seasonYearFromDateString(v));
+                        }
+                      },
+                    })}
                     required
                   />
                 </div>
@@ -1897,9 +1931,8 @@ export default function AdminPage() {
                   <input id="ev-end-date"
                     type="date"
                     className={FIELD_INPUT_CLASS}
-                    value={evEndDate}
                     min={evStartDate || undefined}
-                    onChange={(e) => setEvEndDate(e.target.value)}
+                    {...evRegister("endDate")}
                     required
                   />
                 </div>
@@ -1911,11 +1944,7 @@ export default function AdminPage() {
                   inputMode="numeric"
                   pattern="\d{4}"
                   placeholder="2027"
-                  value={evSeasonYear}
-                  onChange={(e) => {
-                    setEvSeasonTouched(true);
-                    setEvSeasonYear(e.target.value);
-                  }}
+                  {...evRegister("seasonYear", { onChange: () => setEvSeasonTouched(true) })}
                 />
                 <p className="text-xs text-muted-foreground mt-1">
                   Defaults from the start date — seasons roll over October 1.
@@ -1925,8 +1954,7 @@ export default function AdminPage() {
                 <label htmlFor="ev-timezone" className={FIELD_LABEL_CLASS}>Timezone</label>
                 <select id="ev-timezone"
                   className={FIELD_INPUT_CLASS}
-                  value={evTimezone}
-                  onChange={(e) => setEvTimezone(e.target.value)}
+                  {...evRegister("timezone")}
                 >
                   <optgroup label="United States">
                     <option value="America/New_York">Eastern — New York / Miami</option>
@@ -1988,18 +2016,17 @@ export default function AdminPage() {
               <h2 id="sess-dialog-title" className="text-lg font-semibold">{sessEditId ? "Edit session" : "New session"}</h2>
               <Button type="button" variant="ghost" size="sm" aria-label="Close" onClick={() => setSessDialogOpen(false)}>✕</Button>
             </div>
-            <form onSubmit={submitSessionDialog} className="space-y-4">
+            <form onSubmit={(e) => void sessValidate(submitSessionDialog, toastFirstError)(e)} className="space-y-4">
               <div>
                 <label htmlFor="sess-event" className={FIELD_LABEL_CLASS}>Event</label>
                 <select id="sess-event"
                   className={FIELD_INPUT_CLASS}
-                  value={sessEventId}
-                  onChange={(e) => {
-                    const id = e.target.value;
-                    setSessEventId(id);
-                    const ev = events?.find((ev) => ev.id === id);
-                    if (ev) setSessDate(ev.start_date);
-                  }}
+                  {...sessRegister("eventId", {
+                    onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
+                      const ev = events?.find((ev) => ev.id === e.target.value);
+                      if (ev) sessSetValue("date", ev.start_date);
+                    },
+                  })}
                 >
                   <option value="">Select event…</option>
                   {events?.map((ev) => (
@@ -2012,8 +2039,7 @@ export default function AdminPage() {
                 <input id="sess-date"
                   type="date"
                   className={FIELD_INPUT_CLASS}
-                  value={sessDate}
-                  onChange={(e) => setSessDate(e.target.value)}
+                  {...sessRegister("date")}
                   required
                 />
               </div>
@@ -2038,8 +2064,7 @@ export default function AdminPage() {
                 <input id="sess-start-time"
                   type="time"
                   className={FIELD_INPUT_CLASS}
-                  value={sessStartTime}
-                  onChange={(e) => setSessStartTime(e.target.value)}
+                  {...sessRegister("startTime")}
                   required
                 />
               </div>
@@ -2048,8 +2073,7 @@ export default function AdminPage() {
                   <label htmlFor="sess-checkin-opens" className={FIELD_LABEL_CLASS}>Check-in opens</label>
                   <select id="sess-checkin-opens"
                     className={FIELD_INPUT_CLASS}
-                    value={sessCheckinOffsetMins}
-                    onChange={(e) => setSessCheckinOffsetMins(e.target.value)}
+                    {...sessRegister("checkinOffsetMins")}
                   >
                     <option value="0">Same as start</option>
                     <option value="15">15 min before</option>
@@ -2064,8 +2088,7 @@ export default function AdminPage() {
                   <label htmlFor="sess-duration" className={FIELD_LABEL_CLASS}>Floor trial duration</label>
                   <select id="sess-duration"
                     className={FIELD_INPUT_CLASS}
-                    value={sessDurationMins}
-                    onChange={(e) => setSessDurationMins(e.target.value)}
+                    {...sessRegister("durationMins")}
                   >
                     <option value="60">1 hour</option>
                     <option value="90">1.5 hours</option>
@@ -2086,8 +2109,7 @@ export default function AdminPage() {
                     type="number"
                     min={0}
                     className={FIELD_INPUT_CLASS}
-                    value={sessPriorityMax}
-                    onChange={(e) => setSessPriorityMax(e.target.value)}
+                    {...sessRegister("priorityMax")}
                   />
                 </div>
                 <div>
@@ -2096,8 +2118,7 @@ export default function AdminPage() {
                     type="number"
                     min={0}
                     className={FIELD_INPUT_CLASS}
-                    value={sessNonPriorityMax}
-                    onChange={(e) => setSessNonPriorityMax(e.target.value)}
+                    {...sessRegister("nonPriorityMax")}
                   />
                 </div>
               </div>
@@ -2107,8 +2128,7 @@ export default function AdminPage() {
                   type="number"
                   min={0}
                   className={FIELD_INPUT_CLASS}
-                  value={sessPriorityRunLimit}
-                  onChange={(e) => setSessPriorityRunLimit(e.target.value)}
+                  {...sessRegister("priorityRunLimit")}
                 />
                 <p className="text-xs text-muted-foreground mt-1">
                   Number of runs that count as priority for each priority division.

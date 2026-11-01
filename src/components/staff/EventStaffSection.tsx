@@ -1,5 +1,8 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
+import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { z } from "zod";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
 import QueryError from "@/components/QueryError";
@@ -10,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EVENT_ROLE_LABELS } from "@/lib/eventRoles";
+import { toastFirstError } from "@/lib/formErrors";
 import type { ApiEvent, ApiEventPerson, ApiEventStaff, EventStaffRole } from "@/schemas";
 
 /**
@@ -17,6 +21,19 @@ import type { ApiEvent, ApiEventPerson, ApiEventStaff, EventStaffRole } from "@/
  * granted and revoked by an admin only, so it is never offered here.
  */
 const GRANTABLE: readonly EventStaffRole[] = ["coordinator", "dj"];
+
+const grantSchema = z.object({
+  person: z
+    .custom<ApiEventPerson | null>()
+    .refine((p) => p !== null, "Choose a person")
+    .pipe(z.custom<ApiEventPerson>()),
+  role: z
+    .custom<EventStaffRole | "">()
+    .refine((r) => r !== "", "Choose a role")
+    .pipe(z.custom<EventStaffRole>()),
+});
+type GrantForm = z.input<typeof grantSchema>;
+type GrantValues = z.output<typeof grantSchema>;
 
 function personLabel(s: ApiEventStaff): string {
   return [s.first_name, s.last_name].filter(Boolean).join(" ").trim() || s.email;
@@ -33,28 +50,30 @@ export default function EventStaffSection({ event }: { event: ApiEvent }) {
   const staff = staffQuery.data ?? null;
   const grantStaff = useEndpointMutation(endpoints.events.grantStaff, { invalidates: [endpoints.events.staff] });
   const revokeStaff = useEndpointMutation(endpoints.events.revokeStaff, { invalidates: [endpoints.events.staff] });
-  const [person, setPerson] = useState<ApiEventPerson | null>(null);
-  const [role, setRole] = useState<EventStaffRole | "">("");
-  const [granting, setGranting] = useState(false);
+  const {
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { isSubmitting: granting },
+  } = useForm<GrantForm, unknown, GrantValues>({
+    resolver: zodResolver(grantSchema),
+    defaultValues: { person: null, role: "" },
+  });
+  const person = watch("person");
+  const role = watch("role");
   const [revoking, setRevoking] = useState<string | null>(null);
 
-  const grant = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!person) { toast.error("Choose a person"); return; }
-    if (!role) { toast.error("Choose a role"); return; }
-    setGranting(true);
+  const grant = async ({ person, role }: GrantValues) => {
     try {
       const row = await grantStaff.mutateAsync({
         params: { id: event.id, userId: person.user_id, role },
       });
       toast.success(`${personLabel(row)} is now ${EVENT_ROLE_LABELS[row.role]}`);
-      setPerson(null);
-      setRole("");
+      reset();
       void reloadMe();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Grant failed");
-    } finally {
-      setGranting(false);
     }
   };
 
@@ -125,13 +144,13 @@ export default function EventStaffSection({ event }: { event: ApiEvent }) {
           <CardTitle>Add staff</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={(e) => void grant(e)} className="space-y-4 max-w-lg">
+          <form onSubmit={(e) => void handleSubmit(grant, toastFirstError)(e)} className="space-y-4 max-w-lg">
             <PersonPicker
               id="staff-grant-user"
               eventId={event.id}
               label="Person"
               value={person}
-              onChange={setPerson}
+              onChange={(p) => setValue("person", p)}
               hint="To add someone new to the event, ask an admin."
             />
             <div className="space-y-1">
@@ -140,7 +159,7 @@ export default function EventStaffSection({ event }: { event: ApiEvent }) {
                 ariaLabel="Role"
                 options={GRANTABLE.map((r) => ({ value: r, label: EVENT_ROLE_LABELS[r] }))}
                 value={role}
-                onChange={setRole}
+                onChange={(r) => setValue("role", r)}
               />
               <p className="text-xs text-muted-foreground">An admin adds event managers.</p>
             </div>

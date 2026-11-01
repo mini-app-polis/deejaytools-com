@@ -1,12 +1,13 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
-import { useForm, type FieldErrors } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { z } from "zod";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointMutation } from "@/api/queries";
 import { useAuthMe } from "@/hooks/useAuthMe";
+import { toastFirstError } from "@/lib/formErrors";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -36,12 +37,6 @@ const eventDetailsSchema = z
   });
 type EventDetailsForm = z.input<typeof eventDetailsSchema>;
 type EventDetailsValues = z.output<typeof eventDetailsSchema>;
-
-/** A refused save says why in a toast, one problem at a time, in field order. */
-function toastFirstError(errors: FieldErrors<EventDetailsForm>) {
-  const first = Object.values(errors).find((e) => e?.message);
-  if (first?.message) toast.error(first.message);
-}
 
 /**
  * Edit or delete the event: PATCH and DELETE /v1/events/:id, as the admin
