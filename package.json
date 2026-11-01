@@ -16,6 +16,7 @@
     "test": "vitest run --passWithNoTests",
     "test:coverage": "vitest run --coverage --passWithNoTests",
     "test:contract": "vitest run --config vitest.contract.config.ts",
+    "openapi:sync": "node scripts/sync-openapi.mjs",
     "test:e2e": "playwright test"
   },
   "dependencies": {

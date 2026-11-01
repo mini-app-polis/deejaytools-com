@@ -43,7 +43,7 @@ src/
 ├── lib/           Pure helpers — no React, safe to import anywhere
 ├── pages/         Route-level screens (+ colocated *.test.tsx)
 │   └── help/      Seven /how-it-works/* topic pages
-├── contract/      Live contract suite (`pnpm test:contract`)
+├── contract/      Live contract suite (`pnpm test:contract`), and the catalog check against the API's OpenAPI snapshot
 ├── schemas/       zod schemas for API responses (`@/schemas`)
 ├── test/          Vitest global setup, `fx.*` fixtures, `renderWithQueryClient`
 ├── main.tsx       Entry: Sentry → ClerkProvider → QueryClientProvider → App
@@ -191,7 +191,7 @@ There is no refresh logic here — Clerk owns session lifetime.
 
 Responses are JSON envelopes, typed in `src/api/envelope.ts`:
 
-- Success: `{ data: T, meta?: … }` → returns `data`
+- Success: `{ data: T, meta: { version: "v1", count?, total? } }` → returns `data`. `SuccessMetaSchema` accepts `meta` with or without `count` and `total`; the live contract suite checks every success's `meta` against it
 - Error: `{ error: { code, message, … } }` → throws an `ApiError` (status and code attached) whose message is the client's friendly text for that code, or the server's `message`
 - 5xx without an error envelope → `ApiError` with a "server unavailable" message
 - 2xx the client cannot read → `ApiError` saying so
@@ -236,7 +236,15 @@ Every API call the app makes is declared once in `endpoints.ts`: method, access 
 
 A response that fails its schema is a contract violation. In dev and tests it throws `ContractViolation`; in production it is reported to Sentry (tagged `contract_endpoint`) and the raw data is used, so harmless drift never breaks a page but never goes unnoticed. Unit-test API mocks are built with the `fx.*` factories in `src/test/fixtures.ts`, which parse through the same schemas.
 
-The live contract suite (`src/contract`, `pnpm test:contract`, `.github/workflows/contract.yml`) walks the catalog against the development API with a real Clerk session and fails on any endpoint that is neither exercised nor explicitly skipped. See [ADR-0002](decisions/ADR-0002-api-contract.md).
+The live contract suite (`src/contract`, `pnpm test:contract`, `.github/workflows/contract.yml`) walks the catalog against the development API with a real Clerk session and fails on any endpoint that is neither exercised nor explicitly skipped. See [ADR-0002](decisions/ADR-0002-api-contract.md). This repository owns the API's live contract suite.
+
+Before anything is deployed, the catalog is also checked against api-deejaytools' committed OpenAPI document. `src/contract/api-deejaytools.openapi.json` is a copy of that repository's `docs/openapi.json`; `src/contract/apiSnapshot.test.ts` (run by `pnpm test`, so in every pull request, with no network) uses `openapiCheck.ts` to confirm that every endpoint's route and method exist, that every documented success response satisfies the endpoint's schema (required fields present, types the app accepts, null only where it allows null) with a `meta` that `SuccessMetaSchema` accepts, and that a declared request body fits the route's. It is lenient where the document cannot tell: a loosely typed API field, or a plain string the app narrows to an enum, is not reported.
+
+The flow when the API changes:
+
+1. api-deejaytools regenerates and commits `docs/openapi.json` with the change (its unit tests fail while the snapshot is stale).
+2. Its CI runs this repository's `apiSnapshot.test.ts` from `dev` with the new document in place of the copy, so a change that would break this app fails in the API's pull request, before it merges.
+3. Once it is on the API's `dev`, `pnpm openapi:sync` here refreshes the copy (from the API's `dev` branch by default; a branch, tag or commit, or a local file, may be named). Commit it with any change here that relies on it.
 
 ---
 

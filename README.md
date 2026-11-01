@@ -37,6 +37,7 @@ pnpm lint           # eslint
 pnpm test           # vitest once
 pnpm test:coverage  # with coverage (fails below the floor in vitest.config.ts)
 pnpm test:contract  # live contract suite against a development API (see Testing)
+pnpm openapi:sync   # refresh the copy of the API's OpenAPI snapshot (see Testing)
 pnpm test:e2e       # Playwright end-to-end suite against a deployed dev site (see Testing)
 ```
 
@@ -89,6 +90,8 @@ Pure-function tests run in Node; component tests opt into jsdom per file via `//
 `pnpm test` runs the unit and component tests; `pnpm test:coverage` runs them with coverage and fails below the thresholds in `vitest.config.ts`.
 
 `pnpm test:contract` runs the live contract suite against a development API — every endpoint in `src/api/endpoints.ts`, validated against its schema. It needs `CONTRACT_API_URL`, `CONTRACT_CLERK_SECRET_KEY` (a dev-instance `sk_test_` key) and `CONTRACT_USER_ID` (an admin in that environment), and refuses production. See [ADR-0002](docs/decisions/ADR-0002-api-contract.md).
+
+`pnpm test` also checks the endpoint catalog against a copy of api-deejaytools' committed OpenAPI document (`src/contract/api-deejaytools.openapi.json`, refreshed with `pnpm openapi:sync`), so a schema the API no longer satisfies fails in a pull request without a running API. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 `pnpm test:e2e` runs the Playwright suite (`e2e/`, `playwright.config.ts`) in a real browser against a deployed dev site, signed in as the contract test user, including an axe-core accessibility scan of the main pages. It writes to the dev API and needs `E2E_BASE_URL`, `CLERK_PUBLISHABLE_KEY` (`pk_test_…`), `CLERK_SECRET_KEY` (`sk_test_…`), `CONTRACT_API_URL` and `CONTRACT_USER_ID`; run `pnpm exec playwright install chromium` once first. CI runs it after each deploy of `dev`.
 
