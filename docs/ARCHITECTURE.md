@@ -93,12 +93,12 @@ One default-export component per route. Pages orchestrate fetching, local state,
 | `NavBar.tsx` | Primary nav + admin/manager sub-bars; "My events" and an Event staff sub-bar for event staff |
 | `AuthSync.tsx` | One-shot POST `/v1/auth/sync` after sign-in |
 | `RequireAuth.tsx` | Clerk signed-in gate |
-| `AdminGuard.tsx` | Requires `role === "admin"` |
-| `ManagerGuard.tsx` | Requires `role === "admin"` — the API has no global manager role |
+| `AdminGuard.tsx` | Requires `role === "admin"`; guards `/admin` and `/manager` (the API has no global manager role) |
 | `AuthMeError.tsx` | What the guards show, with a retry, when `GET /v1/auth/me` fails |
 | `QueryError.tsx` | What a page shows, with a retry, where a query's data would be when it fails (§3) |
 | `MaintenancePage.tsx` | Replaces the whole app when the build has `VITE_MAINTENANCE=1` |
 | `EventRoleGuard.tsx` | Requires a staff role, or a richer one, on the event in `:eventId` |
+| `admin/` | Admin dashboard sections that `AdminPage` renders, each owning its state, forms and queries (`AdminEventsSection`, `AdminSessionsSection` with its `AdminSessionDialog`), and `adminShared.tsx` for the status badges, time formatting and field classes the sections share |
 | `staff/` | Per-event staff portals: `StaffPortal` (shell + section tabs), `portalSections.tsx` (which sections each portal has) and one component per section |
 | `SongUploadForm.tsx` | Chunked upload form (self + managed variants) |
 | `SpecialUploadForm.tsx` | Portal-specific upload (Teams/Cabaret/etc.) |
@@ -282,7 +282,7 @@ Defined in `pages/App.tsx`. Pattern: public landing **outside** `Layout`; everyt
 | `/admin` | — | `<Navigate to="/admin/events">` | |
 | `/admin/:section` | `AdminGuard` | `AdminPage` | |
 | `/manager` | — | `<Navigate to="/manager/active-sessions">` | |
-| `/manager/:section` | `ManagerGuard` | `ManagerPage` | |
+| `/manager/:section` | `AdminGuard` | `ManagerPage` | |
 | `/my-events` | `RequireAuth` | `MyEventsPage` | The caller's staff events, each linking to its portal |
 | `/events/:eventId/coordinator` | `EventRoleGuard` (coordinator) | `CoordinatorPortalPage` | |
 | `/events/:eventId/dj`, `/events/:eventId/dj/:section` | `EventRoleGuard` (dj) | `DjPortalPage` | Bare path lands on the first section |
@@ -291,8 +291,7 @@ Defined in `pages/App.tsx`. Pattern: public landing **outside** `Layout`; everyt
 ### Guards (behavior)
 
 - **`RequireAuth`** — `<SignedOut>` → redirect `/`. No role check.
-- **`AdminGuard`** — waits for `useAuthMe().loading`, then requires `isAdmin && me`; else redirect `/`. Shows skeleton while loading, and `AuthMeError` (with a retry) when the record failed to load.
-- **`ManagerGuard`** — same loading and error pattern; requires `isAdmin && me`. The manager area is admin-only: the API's global roles are `user` and `admin`, and staff roles are per event.
+- **`AdminGuard`** — waits for `useAuthMe().loading`, then requires `isAdmin && me`; else redirect `/`. Shows skeleton while loading, and `AuthMeError` (with a retry) when the record failed to load. It guards the manager area too, which is admin-only: the API's global roles are `user` and `admin`, and staff roles are per event.
 - **`EventRoleGuard`** — same loading and error pattern; requires the role it names, or a richer one (event manager, then DJ, then coordinator), in `eventRoles` for the `:eventId` in the URL. The global admin role does not count. The API checks every portal call again against the same event.
 
 ### Per-event staff portals
@@ -325,7 +324,7 @@ export const MANAGER_SECTIONS = [
 ] as const;
 ```
 
-`guide` renders `ManagerGuideSection` (floor-trial ops reference). NavBar lists **Guide** last in `MANAGER_ITEMS` (`/manager/guide`); the bare `/manager` redirect lands on `active-sessions`.
+`active-sessions` renders the staff `LiveQueueSection` over today's sessions across all events, and check-in-for and upload-for pick the person with `PersonPicker` searching every user (admins only reach this page). `guide` renders `ManagerGuideSection` (floor-trial ops reference). NavBar lists **Guide** last in `MANAGER_ITEMS` (`/manager/guide`); the bare `/manager` redirect lands on `active-sessions`.
 
 Each page reads `:section` from `useParams`, validates against its `*_SECTIONS` array, and falls back to a default (`events` / `active-sessions`) when the slug is missing or unknown — so `/admin/foo` shows the default section instead of a blank screen.
 
@@ -562,9 +561,9 @@ The session (`sessions.get`) and its public queues (`queue.active`, `queue.waiti
 
 A failed refresh shows `Couldn't refresh the queue; it may be out of date` with **Retry now**, without blocking the page. The check-in clock (`now`) ticks on its own timer at the window's next edge; it does not fetch.
 
-### `ManagerPage` (active-sessions section) and the staff `LiveQueueSection` — 8 seconds
+### `LiveQueueSection` (staff portals and the manager's active sessions) — 8 seconds
 
-Both read through `hooks/useLiveQueues.ts`: `queue.activeStaff`, `queue.priority` and `queue.nonPriority` with `refetchInterval: LIVE_QUEUE_POLL_MS` (8000), plus a **1 second** tick only to refresh the “Updated Xs ago” label without re-fetching.
+`components/staff/LiveQueueSection.tsx` is the one live queue: a staff portal shows it for its event, and `ManagerPage`'s active-sessions section shows it for today's sessions across all events. It reads through `hooks/useLiveQueues.ts`: `queue.activeStaff`, `queue.priority` and `queue.nonPriority` with `refetchInterval: LIVE_QUEUE_POLL_MS` (8000), plus a **1 second** tick only to refresh the “Updated Xs ago” label without re-fetching.
 
 **Why 8s:** Managers actively reorder and advance the queue; they need near-real-time state. A failed background refetch is silent but turns the label amber: `Couldn't refresh — tap to retry`; a refresh someone taps says why it failed in a toast. Success shows `Updated {formatAgo(...)}` (e.g. `just now`, `12s ago`).
 
@@ -588,7 +587,7 @@ Both read through `hooks/useLiveQueues.ts`: `queue.activeStaff`, `queue.priority
 
 1. Create `src/pages/MyPage.tsx` (default export).
 2. Add a `<Route>` in `App.tsx` inside or outside `Layout` as appropriate.
-3. Wrap with `RequireAuth`, `AdminGuard`, `ManagerGuard` or `EventRoleGuard` if needed.
+3. Wrap with `RequireAuth`, `AdminGuard` or `EventRoleGuard` if needed.
 4. Read with `useEndpointQuery` and change with `useEndpointMutation` (§3); render a query's error with `QueryError`.
 5. Add `MyPage.test.tsx` with `// @vitest-environment jsdom` if it renders UI, rendering through `renderWithQueryClient`.
 6. Link from `NavBar` or an existing page if it should be discoverable.
@@ -596,7 +595,7 @@ Both read through `hooks/useLiveQueues.ts`: `queue.activeStaff`, `queue.priority
 ### A new admin section
 
 1. Add slug to `ADMIN_SECTIONS` in `AdminPage.tsx`.
-2. Add `<TabsContent value="your-slug">` block in the same file.
+2. Add a section component under `components/admin/` that renders its own `<TabsContent value="your-slug">` (and its dialogs), and render it from `AdminPage.tsx`.
 3. Add `{ to: "/admin/your-slug", label: "…" }` to `SUPERUSER_ITEMS` in `NavBar.tsx`.
 4. Section is immediately bookmarkable at `/admin/your-slug`.
 
