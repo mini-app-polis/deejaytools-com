@@ -3,7 +3,6 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import AdminGuard from "@/components/AdminGuard";
 import EventRoleGuard from "@/components/EventRoleGuard";
-import ManagerGuard from "@/components/ManagerGuard";
 import Layout from "@/components/Layout";
 import RequireAuth from "@/components/RequireAuth";
 import RouteFallback from "@/components/RouteFallback";
@@ -228,11 +227,11 @@ export default function App() {
           <Route
             path="manager/:section"
             element={
-              <ManagerGuard>
+              <AdminGuard>
                 <Lazy>
                   <ManagerPage />
                 </Lazy>
-              </ManagerGuard>
+              </AdminGuard>
             }
           />
         </Route>

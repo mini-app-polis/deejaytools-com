@@ -47,9 +47,6 @@ vi.mock("@/components/RequireAuth", () => ({
 vi.mock("@/components/AdminGuard", () => ({
   default: ({ children }: { children: ReactNode }) => <div data-testid="admin-guard">{children}</div>,
 }));
-vi.mock("@/components/ManagerGuard", () => ({
-  default: ({ children }: { children: ReactNode }) => <div data-testid="manager-guard">{children}</div>,
-}));
 vi.mock("@/components/EventRoleGuard", () => ({
   default: function EventRoleGuard({ role, children }: { role: string; children: ReactNode }) {
     const { eventId } = useParams();
@@ -143,10 +140,10 @@ describe("App routes", () => {
     expect(window.location.pathname).toBe("/admin/events");
   });
 
-  it("redirects bare /manager to its default section behind ManagerGuard", async () => {
+  it("redirects bare /manager to its default section behind AdminGuard", async () => {
     renderAt("/manager");
     expect(await screen.findByText("ManagerPage")).toBeInTheDocument();
-    expect(screen.getByTestId("manager-guard")).toHaveTextContent("ManagerPage");
+    expect(screen.getByTestId("admin-guard")).toHaveTextContent("ManagerPage");
     expect(window.location.pathname).toBe("/manager/active-sessions");
   });
 });
