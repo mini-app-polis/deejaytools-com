@@ -4,32 +4,22 @@ import { useForm } from "react-hook-form";
 import { useParams, Link } from "react-router-dom";
 import { toast } from "sonner";
 import { z } from "zod";
-import {
-  type ApiAdminUser,
-  type ApiAdminEventSongSubmission,
-  type ApiQueueEntry,
-  type ApiSession,
-} from "@/schemas";
+import { type ApiAdminEventSongSubmission, type ApiEventPerson } from "@/schemas";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
 import QueryError from "@/components/QueryError";
-import { useDebouncedValue } from "@/hooks/useDebouncedValue";
-import { useLiveQueues } from "@/hooks/useLiveQueues";
 import SongUploadForm from "@/components/SongUploadForm";
-import { SessionInfoHeader } from "@/components/SessionInfoHeader";
 import { Button } from "@/components/ui/button";
 import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { toastFirstError } from "@/lib/formErrors";
 import { formatSessionTitle } from "@/lib/sessionFormat";
-import { isSessionToday } from "@/lib/zonedTime";
-import { songLabel } from "@/lib/songLabel";
 import ManagerGuideSection from "@/components/manager/ManagerGuideSection";
-import { useQueueActions, WithdrawEntryDialog } from "@/components/staff/queueActions";
+import LiveQueueSection from "@/components/staff/LiveQueueSection";
+import PersonPicker from "@/components/staff/PersonPicker";
 import { cn } from "@/lib/utils";
 
 const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
@@ -40,9 +30,9 @@ const NO_ROWS: readonly never[] = [];
 /** CheckIn For: the user is picked by search, then the session, song and division. */
 const checkinForSchema = z.object({
   user: z
-    .custom<ApiAdminUser | null>()
+    .custom<ApiEventPerson | null>()
     .refine((u) => u !== null, "Select a user")
-    .pipe(z.custom<ApiAdminUser>()),
+    .pipe(z.custom<ApiEventPerson>()),
   sessionId: z.string().min(1, "Select a session"),
   songId: z.string().min(1, "Select a song"),
   division: z.string().min(1, "Select a division"),
@@ -56,15 +46,6 @@ const DEFAULT_MANAGER_SECTION: ManagerSection = "active-sessions";
 
 function isManagerSection(s: string | undefined): s is ManagerSection {
   return !!s && (MANAGER_SECTIONS as readonly string[]).includes(s);
-}
-
-function formatAgo(ms: number): string {
-  const s = Math.max(0, Math.round(ms / 1000));
-  if (s < 5) return "just now";
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  return `${Math.floor(m / 60)}h ago`;
 }
 
 export default function ManagerPage() {
@@ -88,7 +69,6 @@ export default function ManagerPage() {
       return next;
     });
 
-  const [cfUserQuery, setCfUserQuery] = useState("");
   const {
     handleSubmit: cfValidate,
     reset: cfReset,
@@ -106,25 +86,10 @@ export default function ManagerPage() {
   const setCfSongId = (id: string) => cfSetValue("songId", id);
   const setCfDivision = (d: string) => cfSetValue("division", d);
 
-  const [ufQuery, setUfQuery] = useState("");
-  const [ufSelected, setUfSelected] = useState<{ id: string; email: string; first_name: string | null; last_name: string | null } | null>(null);
-
+  // Kept here, not in the section, so a chosen session survives a tab switch.
   const [lqSessionId, setLqSessionId] = useState("");
-  const {
-    active: lqActive,
-    priority: lqPriority,
-    nonPriority: lqNonPriority,
-    loading: lqLoading,
-    updatedAt: lqUpdatedAt,
-    refreshFailed: lqRefreshFailed,
-    loadError: lqLoadError,
-    refresh: refreshLiveQueues,
-  } = useLiveQueues(lqSessionId);
-  // Only a fallback for labels the queue rows leave out, so a failure here
-  // leaves the ids showing rather than blocking the queue.
-  const lqPairs = useEndpointQuery(endpoints.partners.leadingPairs).data ?? NO_ROWS;
-  const lqSongs = useEndpointQuery(endpoints.songs.list).data ?? NO_ROWS;
-  const [lqNowTick, setLqNowTick] = useState(() => Date.now());
+
+  const [ufSelected, setUfSelected] = useState<ApiEventPerson | null>(null);
 
   const cfActiveSessions = (sessions ?? []).filter(
     (s) => s.status === "checkin_open" || s.status === "in_progress"
@@ -147,25 +112,15 @@ export default function ManagerPage() {
     setEsCollapsedDivisions(new Set());
   }, [esEventId]);
 
-  // User searches run for the trimmed text once typing pauses; the query key
-  // keeps the results matched to what was searched for.
-  const cfSearchQ = useDebouncedValue(cfUserQuery.trim(), 250);
-  const cfUsersQuery = useEndpointQuery(endpoints.admin.users, {
-    params: { q: cfSearchQ },
-    enabled: !cfSelectedUser && !!cfSearchQ,
-  });
-  const cfUserResults = cfUserQuery.trim() && cfSearchQ ? (cfUsersQuery.data ?? []) : [];
-  const cfSearching = cfUsersQuery.isFetching;
-
   // A new user or session starts the song and division choice again.
   useEffect(() => {
     cfSetValue("songId", "");
     cfSetValue("division", "");
-  }, [cfSelectedUser?.id, cfSessionId, cfSessionObj?.event_id, cfSetValue]);
+  }, [cfSelectedUser?.user_id, cfSessionId, cfSessionObj?.event_id, cfSetValue]);
 
   const cfEventId = cfSessionObj?.event_id ?? null;
   const cfSubmissionsQuery = useEndpointQuery(endpoints.admin.userEventSongSubmissions, {
-    params: { id: cfSelectedUser?.id ?? "", eventId: cfEventId ?? "" },
+    params: { id: cfSelectedUser?.user_id ?? "", eventId: cfEventId ?? "" },
     enabled: !!cfSelectedUser && !!cfSessionId && !!cfEventId,
   });
   // null until the user and session are chosen and their songs have loaded.
@@ -180,48 +135,9 @@ export default function ManagerPage() {
     setCfDivision(cfSessionDivisions.includes(d) ? d : "");
   };
 
-  const ufSearchQ = useDebouncedValue(ufQuery.trim(), 250);
-  const ufUsersQuery = useEndpointQuery(endpoints.admin.users, {
-    params: { q: ufSearchQ },
-    enabled: !ufSelected && !!ufSearchQ,
-  });
-  const ufResults = ufQuery.trim() && ufSearchQ ? (ufUsersQuery.data ?? []) : [];
-  const ufSearching = ufUsersQuery.isFetching;
-
   const createCheckin = useEndpointMutation(endpoints.checkins.create, {
     invalidates: [endpoints.queue.activeStaff, endpoints.queue.priority, endpoints.queue.nonPriority],
   });
-
-  useEffect(() => {
-    if (!sessions) return;
-    const active = sessions.filter(
-      (s) => s.status === "checkin_open" || s.status === "in_progress"
-    );
-    if (active.length === 1) {
-      // Auto-select only while nothing is selected; a manual choice is kept.
-      setLqSessionId((cur) => cur || active[0]!.id);
-    }
-  }, [sessions]);
-
-  useEffect(() => {
-    if (!lqSessionId) return;
-    const id = setInterval(() => setLqNowTick(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [lqSessionId]);
-
-  const pairMap = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const p of lqPairs) m.set(p.id, p.display_name);
-    return m;
-  }, [lqPairs]);
-
-  const songMap = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const s of lqSongs) {
-      m.set(s.id, songLabel(s));
-    }
-    return m;
-  }, [lqSongs]);
 
   const esVisibleEvents = useMemo(
     () =>
@@ -248,55 +164,15 @@ export default function ManagerPage() {
     return keys.map((division) => ({ division, rows: map.get(division)! }));
   }, [esSubmissions]);
 
-  const activeSessionOptions = useMemo(() => {
-    if (!sessions) return [];
-    const now = Date.now();
-    return sessions
-      .filter((s) => isSessionToday(s, now))
-      .sort((a, b) => {
-        const isLive = (s: ApiSession) =>
-          s.status === "checkin_open" || s.status === "in_progress";
-        if (isLive(a) && !isLive(b)) return -1;
-        if (!isLive(a) && isLive(b)) return 1;
-        return a.floor_trial_starts_at - b.floor_trial_starts_at;
-      });
-  }, [sessions]);
-
-  const lqSession = useMemo(
-    () => sessions?.find((s) => s.id === lqSessionId) ?? null,
-    [sessions, lqSessionId]
-  );
-
-  const renderEntityLabel = (row: ApiQueueEntry) => {
-    if (row.entityLabel && row.entityLabel !== "—") return row.entityLabel;
-    if (row.entityPairId) return pairMap.get(row.entityPairId) ?? row.entityLabel;
-    return row.entityLabel;
-  };
-
-  const renderSongLabel = (row: ApiQueueEntry) =>
-    row.songDisplayName ?? (row.songId ? (songMap.get(row.songId) ?? row.songId) : "—");
-
-  const queueActions = useQueueActions();
-
-  const handleComplete = (queueEntryId: string) =>
-    void queueActions.run(endpoints.queue.complete, queueEntryId);
-
-  const handleIncomplete = (queueEntryId: string) =>
-    void queueActions.run(endpoints.queue.incomplete, queueEntryId);
-
-  const handleMoveDown = (queueEntryId: string) =>
-    void queueActions.run(endpoints.queue.moveDown, queueEntryId);
-
   const submitCheckinFor = async ({ user, sessionId, songId, division }: CheckinForValues) => {
     try {
       await createCheckin.mutateAsync({ body: {
         sessionId,
         songId,
         divisionName: division,
-        on_behalf_of_user_id: user.id,
+        on_behalf_of_user_id: user.user_id,
       } });
-      const who = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
-      toast.success(`Checked in ${who}`);
+      toast.success(`Checked in ${user.display_name}`);
       setCfSongId("");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Check-in failed");
@@ -329,275 +205,11 @@ export default function ManagerPage() {
               Open guide →
             </Link>
           </div>
-          {/* Session selector */}
-          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-            <div className="w-full sm:w-72">
-              {sessionsQuery.error && !sessions ? (
-                <QueryError what="sessions" error={sessionsQuery.error} onRetry={() => void sessionsQuery.refetch()} />
-              ) : sessions === null ? null : activeSessionOptions.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No floor-trial sessions scheduled for today. When one is scheduled for today, it&apos;ll appear here to manage.
-                </p>
-              ) : (
-                <ChoiceGroup
-                  ariaLabel="Session"
-                  options={activeSessionOptions.map((s) => ({
-                    value: s.id,
-                    label:
-                      formatSessionTitle(s, s.event_timezone) +
-                      (s.status === "completed" || s.status === "cancelled"
-                        ? ` (${s.status})`
-                        : ""),
-                  }))}
-                  value={lqSessionId}
-                  onChange={setLqSessionId}
-                />
-              )}
-            </div>
-            {lqSessionId && (
-              <button
-                type="button"
-                onClick={() => void refreshLiveQueues()}
-                disabled={lqLoading}
-                title="Refresh now"
-                className={cn(
-                  "text-xs transition-colors hover:underline disabled:opacity-60",
-                  lqRefreshFailed ? "text-amber-600 dark:text-amber-500" : "text-muted-foreground"
-                )}
-              >
-                {lqLoading
-                  ? "Refreshing…"
-                  : lqRefreshFailed
-                    ? "Couldn't refresh — tap to retry"
-                    : lqUpdatedAt !== null
-                      ? `Updated ${formatAgo(lqNowTick - lqUpdatedAt)}`
-                      : "Updating…"}
-              </button>
-            )}
-          </div>
-
-          {sessions !== null && activeSessionOptions.length > 0 && !lqSessionId && (
-            <p className="text-sm text-muted-foreground">Choose a session above to manage its queue.</p>
-          )}
-
-          {lqSessionId && lqLoadError && (
-            <QueryError what="the queues" error={lqLoadError} onRetry={() => void refreshLiveQueues()} />
-          )}
-
-          {lqSessionId && !lqLoadError && (
-            <div className={`space-y-4 ${lqLoading ? "opacity-60" : ""}`}>
-              {lqSession && <SessionInfoHeader session={lqSession} showTitle={false} />}
-
-              {/* Active queue */}
-              <Card className="border-primary/30">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-primary">Active</CardTitle>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-muted-foreground">
-                        {lqActive.length} slot{lqActive.length !== 1 ? "s" : ""}
-                      </span>
-                      <span className="text-xs text-muted-foreground">Fills automatically</span>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {lqActive.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No one on deck.</p>
-                  ) : (
-                    lqActive
-                      .slice()
-                      .sort((a, b) => a.position - b.position)
-                      .map((row) => {
-                        const isSlotOne = row.position === 1;
-                        const isLast = row.position === lqActive.length;
-                        const filename = row.songProcessedFilename ?? undefined;
-                        return (
-                          <div key={row.queueEntryId} className="flex items-start gap-3">
-                            <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
-                              {isSlotOne && <span className="text-primary mr-0.5">▶</span>}
-                              #{row.position}
-                            </span>
-                            <div
-                              className={
-                                isSlotOne
-                                  ? "border border-primary/50 bg-primary/10 rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5"
-                                  : "border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5"
-                              }
-                            >
-                              <p className="font-medium">{renderEntityLabel(row)}</p>
-                              <p className="text-muted-foreground truncate">
-                                {row.divisionName} · {renderSongLabel(row)}
-                              </p>
-                              {filename && (
-                                <p className="text-xs text-muted-foreground break-all font-mono">
-                                  {filename}
-                                </p>
-                              )}
-                              {row.notes && (
-                                <p className="text-xs text-muted-foreground italic">
-                                  Note: {row.notes}
-                                </p>
-                              )}
-                              <div className="flex gap-2 flex-wrap pt-2 border-t border-border/40 mt-1.5">
-                                <Button size="sm" disabled={queueActions.busy} onClick={() => handleComplete(row.queueEntryId)}>
-                                  Run complete
-                                </Button>
-                                <Button size="sm" variant="outline" disabled={queueActions.busy} onClick={() => handleIncomplete(row.queueEntryId)}>
-                                  Run incomplete
-                                </Button>
-                                {!isLast && (
-                                  <Button size="sm" variant="outline" disabled={queueActions.busy} onClick={() => handleMoveDown(row.queueEntryId)}>
-                                    Move down
-                                  </Button>
-                                )}
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-destructive hover:text-destructive"
-                                  disabled={queueActions.busy}
-                                  onClick={() => queueActions.requestWithdraw(row)}
-                                >
-                                  Withdraw
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Priority + Non-priority queues — side by side when there's room */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Card className="border-amber-500/30">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-amber-500 dark:text-amber-400">Priority</CardTitle>
-                      <span className="text-xs text-muted-foreground">{lqPriority.length} waiting</span>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {lqPriority.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">Priority queue is empty.</p>
-                    ) : (
-                      lqPriority
-                        .slice()
-                        .sort((a, b) => a.position - b.position)
-                        .map((row) => {
-                          const isLast = row.position === lqPriority.length;
-                          const filename = row.songProcessedFilename ?? undefined;
-                          return (
-                            <div key={row.queueEntryId} className="flex items-start gap-3">
-                              <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
-                                #{row.position}
-                              </span>
-                              <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
-                                <p className="font-medium">{renderEntityLabel(row)}</p>
-                                <p className="text-muted-foreground truncate">
-                                  {row.divisionName} · {renderSongLabel(row)}
-                                </p>
-                                {filename && (
-                                  <p className="text-xs text-muted-foreground break-all font-mono">
-                                    {filename}
-                                  </p>
-                                )}
-                                {row.notes && (
-                                  <p className="text-xs text-muted-foreground italic">Note: {row.notes}</p>
-                                )}
-                                <div className="flex gap-2 pt-2 border-t border-border/40 mt-1.5">
-                                  {!isLast && (
-                                    <Button size="sm" variant="outline" disabled={queueActions.busy} onClick={() => handleMoveDown(row.queueEntryId)}>
-                                      Move down
-                                    </Button>
-                                  )}
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="text-destructive hover:text-destructive"
-                                    disabled={queueActions.busy}
-                                    onClick={() => queueActions.requestWithdraw(row)}
-                                  >
-                                    Withdraw
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card className="border-sky-500/30">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-sky-500 dark:text-sky-400">Standard</CardTitle>
-                      <span className="text-xs text-muted-foreground">{lqNonPriority.length} waiting</span>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {lqNonPriority.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">Standard queue is empty.</p>
-                    ) : (
-                      lqNonPriority
-                        .slice()
-                        .sort((a, b) => a.position - b.position)
-                        .map((row) => {
-                          const isLast = row.position === lqNonPriority.length;
-                          const filename = row.songProcessedFilename ?? undefined;
-                          return (
-                            <div key={row.queueEntryId} className="flex items-start gap-3">
-                              <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
-                                #{row.position}
-                              </span>
-                              <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
-                                <p className="font-medium">{renderEntityLabel(row)}</p>
-                                <p className="text-muted-foreground truncate">
-                                  {row.divisionName} · {renderSongLabel(row)}
-                                </p>
-                                {filename && (
-                                  <p className="text-xs text-muted-foreground break-all font-mono">
-                                    {filename}
-                                  </p>
-                                )}
-                                {row.notes && (
-                                  <p className="text-xs text-muted-foreground italic">Note: {row.notes}</p>
-                                )}
-                                <div className="flex gap-2 pt-2 border-t border-border/40 mt-1.5">
-                                  {!isLast && (
-                                    <Button size="sm" variant="outline" disabled={queueActions.busy} onClick={() => handleMoveDown(row.queueEntryId)}>
-                                      Move down
-                                    </Button>
-                                  )}
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="text-destructive hover:text-destructive"
-                                    disabled={queueActions.busy}
-                                    onClick={() => queueActions.requestWithdraw(row)}
-                                  >
-                                    Withdraw
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-
-            </div>
-          )}
-          <WithdrawEntryDialog
-            entry={queueActions.pendingWithdraw}
-            label={queueActions.pendingWithdraw ? renderEntityLabel(queueActions.pendingWithdraw) : ""}
-            busy={queueActions.busy}
-            onCancel={queueActions.cancelWithdraw}
-            onConfirm={() => void queueActions.confirmWithdraw()}
+          <LiveQueueSection
+            today
+            sessionId={lqSessionId}
+            onSessionIdChange={setLqSessionId}
+            selectorClassName="w-full sm:w-72"
           />
         </TabsContent>
 
@@ -744,40 +356,16 @@ export default function ManagerPage() {
                 <p className="text-sm text-muted-foreground">
                   Find the user you're uploading for. The song is created exactly as if they uploaded it themselves.
                 </p>
-                <Input
-                  type="search"
-                  aria-label="Search for the user to upload for"
-                  placeholder="Search by name or email…"
-                  value={ufQuery}
-                  onChange={(e) => setUfQuery(e.target.value)}
-                  autoFocus
-                />
-                {ufUsersQuery.error && ufSearchQ && !ufSearching ? (
-                  <QueryError what="users" error={ufUsersQuery.error} onRetry={() => void ufUsersQuery.refetch()} />
-                ) : ufSearching ? (
-                  <Skeleton className="h-24 w-full" />
-                ) : ufResults.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    {ufQuery.trim() ? "No matches." : "Type a name or email to search."}
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {ufResults.map((u) => {
-                      const name = [u.first_name, u.last_name].filter(Boolean).join(" ").trim() || "(no name)";
-                      return (
-                        <button
-                          key={u.id}
-                          type="button"
-                          onClick={() => setUfSelected(u)}
-                          className="w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50"
-                        >
-                          <p className="font-medium">{name}</p>
-                          <p className="text-xs text-muted-foreground">{u.email}</p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                <div className="max-w-lg">
+                  <PersonPicker
+                    id="upload-for-user"
+                    allUsers
+                    label="User to upload for"
+                    value={null}
+                    onChange={setUfSelected}
+                    autoFocus
+                  />
+                </div>
               </CardContent>
             </Card>
           ) : (
@@ -785,10 +373,9 @@ export default function ManagerPage() {
               <CardHeader>
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <CardTitle>
-                    Upload For:{" "}
-                    {[ufSelected.first_name, ufSelected.last_name].filter(Boolean).join(" ").trim() || ufSelected.email}
+                    Upload For: {ufSelected.display_name}
                   </CardTitle>
-                  <Button variant="outline" size="sm" onClick={() => { setUfSelected(null); setUfQuery(""); }}>
+                  <Button variant="outline" size="sm" onClick={() => setUfSelected(null)}>
                     Change user
                   </Button>
                 </div>
@@ -797,8 +384,10 @@ export default function ManagerPage() {
                 <SongUploadForm
                   variant="self"
                   onBehalf={{
-                    userId: ufSelected.id,
-                    label: `${[ufSelected.first_name, ufSelected.last_name].filter(Boolean).join(" ").trim() || ufSelected.email}${ufSelected.email ? ` (${ufSelected.email})` : ""}`,
+                    userId: ufSelected.user_id,
+                    label: ufSelected.email_masked
+                      ? `${ufSelected.display_name} (${ufSelected.email_masked})`
+                      : ufSelected.display_name,
                   }}
                 />
               </CardContent>
@@ -815,43 +404,16 @@ export default function ManagerPage() {
                 <p className="text-sm text-muted-foreground">
                   Find the user you&apos;re checking in for. The check-in is recorded exactly as if they did it themselves.
                 </p>
-                <Input
-                  type="search"
-                  aria-label="Search for the user to check in"
-                  placeholder="Search by name or email…"
-                  value={cfUserQuery}
-                  onChange={(e) => setCfUserQuery(e.target.value)}
-                  autoFocus
-                />
-                {cfUsersQuery.error && cfSearchQ && !cfSearching ? (
-                  <QueryError what="users" error={cfUsersQuery.error} onRetry={() => void cfUsersQuery.refetch()} />
-                ) : cfSearching ? (
-                  <Skeleton className="h-24 w-full" />
-                ) : cfUserResults.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    {cfUserQuery.trim() ? "No matches." : "Type a name or email to search."}
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {cfUserResults.map((u) => {
-                      const name = [u.first_name, u.last_name].filter(Boolean).join(" ").trim() || "(no name)";
-                      return (
-                        <button
-                          key={u.id}
-                          type="button"
-                          onClick={() => {
-                            cfSetValue("user", u);
-                            setCfUserQuery("");
-                          }}
-                          className="w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50"
-                        >
-                          <p className="font-medium">{name}</p>
-                          <p className="text-xs text-muted-foreground">{u.email}</p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                <div className="max-w-lg">
+                  <PersonPicker
+                    id="checkin-for-user"
+                    allUsers
+                    label="User to check in"
+                    value={null}
+                    onChange={(u) => cfSetValue("user", u)}
+                    autoFocus
+                  />
+                </div>
               </CardContent>
             </Card>
           ) : (
@@ -859,16 +421,12 @@ export default function ManagerPage() {
               <CardHeader>
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <CardTitle>
-                    CheckIn For:{" "}
-                    {[cfSelectedUser.first_name, cfSelectedUser.last_name].filter(Boolean).join(" ").trim() || cfSelectedUser.email}
+                    CheckIn For: {cfSelectedUser.display_name}
                   </CardTitle>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => {
-                      cfReset();
-                      setCfUserQuery("");
-                    }}
+                    onClick={() => cfReset()}
                   >
                     Change user
                   </Button>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointQuery } from "@/api/queries";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import {
   PERSON_SEARCH_DEBOUNCE_MS,
   PERSON_SEARCH_MIN_CHARS,
+  adminUserAsPerson,
   formatPersonLabel,
   personSearchQuery,
 } from "@/lib/personSearch";
@@ -20,29 +21,39 @@ type Search =
   | { status: "done"; results: ApiEventPerson[] }
   | { status: "error"; message: string };
 
-/**
- * Where the event's staff pick the person they act for or add to the staff.
- * A search box over the event's own people search (never the admin user
- * search): it waits for two characters and a pause in typing, then lists
- * matches as a listbox the arrow keys and Enter can pick from. Once someone
- * is picked it shows them, with Change to search again.
- */
-export default function PersonPicker({
-  id,
-  eventId,
-  label,
-  value,
-  onChange,
-  hint,
-}: {
+export type PersonPickerProps = {
   id: string;
-  eventId: string;
   label: string;
   value: ApiEventPerson | null;
   onChange: (person: ApiEventPerson | null) => void;
   /** Said after the line about who appears here. */
   hint?: string;
-}) {
+  autoFocus?: boolean;
+} & (
+  /** Search the people connected to this event, as its staff may. */
+  | { eventId: string; allUsers?: never }
+  /** Search every user, through the admin user search: for admin pages only. */
+  | { eventId?: never; allUsers: true }
+);
+
+/**
+ * Where the event's staff pick the person they act for or add to the staff.
+ * A search box over the event's own people search (never the admin user
+ * search, unless an admin page asks for `allUsers`): it waits for two
+ * characters and a pause in typing, then lists matches as a listbox the arrow
+ * keys and Enter can pick from. Once someone is picked it shows them, with
+ * Change to search again.
+ */
+export default function PersonPicker({
+  id,
+  eventId,
+  allUsers,
+  label,
+  value,
+  onChange,
+  hint,
+  autoFocus,
+}: PersonPickerProps) {
   const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
@@ -53,10 +64,19 @@ export default function PersonPicker({
   const q = personSearchQuery(text);
   const settledQ = useDebouncedValue(q, PERSON_SEARCH_DEBOUNCE_MS);
   const settled = q !== null && settledQ === q;
-  const peopleQuery = useEndpointQuery(endpoints.events.people, {
-    params: { id: eventId, q: settledQ ?? "" },
-    enabled: settled,
+  const eventPeopleQuery = useEndpointQuery(endpoints.events.people, {
+    params: { id: eventId ?? "", q: settledQ ?? "" },
+    enabled: settled && !allUsers,
   });
+  const usersQuery = useEndpointQuery(endpoints.admin.users, {
+    params: { q: settledQ ?? "" },
+    enabled: settled && !!allUsers,
+  });
+  const usersData = usersQuery.data;
+  const usersAsPeople = useMemo(() => usersData?.map(adminUserAsPerson), [usersData]);
+  const peopleQuery = allUsers
+    ? { data: usersAsPeople, error: usersQuery.error, isFetching: usersQuery.isFetching }
+    : eventPeopleQuery;
   const search: Search =
     q === null
       ? { status: "idle" }
@@ -121,10 +141,14 @@ export default function PersonPicker({
   let statusText = "";
   if (search.status === "loading") statusText = "Searching…";
   else if (search.status === "error") statusText = `Couldn't search: ${search.message}`;
-  else if (search.status === "done" && results.length === 0) statusText = "No one connected to this event matches that.";
+  else if (search.status === "done" && results.length === 0) {
+    statusText = allUsers ? "No user matches that." : "No one connected to this event matches that.";
+  }
   else if (search.status === "idle" && text.trim().length > 0) {
     statusText = `Type at least ${PERSON_SEARCH_MIN_CHARS} characters to search.`;
   }
+
+  const who = allUsers ? "Any user can be found by name or email." : "Only people connected to this event appear here.";
 
   return (
     <div className="space-y-1">
@@ -163,6 +187,7 @@ export default function PersonPicker({
             onKeyDown={onKeyDown}
             placeholder="Search by name or email"
             autoComplete="off"
+            autoFocus={autoFocus}
           />
           <ul
             id={listboxId}
@@ -199,7 +224,8 @@ export default function PersonPicker({
         </p>
       )}
       <p id={helpId} className="text-xs text-muted-foreground">
-        Only people connected to this event appear here.{hint ? ` ${hint}` : ""}
+        {who}
+        {hint ? ` ${hint}` : ""}
       </p>
     </div>
   );

@@ -12,12 +12,17 @@ import { useLiveQueues } from "@/hooks/useLiveQueues";
 import { richestEventRole } from "@/lib/eventRoles";
 import { compareSessionChrono } from "@/lib/chronoSort";
 import { formatSessionTitle } from "@/lib/sessionFormat";
+import { songLabel } from "@/lib/songLabel";
 import { cn } from "@/lib/utils";
+import { isSessionToday } from "@/lib/zonedTime";
 import type { ApiEvent, ApiQueueEntry, ApiSession } from "@/schemas";
 
 function isLive(s: ApiSession): boolean {
   return s.status === "checkin_open" || s.status === "in_progress";
 }
+
+// A stable empty list while a query has no data, so memos over it hold.
+const NO_ROWS: readonly never[] = [];
 
 function formatAgo(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000));
@@ -28,21 +33,52 @@ function formatAgo(ms: number): string {
   return `${Math.floor(m / 60)}h ago`;
 }
 
+export type LiveQueueSectionProps = {
+  /**
+   * The chosen session, when the caller keeps it, so the choice outlives this
+   * section being unmounted. Left out, the section keeps it itself.
+   */
+  sessionId?: string;
+  onSessionIdChange?: (id: string) => void;
+  /** Classes for a box around the session choice, to size it. */
+  selectorClassName?: string;
+} & (
+  /** One event's sessions, in date order: the event's staff portal. */
+  | { event: ApiEvent; today?: never }
+  /**
+   * Today's sessions across every event, live ones first: the admins' manager
+   * page. Labels the queue rows leave out are filled from the pair and song
+   * lists, and the processed filename is always shown.
+   */
+  | { event?: never; today: true }
+);
+
 /**
- * The live floor-trial queue for one of the event's sessions: the active
- * slots and both waiting queues, with run complete, run incomplete, move
- * down and withdraw. Each entry shows its song label; a DJ also sees the
- * song's processed filename. Every action names a queue entry of this event's
- * session, which the API resolves to the event before deciding.
+ * The live floor-trial queue for one session: the active slots and both
+ * waiting queues, with run complete, run incomplete, move down and withdraw.
+ * Each entry shows its song label; a DJ also sees the song's processed
+ * filename. Every action names a queue entry of the session, which the API
+ * resolves to its event before deciding.
  */
-export default function LiveQueueSection({ event }: { event: ApiEvent }) {
+export default function LiveQueueSection({
+  event,
+  today,
+  sessionId: chosenId,
+  onSessionIdChange,
+  selectorClassName,
+}: LiveQueueSectionProps) {
   // A DJ finds the song's file in the event's Drive folder by its processed
   // filename, so DJs see it under the song; other staff see the label only.
+  // Only admins reach the cross-event view, and they see it too.
   const { eventRoles } = useAuthMe();
-  const showFilename = richestEventRole(eventRoles, event.id) === "dj";
-  const sessionsQuery = useEndpointQuery(endpoints.sessions.list, { params: { eventId: event.id } });
+  const showFilename = event ? richestEventRole(eventRoles, event.id) === "dj" : true;
+  const sessionsQuery = useEndpointQuery(endpoints.sessions.list, {
+    params: event ? { eventId: event.id } : undefined,
+  });
   const sessions = sessionsQuery.data ?? null;
-  const [sessionId, setSessionId] = useState("");
+  const [ownId, setOwnId] = useState("");
+  const sessionId = chosenId ?? ownId;
+  const setSessionId = onSessionIdChange ?? setOwnId;
   const {
     active,
     priority,
@@ -55,11 +91,18 @@ export default function LiveQueueSection({ event }: { event: ApiEvent }) {
   } = useLiveQueues(sessionId);
   const [now, setNow] = useState(() => Date.now());
 
+  // Only a fallback for labels the queue rows leave out, so a failure here
+  // leaves the ids showing rather than blocking the queue.
+  const pairs = useEndpointQuery(endpoints.partners.leadingPairs, { enabled: !!today }).data ?? NO_ROWS;
+  const songs = useEndpointQuery(endpoints.songs.list, { enabled: !!today }).data ?? NO_ROWS;
+  const pairMap = useMemo(() => new Map(pairs.map((p) => [p.id, p.display_name])), [pairs]);
+  const songMap = useMemo(() => new Map(songs.map((s) => [s.id, songLabel(s)])), [songs]);
+
   // One session running now: open it straight away.
   useEffect(() => {
     const live = sessions?.filter(isLive) ?? [];
-    if (live.length === 1) setSessionId((cur) => cur || live[0]!.id);
-  }, [sessions]);
+    if (live.length === 1 && !sessionId) setSessionId(live[0]!.id);
+  }, [sessions, sessionId, setSessionId]);
 
   // The "Updated 5s ago" clock.
   useEffect(() => {
@@ -68,23 +111,36 @@ export default function LiveQueueSection({ event }: { event: ApiEvent }) {
     return () => clearInterval(tick);
   }, [sessionId]);
 
-  const options = useMemo(
-    () =>
-      (sessions ?? [])
-        .slice()
-        .sort((a, b) => compareSessionChrono(a, b))
-        .map((s) => ({
-          value: s.id,
-          label:
-            formatSessionTitle(s, s.event_timezone ?? event.timezone) +
-            (s.status === "completed" || s.status === "cancelled" ? ` (${s.status})` : ""),
-        })),
-    [sessions, event.timezone]
-  );
+  const options = useMemo(() => {
+    const listed = today
+      ? (sessions ?? [])
+          .filter((s) => isSessionToday(s, Date.now()))
+          .sort(
+            (a, b) =>
+              Number(isLive(b)) - Number(isLive(a)) || a.floor_trial_starts_at - b.floor_trial_starts_at
+          )
+      : (sessions ?? []).slice().sort((a, b) => compareSessionChrono(a, b));
+    return listed.map((s) => ({
+      value: s.id,
+      label:
+        formatSessionTitle(s, s.event_timezone ?? event?.timezone) +
+        (s.status === "completed" || s.status === "cancelled" ? ` (${s.status})` : ""),
+    }));
+  }, [sessions, today, event?.timezone]);
 
   const session = sessions?.find((s) => s.id === sessionId) ?? null;
 
   const actions = useQueueActions();
+
+  const entityLabel = (row: ApiQueueEntry) =>
+    row.entityLabel && row.entityLabel !== "—"
+      ? row.entityLabel
+      : row.entityPairId
+        ? (pairMap.get(row.entityPairId) ?? row.entityLabel)
+        : row.entityLabel;
+
+  const songText = (row: ApiQueueEntry) =>
+    row.songDisplayName ?? (row.songId ? (songMap.get(row.songId) ?? row.songId) : "—");
 
   const renderRow = (row: ApiQueueEntry, list: readonly ApiQueueEntry[], isActiveQueue: boolean) => {
     const isSlotOne = isActiveQueue && row.position === 1;
@@ -100,9 +156,9 @@ export default function LiveQueueSection({ event }: { event: ApiEvent }) {
             isSlotOne && "border-primary/50 bg-primary/10"
           )}
         >
-          <p className="font-medium">{row.entityLabel}</p>
+          <p className="font-medium">{entityLabel(row)}</p>
           <p className="text-muted-foreground truncate">
-            {row.divisionName} · {row.songDisplayName ?? row.songId ?? "—"}
+            {row.divisionName} · {songText(row)}
           </p>
           {showFilename && row.songProcessedFilename && (
             <p className="text-xs text-muted-foreground break-all font-mono">{row.songProcessedFilename}</p>
@@ -159,16 +215,23 @@ export default function LiveQueueSection({ event }: { event: ApiEvent }) {
         .map((row) => renderRow(row, list, isActiveQueue))
     );
 
+  const selector =
+    sessionsQuery.error && !sessions ? (
+      <QueryError what="sessions" error={sessionsQuery.error} onRetry={() => void sessionsQuery.refetch()} />
+    ) : sessions === null ? null : options.length === 0 ? (
+      <p className="text-sm text-muted-foreground">
+        {today
+          ? "No floor-trial sessions scheduled for today. When one is scheduled for today, it'll appear here to manage."
+          : "This event has no sessions yet."}
+      </p>
+    ) : (
+      <ChoiceGroup ariaLabel="Session" options={options} value={sessionId} onChange={setSessionId} />
+    );
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-        {sessionsQuery.error && !sessions ? (
-          <QueryError what="sessions" error={sessionsQuery.error} onRetry={() => void sessionsQuery.refetch()} />
-        ) : sessions === null ? null : options.length === 0 ? (
-          <p className="text-sm text-muted-foreground">This event has no sessions yet.</p>
-        ) : (
-          <ChoiceGroup ariaLabel="Session" options={options} value={sessionId} onChange={setSessionId} />
-        )}
+        {selectorClassName ? <div className={selectorClassName}>{selector}</div> : selector}
         {sessionId && (
           <button
             type="button"
@@ -206,9 +269,12 @@ export default function LiveQueueSection({ event }: { event: ApiEvent }) {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-primary">Active</CardTitle>
-                <span className="text-xs text-muted-foreground">
-                  {active.length} slot{active.length !== 1 ? "s" : ""} · Fills automatically
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-muted-foreground">
+                    {active.length} slot{active.length !== 1 ? "s" : ""}
+                  </span>
+                  <span className="text-xs text-muted-foreground">Fills automatically</span>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-2">{renderList(active, "No one on deck.", true)}</CardContent>
@@ -238,7 +304,7 @@ export default function LiveQueueSection({ event }: { event: ApiEvent }) {
 
       <WithdrawEntryDialog
         entry={actions.pendingWithdraw}
-        label={actions.pendingWithdraw?.entityLabel ?? ""}
+        label={actions.pendingWithdraw ? entityLabel(actions.pendingWithdraw) : ""}
         busy={actions.busy}
         onCancel={actions.cancelWithdraw}
         onConfirm={() => void actions.confirmWithdraw()}

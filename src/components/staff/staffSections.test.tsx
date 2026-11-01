@@ -52,6 +52,11 @@ const live = (id: string) =>
     divisions: [{ id: "d-1", division_name: "Classic", is_priority: false, sort_order: 0, priority_run_limit: null }],
   });
 
+const threeDaysAgo = (id: string) => {
+  const t = NOW - 3 * 86_400_000;
+  return fx.session({ ...live(id), status: "completed", checkin_opens_at: t - 3_600_000, floor_trial_starts_at: t, floor_trial_ends_at: t + 3_600_000 });
+};
+
 /**
  * Puts the caller's /v1/auth/me record in the cache, as the nav bar would
  * have, and returns whether it has since been invalidated.
@@ -331,6 +336,80 @@ describe("LiveQueueSection", () => {
     inRouter(<LiveQueueSection event={event} />);
     expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load sessions: down");
     expect(screen.queryByText("This event has no sessions yet.")).not.toBeInTheDocument();
+  });
+
+  it("asks for no pair or song lists for an event's queue", async () => {
+    apiGet.mockImplementation((p: string) => {
+      if (p === "/v1/sessions?event_id=ev-1") return Promise.resolve([live("s-1")]);
+      if (p === "/v1/queue/s-1/active/staff") return Promise.resolve([fx.queueEntry({ entityLabel: "—", songId: "song-1" })]);
+      return Promise.resolve([]);
+    });
+    inRouter(<LiveQueueSection event={event} />);
+    expect(await screen.findByText("Classic · song-1")).toBeInTheDocument();
+    expect(allPaths()).not.toContain("/v1/partners/leading-pairs");
+    expect(allPaths()).not.toContain("/v1/songs");
+  });
+
+  it("with today, lists today's sessions across events live first and fills labels the rows leave out", async () => {
+    const earlier = fx.session({
+      ...live("s-done"),
+      event_id: "ev-2",
+      status: "completed",
+      checkin_opens_at: NOW - 120_000,
+      floor_trial_starts_at: NOW - 90_000,
+    });
+    const old = threeDaysAgo("s-old");
+    apiGet.mockImplementation((p: string) => {
+      if (p === "/v1/sessions") return Promise.resolve([earlier, old, live("s-1")]);
+      if (p === "/v1/partners/leading-pairs") return Promise.resolve([fx.leadingPair({ id: "pair-9", display_name: "Pair From Map" })]);
+      if (p === "/v1/songs") return Promise.resolve([fx.song({ id: "song-9", partnership_label: "Pair", division: "Classic", routine_name: "Opener" })]);
+      if (p === "/v1/queue/s-1/active/staff") {
+        return Promise.resolve([
+          fx.queueEntry({ queueEntryId: "qe-1", entityLabel: "—", entityPairId: "pair-9", songId: "song-9", songProcessedFilename: "Pair_Classic.mp3" }),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    inRouter(<LiveQueueSection today />);
+
+    // The one live session is opened straight away, though it starts later.
+    expect(await screen.findByText("Pair From Map")).toBeInTheDocument();
+    const radios = within(screen.getByRole("radiogroup", { name: "Session" })).getAllByRole("radio");
+    expect(radios).toHaveLength(2);
+    expect(radios[0]).toHaveAttribute("aria-checked", "true");
+    expect(radios[1]).toHaveTextContent("(completed)");
+    expect(screen.getByText(/^Classic · Pair - Classic - Opener/)).toBeInTheDocument();
+    // Not a DJ of any event, yet the filename shows: only admins reach this view.
+    expect(screen.getByText("Pair_Classic.mp3")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw" }));
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Pair From Map (Classic) will be removed");
+  });
+
+  it("takes the chosen session from its caller when given, and sizes the choice", async () => {
+    apiGet.mockImplementation((p: string) =>
+      Promise.resolve(p === "/v1/sessions?event_id=ev-1" ? [live("s-1"), live("s-2")] : [])
+    );
+    const onSessionIdChange = vi.fn();
+    inRouter(
+      <LiveQueueSection event={event} sessionId="s-2" onSessionIdChange={onSessionIdChange} selectorClassName="sized" />
+    );
+    const group = await screen.findByRole("radiogroup", { name: "Session" });
+    expect(group.parentElement).toHaveClass("sized");
+    const radios = within(group).getAllByRole("radio");
+    expect(radios[1]).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(radios[0]!);
+    expect(onSessionIdChange).toHaveBeenCalledWith("s-1");
+    // The caller decides: until it passes the new id, the old one stays chosen.
+    expect(radios[1]).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("with today, says when nothing is scheduled for today", async () => {
+    apiGet.mockImplementation((p: string) =>
+      Promise.resolve(p === "/v1/sessions" ? [threeDaysAgo("s-old")] : [])
+    );
+    inRouter(<LiveQueueSection today />);
+    expect(await screen.findByText(/no floor-trial sessions scheduled for today/i)).toBeInTheDocument();
   });
 });
 
