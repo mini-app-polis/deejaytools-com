@@ -51,9 +51,14 @@ async function sweep(): Promise<void> {
   for (const s of await api.call<Song[]>("GET", "/v1/songs")) {
     if (s.routine_name?.startsWith(`${PREFIX} `)) await api.call("DELETE", `/v1/songs/${s.id}`).catch(() => undefined);
   }
-  const partners = await api.call<{ id: string; first_name: string; last_name: string }[]>("GET", "/v1/partners");
+  // Never the partner linked to the dancer test user (roles.e2e.ts): that
+  // row is made once by hand and kept.
+  const partners = await api.call<{ id: string; first_name: string; last_name: string; linked_user_id: string | null }[]>(
+    "GET",
+    "/v1/partners"
+  );
   for (const p of partners) {
-    if (p.first_name === PARTNER_FIRST && p.last_name.startsWith("Dancer")) {
+    if (p.first_name === PARTNER_FIRST && p.last_name.startsWith("Dancer") && !p.linked_user_id) {
       await api.call("DELETE", `/v1/partners/${p.id}`).catch(() => undefined);
     }
   }

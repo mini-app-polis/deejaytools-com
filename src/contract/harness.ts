@@ -7,6 +7,7 @@ import {
   allEndpoints,
   call,
   type CallArgs,
+  endpoints,
   type Endpoint,
   type Transport,
 } from "@/api/endpoints";
@@ -31,7 +32,12 @@ const ALLOWED_DEV_HOSTS = ["api-dev.deejaytools.com"];
 export interface ContractConfig {
   apiUrl: string;
   clerkSecretKey: string;
+  /** The admin test user. */
   userId: string;
+  /** A plain user: the linked partner of a row in the admin's address book. */
+  dancerUserId: string;
+  /** A plain user the suite grants per-event staff roles to. */
+  staffUserId: string;
 }
 
 function env(name: string): string | undefined {
@@ -54,10 +60,14 @@ export function loadConfig(): ContractConfig {
   const apiUrl = env("CONTRACT_API_URL");
   const clerkSecretKey = env("CONTRACT_CLERK_SECRET_KEY");
   const userId = env("CONTRACT_USER_ID");
+  const dancerUserId = env("CONTRACT_DANCER_USER_ID");
+  const staffUserId = env("CONTRACT_STAFF_USER_ID");
   const missing = [
     !apiUrl && "CONTRACT_API_URL",
     !clerkSecretKey && "CONTRACT_CLERK_SECRET_KEY",
     !userId && "CONTRACT_USER_ID",
+    !dancerUserId && "CONTRACT_DANCER_USER_ID",
+    !staffUserId && "CONTRACT_STAFF_USER_ID",
   ].filter(Boolean);
   if (missing.length) {
     throw new Error(`Contract suite not configured: set ${missing.join(", ")}.`);
@@ -72,7 +82,18 @@ export function loadConfig(): ContractConfig {
   if (onProductionDomain && !ALLOWED_DEV_HOSTS.includes(host)) {
     throw new Error(`Refusing to run against ${host}: the contract suite writes data.`);
   }
-  return { apiUrl: apiUrl!.replace(/\/$/, ""), clerkSecretKey: clerkSecretKey!, userId: userId! };
+  if (new Set([userId, dancerUserId, staffUserId]).size !== 3) {
+    throw new Error(
+      "Refusing to run: CONTRACT_USER_ID, CONTRACT_DANCER_USER_ID and CONTRACT_STAFF_USER_ID must be three different users."
+    );
+  }
+  return {
+    apiUrl: apiUrl!.replace(/\/$/, ""),
+    clerkSecretKey: clerkSecretKey!,
+    userId: userId!,
+    dancerUserId: dancerUserId!,
+    staffUserId: staffUserId!,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -148,6 +169,33 @@ export function makeClient(apiUrl: string, session: ClerkTestSession | null): Cl
     put: async <T>(path: string, body: unknown) => (await send("PUT", path, body)) as T,
     del: (path: string) => send("DELETE", path),
   };
+}
+
+/** A signed-in test user: their Clerk session and a client that sends its token. */
+export interface SignedIn {
+  session: ClerkTestSession;
+  client: Client;
+}
+
+/**
+ * Start a Clerk session for `userId` and sync it with the API, as the app
+ * does on sign-in, so the user has a `users` row before anyone names it (a
+ * staff grant, a partner link). For the suite's other users: the admin's
+ * own sync is validated against the catalog in the suite itself.
+ */
+export async function signInAs(cfg: ContractConfig, userId: string): Promise<SignedIn> {
+  const session = await ClerkTestSession.start(cfg.clerkSecretKey, userId);
+  const client = makeClient(cfg.apiUrl, session);
+  const res = await client.raw("POST", endpoints.auth.sync.path(), {
+    email: session.user.email,
+    firstName: session.user.firstName ?? undefined,
+    lastName: session.user.lastName ?? undefined,
+  });
+  if (res.status !== 200) {
+    await session.end();
+    throw new Error(`Syncing test user ${session.user.email} failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
+  }
+  return { session, client };
 }
 
 // ---------------------------------------------------------------------------

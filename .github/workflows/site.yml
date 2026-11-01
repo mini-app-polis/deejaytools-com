@@ -162,6 +162,8 @@ jobs:
       CLERK_SECRET_KEY: ${{ secrets.CONTRACT_CLERK_SECRET_KEY }}
       CONTRACT_API_URL: ${{ vars.CONTRACT_API_URL }}
       CONTRACT_USER_ID: ${{ vars.CONTRACT_USER_ID }}
+      CONTRACT_DANCER_USER_ID: ${{ vars.CONTRACT_DANCER_USER_ID }}
+      CONTRACT_STAFF_USER_ID: ${{ vars.CONTRACT_STAFF_USER_ID }}
     steps:
       - name: Resolve the dev site URL
         run: |

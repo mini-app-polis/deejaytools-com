@@ -10,6 +10,9 @@ name: Contract
 #   secret   CONTRACT_CLERK_SECRET_KEY   dev Clerk instance secret key (sk_test_…)
 #   variable CONTRACT_API_URL           dev API base URL
 #   variable CONTRACT_USER_ID           Clerk user id of the test user (an admin in dev)
+#   variable CONTRACT_DANCER_USER_ID    Clerk user id of a plain user, linked as the admin's partner
+#                                       (one-time setup: docs/DEPLOYMENT.md, "Linked partner for the test suites")
+#   variable CONTRACT_STAFF_USER_ID     Clerk user id of a plain user the suite grants event staff roles to
 # Missing configuration fails the run: an unconfigured suite checks nothing,
 # and a green run must mean the contract was checked.
 #
@@ -49,6 +52,8 @@ jobs:
     env:
       CONTRACT_API_URL: ${{ vars.CONTRACT_API_URL }}
       CONTRACT_USER_ID: ${{ vars.CONTRACT_USER_ID }}
+      CONTRACT_DANCER_USER_ID: ${{ vars.CONTRACT_DANCER_USER_ID }}
+      CONTRACT_STAFF_USER_ID: ${{ vars.CONTRACT_STAFF_USER_ID }}
       CONTRACT_CLERK_SECRET_KEY: ${{ secrets.CONTRACT_CLERK_SECRET_KEY }}
     steps:
       - name: Check configuration
@@ -56,6 +61,8 @@ jobs:
           missing=""
           [ -n "$CONTRACT_API_URL" ] || missing="$missing CONTRACT_API_URL"
           [ -n "$CONTRACT_USER_ID" ] || missing="$missing CONTRACT_USER_ID"
+          [ -n "$CONTRACT_DANCER_USER_ID" ] || missing="$missing CONTRACT_DANCER_USER_ID"
+          [ -n "$CONTRACT_STAFF_USER_ID" ] || missing="$missing CONTRACT_STAFF_USER_ID"
           [ -n "$CONTRACT_CLERK_SECRET_KEY" ] || missing="$missing CONTRACT_CLERK_SECRET_KEY"
           if [ -n "$missing" ]; then
             echo "::error::Contract suite not configured — set$missing."

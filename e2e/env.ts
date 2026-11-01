@@ -23,7 +23,12 @@ export interface E2eConfig {
   baseUrl: string;
   apiUrl: string;
   secretKey: string;
+  /** The admin test user. */
   userId: string;
+  /** A plain user: the linked partner of a row in the admin's address book. */
+  dancerUserId: string;
+  /** A plain user the suite grants per-event staff roles to. */
+  staffUserId: string;
 }
 
 export function e2eConfig(): E2eConfig {
@@ -31,6 +36,13 @@ export function e2eConfig(): E2eConfig {
   const apiUrl = required("CONTRACT_API_URL").replace(/\/$/, "");
   const secretKey = required("CLERK_SECRET_KEY");
   const userId = required("CONTRACT_USER_ID");
+  const dancerUserId = required("CONTRACT_DANCER_USER_ID");
+  const staffUserId = required("CONTRACT_STAFF_USER_ID");
+  if (new Set([userId, dancerUserId, staffUserId]).size !== 3) {
+    throw new Error(
+      "Refusing to run: CONTRACT_USER_ID, CONTRACT_DANCER_USER_ID and CONTRACT_STAFF_USER_ID must be three different users."
+    );
+  }
   if (!secretKey.startsWith("sk_test_")) {
     throw new Error("Refusing to run: CLERK_SECRET_KEY is not a development-instance key (sk_test_…).");
   }
@@ -40,5 +52,5 @@ export function e2eConfig(): E2eConfig {
   for (const url of [baseUrl, apiUrl]) {
     if (onProduction(url)) throw new Error(`Refusing to run against ${new URL(url).hostname}: the suite writes data.`);
   }
-  return { baseUrl, apiUrl, secretKey, userId };
+  return { baseUrl, apiUrl, secretKey, userId, dancerUserId, staffUserId };
 }

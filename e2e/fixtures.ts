@@ -14,9 +14,46 @@ export class Api {
     readonly session: ClerkTestSession
   ) {}
 
-  static async start(): Promise<Api> {
+  /** Sign in as `userId`: the admin test user unless another is named. */
+  static async start(userId?: string): Promise<Api> {
     const cfg = e2eConfig();
-    return new Api(cfg.apiUrl, await ClerkTestSession.start(cfg.secretKey, cfg.userId));
+    return new Api(cfg.apiUrl, await ClerkTestSession.start(cfg.secretKey, userId ?? cfg.userId));
+  }
+
+  /**
+   * Sync the user with the API, as the app does on sign-in, so they have a
+   * users row before anyone else names them (a staff grant, a partner link).
+   */
+  async sync(): Promise<void> {
+    const { email, firstName, lastName } = this.session.user;
+    await this.call("POST", "/v1/auth/sync", {
+      email,
+      firstName: firstName ?? undefined,
+      lastName: lastName ?? undefined,
+    });
+  }
+
+  /**
+   * Upload `file` as a song in one chunk, with the form fields the Add Song
+   * form sends (division, routine_name, partner_id, …). The site's own
+   * upload code needs Vite, so this speaks the chunk protocol directly; the
+   * contract suite runs the real thing.
+   */
+  async uploadSong(file: { name: string; mimeType: string; buffer: Buffer }, fields: Record<string, string>): Promise<void> {
+    const form = new FormData();
+    form.set("chunk", new Blob([new Uint8Array(file.buffer)], { type: file.mimeType }), file.name);
+    form.set("upload_id", crypto.randomUUID());
+    form.set("chunk_index", "0");
+    form.set("total_chunks", "1");
+    form.set("original_filename", file.name);
+    form.set("mime_type", file.mimeType);
+    for (const [key, value] of Object.entries(fields)) form.set(key, value);
+    const res = await fetch(`${this.apiUrl}/v1/songs/upload/chunk`, {
+      method: "POST",
+      headers: { Accept: "application/json", Authorization: `Bearer ${await this.session.token()}` },
+      body: form,
+    });
+    if (!res.ok) throw new Error(`Song upload → ${res.status} ${(await res.text()).slice(0, 300)}`);
   }
 
   async call<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
@@ -66,6 +103,12 @@ export async function signIn(page: Page, email: string): Promise<void> {
   await page.goto("/");
   await expectApiReachable(page);
   await clerk.signIn({ page, emailAddress: email });
+}
+
+/** Expect the page to have been sent to the landing page, as the app's
+ * guards do for someone who may not see a route. */
+export async function expectSentHome(page: Page): Promise<void> {
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/");
 }
 
 /**

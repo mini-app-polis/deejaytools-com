@@ -19,14 +19,32 @@
  *
  * Run: pnpm test:contract  (needs CONTRACT_API_URL, CONTRACT_CLERK_SECRET_KEY,
  * CONTRACT_USER_ID; the test user must be an admin in that environment).
+ *
+ * Two plain users sign in beside the admin, so the views only other people
+ * get are seen live: CONTRACT_DANCER_USER_ID, the linked partner of a row in
+ * the admin's address book (made once by hand: see "Linked partner for the
+ * test suites" in docs/DEPLOYMENT.md), and CONTRACT_STAFF_USER_ID, who is
+ * granted per-event staff roles here and loses them again. Their calls go
+ * through the same validating `call()`, but not through the ledger: it
+ * counts what the admin exercises.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { bareJsonTransport } from "@/api/bareTransport";
-import { allEndpoints, checkEndpoint, endpoints } from "@/api/endpoints";
+import { allEndpoints, call, checkEndpoint, endpoints } from "@/api/endpoints";
 import { createLogger } from "@/lib/logger";
-import { SessionStatusSchema } from "@/schemas";
+import { type ApiSong, SessionStatusSchema } from "@/schemas";
 import { ClerkTestSession } from "./clerk";
-import { ApiStatusError, type Client, Ledger, loadConfig, makeClient, sleep, strictContracts } from "./harness";
+import {
+  ApiStatusError,
+  type Client,
+  Ledger,
+  loadConfig,
+  makeClient,
+  type SignedIn,
+  signInAs,
+  sleep,
+  strictContracts,
+} from "./harness";
 
 const RUN_PREFIX = "Contract Suite";
 const DIVISION = "Classic";
@@ -63,6 +81,14 @@ const cfg = loadConfig();
 let session: ClerkTestSession;
 let api: Client;
 let ledger: Ledger;
+/** The admin test user's id. */
+let adminId: string;
+/** The plain user linked to `state.linkedPartnerId`, and their id. */
+let dancer: SignedIn | undefined;
+let dancerId: string;
+/** The plain user granted staff roles, and their id. */
+let staff: SignedIn | undefined;
+let staffId: string;
 
 const state: {
   eventId?: string;
@@ -73,6 +99,12 @@ const state: {
   songId?: string;
   submissionId?: string;
   checkinId?: string;
+  /** The persistent partner row linked to the dancer user: never deleted. */
+  linkedPartnerId?: string;
+  sharedSongId?: string;
+  sharedSubmissionId?: string;
+  sharedCheckinId?: string;
+  otherEventId?: string;
 } = {};
 
 /**
@@ -148,6 +180,67 @@ async function waitForActive(sessionId: string): Promise<string> {
   );
 }
 
+/**
+ * Upload a small MP3 as the admin with the app's own upload code, attached
+ * to `partnerId` as the upload form attaches it, and wait until the API has
+ * put it on Google Drive. `onListed` gets the song's id as soon as it is
+ * listed, so cleanup can find it even if the wait fails.
+ *
+ * The API commits the song row before it answers the last chunk, so the song
+ * is listed from the first poll on. It deletes the song again if the Drive
+ * upload fails — often before that first poll — so a song missing at any
+ * point means Drive refused it.
+ */
+async function uploadSong(routineName: string, partnerId: string, onListed: (id: string) => void): Promise<ApiSong> {
+  vi.stubEnv("VITE_API_URL", cfg.apiUrl);
+  try {
+    const { uploadSongInChunks } = await import("@/lib/chunkedSongUpload");
+    // An empty ID3v2 header passes the API's MP3 check; the rest stands in
+    // for audio frames.
+    const bytes = new Uint8Array([0x49, 0x44, 0x33, 0x04, 0, 0, 0, 0, 0, 0, ...new Uint8Array(4096).fill(0x55)]);
+    await uploadSongInChunks({
+      file: new File([bytes], "contract-suite.mp3", { type: "audio/mpeg" }),
+      getToken: () => session.token(),
+      buildFormFields: () => ({ division: DIVISION, routine_name: routineName, partner_id: partnerId }),
+      retryDelayMs: 0,
+    });
+    ledger.mark(endpoints.songs.uploadChunk);
+
+    const deadline = Date.now() + DRIVE_UPLOAD_TIMEOUT_MS;
+    for (;;) {
+      const song = (await ledger.hit(endpoints.songs.list)).find((s) => s.routine_name === routineName);
+      if (!song) {
+        throw new Error(
+          "The API removed the uploaded song: its Google Drive upload failed. See song_background_upload_failed in the dev API logs."
+        );
+      }
+      onListed(song.id);
+      if (song.drive_file_id) return song;
+      if (Date.now() > deadline) {
+        throw new Error(`The song had no Google Drive file after ${DRIVE_UPLOAD_TIMEOUT_MS / 1000}s.`);
+      }
+      await sleep(2_000);
+    }
+  } finally {
+    vi.unstubAllEnvs();
+  }
+}
+
+/**
+ * Expect a call to be refused with 403. The transport has already checked
+ * the body is the {error:{code,message}} envelope: a bare body throws a
+ * plain Error instead of an ApiStatusError.
+ */
+async function expectForbidden(request: Promise<unknown>): Promise<void> {
+  const err = await request.then(
+    () => null,
+    (e: unknown) => e
+  );
+  expect(err).toBeInstanceOf(ApiStatusError);
+  expect((err as ApiStatusError).status).toBe(403);
+  expect((err as ApiStatusError).code).toBeTruthy();
+}
+
 beforeAll(async () => {
   strictContracts();
   session = await ClerkTestSession.start(cfg.clerkSecretKey, cfg.userId);
@@ -178,6 +271,7 @@ beforeAll(async () => {
       `Contract user ${me.email} is not an admin in this environment. Promote it once from the Admin page.`
     );
   }
+  adminId = me.id;
 
   // Sweep what a crashed run left behind. Deleting the event removes its
   // sessions, check-ins, queue entries and song submissions with it (and
@@ -204,6 +298,31 @@ beforeAll(async () => {
       await api.del(endpoints.partners.remove.path({ id: p.id })).catch(() => undefined);
     }
   }
+
+  // The two plain users. Signing in syncs each, so their users rows exist
+  // before a grant or a link names them.
+  dancer = await signInAs(cfg, cfg.dancerUserId);
+  staff = await signInAs(cfg, cfg.staffUserId);
+  const dancerMe = await call(dancer.client, endpoints.auth.me);
+  const staffMe = await call(staff.client, endpoints.auth.me);
+  for (const u of [dancerMe, staffMe]) {
+    if (u.role !== "user") throw new Error(`Test user ${u.email} must be a plain user, not ${u.role}.`);
+  }
+  dancerId = dancerMe.id;
+  staffId = staffMe.id;
+
+  // No endpoint sets a partner's link, so the link is a row made once by
+  // hand, and kept: found here, never created or deleted.
+  const linked = (await api.get<{ id: string; linked_user_id: string | null }[]>(endpoints.partners.list.path())).find(
+    (p) => p.linked_user_id === dancerId
+  );
+  if (!linked) {
+    throw new Error(
+      `No partner in ${me.email}'s address book is linked to ${dancerMe.email} (${dancerId}). ` +
+        'Create it once in the dev database: see "Linked partner for the test suites" in docs/DEPLOYMENT.md.'
+    );
+  }
+  state.linkedPartnerId = linked.id;
 }, 60_000);
 
 afterAll(async () => {
@@ -220,9 +339,27 @@ afterAll(async () => {
       async () => state.submissionId && ledger.hit(endpoints.eventSongSubmissions.remove, { params: { id: state.submissionId } }),
     ],
     ["songs.remove", async () => state.songId && ledger.hit(endpoints.songs.remove, { params: { id: state.songId } })],
+    [
+      "checkins.withdraw (shared)",
+      async () => state.sharedCheckinId && ledger.hit(endpoints.checkins.withdraw, { params: { id: state.sharedCheckinId } }),
+    ],
+    [
+      "eventSongSubmissions.remove (shared)",
+      async () =>
+        state.sharedSubmissionId &&
+        ledger.hit(endpoints.eventSongSubmissions.remove, { params: { id: state.sharedSubmissionId } }),
+    ],
+    [
+      "songs.remove (shared)",
+      async () => state.sharedSongId && ledger.hit(endpoints.songs.remove, { params: { id: state.sharedSongId } }),
+    ],
     ["admin.clearTestCheckins", () => ledger.hit(endpoints.admin.clearTestCheckins)],
     ["sessions.remove", async () => state.sessionId && ledger.hit(endpoints.sessions.remove, { params: { id: state.sessionId } })],
     ["events.remove", async () => state.eventId && ledger.hit(endpoints.events.remove, { params: { id: state.eventId } })],
+    [
+      "events.remove (other)",
+      async () => state.otherEventId && ledger.hit(endpoints.events.remove, { params: { id: state.otherEventId } }),
+    ],
     ["partners.remove", async () => state.partnerId && ledger.hit(endpoints.partners.remove, { params: { id: state.partnerId } })],
     ["teams.remove", async () => state.teamId && ledger.hit(endpoints.teams.remove, { params: { id: state.teamId } })],
     [
@@ -243,6 +380,8 @@ afterAll(async () => {
     }
   }
   await session?.end();
+  await dancer?.session.end();
+  await staff?.session.end();
 
   if (ledger) {
     const { exercised, skipped, unaccounted } = ledger.report();
@@ -424,45 +563,12 @@ describe("contract", () => {
   // subfolder, so each run leaves two tiny files there: the song and its
   // event copy.
   it("song upload reaches Google Drive", async () => {
-    vi.stubEnv("VITE_API_URL", cfg.apiUrl);
-    const { uploadSongInChunks } = await import("@/lib/chunkedSongUpload");
-    const routineName = `${RUN_PREFIX} ${Date.now()}`;
     const partnerId = state.partnerId!;
-    // An empty ID3v2 header passes the API's MP3 check; the rest stands in
-    // for audio frames.
-    const bytes = new Uint8Array([0x49, 0x44, 0x33, 0x04, 0, 0, 0, 0, 0, 0, ...new Uint8Array(4096).fill(0x55)]);
-    await uploadSongInChunks({
-      file: new File([bytes], "contract-suite.mp3", { type: "audio/mpeg" }),
-      getToken: () => session.token(),
-      buildFormFields: () => ({ division: DIVISION, routine_name: routineName, partner_id: partnerId }),
-      retryDelayMs: 0,
+    const song = await uploadSong(`${RUN_PREFIX} ${Date.now()}`, partnerId, (id) => {
+      state.songId = id;
     });
-    ledger.mark(endpoints.songs.uploadChunk);
-
-    // The API commits the song row before it answers the last chunk, so the
-    // song is listed from the first poll on. It deletes the song again if the
-    // Drive upload fails — often before that first poll — so a song missing
-    // at any point means Drive refused it.
-    const deadline = Date.now() + DRIVE_UPLOAD_TIMEOUT_MS;
-    for (;;) {
-      const song = (await ledger.hit(endpoints.songs.list)).find((s) => s.routine_name === routineName);
-      if (!song) {
-        throw new Error(
-          "The API removed the uploaded song: its Google Drive upload failed. See song_background_upload_failed in the dev API logs."
-        );
-      }
-      state.songId = song.id;
-      if (song.drive_file_id) {
-        expect(song.processed_filename).toMatch(/\.mp3$/);
-        expect(song.partner_id).toBe(partnerId);
-        break;
-      }
-      if (Date.now() > deadline) {
-        throw new Error(`The song had no Google Drive file after ${DRIVE_UPLOAD_TIMEOUT_MS / 1000}s.`);
-      }
-      await sleep(2_000);
-    }
-    vi.unstubAllEnvs();
+    expect(song.processed_filename).toMatch(/\.mp3$/);
+    expect(song.partner_id).toBe(partnerId);
   }, 90_000);
 
   // The dancer's side of floor trial day, end to end: enter the uploaded
@@ -552,6 +658,61 @@ describe("contract", () => {
     );
   }, 240_000);
 
+  // The other side of a song: the admin owns a song whose partner row is
+  // linked to the dancer user, enters it and checks in with it. The dancer
+  // sees all three as shared — and may not withdraw any of them, which the
+  // API refuses as well as the pages hiding it. The check-in is withdrawn
+  // before the queue test, which counts the session's entries; the
+  // submission and song go in the cleanup, after their Drive copy has had
+  // time to be made.
+  it("a linked partner sees the shared song, submission and check-in, and cannot withdraw them", async () => {
+    const sessionId = state.sessionId!;
+    const eventId = state.eventId!;
+    const partnerId = state.linkedPartnerId!;
+    const song = await uploadSong(`${RUN_PREFIX} shared ${Date.now()}`, partnerId, (id) => {
+      state.sharedSongId = id;
+    });
+    expect(song).toMatchObject({ partner_id: partnerId, shared_with_me: false });
+    const submission = await ledger.hit(endpoints.eventSongSubmissions.create, {
+      body: { event_id: eventId, song_id: song.id },
+    });
+    state.sharedSubmissionId = submission.id;
+    const pair = await ledger.hit(endpoints.pairs.findOrCreate, { body: { partner_id: partnerId } });
+    const checkin = await ledger.hit(endpoints.checkins.create, {
+      body: { sessionId, divisionName: DIVISION, entityPairId: pair.id, songId: song.id },
+    });
+    state.sharedCheckinId = checkin.id;
+
+    // The owner may withdraw both.
+    const ownSubmissions = await ledger.hit(endpoints.eventSongSubmissions.list, { params: { eventId } });
+    expect(ownSubmissions.find((s) => s.id === submission.id)?.can_withdraw).toBe(true);
+    expect((await ledger.hit(endpoints.checkins.mine)).find((c) => c.id === checkin.id)?.canWithdraw).toBe(true);
+
+    // The linked partner sees them, read-only.
+    const as = dancer!.client;
+    const shared = (await call(as, endpoints.songs.list)).find((s) => s.id === song.id);
+    expect(shared).toMatchObject({ user_id: adminId, partner_id: partnerId, shared_with_me: true });
+    const submissions = await call(as, endpoints.eventSongSubmissions.list, { params: { eventId } });
+    expect(submissions.find((s) => s.id === submission.id)).toMatchObject({ song_id: song.id, can_withdraw: false });
+    const everywhere = await call(as, endpoints.eventSongSubmissions.list);
+    expect(everywhere.find((s) => s.id === submission.id)?.can_withdraw).toBe(false);
+    const mine = await call(as, endpoints.checkins.mine);
+    expect(mine.find((c) => c.id === checkin.id)).toMatchObject({ sessionId, entityPairId: pair.id, canWithdraw: false });
+    await expectForbidden(call(as, endpoints.checkins.withdraw, { params: { id: checkin.id } }));
+
+    await ledger.hit(endpoints.checkins.withdraw, { params: { id: checkin.id } });
+    state.sharedCheckinId = undefined;
+    expect((await call(as, endpoints.checkins.mine)).some((c) => c.id === checkin.id)).toBe(false);
+  }, 120_000);
+
+  it("a plain user is refused admin and event-staff routes", async () => {
+    const as = dancer!.client;
+    await expectForbidden(call(as, endpoints.admin.users));
+    await expectForbidden(call(as, endpoints.admin.songs));
+    await expectForbidden(call(as, endpoints.events.songSubmissions, { params: { id: state.eventId! } }));
+    await expectForbidden(call(as, endpoints.events.staff, { params: { id: state.eventId! } }));
+  });
+
   it("the user's own lists", async () => {
     await ledger.hit(endpoints.songs.list);
     await ledger.hit(endpoints.checkins.mine);
@@ -598,6 +759,52 @@ describe("contract", () => {
     expect(withRole.event_roles).toContainEqual({ event_id: eventId, role: "coordinator" });
     await ledger.hit(endpoints.events.revokeStaff, { params: { id: eventId, userId: me.id, role: "coordinator" } });
     expect((await ledger.hit(endpoints.events.staff, { params: { id: eventId } })).some((s) => s.user_id === me.id)).toBe(false);
+  });
+
+  // The same routes as a staff member, not an admin: each role's scopes hold
+  // on the event it was granted for and nowhere else. A coordinator reads
+  // the event's entries and people but not its staff list, which takes an
+  // event manager. Event manager is revoked as soon as it has been checked:
+  // its grant queues a Drive folder share, which finds the role gone and
+  // does nothing.
+  it("a staff member reaches an event's staff routes on that event only", async () => {
+    const eventId = state.eventId!;
+    const other = await ledger.hit(endpoints.events.create, {
+      body: {
+        name: `${RUN_PREFIX} other ${new Date().toISOString()}`,
+        start_date: dateIn(TIMEZONE, 30),
+        end_date: dateIn(TIMEZONE, 31),
+        timezone: TIMEZONE,
+      },
+    });
+    state.otherEventId = other.id;
+    const as = staff!.client;
+    const role = (r: "coordinator" | "event-manager") => ({ params: { id: eventId, userId: staffId, role: r } });
+
+    await expectForbidden(call(as, endpoints.events.people, { params: { id: eventId, q: "co" } }));
+    await ledger.hit(endpoints.events.grantStaff, role("coordinator"));
+    expect((await call(as, endpoints.auth.me)).event_roles).toContainEqual({ event_id: eventId, role: "coordinator" });
+    await call(as, endpoints.events.people, { params: { id: eventId, q: "co" } });
+    await call(as, endpoints.events.songSubmissions, { params: { id: eventId } });
+    await expectForbidden(call(as, endpoints.events.staff, { params: { id: eventId } }));
+    await expectForbidden(call(as, endpoints.events.people, { params: { id: other.id, q: "co" } }));
+    await expectForbidden(call(as, endpoints.events.songSubmissions, { params: { id: other.id } }));
+    await expectForbidden(call(as, endpoints.admin.users));
+
+    await ledger.hit(endpoints.events.grantStaff, role("event-manager"));
+    try {
+      const list = await call(as, endpoints.events.staff, { params: { id: eventId } });
+      expect(list.filter((s) => s.user_id === staffId).map((s) => s.role).sort()).toEqual(["coordinator", "event-manager"]);
+      await expectForbidden(call(as, endpoints.events.staff, { params: { id: other.id } }));
+    } finally {
+      await ledger.hit(endpoints.events.revokeStaff, role("event-manager"));
+    }
+    await ledger.hit(endpoints.events.revokeStaff, role("coordinator"));
+    expect((await call(as, endpoints.auth.me)).event_roles.some((r) => r.event_id === eventId)).toBe(false);
+    await expectForbidden(call(as, endpoints.events.people, { params: { id: eventId, q: "co" } }));
+
+    await ledger.hit(endpoints.events.remove, { params: { id: other.id } });
+    state.otherEventId = undefined;
   });
 
   it("queue", async () => {
