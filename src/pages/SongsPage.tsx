@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { songLabel, songPieces } from "@/lib/songLabel";
+import { songPieces } from "@/lib/songLabel";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
 import QueryError from "@/components/QueryError";
-import { Badge } from "@/components/ui/badge";
+import SongCard from "@/components/SongCard";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -102,60 +102,9 @@ export default function SongsPage() {
             .
           </p>
         )}
-        {songs.map((s) => {
-          const partnerName = s.partnership_label?.trim() || null;
-          return (
-            <div key={s.id} className="rounded-lg border-2 border-primary/40 bg-card p-4 space-y-2 shadow-sm">
-              <div className="flex items-start justify-between gap-2">
-                <p className="font-medium text-sm leading-snug break-words flex-1">
-                  {songLabel(s)}
-                </p>
-                <p className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
-                  {new Date(s.created_at).toLocaleDateString()}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                {s.division && (
-                  <span>
-                    <span className="text-muted-foreground text-xs">Division </span>
-                    {s.division}
-                  </span>
-                )}
-                {partnerName && (
-                  <span>
-                    <span className="text-muted-foreground text-xs">Entered as </span>
-                    {partnerName}
-                  </span>
-                )}
-                {s.routine_name && (
-                  <span>
-                    <span className="text-muted-foreground text-xs">Routine </span>
-                    {s.routine_name}
-                  </span>
-                )}
-                {s.personal_descriptor && (
-                  <span>
-                    <span className="text-muted-foreground text-xs">Descriptor </span>
-                    {s.personal_descriptor}
-                  </span>
-                )}
-              </div>
-              {s.shared_with_me ? (
-                <Badge variant="outline">Shared with you</Badge>
-              ) : (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="destructive"
-                  className="w-full mt-1"
-                  onClick={() => setPendingDeleteId(s.id)}
-                >
-                  Delete
-                </Button>
-              )}
-            </div>
-          );
-        })}
+        {songs.map((s) => (
+          <SongCard key={s.id} song={s} onDelete={setPendingDeleteId} />
+        ))}
       </div>
 
     </div>
