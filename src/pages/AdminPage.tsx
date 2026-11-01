@@ -2,19 +2,18 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { keepPreviousData } from "@tanstack/react-query";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { z } from "zod";
-import { type ApiEvent, type ApiSession } from "@/schemas";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
 import QueryError from "@/components/QueryError";
+import AdminEventsSection from "@/components/admin/AdminEventsSection";
+import AdminSessionsSection from "@/components/admin/AdminSessionsSection";
+import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS, formatTime } from "@/components/admin/adminShared";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import { useDivisions } from "@/hooks/useDivisions";
-import { CLICKABLE_ROW_CLASS, ROW_LINK_CLASS } from "@/lib/clickable";
 import { toastFirstError } from "@/lib/formErrors";
-import { adminSessionFormSchema, type AdminSessionForm } from "@/lib/sessionForm";
-import { seasonYearFromDateString } from "@/lib/seasonYear";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ChoiceGroup } from "@/components/ui/choice-group";
@@ -40,9 +39,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
-import { epochToTimeInTz, toEpochInTz } from "@/lib/zonedTime";
-import { compareEventChrono, compareSessionChrono } from "@/lib/chronoSort";
+import { formatSessionTitle } from "@/lib/sessionFormat";
+import { compareSessionChrono } from "@/lib/chronoSort";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -53,80 +51,8 @@ function randomDivision(divisions: readonly string[]): string {
   return divisions.length > 0 ? divisions[Math.floor(Math.random() * divisions.length)] : "";
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function eventStatusBadge(status: string) {
-  switch (status) {
-    case "upcoming":
-      return <Badge variant="default">{status}</Badge>;
-    case "active":
-      return (
-        <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 border-transparent">
-          {status}
-        </Badge>
-      );
-    case "completed":
-      return <Badge variant="secondary">{status}</Badge>;
-    case "cancelled":
-      return <Badge variant="destructive">{status}</Badge>;
-    default:
-      return <Badge variant="outline">{status}</Badge>;
-  }
-}
-
-function sessionStatusBadge(status: string) {
-  switch (status) {
-    case "scheduled":
-      return <Badge variant="secondary">{status}</Badge>;
-    case "checkin_open":
-      return <Badge variant="default">{status}</Badge>;
-    case "in_progress":
-      return (
-        <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 border-transparent">
-          {status}
-        </Badge>
-      );
-    case "completed":
-      return <Badge variant="outline">{status}</Badge>;
-    case "cancelled":
-      return <Badge variant="destructive">{status}</Badge>;
-    default:
-      return <Badge variant="outline">{status}</Badge>;
-  }
-}
-
-function formatTime(ts: number): string {
-  return new Date(ts).toLocaleString(undefined, {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
-}
-
-const FIELD_INPUT_CLASS =
-  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
-const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
-
 // ─── Forms ────────────────────────────────────────────────────────────────────
 
-/** The event dialog, checked in the order it reads; only the first problem is reported. */
-const eventFormSchema = z
-  .object({
-    name: z.string(),
-    startDate: z.string(),
-    endDate: z.string(),
-    seasonYear: z.string(),
-    timezone: z.string(),
-  })
-  .superRefine((v, ctx) => {
-    const fail = (path: string, message: string) => ctx.addIssue({ code: "custom", path: [path], message });
-    if (!v.name.trim()) return fail("name", "Name is required");
-    if (!v.startDate) return fail("startDate", "Start date is required");
-    if (!v.endDate) return fail("endDate", "End date is required");
-    if (v.endDate < v.startDate) return fail("endDate", "End date must be on or after start date");
-    const season = v.seasonYear.trim();
-    if (season && !/^\d{4}$/.test(season)) fail("seasonYear", "Season year must be four digits");
-  });
-type EventForm = z.infer<typeof eventFormSchema>;
 /** A test check-in: checked in the order the form reads; only the first problem is reported. */
 const testCheckinSchema = z
   .object({
@@ -160,8 +86,6 @@ function testDancers() {
   };
 }
 
-const EMPTY_EVENT: EventForm = { name: "", startDate: "", endDate: "", seasonYear: "", timezone: "America/Chicago" };
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 /**
@@ -170,7 +94,7 @@ const EMPTY_EVENT: EventForm = { name: "", startDate: "", endDate: "", seasonYea
  *
  * Each admin section is now its own route (`/admin/<section>`); the value
  * here is the URL slug and the corresponding Radix `<TabsContent value=...>`
- * identifier in this file. Keeping them in one constant keeps the route,
+ * identifier, in this file or in the section's component. Keeping them in one constant keeps the route,
  * the param parsing, and the rendering in lock-step.
  */
 export const ADMIN_SECTIONS = [
@@ -191,7 +115,6 @@ function isAdminSection(s: string | undefined): s is AdminSection {
 
 export default function AdminPage() {
   const { divisions: divisionOptions } = useDivisions();
-  const navigate = useNavigate();
   // The URL drives which section is shown. An unknown / missing slug
   // collapses to the default rather than rendering nothing, so a
   // user typing /admin/foo doesn't see a blank page.
@@ -202,64 +125,6 @@ export default function AdminPage() {
   // Identifies the current admin so the Users tab can hide the role
   // toggle on their own row (the API also rejects self-demotion).
   const { me } = useAuthMe();
-
-  // ── Events tab ──────────────────────────────────────────────────────────────
-  const [evDialogOpen, setEvDialogOpen] = useState(false);
-  const {
-    register: evRegister,
-    handleSubmit: evValidate,
-    reset: evReset,
-    getValues: evGetValues,
-    setValue: evSetValue,
-    watch: evWatch,
-    formState: { isSubmitting: evSubmitting },
-  } = useForm<EventForm>({ resolver: zodResolver(eventFormSchema), defaultValues: EMPTY_EVENT });
-  const evStartDate = evWatch("startDate");
-  /** True once the admin has typed in the season year field — blocks auto-suggest. */
-  const [evSeasonTouched, setEvSeasonTouched] = useState(false);
-  /**
-   * When set, the Event dialog is in edit mode: submitting calls PATCH on
-   * this id instead of POST. Cleared when the dialog closes.
-   */
-  const [evEditId, setEvEditId] = useState<string | null>(null);
-  const [showEventsCompleted, setShowEventsCompleted] = useState(false);
-
-  // ── Sessions tab ────────────────────────────────────────────────────────────
-  const [sessDialogOpen, setSessDialogOpen] = useState(false);
-  const {
-    register: sessRegister,
-    handleSubmit: sessValidate,
-    reset: sessReset,
-    setValue: sessSetValue,
-    watch: sessWatch,
-    formState: { isSubmitting: sessSubmitting },
-  } = useForm<AdminSessionForm>({
-    resolver: zodResolver(adminSessionFormSchema(divisionOptions.length > 0)),
-    defaultValues: {
-      eventId: "",
-      date: "",
-      startTime: "07:00",
-      checkinOffsetMins: "30",
-      durationMins: "120",
-      priorityMax: "6",
-      nonPriorityMax: "4",
-      priorityRunLimit: "1",
-      divisionPriority: {},
-    },
-  });
-  const sessEventId = sessWatch("eventId");
-  const sessDate = sessWatch("date");
-  const sessStartTime = sessWatch("startTime");
-  const sessDivisionPriority = sessWatch("divisionPriority");
-  /** When set, the Session dialog is in edit mode (PATCH/PUT instead of POST). */
-  const [sessEditId, setSessEditId] = useState<string | null>(null);
-  /** Tracks the row currently mid-delete so its button can disable + show "Deleting…". */
-  const [sessDeletingId, setSessDeletingId] = useState<string | null>(null);
-  /** Delete-confirmation dialog state — one per destructive action type. */
-  const [pendingDeleteEventId, setPendingDeleteEventId] = useState<string | null>(null);
-  const [pendingDeleteSession, setPendingDeleteSession] = useState<ApiSession | null>(null);
-  const [showSessionsCompleted, setShowSessionsCompleted] = useState(false);
-  const [showSessionsCancelled, setShowSessionsCancelled] = useState(false);
 
   // ── Run history tab ─────────────────────────────────────────────────────────
   const RUNS_FETCH_LIMIT = 500;
@@ -320,7 +185,6 @@ export default function AdminPage() {
 
   const sessionsQuery = useEndpointQuery(endpoints.sessions.list);
   const sessions = sessionsQuery.data ?? null;
-  const loadingSessions = sessionsQuery.isFetching;
 
   // A session filter wins over an event filter; with neither, every run.
   const runsQueryString = useMemo(() => {
@@ -374,20 +238,6 @@ export default function AdminPage() {
   const tcQuery = useEndpointQuery(endpoints.admin.testCheckins);
   const tcData = tcQuery.data ?? null;
 
-  const createEvent = useEndpointMutation(endpoints.events.create, { invalidates: [endpoints.events.list] });
-  // The nav bar lists the caller's staff events by name, from their record.
-  const updateEvent = useEndpointMutation(endpoints.events.update, {
-    invalidates: [endpoints.events.list, endpoints.sessions.list, endpoints.auth.me],
-  });
-  const removeEvent = useEndpointMutation(endpoints.events.remove, {
-    invalidates: [endpoints.events.list, endpoints.sessions.list, endpoints.auth.me],
-  });
-  const createSession = useEndpointMutation(endpoints.sessions.create, { invalidates: [endpoints.sessions.list] });
-  const updateSession = useEndpointMutation(endpoints.sessions.update, { invalidates: [endpoints.sessions.list] });
-  const setSessionDivisions = useEndpointMutation(endpoints.sessions.setDivisions, {
-    invalidates: [endpoints.sessions.list],
-  });
-  const removeSession = useEndpointMutation(endpoints.sessions.remove, { invalidates: [endpoints.sessions.list] });
   const injectCheckin = useEndpointMutation(endpoints.admin.injectCheckin, {
     invalidates: [endpoints.admin.testCheckins],
   });
@@ -519,260 +369,6 @@ export default function AdminPage() {
     [adminSongs, adminSongsYear, adminSongsDivision]
   );
 
-  // ── Event CRUD ──────────────────────────────────────────────────────────────
-
-  const deleteEvent = (id: string) => {
-    setPendingDeleteEventId(id);
-  };
-
-  const confirmDeleteEvent = async () => {
-    if (!pendingDeleteEventId) return;
-    const id = pendingDeleteEventId;
-    setPendingDeleteEventId(null);
-    try {
-      await removeEvent.mutateAsync({ params: { id } });
-      toast.success("Event deleted");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Delete failed");
-    }
-  };
-
-  const openEvDialog = () => {
-    setEvEditId(null);
-    evReset(EMPTY_EVENT);
-    setEvSeasonTouched(false);
-    setEvDialogOpen(true);
-  };
-
-  const openEvEditDialog = (ev: ApiEvent) => {
-    setEvEditId(ev.id);
-    evReset({
-      name: ev.name,
-      startDate: ev.start_date,
-      endDate: ev.end_date,
-      seasonYear: ev.season_year,
-      timezone: ev.timezone,
-    });
-    setEvSeasonTouched(true);
-    setEvDialogOpen(true);
-  };
-
-  const submitEventDialog = async (v: EventForm) => {
-    const evName = v.name;
-    const evStartDate = v.startDate;
-    const evEndDate = v.endDate;
-    const evTimezone = v.timezone;
-    const trimmedSeason = v.seasonYear.trim();
-    try {
-      if (evEditId) {
-        // Edit mode — PATCH the existing event; the lists refetch.
-        await updateEvent.mutateAsync({ params: { id: evEditId }, body: {
-          name: evName.trim(),
-          start_date: evStartDate,
-          end_date: evEndDate,
-          timezone: evTimezone,
-          season_year: trimmedSeason || undefined,
-        } });
-        toast.success("Event updated");
-      } else {
-        // Create mode — POST; the list refetches.
-        await createEvent.mutateAsync({ body: {
-          name: evName.trim(),
-          start_date: evStartDate,
-          end_date: evEndDate,
-          timezone: evTimezone,
-          season_year: trimmedSeason || undefined,
-        } });
-        toast.success("Event created");
-      }
-      setEvDialogOpen(false);
-      setEvEditId(null);
-      evReset(EMPTY_EVENT);
-      setEvSeasonTouched(false);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save event");
-    }
-  };
-
-  // ── Session CRUD ─────────────────────────────────────────────────────────────
-
-  const resetSessForm = () => {
-    const defaultEvent = events?.[0];
-    // Check-in opens 30 minutes before the floor trial, which runs 2 hours.
-    sessReset({
-      eventId: defaultEvent?.id ?? "",
-      date: defaultEvent?.start_date ?? "",
-      startTime: "07:00",
-      checkinOffsetMins: "30",
-      durationMins: "120",
-      priorityMax: "6",
-      nonPriorityMax: "4",
-      priorityRunLimit: "1",
-      // Per-division priority flags — all divisions always present, admin picks which are priority
-      divisionPriority: {},
-    });
-  };
-
-  const openSessDialog = () => {
-    setSessEditId(null);
-    resetSessForm();
-    setSessDialogOpen(true);
-  };
-
-  /**
-   * Pre-fill the Session dialog from an existing session row and switch into
-   * edit mode. The session stores absolute epochs but the form takes
-   * wall-clock time + offsets, so we derive those by anchoring on the
-   * event's timezone.
-   */
-  const openSessEditDialog = (s: ApiSession) => {
-    const tz =
-      s.event_timezone ??
-      events?.find((ev) => ev.id === s.event_id)?.timezone ??
-      Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-    setSessEditId(s.id);
-
-    // Per-division priority flags + the (single, shared) priority run limit.
-    const flags: Record<string, boolean> = {};
-    let runLimit = 1;
-    for (const d of s.divisions ?? []) {
-      flags[d.division_name] = d.is_priority;
-      // priority_run_limit is nullable on non-priority divisions; only
-      // priority divisions store a real limit, and they all share one.
-      const limit = d.priority_run_limit ?? 0;
-      if (d.is_priority && limit > 0) {
-        runLimit = limit;
-      }
-    }
-    sessReset({
-      eventId: s.event_id ?? "",
-      date: s.date ?? "",
-      startTime: epochToTimeInTz(s.floor_trial_starts_at, tz),
-      checkinOffsetMins: String(Math.max(0, Math.round((s.floor_trial_starts_at - s.checkin_opens_at) / 60_000))),
-      durationMins: String(Math.max(1, Math.round((s.floor_trial_ends_at - s.floor_trial_starts_at) / 60_000))),
-      priorityMax: String(s.active_priority_max ?? 6),
-      nonPriorityMax: String(s.active_non_priority_max ?? 4),
-      priorityRunLimit: String(runLimit),
-      divisionPriority: flags,
-    });
-
-    setSessDialogOpen(true);
-  };
-
-  const deleteSession = (s: ApiSession) => {
-    setPendingDeleteSession(s);
-  };
-
-  const confirmDeleteSession = async () => {
-    if (!pendingDeleteSession) return;
-    const s = pendingDeleteSession;
-    setPendingDeleteSession(null);
-    setSessDeletingId(s.id);
-    try {
-      await removeSession.mutateAsync({ params: { id: s.id } });
-      toast.success("Session deleted");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to delete session");
-    } finally {
-      setSessDeletingId(null);
-    }
-  };
-
-  const toggleDivisionPriority = (name: string) => {
-    sessSetValue("divisionPriority", { ...sessDivisionPriority, [name]: !sessDivisionPriority[name] });
-  };
-
-  // The schema has checked the fields, so the numbers parse and are in range.
-  const submitSessionDialog = async (v: AdminSessionForm) => {
-    const { eventId: sessEventId, date: sessDate, startTime: sessStartTime } = v;
-    const sessDivisionPriority = v.divisionPriority;
-    const priorityMaxNum = Number(v.priorityMax);
-    const nonPriorityMaxNum = Number(v.nonPriorityMax);
-
-    // Interpret the start time in the event's timezone so times are always
-    // correct regardless of where the admin's browser is located.
-    const eventTz =
-      events?.find((ev) => ev.id === sessEventId)?.timezone ??
-      Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-    const floorStartsAt  = toEpochInTz(sessDate, sessStartTime, eventTz);
-    const checkinOpensAt = floorStartsAt - Number(v.checkinOffsetMins) * 60_000;
-    const floorEndsAt    = floorStartsAt + Number(v.durationMins) * 60_000;
-
-    const priorityRunLimitNum = Number(v.priorityRunLimit);
-
-    // Auto-generate session name from date
-    const sessionName = new Date(`${sessDate}T12:00:00`).toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-
-    // All divisions always included; per-division priority flag; shared run limit
-    const divisions = divisionOptions.map((d, i) => ({
-      division_name: d,
-      is_priority: sessDivisionPriority[d] ?? false,
-      sort_order: i,
-      priority_run_limit: (sessDivisionPriority[d] ?? false) ? priorityRunLimitNum : 0,
-    }));
-
-    try {
-      if (sessEditId) {
-        // Edit: PATCH the scalar fields first, then PUT divisions to overwrite
-        // the priority/run-limit flags. The two endpoints are intentionally
-        // separate on the API side because divisions are a child collection.
-        // Each call is wrapped so the toast can identify which leg failed —
-        // necessary because the PATCH can succeed while the PUT errors,
-        // leaving the row half-updated.
-        try {
-          await updateSession.mutateAsync({ params: { id: sessEditId }, body: {
-            event_id: sessEventId,
-            name: sessionName,
-            date: sessDate,
-            checkin_opens_at: checkinOpensAt,
-            floor_trial_starts_at: floorStartsAt,
-            floor_trial_ends_at: floorEndsAt,
-            active_priority_max: priorityMaxNum,
-            active_non_priority_max: nonPriorityMaxNum,
-          } });
-        } catch (err) {
-          throw new Error(
-            `Failed to update session fields: ${err instanceof Error ? err.message : String(err)}`,
-            { cause: err }
-          );
-        }
-        try {
-          await setSessionDivisions.mutateAsync({ params: { id: sessEditId }, body: { divisions } });
-        } catch (err) {
-          throw new Error(
-            `Session fields saved, but failed to update divisions: ${err instanceof Error ? err.message : String(err)}`,
-            { cause: err }
-          );
-        }
-        toast.success("Session updated");
-      } else {
-        await createSession.mutateAsync({ body: {
-          event_id: sessEventId,
-          name: sessionName,
-          date: sessDate,
-          checkin_opens_at: checkinOpensAt,
-          floor_trial_starts_at: floorStartsAt,
-          floor_trial_ends_at: floorEndsAt,
-          active_priority_max: priorityMaxNum,
-          active_non_priority_max: nonPriorityMaxNum,
-          divisions,
-        } });
-        toast.success("Session created");
-      }
-      setSessDialogOpen(false);
-      setSessEditId(null);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save session");
-    }
-  };
-
   const submitTestCheckin = async (v: TestCheckinForm) => {
     try {
       const result = await injectCheckin.mutateAsync({ body: {
@@ -840,185 +436,6 @@ export default function AdminPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
-  const eventBuckets = useMemo(() => {
-    const list = (events ?? []).slice().sort(compareEventChrono);
-    return {
-      active: list.filter((e) => e.status === "active"),
-      upcoming: list.filter((e) => e.status === "upcoming"),
-      completed: list.filter((e) => e.status === "completed"),
-    };
-  }, [events]);
-
-  const sessionBuckets = useMemo(() => {
-    const list = (sessions ?? []).slice().sort(compareSessionChrono);
-    return {
-      active: list.filter((s) => s.status === "checkin_open" || s.status === "in_progress"),
-      upcoming: list.filter((s) => s.status === "scheduled"),
-      completed: list.filter((s) => s.status === "completed"),
-      cancelled: list.filter((s) => s.status === "cancelled"),
-    };
-  }, [sessions]);
-
-  const renderEventRow = (ev: ApiEvent) => (
-    <TableRow
-      key={ev.id}
-      className={CLICKABLE_ROW_CLASS}
-      onClick={() => navigate(`/events/${ev.id}`)}
-    >
-      <TableCell className="font-medium">
-        <Link
-          to={`/events/${ev.id}`}
-          className={ROW_LINK_CLASS}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {ev.name}
-        </Link>
-      </TableCell>
-      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-        {ev.start_date}
-      </TableCell>
-      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-        {ev.end_date}
-      </TableCell>
-      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-        {ev.season_year}
-      </TableCell>
-      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-        <Badge variant="outline" className="text-xs font-normal">
-          {formatTimezoneAbbr(ev.timezone)}
-        </Badge>
-        <span className="ml-1.5 text-xs">{ev.timezone}</span>
-      </TableCell>
-      <TableCell>{eventStatusBadge(ev.status)}</TableCell>
-      <TableCell onClick={(e) => e.stopPropagation()}>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => openEvEditDialog(ev)}>
-            Edit
-          </Button>
-          <Button variant="destructive" size="sm" onClick={() => deleteEvent(ev.id)}>
-            Delete
-          </Button>
-        </div>
-      </TableCell>
-    </TableRow>
-  );
-
-  const renderSessionRow = (s: ApiSession) => {
-    const eventName = events?.find((ev) => ev.id === s.event_id)?.name ?? "—";
-    return (
-      <TableRow
-        key={s.id}
-        className={CLICKABLE_ROW_CLASS}
-        onClick={() => navigate(`/sessions/${s.id}`)}
-      >
-        <TableCell className="font-medium">
-          <Link
-            to={`/sessions/${s.id}`}
-            className={ROW_LINK_CLASS}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {formatSessionTitle(s, s.event_timezone)}
-          </Link>
-        </TableCell>
-        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-          {eventName}
-        </TableCell>
-        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-          {s.event_timezone && (
-            <Badge variant="outline" className="text-xs font-normal">
-              {formatTimezoneAbbr(s.event_timezone, s.floor_trial_starts_at)}
-            </Badge>
-          )}
-        </TableCell>
-        <TableCell>{sessionStatusBadge(s.status)}</TableCell>
-        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-          {formatTimeOnly(s.checkin_opens_at, s.event_timezone)}
-        </TableCell>
-        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-          {formatTimeOnly(s.floor_trial_starts_at, s.event_timezone)}
-        </TableCell>
-        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-          {formatTimeOnly(s.floor_trial_ends_at, s.event_timezone)}
-        </TableCell>
-        <TableCell onClick={(e) => e.stopPropagation()}>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => openSessEditDialog(s)}
-              disabled={sessDeletingId === s.id}
-            >
-              Edit
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => deleteSession(s)}
-              disabled={sessDeletingId === s.id}
-            >
-              {sessDeletingId === s.id ? "Deleting…" : "Delete"}
-            </Button>
-          </div>
-        </TableCell>
-      </TableRow>
-    );
-  };
-
-  const renderEventBox = (title: string, rows: ApiEvent[]) => (
-    <section className="rounded-lg border bg-card overflow-hidden">
-      <div className="px-4 py-3 border-b flex items-center gap-2">
-        <h2 className="font-semibold">{title}</h2>
-        <span className="text-sm text-muted-foreground">({rows.length})</span>
-      </div>
-      {rows.length === 0 ? (
-        <p className="px-4 py-3 text-sm text-muted-foreground">None.</p>
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Start date</TableHead>
-              <TableHead>End date</TableHead>
-              <TableHead>Season</TableHead>
-              <TableHead>Timezone</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="w-[160px]">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>{rows.map((ev) => renderEventRow(ev))}</TableBody>
-        </Table>
-      )}
-    </section>
-  );
-
-  const renderSessionBox = (title: string, rows: ApiSession[]) => (
-    <section className="rounded-lg border bg-card overflow-hidden">
-      <div className="px-4 py-3 border-b flex items-center gap-2">
-        <h2 className="font-semibold">{title}</h2>
-        <span className="text-sm text-muted-foreground">({rows.length})</span>
-      </div>
-      {rows.length === 0 ? (
-        <p className="px-4 py-3 text-sm text-muted-foreground">None.</p>
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Session</TableHead>
-              <TableHead>Event</TableHead>
-              <TableHead>TZ</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Open</TableHead>
-              <TableHead>Start</TableHead>
-              <TableHead>End</TableHead>
-              <TableHead className="w-[160px]">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>{rows.map((s) => renderSessionRow(s))}</TableBody>
-        </Table>
-      )}
-    </section>
-  );
-
   return (
     <div className="space-y-6">
       <h1 className="page-title text-2xl">Admin</h1>
@@ -1028,71 +445,9 @@ export default function AdminPage() {
           <Tabs> wrapper selects the section: Radix hides every TabsContent
           whose `value` doesn't match the controlled `value` prop. */}
       <Tabs value={section}>
-
-        {/* ── Events tab ── */}
-        <TabsContent value="events" className="mt-4 space-y-3">
-          <div className="flex flex-wrap items-center gap-4">
-            <Button onClick={openEvDialog} className="w-full sm:w-auto">
-              New Event
-            </Button>
-            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={showEventsCompleted}
-                onChange={(e) => setShowEventsCompleted(e.target.checked)}
-              />
-              Show completed
-            </label>
-          </div>
-          {eventsQuery.error && !events ? (
-            <QueryError what="events" error={eventsQuery.error} onRetry={() => void eventsQuery.refetch()} />
-          ) : loadingEvents && !events ? (
-            <Skeleton className="h-40 w-full" />
-          ) : (
-            <div className={`space-y-4${loadingEvents ? " opacity-60" : ""}`}>
-              {renderEventBox("Active", eventBuckets.active)}
-              {renderEventBox("Upcoming", eventBuckets.upcoming)}
-              {showEventsCompleted && renderEventBox("Completed", eventBuckets.completed)}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* ── Sessions tab ── */}
-        <TabsContent value="sessions" className="mt-4 space-y-3">
-          <div className="flex flex-wrap items-center gap-4">
-            <Button onClick={openSessDialog} className="w-full sm:w-auto">
-              New Session
-            </Button>
-            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={showSessionsCompleted}
-                onChange={(e) => setShowSessionsCompleted(e.target.checked)}
-              />
-              Show completed
-            </label>
-            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={showSessionsCancelled}
-                onChange={(e) => setShowSessionsCancelled(e.target.checked)}
-              />
-              Show cancelled
-            </label>
-          </div>
-          {sessionsQuery.error && !sessions ? (
-            <QueryError what="sessions" error={sessionsQuery.error} onRetry={() => void sessionsQuery.refetch()} />
-          ) : loadingSessions && !sessions ? (
-            <Skeleton className="h-40 w-full" />
-          ) : (
-            <div className={`space-y-4${loadingSessions ? " opacity-60" : ""}`}>
-              {renderSessionBox("Active", sessionBuckets.active)}
-              {renderSessionBox("Upcoming", sessionBuckets.upcoming)}
-              {showSessionsCompleted && renderSessionBox("Completed", sessionBuckets.completed)}
-              {showSessionsCancelled && renderSessionBox("Cancelled", sessionBuckets.cancelled)}
-            </div>
-          )}
-        </TabsContent>
+        {/* These sections render their own TabsContent and dialogs. */}
+        <AdminEventsSection />
+        <AdminSessionsSection />
 
         {/* ── Run History tab ── */}
         <TabsContent value="runs" className="mt-4 space-y-4">
@@ -1830,338 +1185,6 @@ export default function AdminPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* ── Delete Event confirmation dialog ── */}
-      <Dialog open={!!pendingDeleteEventId} onOpenChange={(open: boolean) => { if (!open) setPendingDeleteEventId(null); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete this event?</DialogTitle>
-            <DialogDescription>
-              {pendingDeleteEventId
-                ? (() => {
-                    const ev = events?.find((e) => e.id === pendingDeleteEventId);
-                    return ev
-                      ? <>This will permanently delete <span className="font-medium">{ev.name}</span>. This cannot be undone.</>
-                      : "This will permanently delete the event. This cannot be undone.";
-                  })()
-                : null}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPendingDeleteEventId(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => void confirmDeleteEvent()}>Delete</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Delete Session confirmation dialog ── */}
-      <Dialog open={!!pendingDeleteSession} onOpenChange={(open: boolean) => { if (!open) setPendingDeleteSession(null); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete this session?</DialogTitle>
-            <DialogDescription>
-              {pendingDeleteSession && (
-                <>
-                  <span className="font-medium">{formatSessionTitle(pendingDeleteSession, pendingDeleteSession.event_timezone)}</span>
-                  <br />
-                  This deletes the session and everything in it — its check-ins, queue, and run history. This cannot be undone.
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPendingDeleteSession(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => void confirmDeleteSession()}>Delete</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Create Event dialog ── */}
-      {evDialogOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4"
-          onClick={() => setEvDialogOpen(false)}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="ev-dialog-title"
-            className="rounded-t-2xl sm:rounded-lg border bg-background p-6 shadow-lg w-full sm:max-w-md space-y-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="sm:hidden flex justify-center -mt-2 mb-2">
-              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
-            </div>
-            <div className="flex items-center justify-between">
-              <h2 id="ev-dialog-title" className="text-lg font-semibold">{evEditId ? "Edit event" : "New event"}</h2>
-              <Button type="button" variant="ghost" size="sm" aria-label="Close" onClick={() => setEvDialogOpen(false)}>✕</Button>
-            </div>
-            <form onSubmit={(e) => void evValidate(submitEventDialog, toastFirstError)(e)} className="space-y-4">
-              <div>
-                <label htmlFor="ev-name" className={FIELD_LABEL_CLASS}>Name</label>
-                <input id="ev-name"
-                  className={FIELD_INPUT_CLASS}
-                  {...evRegister("name")}
-                  autoFocus
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label htmlFor="ev-start-date" className={FIELD_LABEL_CLASS}>Start date</label>
-                  <input id="ev-start-date"
-                    type="date"
-                    className={FIELD_INPUT_CLASS}
-                    {...evRegister("startDate", {
-                      onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
-                        const v = e.target.value;
-                        const evEndDate = evGetValues("endDate");
-                        if (evEndDate && v > evEndDate) evSetValue("endDate", v);
-                        if (!evEditId && !evSeasonTouched && v) {
-                          evSetValue("seasonYear", seasonYearFromDateString(v));
-                        }
-                      },
-                    })}
-                    required
-                  />
-                </div>
-                <div>
-                  <label htmlFor="ev-end-date" className={FIELD_LABEL_CLASS}>End date</label>
-                  <input id="ev-end-date"
-                    type="date"
-                    className={FIELD_INPUT_CLASS}
-                    min={evStartDate || undefined}
-                    {...evRegister("endDate")}
-                    required
-                  />
-                </div>
-              </div>
-              <div>
-                <label htmlFor="ev-season-year" className={FIELD_LABEL_CLASS}>Season year</label>
-                <input id="ev-season-year"
-                  className={FIELD_INPUT_CLASS}
-                  inputMode="numeric"
-                  pattern="\d{4}"
-                  placeholder="2027"
-                  {...evRegister("seasonYear", { onChange: () => setEvSeasonTouched(true) })}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Defaults from the start date — seasons roll over October 1.
-                </p>
-              </div>
-              <div>
-                <label htmlFor="ev-timezone" className={FIELD_LABEL_CLASS}>Timezone</label>
-                <select id="ev-timezone"
-                  className={FIELD_INPUT_CLASS}
-                  {...evRegister("timezone")}
-                >
-                  <optgroup label="United States">
-                    <option value="America/New_York">Eastern — New York / Miami</option>
-                    <option value="America/Chicago">Central — Chicago / Dallas</option>
-                    <option value="America/Denver">Mountain — Denver / Salt Lake City</option>
-                    <option value="America/Phoenix">Mountain (no DST) — Phoenix</option>
-                    <option value="America/Los_Angeles">Pacific — Los Angeles / Seattle</option>
-                    <option value="America/Anchorage">Alaska — Anchorage</option>
-                    <option value="Pacific/Honolulu">Hawaii — Honolulu</option>
-                  </optgroup>
-                  <optgroup label="Canada">
-                    <option value="America/Toronto">Eastern — Toronto</option>
-                    <option value="America/Winnipeg">Central — Winnipeg</option>
-                    <option value="America/Edmonton">Mountain — Edmonton</option>
-                    <option value="America/Vancouver">Pacific — Vancouver</option>
-                  </optgroup>
-                  <optgroup label="Europe">
-                    <option value="Europe/London">London / Dublin</option>
-                    <option value="Europe/Paris">Central European — Paris / Berlin</option>
-                    <option value="Europe/Helsinki">Eastern European — Helsinki / Kyiv</option>
-                  </optgroup>
-                  <optgroup label="Asia / Pacific">
-                    <option value="Asia/Tokyo">Tokyo / Osaka</option>
-                    <option value="Asia/Seoul">Seoul</option>
-                    <option value="Asia/Shanghai">Shanghai / Beijing</option>
-                    <option value="Asia/Singapore">Singapore / Kuala Lumpur</option>
-                    <option value="Australia/Sydney">Sydney / Melbourne</option>
-                    <option value="Pacific/Auckland">Auckland</option>
-                  </optgroup>
-                </select>
-              </div>
-              <Button type="submit" disabled={evSubmitting} size="lg" className="w-full">
-                {evSubmitting
-                  ? evEditId ? "Saving…" : "Creating…"
-                  : evEditId ? "Save changes" : "Create event"}
-              </Button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ── Create Session dialog ── */}
-      {sessDialogOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
-          onClick={() => setSessDialogOpen(false)}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="sess-dialog-title"
-            className="rounded-t-2xl sm:rounded-lg border bg-background p-6 shadow-lg w-full sm:max-w-lg max-h-[92vh] overflow-y-auto space-y-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="sm:hidden flex justify-center -mt-2 mb-2">
-              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
-            </div>
-            <div className="flex items-center justify-between">
-              <h2 id="sess-dialog-title" className="text-lg font-semibold">{sessEditId ? "Edit session" : "New session"}</h2>
-              <Button type="button" variant="ghost" size="sm" aria-label="Close" onClick={() => setSessDialogOpen(false)}>✕</Button>
-            </div>
-            <form onSubmit={(e) => void sessValidate(submitSessionDialog, toastFirstError)(e)} className="space-y-4">
-              <div>
-                <label htmlFor="sess-event" className={FIELD_LABEL_CLASS}>Event</label>
-                <select id="sess-event"
-                  className={FIELD_INPUT_CLASS}
-                  {...sessRegister("eventId", {
-                    onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
-                      const ev = events?.find((ev) => ev.id === e.target.value);
-                      if (ev) sessSetValue("date", ev.start_date);
-                    },
-                  })}
-                >
-                  <option value="">Select event…</option>
-                  {events?.map((ev) => (
-                    <option key={ev.id} value={ev.id}>{ev.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="sess-date" className={FIELD_LABEL_CLASS}>Date</label>
-                <input id="sess-date"
-                  type="date"
-                  className={FIELD_INPUT_CLASS}
-                  {...sessRegister("date")}
-                  required
-                />
-              </div>
-              <div>
-                <label htmlFor="sess-start-time" className={FIELD_LABEL_CLASS}>
-                  Start time
-                  {sessEventId && events?.find((ev) => ev.id === sessEventId)?.timezone && (
-                    <span className="ml-1.5 font-normal text-muted-foreground">
-                      ({formatTimezoneAbbr(
-                        events.find((ev) => ev.id === sessEventId)!.timezone,
-                        sessDate && sessStartTime
-                          ? toEpochInTz(
-                              sessDate,
-                              sessStartTime,
-                              events.find((ev) => ev.id === sessEventId)!.timezone
-                            )
-                          : undefined
-                      )})
-                    </span>
-                  )}
-                </label>
-                <input id="sess-start-time"
-                  type="time"
-                  className={FIELD_INPUT_CLASS}
-                  {...sessRegister("startTime")}
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label htmlFor="sess-checkin-opens" className={FIELD_LABEL_CLASS}>Check-in opens</label>
-                  <select id="sess-checkin-opens"
-                    className={FIELD_INPUT_CLASS}
-                    {...sessRegister("checkinOffsetMins")}
-                  >
-                    <option value="0">Same as start</option>
-                    <option value="15">15 min before</option>
-                    <option value="30">30 min before</option>
-                    <option value="45">45 min before</option>
-                    <option value="60">1 hour before</option>
-                    <option value="90">1.5 hours before</option>
-                    <option value="120">2 hours before</option>
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="sess-duration" className={FIELD_LABEL_CLASS}>Floor trial duration</label>
-                  <select id="sess-duration"
-                    className={FIELD_INPUT_CLASS}
-                    {...sessRegister("durationMins")}
-                  >
-                    <option value="60">1 hour</option>
-                    <option value="90">1.5 hours</option>
-                    <option value="120">2 hours</option>
-                    <option value="150">2.5 hours</option>
-                    <option value="180">3 hours</option>
-                    <option value="210">3.5 hours</option>
-                    <option value="240">4 hours</option>
-                    <option value="270">4.5 hours</option>
-                    <option value="300">5 hours</option>
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label htmlFor="sess-priority-max" className={FIELD_LABEL_CLASS}>Active cap (priority)</label>
-                  <input id="sess-priority-max"
-                    type="number"
-                    min={0}
-                    className={FIELD_INPUT_CLASS}
-                    {...sessRegister("priorityMax")}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="sess-non-priority-max" className={FIELD_LABEL_CLASS}>Active cap (non-priority)</label>
-                  <input id="sess-non-priority-max"
-                    type="number"
-                    min={0}
-                    className={FIELD_INPUT_CLASS}
-                    {...sessRegister("nonPriorityMax")}
-                  />
-                </div>
-              </div>
-              <div>
-                <label htmlFor="sess-priority-run-limit" className={FIELD_LABEL_CLASS}>Priority run limit</label>
-                <input id="sess-priority-run-limit"
-                  type="number"
-                  min={0}
-                  className={FIELD_INPUT_CLASS}
-                  {...sessRegister("priorityRunLimit")}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Number of runs that count as priority for each priority division.
-                </p>
-              </div>
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Divisions</label>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
-                  {divisionOptions.map((d) => (
-                    <label key={d} className="flex items-center gap-2 text-sm cursor-pointer py-0.5">
-                      <input
-                        type="checkbox"
-                        checked={sessDivisionPriority[d] ?? false}
-                        onChange={() => toggleDivisionPriority(d)}
-                      />
-                      <span>{d}</span>
-                      {sessDivisionPriority[d] && (
-                        <span className="text-xs text-primary font-medium">priority</span>
-                      )}
-                    </label>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  All divisions are always included. Check the ones that grant priority status.
-                </p>
-              </div>
-              <Button type="submit" disabled={sessSubmitting} size="lg" className="w-full">
-                {sessSubmitting
-                  ? sessEditId ? "Saving…" : "Creating…"
-                  : sessEditId ? "Save changes" : "Create session"}
-              </Button>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
