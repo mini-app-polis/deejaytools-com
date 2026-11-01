@@ -1,3 +1,12 @@
+# [2.22.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.21.0...v2.22.0) (2026-11-01)
+
+
+### Features
+
+* **api:** accept the shared envelope's count and total in success meta ([865c5e8](https://github.com/mini-app-polis/deejaytools-com/commit/865c5e84aaff16d1821bcbf9f69fd08ed7a86bdb))
+* **contract:** check the endpoint catalog against api-deejaytools' OpenAPI snapshot ([0213351](https://github.com/mini-app-polis/deejaytools-com/commit/02133516640a6a8c9d9e345404d2104c24653429))
+* **data:** move auth.me, divisions and the API version onto the query client ([d7be039](https://github.com/mini-app-polis/deejaytools-com/commit/d7be039c63d82c985f1ae3833f6807f57532fc2b))
+
 # [2.21.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.20.0...v2.21.0) (2026-10-31)
 
 
