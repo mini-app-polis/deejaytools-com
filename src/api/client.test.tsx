@@ -85,6 +85,14 @@ describe("useApiClient.get", () => {
     expect(out).toEqual(payload);
   });
 
+  it("unwraps `data` when meta carries the shared envelope's count and total", async () => {
+    const payload = { id: "abc" };
+    fetchMock.mockResolvedValue(jsonResponse({ data: payload, meta: { version: "v1", count: 1, total: 1 } }));
+    const { result } = renderHook(() => useApiClient());
+
+    expect(await result.current.get<typeof payload>("/v1/foo")).toEqual(payload);
+  });
+
   it("throws an Error with the server's message when the envelope contains 'error'", async () => {
     fetchMock.mockResolvedValue(
       jsonResponse(

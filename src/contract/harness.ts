@@ -10,6 +10,7 @@ import {
   type Endpoint,
   type Transport,
 } from "@/api/endpoints";
+import { SuccessMetaSchema } from "@/api/envelope";
 import { ClerkTestSession } from "./clerk";
 
 // ---------------------------------------------------------------------------
@@ -109,6 +110,10 @@ async function readEnvelope(res: Response): Promise<unknown> {
   }
   if (!obj || !("data" in obj)) {
     throw new Error(`Success response ${res.status} lacks the {data} envelope: ${text.slice(0, 200)}`);
+  }
+  const meta = SuccessMetaSchema.safeParse((obj as { meta?: unknown }).meta);
+  if (!meta.success) {
+    throw new Error(`Success response ${res.status} has an invalid meta: ${text.slice(0, 200)}`);
   }
   return obj.data;
 }
