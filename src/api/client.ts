@@ -80,6 +80,10 @@ async function parseEnvelope<T>(res: Response): Promise<T> {
   throw err;
 }
 
+/**
+ * React hook returning get/post/postForm/patch/put/del helpers that call the
+ * API with the signed-in user's Clerk token and unwrap the response envelope.
+ */
 export function useApiClient() {
   const { getToken } = useAuth();
 

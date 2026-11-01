@@ -89,6 +89,11 @@ export const RETRY_BASE_DELAY_MS = 1000;
 /** How long the finished progress bar stays at 100% before the caller moves on. */
 const FINISH_HOLD_MS = 400;
 
+/**
+ * Uploads a song file to the chunk endpoint in CHUNK_SIZE pieces, retrying
+ * failed chunks, and reports progress through `onProgress`. Throws when the
+ * file cannot be read or a chunk keeps failing.
+ */
 export async function uploadSongInChunks({
   file,
   getToken,

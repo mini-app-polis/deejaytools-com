@@ -23,6 +23,7 @@ function sessionBucket(s: SessionLike, now: number): 0 | 1 | 2 {
   return 2;
 }
 
+/** Sort comparator for sessions: active first, then upcoming soonest first, then past most recent first. */
 export function compareSessionChrono(
   a: SessionLike,
   b: SessionLike,
@@ -54,6 +55,7 @@ function eventBucket(e: EventLike, today: string): 0 | 1 | 2 {
   return 2;
 }
 
+/** Sort comparator for events: active first, then upcoming soonest first, then past most recent first. */
 export function compareEventChrono(
   a: EventLike,
   b: EventLike,

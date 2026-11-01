@@ -23,6 +23,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { bareJsonTransport } from "@/api/bareTransport";
 import { allEndpoints, checkEndpoint, endpoints } from "@/api/endpoints";
+import { createLogger } from "@/lib/logger";
 import { SessionStatusSchema } from "@/schemas";
 import { ClerkTestSession } from "./clerk";
 import { ApiStatusError, type Client, Ledger, loadConfig, makeClient, sleep, strictContracts } from "./harness";
@@ -30,6 +31,7 @@ import { ApiStatusError, type Client, Ledger, loadConfig, makeClient, sleep, str
 const RUN_PREFIX = "Contract Suite";
 const DIVISION = "Classic";
 const TIMEZONE = "America/Chicago";
+const logger = createLogger("deejaytools-contract-suite");
 /** The API's scheduler ticks every 30 s; allow three ticks. */
 const QUEUE_FILL_TIMEOUT_MS = 95_000;
 const QUEUE_POLL_MS = 5_000;
@@ -244,10 +246,14 @@ afterAll(async () => {
 
   if (ledger) {
     const { exercised, skipped, unaccounted } = ledger.report();
-    console.info(
-      `Contract coverage: ${exercised.length} exercised, ${skipped.length} skipped` +
-        skipped.map(([id, why]) => `\n  skipped ${id} — ${why}`).join("")
-    );
+    logger.info({
+      event: "contract_coverage",
+      category: "api",
+      context: {
+        exercised: exercised.length,
+        skipped: skipped.map(([id, why]) => ({ id, why })),
+      },
+    });
     if (unaccounted.length) {
       failures.push(
         `Endpoints neither exercised nor skipped with a reason: ${unaccounted.join(", ")}. ` +

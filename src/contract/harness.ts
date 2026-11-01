@@ -123,6 +123,10 @@ export interface Client extends Transport {
   raw(method: string, path: string, body?: unknown): Promise<Response>;
 }
 
+/**
+ * A client for the API at `apiUrl` that checks the response envelope and
+ * sends `session`'s bearer token when there is one (anonymous when null).
+ */
 export function makeClient(apiUrl: string, session: ClerkTestSession | null): Client {
   const raw = async (method: string, path: string, body?: unknown) => {
     const headers: Record<string, string> = { Accept: "application/json" };
@@ -194,10 +198,12 @@ export class Ledger {
   }
 }
 
+/** Puts response validation in strict mode, so any contract mismatch throws. */
 export function strictContracts(): void {
   setContractMode("strict");
 }
 
+/** Resolves after `ms` milliseconds. */
 export async function sleep(ms: number): Promise<void> {
   await new Promise((r) => setTimeout(r, ms));
 }
