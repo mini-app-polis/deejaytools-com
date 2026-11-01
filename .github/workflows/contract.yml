@@ -10,6 +10,12 @@ name: Contract
 #   secret   CONTRACT_CLERK_SECRET_KEY   dev Clerk instance secret key (sk_test_…)
 #   variable CONTRACT_API_URL           dev API base URL
 #   variable CONTRACT_USER_ID           Clerk user id of the test user (an admin in dev)
+# Missing configuration fails the run: an unconfigured suite checks nothing,
+# and a green run must mean the contract was checked.
+#
+# This repository owns the API's live contract suite. The static half — the
+# catalog against api-deejaytools' committed OpenAPI document — runs with the
+# unit tests in CI (src/contract/apiSnapshot.test.ts).
 #
 # When it runs — whenever either side of the contract changes:
 #   - a push to dev here: the web app's schemas or catalog changed;
@@ -46,26 +52,22 @@ jobs:
       CONTRACT_CLERK_SECRET_KEY: ${{ secrets.CONTRACT_CLERK_SECRET_KEY }}
     steps:
       - name: Check configuration
-        id: config
         run: |
-          if [ -z "$CONTRACT_API_URL" ] || [ -z "$CONTRACT_USER_ID" ] || [ -z "$CONTRACT_CLERK_SECRET_KEY" ]; then
-            echo "::warning::Contract suite not configured — set CONTRACT_API_URL, CONTRACT_USER_ID and CONTRACT_CLERK_SECRET_KEY."
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=true" >> "$GITHUB_OUTPUT"
+          missing=""
+          [ -n "$CONTRACT_API_URL" ] || missing="$missing CONTRACT_API_URL"
+          [ -n "$CONTRACT_USER_ID" ] || missing="$missing CONTRACT_USER_ID"
+          [ -n "$CONTRACT_CLERK_SECRET_KEY" ] || missing="$missing CONTRACT_CLERK_SECRET_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Contract suite not configured — set$missing."
+            exit 1
           fi
       - uses: actions/checkout@v7
-        if: steps.config.outputs.ready == 'true'
         with:
           ref: ${{ github.event_name == 'repository_dispatch' && 'dev' || '' }}
       - uses: pnpm/action-setup@v6
-        if: steps.config.outputs.ready == 'true'
       - uses: actions/setup-node@v7
-        if: steps.config.outputs.ready == 'true'
         with:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-        if: steps.config.outputs.ready == 'true'
       - run: pnpm test:contract
-        if: steps.config.outputs.ready == 'true'

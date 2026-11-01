@@ -1,8 +1,11 @@
 import { useAuth } from "@clerk/clerk-react";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import { z } from "zod";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointQuery } from "@/api/queries";
 import { queryKey } from "@/api/queryKeys";
@@ -13,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ApiTeam } from "@/schemas";
+import { toastFirstError } from "@/lib/formErrors";
 import {
   MAX_FILE_BYTES,
   uploadSongInChunks,
@@ -23,6 +27,40 @@ import {
 const NO_TEAMS: readonly ApiTeam[] = [];
 
 const SPECIAL_DIVISION_OPTIONS = ["Teams", "Cabaret", "Exhibition", "My Division Is Not Listed"];
+
+// Checked in the order the old form read them; only the first problem is reported.
+const specialUploadSchema = z
+  .object({
+    file: z.custom<File | null>(),
+    division: z.string(),
+    entityName: z.string(),
+    selectedTeamId: z.string(),
+    routineName: z.string(),
+    descriptor: z.string(),
+  })
+  .superRefine((v, ctx) => {
+    const fail = (path: string, message: string) => ctx.addIssue({ code: "custom", path: [path], message });
+    if (!v.file) return fail("file", "Please select an audio file.");
+    if (v.file.size > MAX_FILE_BYTES) {
+      return fail("file", "That file is too large. Please choose an audio file under 100 MB.");
+    }
+    if (!v.division) return fail("division", "Please select a division.");
+    if (v.division === "Teams") {
+      if (!v.selectedTeamId) fail("selectedTeamId", "Please select a team.");
+    } else if (!v.entityName.trim()) {
+      fail("entityName", "Please enter a group name.");
+    }
+  });
+type SpecialUploadValues = z.infer<typeof specialUploadSchema>;
+
+const EMPTY_FORM: SpecialUploadValues = {
+  file: null,
+  division: "",
+  entityName: "",
+  selectedTeamId: "",
+  routineName: "",
+  descriptor: "",
+};
 
 function formatMB(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1);
@@ -44,13 +82,22 @@ export default function SpecialUploadForm() {
   const teams = teamsQuery.data ?? NO_TEAMS;
   const loading = teamsQuery.isLoading;
 
-  const [file, setFile] = useState<File | null>(null);
-  const [division, setDivision] = useState("");
-  const [entityName, setEntityName] = useState("");
-  const [selectedTeamId, setSelectedTeamId] = useState("");
-  const [routineName, setRoutineName] = useState("");
-  const [descriptor, setDescriptor] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    reset,
+    getValues,
+    setValue,
+    watch,
+    formState: { isSubmitting },
+  } = useForm<SpecialUploadValues>({
+    resolver: zodResolver(specialUploadSchema),
+    defaultValues: EMPTY_FORM,
+  });
+  const file = watch("file");
+  const division = watch("division");
+  const entityName = watch("entityName");
+  const selectedTeamId = watch("selectedTeamId");
   const [fileInputKey, setFileInputKey] = useState(0);
   const [formKey, setFormKey] = useState(0);
   const [uploadStage, setUploadStage] = useState<UploadStage>("idle");
@@ -59,35 +106,20 @@ export default function SpecialUploadForm() {
 
   // Preselect the first team once the teams load.
   useEffect(() => {
-    if (teams.length > 0) setSelectedTeamId((cur) => (cur === "" ? teams[0].id : cur));
-  }, [teams]);
+    if (teams.length > 0 && getValues("selectedTeamId") === "") setValue("selectedTeamId", teams[0].id);
+  }, [teams, getValues, setValue]);
 
-  const handleUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!file) {
-      toast.error("Please select an audio file.");
-      return;
-    }
-    if (file.size > MAX_FILE_BYTES) {
-      toast.error("That file is too large. Please choose an audio file under 100 MB.");
-      return;
-    }
-    if (!division) {
-      toast.error("Please select a division.");
-      return;
-    }
+  const handleUpload = async ({
+    file,
+    division,
+    entityName,
+    selectedTeamId,
+    routineName,
+    descriptor,
+  }: SpecialUploadValues) => {
+    // The schema has refused a submit without a file.
+    if (!file) return;
     const isTeams = division === "Teams";
-    if (isTeams) {
-      if (!selectedTeamId) {
-        toast.error("Please select a team.");
-        return;
-      }
-    } else if (!entityName.trim()) {
-      toast.error("Please enter a group name.");
-      return;
-    }
-
-    setIsSubmitting(true);
     try {
       await uploadSongInChunks({
         file,
@@ -116,12 +148,7 @@ export default function SpecialUploadForm() {
       toast.success("Song uploaded successfully.");
       // The upload goes through its own fetch loop, so the song list is refreshed here.
       void queryClient.invalidateQueries({ queryKey: queryKey(endpoints.songs.list) });
-      setFile(null);
-      setDivision("");
-      setEntityName("");
-      setSelectedTeamId(teams.length > 0 ? teams[0].id : "");
-      setRoutineName("");
-      setDescriptor("");
+      reset({ ...EMPTY_FORM, selectedTeamId: teams.length > 0 ? teams[0].id : "" });
       setUploadBytesSent(0);
       setFileInputKey((k) => k + 1);
       setFormKey((k) => k + 1);
@@ -131,7 +158,6 @@ export default function SpecialUploadForm() {
       setUploadStage("idle");
       setUploadProgress(0);
       setUploadBytesSent(0);
-      setIsSubmitting(false);
     }
   };
 
@@ -150,7 +176,7 @@ export default function SpecialUploadForm() {
     (division === "Teams" ? teams.length === 0 || !selectedTeamId : !entityName.trim());
 
   return (
-    <form onSubmit={(e) => void handleUpload(e)} className="space-y-4">
+    <form onSubmit={(e) => void handleSubmit(handleUpload, toastFirstError)(e)} className="space-y-4">
       <div className="space-y-2">
         <Label>Division</Label>
         <ChoiceGroup
@@ -158,7 +184,7 @@ export default function SpecialUploadForm() {
           ariaLabel="Division"
           options={SPECIAL_DIVISION_OPTIONS.map((d) => ({ value: d, label: d }))}
           value={division}
-          onChange={setDivision}
+          onChange={(d) => setValue("division", d)}
         />
       </div>
 
@@ -178,7 +204,7 @@ export default function SpecialUploadForm() {
               ariaLabel="Team"
               options={teams.map((t) => ({ value: t.id, label: t.identifier }))}
               value={selectedTeamId}
-              onChange={setSelectedTeamId}
+              onChange={(id) => setValue("selectedTeamId", id)}
             />
           )}
         </div>
@@ -189,8 +215,7 @@ export default function SpecialUploadForm() {
           <Label htmlFor="special-group-name">Group Name</Label>
           <Input
             id="special-group-name"
-            value={entityName}
-            onChange={(e) => setEntityName(e.target.value)}
+            {...register("entityName")}
             placeholder="Enter the group name"
             required
           />
@@ -201,8 +226,7 @@ export default function SpecialUploadForm() {
         <Label htmlFor="special-routine">Routine / Song name</Label>
         <Input
           id="special-routine"
-          value={routineName}
-          onChange={(e) => setRoutineName(e.target.value)}
+          {...register("routineName")}
           placeholder="Optional — recommended"
         />
       </div>
@@ -210,8 +234,7 @@ export default function SpecialUploadForm() {
         <Label htmlFor="special-descriptor">Personal descriptor</Label>
         <Input
           id="special-descriptor"
-          value={descriptor}
-          onChange={(e) => setDescriptor(e.target.value)}
+          {...register("descriptor")}
           placeholder="e.g. 98%, -2%, v3, 2026-02-01"
         />
       </div>
@@ -222,7 +245,7 @@ export default function SpecialUploadForm() {
           id="special-file"
           type="file"
           accept={isIOS() ? undefined : "audio/*"}
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          onChange={(e) => setValue("file", e.target.files?.[0] ?? null)}
           className="cursor-pointer"
         />
         <p className="text-xs text-muted-foreground">MP3, WAV, FLAC, or M4A — max 100 MB</p>

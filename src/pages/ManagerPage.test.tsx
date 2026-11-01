@@ -24,7 +24,8 @@ vi.mock("sonner", () => ({
   toast: { error: vi.fn(), success: vi.fn() },
 }));
 
-vi.mock("@/hooks/useAuthMe", () => ({
+vi.mock("@/hooks/useAuthMe", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/hooks/useAuthMe")>()),
   useAuthMe: () => ({
     me: { id: "admin_1", email: "admin@example.com", role: "admin" },
     loading: false,

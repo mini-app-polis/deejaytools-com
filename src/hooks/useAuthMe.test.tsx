@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
+import { act, renderHook as rtlRenderHook, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // vi.mock factories are hoisted above all imports, so they cannot reference
@@ -31,15 +33,26 @@ vi.mock("sonner", () => ({
   toast: { error: toastError, success: vi.fn() },
 }));
 
-import { resetAuthMeCache, useAuthMe } from "./useAuthMe";
+import { useAuthMe, useAuthMeQuery } from "./useAuthMe";
 import {
   markAuthSyncPending,
   markAuthSyncSettled,
   resetAuthSyncStatus,
 } from "@/lib/authSyncStatus";
+import { createTestQueryClient } from "@/test/render";
+
+// Every hook in one test shares one client, as every caller in the app does.
+let client: QueryClient;
+
+function renderHook<T>(hook: () => T) {
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  return rtlRenderHook(hook, { wrapper });
+}
 
 beforeEach(() => {
-  resetAuthMeCache();
+  client = createTestQueryClient();
   resetAuthSyncStatus();
   useAuthMock.mockReset();
   apiGet.mockReset();
@@ -169,7 +182,7 @@ describe("useAuthMe", () => {
     expect(toastError).toHaveBeenCalledExactlyOnceWith("Network error");
 
     await act(() => result.current.reload());
-    expect(result.current.me?.id).toBe("u1");
+    await waitFor(() => expect(result.current.me?.id).toBe("u1"));
     expect(result.current.error).toBeNull();
     expect(result.current.loading).toBe(false);
     expect(apiGet).toHaveBeenCalledTimes(2);
@@ -205,7 +218,7 @@ describe("useAuthMe", () => {
     expect(apiGet).toHaveBeenCalledTimes(1);
 
     await act(() => page.result.current.reload());
-    expect(nav.result.current.eventRoles).toEqual([]);
+    await waitFor(() => expect(nav.result.current.eventRoles).toEqual([]));
     expect(page.result.current.eventRoles).toEqual([]);
     // The record stayed on screen while the reload was out.
     expect(nav.result.current.loading).toBe(false);
@@ -260,6 +273,62 @@ describe("useAuthMe", () => {
     expect(result.current.error).toBeNull();
     // reload() while signed out asks nothing.
     await act(() => result.current.reload());
+    expect(apiGet).toHaveBeenCalledTimes(1);
+  });
+
+  it("keys the record by the Clerk user id, so another account never sees it", async () => {
+    const auth = { isLoaded: true, isSignedIn: true, userId: "user_a" as string | undefined };
+    useAuthMock.mockImplementation(() => auth);
+    apiGet.mockResolvedValueOnce(meRow({ id: "user_a", role: "admin" })).mockResolvedValue(meRow({ id: "user_b" }));
+
+    const { result, rerender } = renderHook(() => useAuthMe());
+    await waitFor(() => expect(result.current.me?.id).toBe("user_a"));
+    expect(client.getQueryData(["auth.me", "user_a"])).toMatchObject({ id: "user_a" });
+
+    // Sign out, then in as someone else on the same device.
+    auth.isSignedIn = false;
+    rerender();
+    expect(result.current.me).toBeNull();
+    auth.isSignedIn = true;
+    auth.userId = "user_b";
+    rerender();
+    // Never the previous account's record, not even for a render.
+    expect(result.current.me).toBeNull();
+    expect(result.current.isAdmin).toBe(false);
+    expect(result.current.loading).toBe(true);
+    await waitFor(() => expect(result.current.me?.id).toBe("user_b"));
+    expect(result.current.isAdmin).toBe(false);
+    expect(apiGet).toHaveBeenCalledTimes(2);
+    expect(client.getQueryData(["auth.me", "user_a"])).toMatchObject({ id: "user_a" });
+    expect(client.getQueryData(["auth.me", "user_b"])).toMatchObject({ id: "user_b" });
+  });
+
+  it("refetches every caller when the auth.me prefix is invalidated", async () => {
+    useAuthMock.mockReturnValue({ isLoaded: true, isSignedIn: true, userId: "user_a" });
+    apiGet.mockResolvedValueOnce(meRow({ first_name: "Alice" })).mockResolvedValue(meRow({ first_name: "Ada" }));
+
+    const nav = renderHook(() => useAuthMe());
+    const page = renderHook(() => useAuthMe());
+    await waitFor(() => expect(nav.result.current.me?.first_name).toBe("Alice"));
+
+    await act(() => client.invalidateQueries({ queryKey: ["auth.me"] }));
+    await waitFor(() => expect(nav.result.current.me?.first_name).toBe("Ada"));
+    expect(page.result.current.me?.first_name).toBe("Ada");
+    expect(apiGet).toHaveBeenCalledTimes(2);
+  });
+
+  it("useAuthMeQuery asks nothing when disabled, and reads the shared record when enabled", async () => {
+    useAuthMock.mockReturnValue({ isLoaded: true, isSignedIn: true, userId: "user_a" });
+    apiGet.mockResolvedValue(meRow());
+
+    const off = renderHook(() => useAuthMeQuery({ enabled: false }));
+    expect(off.result.current.fetchStatus).toBe("idle");
+    expect(apiGet).not.toHaveBeenCalled();
+
+    const shared = renderHook(() => useAuthMe());
+    await waitFor(() => expect(shared.result.current.me?.id).toBe("u1"));
+    const on = renderHook(() => useAuthMeQuery());
+    expect(on.result.current.data?.id).toBe("u1");
     expect(apiGet).toHaveBeenCalledTimes(1);
   });
 

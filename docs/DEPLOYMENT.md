@@ -100,7 +100,7 @@ The nav bar's version text comes from `NavBar.tsx` importing `package.json` dire
 
 ### `contract.yml`
 
-Runs `pnpm test:contract` against the development API whenever either side of the contract changes: a push to `dev` here, or the `dev-api-deployed` dispatch api-deejaytools sends after a successful dev deploy (that run checks out `dev`). Skips with a warning when its configuration is missing. Configuration: secret `CONTRACT_CLERK_SECRET_KEY` (`sk_test_…`), variables `CONTRACT_API_URL` and `CONTRACT_USER_ID`; the e2e job uses the same three. See [ADR-0002](decisions/ADR-0002-api-contract.md).
+Runs `pnpm test:contract` against the development API whenever either side of the contract changes: a push to `dev` here, or the `dev-api-deployed` dispatch api-deejaytools sends after a successful dev deploy (that run checks out `dev`). Fails when its configuration is missing. Configuration: secret `CONTRACT_CLERK_SECRET_KEY` (`sk_test_…`), variables `CONTRACT_API_URL` and `CONTRACT_USER_ID`; the e2e job uses the same three. See [ADR-0002](decisions/ADR-0002-api-contract.md).
 
 ---
 

@@ -1,8 +1,25 @@
 // @vitest-environment jsdom
-import { renderHook, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
+import { renderHook as rtlRenderHook, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useApiVersion } from "./useApiVersion";
+import { createTestQueryClient } from "@/test/render";
+
+// Every hook in one test shares one client, as every caller in the app does.
+let client: QueryClient;
+
+function renderHook<T>(hook: () => T) {
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  return rtlRenderHook(hook, { wrapper });
+}
+
+beforeEach(() => {
+  client = createTestQueryClient();
+});
 
 function respond(status: number, body: unknown) {
   vi.stubGlobal(
@@ -52,6 +69,16 @@ describe("useApiVersion", () => {
     const { result } = renderHook(() => useApiVersion());
     await waitFor(() => expect(fetch).toHaveBeenCalled());
     expect(result.current).toBeNull();
+  });
+
+  it("fetches once for every caller", async () => {
+    respond(200, { version: "1.2.3", commit: null });
+    const first = renderHook(() => useApiVersion());
+    const second = renderHook(() => useApiVersion());
+    await waitFor(() => expect(first.result.current?.version).toBe("1.2.3"));
+    expect(second.result.current?.version).toBe("1.2.3");
+    expect(renderHook(() => useApiVersion()).result.current?.version).toBe("1.2.3");
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("stays null when the request fails", async () => {

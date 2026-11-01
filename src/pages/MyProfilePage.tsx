@@ -30,7 +30,7 @@ type ProfileForm = z.infer<typeof profileSchema>;
 
 export default function MyProfilePage() {
   const { me, loading, error, reload } = useAuthMe();
-  const updateMe = useEndpointMutation(endpoints.auth.updateMe);
+  const updateMe = useEndpointMutation(endpoints.auth.updateMe, { invalidates: [endpoints.auth.me] });
   const isSubmitting = updateMe.isPending;
 
   const form = useForm<ProfileForm>({
@@ -52,7 +52,6 @@ export default function MyProfilePage() {
         firstName: values.firstName,
         lastName: values.lastName,
       } });
-      await reload();
       toast.success("Profile updated");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to update profile");

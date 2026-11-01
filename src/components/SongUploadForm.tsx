@@ -1,8 +1,11 @@
 import { useAuth } from "@clerk/clerk-react";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import { z } from "zod";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointQuery } from "@/api/queries";
 import { queryKey, type KeyedEndpoint } from "@/api/queryKeys";
@@ -12,8 +15,10 @@ import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuthMeQuery } from "@/hooks/useAuthMe";
 import { useDivisions } from "@/hooks/useDivisions";
 import type { ApiManagedPartnership, ApiPartner } from "@/schemas";
+import { toastFirstError } from "@/lib/formErrors";
 import {
   MAX_FILE_BYTES,
   UploadRefused,
@@ -53,6 +58,37 @@ function managedPartnershipSummary(p: ApiManagedPartnership) {
   return `Leader: ${p.leader_first_name} ${p.leader_last_name} · Follower: ${p.follower_first_name} ${p.follower_last_name}`;
 }
 
+/**
+ * The upload form's fields, checked in the order the form reads them; only
+ * the first problem is reported. A self upload needs a partner unless event
+ * staff upload for a dancer; a managed upload needs a partnership.
+ */
+function songUploadSchema(variant: "self" | "managed", staffOnBehalf: boolean) {
+  return z
+    .object({
+      file: z.custom<File | null>(),
+      division: z.string(),
+      routineName: z.string(),
+      descriptor: z.string(),
+      selectedPartnerId: z.string(),
+      selectedManagedPartnershipId: z.string(),
+    })
+    .superRefine((v, ctx) => {
+      const fail = (path: string, message: string) => ctx.addIssue({ code: "custom", path: [path], message });
+      if (!v.file) return fail("file", "Please select an audio file.");
+      if (v.file.size > MAX_FILE_BYTES) {
+        return fail("file", "That file is too large. Please choose an audio file under 100 MB.");
+      }
+      if (!v.division) return fail("division", "Please select a division.");
+      if (variant === "self") {
+        if (!v.selectedPartnerId && !staffOnBehalf) fail("selectedPartnerId", "Please select a partner.");
+      } else if (!v.selectedManagedPartnershipId) {
+        fail("selectedManagedPartnershipId", "Please select a managed partnership.");
+      }
+    });
+}
+type SongUploadValues = z.infer<ReturnType<typeof songUploadSchema>>;
+
 export type SongUploadFormProps = {
   /** "self" = partner upload; "managed" = upload for a managed partnership. */
   variant: "self" | "managed";
@@ -73,19 +109,35 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
   const { groups: divisionGroups, loading: divisionsLoading, error: divisionsError } = useDivisions();
   const uploadGroups = useMemo(() => uploadDivisionGroups(divisionGroups), [divisionGroups]);
 
-  const [file, setFile] = useState<File | null>(null);
-  const [division, setDivision] = useState("");
-  const [routineName, setRoutineName] = useState("");
-  const [descriptor, setDescriptor] = useState("");
-  const [selectedPartnerId, setSelectedPartnerId] = useState("");
-  const [selectedManagedPartnershipId, setSelectedManagedPartnershipId] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [fileInputKey, setFileInputKey] = useState(0);
   const [formKey, setFormKey] = useState(0);
   const [uploadStage, setUploadStage] = useState<UploadStage>("idle");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadBytesSent, setUploadBytesSent] = useState(0);
   const staffOnBehalf = Boolean(onBehalf?.eventId);
+  const {
+    register,
+    handleSubmit,
+    reset,
+    getValues,
+    setValue,
+    watch,
+    formState: { isSubmitting },
+  } = useForm<SongUploadValues>({
+    resolver: zodResolver(songUploadSchema(variant, staffOnBehalf)),
+    defaultValues: {
+      file: null,
+      division: "",
+      routineName: "",
+      descriptor: "",
+      selectedPartnerId: "",
+      selectedManagedPartnershipId: "",
+    },
+  });
+  const file = watch("file");
+  const division = watch("division");
+  const selectedPartnerId = watch("selectedPartnerId");
+  const selectedManagedPartnershipId = watch("selectedManagedPartnershipId");
   const onBehalfUserId = onBehalf?.userId;
   const onBehalfEventId = onBehalf?.eventId;
 
@@ -102,7 +154,7 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
   });
   const ownPartnersQuery = useEndpointQuery(endpoints.partners.list, { enabled: forSelf });
   const partnersQuery = forSelf ? ownPartnersQuery : onBehalfEventId ? eventPartnersQuery : userPartnersQuery;
-  const meQuery = useEndpointQuery(endpoints.auth.me, { enabled: forSelf });
+  const meQuery = useAuthMeQuery({ enabled: forSelf });
   const managedQuery = useEndpointQuery(endpoints.managedPartnerships.list, {
     enabled: variant === "managed" && forSelf,
   });
@@ -115,35 +167,18 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
 
   // Preselect the first partner and partnership once they load.
   useEffect(() => {
-    if (partners.length > 0) setSelectedPartnerId((cur) => (cur === "" ? partners[0].id : cur));
-  }, [partners]);
+    if (partners.length > 0 && getValues("selectedPartnerId") === "") setValue("selectedPartnerId", partners[0].id);
+  }, [partners, getValues, setValue]);
   useEffect(() => {
-    if (managedPartnerships.length > 0) {
-      setSelectedManagedPartnershipId((cur) => (cur === "" ? managedPartnerships[0].id : cur));
+    if (managedPartnerships.length > 0 && getValues("selectedManagedPartnershipId") === "") {
+      setValue("selectedManagedPartnershipId", managedPartnerships[0].id);
     }
-  }, [managedPartnerships]);
+  }, [managedPartnerships, getValues, setValue]);
 
-  const handleUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!file) { toast.error("Please select an audio file."); return; }
-    if (file.size > MAX_FILE_BYTES) {
-      toast.error("That file is too large. Please choose an audio file under 100 MB.");
-      return;
-    }
-    if (!division) { toast.error("Please select a division."); return; }
-    if (variant === "self") {
-      if (!selectedPartnerId && !staffOnBehalf) {
-        toast.error("Please select a partner.");
-        return;
-      }
-    } else {
-      if (!selectedManagedPartnershipId) {
-        toast.error("Please select a managed partnership.");
-        return;
-      }
-    }
-
-    setIsSubmitting(true);
+  const handleUpload = async (values: SongUploadValues) => {
+    const { file, division, routineName, descriptor, selectedPartnerId, selectedManagedPartnershipId } = values;
+    // The schema has refused a submit without a file.
+    if (!file) return;
     try {
       await uploadSongInChunks({
         file,
@@ -189,11 +224,15 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
       for (const ep of added) {
         void queryClient.invalidateQueries({ queryKey: queryKey(ep) });
       }
-      setFile(null);
-      setDivision("");
-      setRoutineName("");
-      setDescriptor("");
-      setSelectedPartnerId(partners.length > 0 ? partners[0].id : "");
+      // The managed partnership stays picked for the next upload.
+      reset({
+        ...getValues(),
+        file: null,
+        division: "",
+        routineName: "",
+        descriptor: "",
+        selectedPartnerId: partners.length > 0 ? partners[0].id : "",
+      });
       setUploadBytesSent(0);
       setFileInputKey((k) => k + 1);
       setFormKey((k) => k + 1);
@@ -210,7 +249,6 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
       setUploadStage("idle");
       setUploadProgress(0);
       setUploadBytesSent(0);
-      setIsSubmitting(false);
     }
   };
 
@@ -243,7 +281,7 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
     isSubmitting || (!staffOnBehalf && (partners.length === 0 || !selectedPartnerId));
 
   return (
-    <form onSubmit={(e) => void handleUpload(e)} className="space-y-4">
+    <form onSubmit={(e) => void handleSubmit(handleUpload, toastFirstError)(e)} className="space-y-4">
       {/* Who this upload is for */}
       {onBehalf ? (
         <p className="text-sm text-muted-foreground">
@@ -276,7 +314,7 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
               { value: NO_PARTNER, label: "No partner" },
             ]}
             value={selectedPartnerId || NO_PARTNER}
-            onChange={(v) => setSelectedPartnerId(v === NO_PARTNER ? "" : v)}
+            onChange={(v) => setValue("selectedPartnerId", v === NO_PARTNER ? "" : v)}
           />
           <p className="text-xs text-muted-foreground">
             The dancer&apos;s partners. The song is submitted to this event when it uploads.
@@ -291,7 +329,7 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
               ariaLabel="Partner"
               options={partners.map((p) => ({ value: p.id, label: partnerLabel(p) }))}
               value={selectedPartnerId}
-              onChange={setSelectedPartnerId}
+              onChange={(id) => setValue("selectedPartnerId", id)}
             />
           )}
           {partners.length === 0 ? (
@@ -329,7 +367,7 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
                   label: managedPartnershipLabel(mp),
                 }))}
                 value={selectedManagedPartnershipId}
-                onChange={setSelectedManagedPartnershipId}
+                onChange={(id) => setValue("selectedManagedPartnershipId", id)}
               />
               {selectedManaged && (
                 <p className="text-sm text-muted-foreground">{managedPartnershipSummary(selectedManaged)}</p>
@@ -352,22 +390,22 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
             ariaLabel="Division"
             groups={uploadGroups}
             value={division}
-            onChange={setDivision}
+            onChange={(d) => setValue("division", d)}
           />
         )}
       </div>
       <div className="space-y-2">
         <Label htmlFor="song-routine">Routine / Song name</Label>
-        <Input id="song-routine" value={routineName} onChange={(e) => setRoutineName(e.target.value)} placeholder="Optional — recommended" />
+        <Input id="song-routine" {...register("routineName")} placeholder="Optional — recommended" />
       </div>
       <div className="space-y-2">
         <Label htmlFor="song-descriptor">Personal descriptor</Label>
-        <Input id="song-descriptor" value={descriptor} onChange={(e) => setDescriptor(e.target.value)} placeholder="e.g. 98%, -2%, v3, 2026-02-01" />
+        <Input id="song-descriptor" {...register("descriptor")} placeholder="e.g. 98%, -2%, v3, 2026-02-01" />
       </div>
       <div className="space-y-2">
         <Label htmlFor="song-file">Audio file</Label>
         <Input key={fileInputKey} id="song-file" type="file" accept={isIOS() ? undefined : "audio/*"}
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="cursor-pointer" />
+          onChange={(e) => setValue("file", e.target.files?.[0] ?? null)} className="cursor-pointer" />
         <p className="text-xs text-muted-foreground">MP3, WAV, FLAC, or M4A — max 100 MB</p>
       </div>
 

@@ -21,7 +21,7 @@ import { vi } from "vitest";
 // hook itself.
 vi.mock("@/hooks/useDivisions", async () => {
   const { LOADED_DIVISIONS } = await import("./divisions");
-  return { useDivisions: () => LOADED_DIVISIONS, resetDivisionsCache: () => {} };
+  return { useDivisions: () => LOADED_DIVISIONS };
 });
 
 if (typeof window !== "undefined") {

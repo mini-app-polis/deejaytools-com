@@ -1,6 +1,9 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
 import { useParams, Link } from "react-router-dom";
 import { toast } from "sonner";
+import { z } from "zod";
 import {
   type ApiAdminUser,
   type ApiAdminEventSongSubmission,
@@ -21,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { toastFirstError } from "@/lib/formErrors";
 import { formatSessionTitle } from "@/lib/sessionFormat";
 import { isSessionToday } from "@/lib/zonedTime";
 import { songLabel } from "@/lib/songLabel";
@@ -32,6 +36,19 @@ const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
 
 // A stable empty list while a query has no data, so memos over it hold.
 const NO_ROWS: readonly never[] = [];
+
+/** CheckIn For: the user is picked by search, then the session, song and division. */
+const checkinForSchema = z.object({
+  user: z
+    .custom<ApiAdminUser | null>()
+    .refine((u) => u !== null, "Select a user")
+    .pipe(z.custom<ApiAdminUser>()),
+  sessionId: z.string().min(1, "Select a session"),
+  songId: z.string().min(1, "Select a song"),
+  division: z.string().min(1, "Select a division"),
+});
+type CheckinForForm = z.input<typeof checkinForSchema>;
+type CheckinForValues = z.output<typeof checkinForSchema>;
 
 export const MANAGER_SECTIONS = ["active-sessions", "event-songs", "upload-for", "checkin-for", "guide"] as const;
 export type ManagerSection = (typeof MANAGER_SECTIONS)[number];
@@ -72,11 +89,22 @@ export default function ManagerPage() {
     });
 
   const [cfUserQuery, setCfUserQuery] = useState("");
-  const [cfSelectedUser, setCfSelectedUser] = useState<ApiAdminUser | null>(null);
-  const [cfSessionId, setCfSessionId] = useState("");
-  const [cfSongId, setCfSongId] = useState("");
-  const [cfDivision, setCfDivision] = useState("");
-  const [cfSubmitting, setCfSubmitting] = useState(false);
+  const {
+    handleSubmit: cfValidate,
+    reset: cfReset,
+    setValue: cfSetValue,
+    watch: cfWatch,
+    formState: { isSubmitting: cfSubmitting },
+  } = useForm<CheckinForForm, unknown, CheckinForValues>({
+    resolver: zodResolver(checkinForSchema),
+    defaultValues: { user: null, sessionId: "", songId: "", division: "" },
+  });
+  const cfSelectedUser = cfWatch("user");
+  const cfSessionId = cfWatch("sessionId");
+  const cfSongId = cfWatch("songId");
+  const cfDivision = cfWatch("division");
+  const setCfSongId = (id: string) => cfSetValue("songId", id);
+  const setCfDivision = (d: string) => cfSetValue("division", d);
 
   const [ufQuery, setUfQuery] = useState("");
   const [ufSelected, setUfSelected] = useState<{ id: string; email: string; first_name: string | null; last_name: string | null } | null>(null);
@@ -131,9 +159,9 @@ export default function ManagerPage() {
 
   // A new user or session starts the song and division choice again.
   useEffect(() => {
-    setCfSongId("");
-    setCfDivision("");
-  }, [cfSelectedUser, cfSessionId, cfSessionObj?.event_id]);
+    cfSetValue("songId", "");
+    cfSetValue("division", "");
+  }, [cfSelectedUser?.id, cfSessionId, cfSessionObj?.event_id, cfSetValue]);
 
   const cfEventId = cfSessionObj?.event_id ?? null;
   const cfSubmissionsQuery = useEndpointQuery(endpoints.admin.userEventSongSubmissions, {
@@ -259,27 +287,19 @@ export default function ManagerPage() {
   const handleMoveDown = (queueEntryId: string) =>
     void queueActions.run(endpoints.queue.moveDown, queueEntryId);
 
-  const submitCheckinFor = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!cfSelectedUser) { toast.error("Select a user"); return; }
-    if (!cfSessionId) { toast.error("Select a session"); return; }
-    if (!cfSongId) { toast.error("Select a song"); return; }
-    if (!cfDivision) { toast.error("Select a division"); return; }
-    setCfSubmitting(true);
+  const submitCheckinFor = async ({ user, sessionId, songId, division }: CheckinForValues) => {
     try {
       await createCheckin.mutateAsync({ body: {
-        sessionId: cfSessionId,
-        songId: cfSongId,
-        divisionName: cfDivision,
-        on_behalf_of_user_id: cfSelectedUser.id,
+        sessionId,
+        songId,
+        divisionName: division,
+        on_behalf_of_user_id: user.id,
       } });
-      const who = [cfSelectedUser.first_name, cfSelectedUser.last_name].filter(Boolean).join(" ") || cfSelectedUser.email;
+      const who = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
       toast.success(`Checked in ${who}`);
       setCfSongId("");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Check-in failed");
-    } finally {
-      setCfSubmitting(false);
     }
   };
 
@@ -820,7 +840,7 @@ export default function ManagerPage() {
                           key={u.id}
                           type="button"
                           onClick={() => {
-                            setCfSelectedUser(u);
+                            cfSetValue("user", u);
                             setCfUserQuery("");
                           }}
                           className="w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50"
@@ -846,11 +866,8 @@ export default function ManagerPage() {
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      setCfSelectedUser(null);
+                      cfReset();
                       setCfUserQuery("");
-                      setCfSessionId("");
-                      setCfSongId("");
-                      setCfDivision("");
                     }}
                   >
                     Change user
@@ -858,7 +875,7 @@ export default function ManagerPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <form onSubmit={submitCheckinFor} className="space-y-4 max-w-lg">
+                <form onSubmit={(e) => void cfValidate(submitCheckinFor, toastFirstError)(e)} className="space-y-4 max-w-lg">
                   <div>
                     <label className={FIELD_LABEL_CLASS}>Session</label>
                     <ChoiceGroup
@@ -868,7 +885,7 @@ export default function ManagerPage() {
                         label: formatSessionTitle(s, s.event_timezone),
                       }))}
                       value={cfSessionId}
-                      onChange={setCfSessionId}
+                      onChange={(id) => cfSetValue("sessionId", id)}
                     />
                   </div>
 

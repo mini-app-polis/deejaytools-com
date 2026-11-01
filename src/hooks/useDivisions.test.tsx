@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
+import { act, renderHook as rtlRenderHook, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // The global setup stubs this hook for component tests; test the real one here.
@@ -14,12 +16,23 @@ const { apiGet, apiClient } = vi.hoisted(() => {
 });
 vi.mock("@/api/client", () => ({ useApiClient: () => apiClient }));
 
-import { resetDivisionsCache, useDivisions } from "./useDivisions";
+import { useDivisions } from "./useDivisions";
+import { createTestQueryClient } from "@/test/render";
+
+// Every hook in one test shares one client, as every caller in the app does.
+let client: QueryClient;
+
+function renderHook<T>(hook: () => T) {
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  return rtlRenderHook(hook, { wrapper });
+}
 
 const LIST = { groups: [["Classic", "Showcase"], ["Masters"]], divisions: ["Classic", "Showcase", "Masters"] };
 
 beforeEach(() => {
-  resetDivisionsCache();
+  client = createTestQueryClient();
   apiGet.mockReset();
 });
 
@@ -60,12 +73,15 @@ describe("useDivisions", () => {
   });
 
   it("loads again when the caller retries after a failure", async () => {
-    apiGet.mockRejectedValueOnce(new Error("offline")).mockResolvedValue(LIST);
+    let answer: (list: typeof LIST) => void = () => {};
+    apiGet.mockRejectedValueOnce(new Error("offline")).mockReturnValue(new Promise((r) => (answer = r)));
     const { result } = renderHook(() => useDivisions());
     await waitFor(() => expect(result.current.error).toBe("offline"));
 
     act(() => result.current.retry());
-    expect(result.current.loading).toBe(true);
+    await waitFor(() => expect(result.current.loading).toBe(true));
+    expect(result.current.error).toBeNull();
+    act(() => answer(LIST));
     await waitFor(() => expect(result.current.divisions).toEqual(LIST.divisions));
     expect(result.current.error).toBeNull();
     expect(apiGet).toHaveBeenCalledTimes(2);

@@ -25,7 +25,7 @@ Orientation for a developer who has never opened this codebase. The app is a Vit
 
 - **No Redux, Zustand, Jotai, or similar** — no store file, no slices, no selectors.
 
-**Data fetching is moving onto TanStack Query** ([ADR-0003](decisions/ADR-0003-shared-data-fetching-with-tanstack-query.md)). Server state is read with `useEndpointQuery` and changed with `useEndpointMutation` (`api/queries.ts`, §3), which share one cache, deduplicate requests, cancel stale responses and refetch what a mutation invalidates. `useState` stays for what the user is editing and for UI state. Every page and section reads through the query hooks; the shared `useAuthMe`, `useDivisions` and `useApiVersion` stores are the last step of ADR-0003's migration and still keep their own caches (§5). New code uses the query hooks — `SessionsPage` is the reference.
+**Data fetching is moving onto TanStack Query** ([ADR-0003](decisions/ADR-0003-shared-data-fetching-with-tanstack-query.md)). Server state is read with `useEndpointQuery` and changed with `useEndpointMutation` (`api/queries.ts`, §3), which share one cache, deduplicate requests, cancel stale responses and refetch what a mutation invalidates. `useState` stays for what the user is editing and for UI state. Every page and section reads through the query hooks, and `useAuthMe`, `useDivisions` and `useApiVersion` are queries on the same client (§5). New code uses the query hooks — `SessionsPage` is the reference.
 
 ---
 
@@ -43,7 +43,7 @@ src/
 ├── lib/           Pure helpers — no React, safe to import anywhere
 ├── pages/         Route-level screens (+ colocated *.test.tsx)
 │   └── help/      Seven /how-it-works/* topic pages
-├── contract/      Live contract suite (`pnpm test:contract`)
+├── contract/      Live contract suite (`pnpm test:contract`), and the catalog check against the API's OpenAPI snapshot
 ├── schemas/       zod schemas for API responses (`@/schemas`)
 ├── test/          Vitest global setup, `fx.*` fixtures, `renderWithQueryClient`
 ├── main.tsx       Entry: Sentry → ClerkProvider → QueryClientProvider → App
@@ -114,12 +114,12 @@ One default-export component per route. Pages orchestrate fetching, local state,
 
 | File | Purpose |
 |------|---------|
-| `useAuthMe.ts` | Reads the one shared `/v1/auth/me` record; exposes `me`, `loading`, `error`, `reload`, `isAdmin`, `eventRoles` (§5) |
-| `useDivisions.ts` | Reads the competition divisions from the public `GET /v1/divisions`, once per page load and shared by every caller; works before sign-in |
+| `useAuthMe.ts` | Reads the caller's `/v1/auth/me` record from the query cache, keyed by Clerk user id; exposes `me`, `loading`, `error`, `reload`, `isAdmin`, `eventRoles`. `useAuthMeQuery` is the raw query underneath (§5) |
+| `useDivisions.ts` | Reads the competition divisions from the public `GET /v1/divisions` as a query, once per page load and shared by every caller; works before sign-in |
 | `useStaffEvents.ts` | Joins `eventRoles` to the shared events list query: each staff event with its richest role; a failed list keeps the portals and returns `error` |
 | `useLiveQueues.ts` | A session's three staff queues, polled every 8 s (§9), with `updatedAt`, `refreshFailed` and a manual `refresh` |
 | `useDebouncedValue.ts` | A value once it has stopped changing for a delay — feeds search boxes into query params |
-| `useApiVersion.ts` | Fetches the API's public `GET /version` once (shown in the nav) |
+| `useApiVersion.ts` | Fetches the API's public `GET /version` once per page load as a query (shown in the nav) |
 
 ### `lib/` modules
 
@@ -191,7 +191,7 @@ There is no refresh logic here — Clerk owns session lifetime.
 
 Responses are JSON envelopes, typed in `src/api/envelope.ts`:
 
-- Success: `{ data: T, meta?: … }` → returns `data`
+- Success: `{ data: T, meta: { version: "v1", count?, total? } }` → returns `data`. `SuccessMetaSchema` accepts `meta` with or without `count` and `total`; the live contract suite checks every success's `meta` against it
 - Error: `{ error: { code, message, … } }` → throws an `ApiError` (status and code attached) whose message is the client's friendly text for that code, or the server's `message`
 - 5xx without an error envelope → `ApiError` with a "server unavailable" message
 - 2xx the client cannot read → `ApiError` saying so
@@ -213,7 +213,7 @@ create.mutate({ body: { … } }, { onError: (e) => toast.error(e.message) });
 
 - **`useEndpointQuery(ep, { params, ...options })`** reads a GET endpoint. Params are required exactly when `call()` requires them; any other `useQuery` option (`enabled`, `refetchInterval`, `staleTime`, …) passes through. Pages never write a `queryKey` or `queryFn`.
 - **`useEndpointMutation(ep, { invalidates, ...options })`** sends `{ params, body }` through `call()`. On success it invalidates every query of each endpoint in `invalidates`, whatever its params, then runs the caller's `onSuccess`.
-- **Keys** come only from `queryKey(ep, params?)`: `[ep.id]`, or `[ep.id, params]` (e.g. `["sessions.list", { eventId: "e1" }]`). TanStack matches keys by prefix, so `queryKey(ep)` covers every variant.
+- **Keys** come only from `queryKey(ep, params?, scope?)`: `[ep.id]`, or `[ep.id, params]` (e.g. `["sessions.list", { eventId: "e1" }]`). `scope` names whose answer it is, for a read that differs per signed-in user, and goes right after the id: `["auth.me", userId]`. TanStack matches keys by prefix, so `queryKey(ep)` covers every variant and every scope.
 - **The client** (`queryClient.ts`) is created once and provided in `main.tsx` inside `ClerkProvider`, so every route and guard shares it. Defaults: no retry for an `ApiError` with a 4xx status or a `ContractViolation` (both answer the same way again); a bounded retry for network errors and 5xx (`shouldRetry`); a short `staleTime` so screens reading the same list share one request.
 - **Errors are shown, not swallowed.** Render a query's `error` where its data would be — `components/QueryError.tsx` gives the inline message and a "Try again" that calls `refetch` — so a failed load never reads as an empty list. Mutation failures keep using a toast. `isLoading` is true only with no data yet, so a background refetch never brings the skeleton back.
 
@@ -236,7 +236,15 @@ Every API call the app makes is declared once in `endpoints.ts`: method, access 
 
 A response that fails its schema is a contract violation. In dev and tests it throws `ContractViolation`; in production it is reported to Sentry (tagged `contract_endpoint`) and the raw data is used, so harmless drift never breaks a page but never goes unnoticed. Unit-test API mocks are built with the `fx.*` factories in `src/test/fixtures.ts`, which parse through the same schemas.
 
-The live contract suite (`src/contract`, `pnpm test:contract`, `.github/workflows/contract.yml`) walks the catalog against the development API with a real Clerk session and fails on any endpoint that is neither exercised nor explicitly skipped. See [ADR-0002](decisions/ADR-0002-api-contract.md).
+The live contract suite (`src/contract`, `pnpm test:contract`, `.github/workflows/contract.yml`) walks the catalog against the development API with a real Clerk session and fails on any endpoint that is neither exercised nor explicitly skipped. See [ADR-0002](decisions/ADR-0002-api-contract.md). This repository owns the API's live contract suite.
+
+Before anything is deployed, the catalog is also checked against api-deejaytools' committed OpenAPI document. `src/contract/api-deejaytools.openapi.json` is a copy of that repository's `docs/openapi.json`; `src/contract/apiSnapshot.test.ts` (run by `pnpm test`, so in every pull request, with no network) uses `openapiCheck.ts` to confirm that every endpoint's route and method exist, that every documented success response satisfies the endpoint's schema (required fields present, types the app accepts, null only where it allows null) with a `meta` that `SuccessMetaSchema` accepts, and that a declared request body fits the route's. It is lenient where the document cannot tell: a loosely typed API field, or a plain string the app narrows to an enum, is not reported.
+
+The flow when the API changes:
+
+1. api-deejaytools regenerates and commits `docs/openapi.json` with the change (its unit tests fail while the snapshot is stale).
+2. Its CI runs this repository's `apiSnapshot.test.ts` from `dev` with the new document in place of the copy, so a change that would break this app fails in the API's pull request, before it merges.
+3. Once it is on the API's `dev`, `pnpm openapi:sync` here refreshes the copy (from the API's `dev` branch by default; a branch, tag or commit, or a local file, may be named). Commit it with any change here that relies on it.
 
 ---
 
@@ -340,28 +348,34 @@ Because `/` renders **outside** `Layout`:
 const { me, loading, error, reload, isAdmin, eventRoles } = useAuthMe();
 ```
 
-Every caller (nav bar, guards, pages) reads one module-level store, so `GET /v1/auth/me` is fetched once per page load however many callers are mounted, a failure is toasted once, and `reload()` updates them all. The store is keyed by the Clerk user id: signing out clears it, and a different account never sees the previous one's record. Only the newest request may write its answer. On a brand-new account `/me` can answer `USER_NOT_SYNCED` before `AuthSync` has created the users row; the hook then waits for the sync (`lib/authSyncStatus.ts`) and asks once more.
+`GET /v1/auth/me` is a query on the shared client (§3), keyed `["auth.me", userId]` with the Clerk user id as the `queryKey()` scope. Every caller (nav bar, guards, pages) reads that one cache entry, so the record is fetched once per page load however many callers are mounted. Because the key carries the user id, signing out and back in as someone else on the same device starts a fresh entry: the previous account's record is never shown, with no reliance on clearing the cache at the right moment. While signed out the query is disabled and `me` is `null`.
+
+`useAuthMe` calls `useQuery` itself rather than `useEndpointQuery`, because its fetch does two things the shared hooks don't: on a brand-new account `/me` can answer `USER_NOT_SYNCED` before `AuthSync` has created the users row, so it waits for the sync (`lib/authSyncStatus.ts`) and asks once more; and it toasts a failure once per request, however many callers share it. To keep that one toast, the query is not retried, and a caller mounted after a failure shows it (with its retry) rather than asking again. `staleTime` is infinite: the record changes only when the caller changes something, and those changes invalidate it.
+
+**Keeping it fresh.** A mutation that changes the caller's record lists `endpoints.auth.me` in its `invalidates`: the profile update (`MyProfilePage`), staff grants and revokes (`EventStaffSection`, which may be the caller's own), and event edits and deletes (`EventDetailsSection`, `AdminPage` — the nav bar lists staff events by name). `invalidates` uses the prefix `["auth.me"]`, so it covers every user's entry. `reload()` invalidates the same prefix by hand; the guards and pages use it for "Try again".
+
+`useAuthMeQuery({ enabled })` is the raw query underneath, for a caller that wants the record only some of the time — `SongUploadForm` reads it only when uploading for the signed-in dancer, through the same key and fetch.
 
 | Field | Meaning |
 |-------|---------|
 | `me` | `ApiAuthMe` from `GET /v1/auth/me`, or `null` |
 | `loading` | `true` until Clerk is loaded and, when signed in, until this account's first answer arrives |
-| `error` | Why the last request failed, or `null`; with `loading` false, so a guard can offer a retry |
-| `reload()` | Re-fetch the record (after a change to the caller's profile or event roles) |
+| `error` | Why the last request failed, or `null` (also while a retry is in flight); with `loading` false, so a guard can offer a retry |
+| `reload()` | Invalidate and re-fetch the record; resolves once it is back |
 | `isAdmin` | `me?.role === "admin"` |
 | `eventRoles` | `me.event_roles`: the caller's `{ event_id, role }` staff roles; `[]` when none or signed out |
 
 ### Why `loading` is computed that way
 
 ```ts
-loading: !isLoaded || (owner !== null && (!current || shared.loading)),
+loading: !isLoaded || (owner !== null && (isPending || (isFetching && me === null))),
 ```
 
-Clerk can report a signed-in user before `/v1/auth/me` returns, and the store can still hold nothing (or another account's record) until this caller's effect starts the load. Without the second clause, `AdminGuard` would see `loading: false`, `isAdmin: false`, and redirect a legitimate admin to `/`. The hook keeps guards in a loading state until this account's record arrives, its request fails, or the user is confirmed signed out.
+Clerk can report a signed-in user before `/v1/auth/me` returns. Without the second clause, `AdminGuard` would see `loading: false`, `isAdmin: false`, and redirect a legitimate admin to `/`. `isPending` covers this account's first load (a new user id is a new key, so it starts pending); the `isFetching` clause covers a retry after a failed first load. A refetch with a record already on screen leaves `loading` false. The hook keeps guards in a loading state until this account's record arrives, its request fails, or the user is confirmed signed out.
 
 ### Divisions — `useDivisions()`
 
-The API owns the division list; the app keeps no copy. `useDivisions()` returns `{ groups, divisions, loading, error }` from `GET /v1/divisions`: `groups` for the grouped pills on the upload form, `divisions` (the groups flattened, in order) for dropdowns, checkbox lists and sorting. Both are empty until the list loads, so forms that send divisions (the session dialogs) refuse to submit until then. Unit tests get the list already loaded from `src/test/setup.ts`; `useDivisions.test.tsx` tests the hook itself.
+The API owns the division list; the app keeps no copy. `useDivisions()` returns `{ groups, divisions, loading, error, retry }` from `GET /v1/divisions`, read through `useEndpointQuery` with an infinite `staleTime` (one fetch per page load; a failed load is retried by the next caller to mount): `groups` for the grouped pills on the upload form, `divisions` (the groups flattened, in order) for dropdowns, checkbox lists and sorting. Both are empty until the list loads, so forms that send divisions (the session dialogs) refuse to submit until then. Unit tests get the list already loaded from `src/test/setup.ts`; `useDivisions.test.tsx` tests the hook itself.
 
 ---
 

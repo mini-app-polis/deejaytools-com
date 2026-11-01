@@ -1,9 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
-import type { ApiDivisions } from "@/schemas";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
-
-type ApiClient = ReturnType<typeof useApiClient>;
+import { useCallback } from "react";
+import { useEndpointQuery } from "@/api/queries";
+import { endpoints } from "@/api/endpoints";
 
 export type DivisionList = {
   /** The divisions in their display groups, in order; empty until loaded. */
@@ -21,66 +18,25 @@ export type DivisionList = {
 const NO_GROUPS: readonly (readonly string[])[] = [];
 const NO_DIVISIONS: readonly string[] = [];
 
-// One fetch per page load, shared by every caller. The list is public and the
-// same for everyone, so it is safe to read before sign-in. A failed load is
-// forgotten, so the next caller tries again.
-let pending: Promise<ApiDivisions> | null = null;
-let loaded: ApiDivisions | null = null;
-
-function loadDivisions(api: ApiClient): Promise<ApiDivisions> {
-  if (!pending) {
-    pending = call(api, endpoints.divisions.list).then(
-      (list) => {
-        loaded = list;
-        return list;
-      },
-      (e: unknown) => {
-        pending = null;
-        throw e;
-      }
-    );
-  }
-  return pending;
-}
-
-/** Forgets the shared list. For tests only. */
-export function resetDivisionsCache(): void {
-  pending = null;
-  loaded = null;
-}
-
-/** The competition divisions, read from GET /v1/divisions. */
+/**
+ * The competition divisions, read from GET /v1/divisions through the shared
+ * query client: one fetch per page load, shared by every caller. The list is
+ * public and the same for everyone, so it is safe to read before sign-in. A
+ * failed load is not kept, so the next caller to mount tries again.
+ */
 export function useDivisions(): DivisionList {
-  const api = useApiClient();
-  const [list, setList] = useState<ApiDivisions | null>(loaded);
-  const [error, setError] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    if (list) return;
-    let cancelled = false;
-    loadDivisions(api)
-      .then((l) => {
-        if (!cancelled) setList(l);
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Could not load the divisions");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, list, attempt]);
+  const { data, error, isFetching, refetch } = useEndpointQuery(endpoints.divisions.list, { staleTime: Infinity });
 
   const retry = useCallback(() => {
-    setError(null);
-    setAttempt((n) => n + 1);
-  }, []);
+    void refetch();
+  }, [refetch]);
 
+  const failed = error !== null && !isFetching;
   return {
-    groups: list?.groups ?? NO_GROUPS,
-    divisions: list?.divisions ?? NO_DIVISIONS,
-    loading: list === null && error === null,
-    error,
+    groups: data?.groups ?? NO_GROUPS,
+    divisions: data?.divisions ?? NO_DIVISIONS,
+    loading: data === undefined && !failed,
+    error: failed ? error.message || "Could not load the divisions" : null,
     retry,
   };
 }
