@@ -35,6 +35,7 @@ async function clerk<T>(secretKey: string, method: string, path: string, body?: 
   return (await res.json()) as T;
 }
 
+/** A Clerk session for the test user: start one, mint bearer tokens with `token()`, and `end()` it. */
 export class ClerkTestSession {
   private cached: { jwt: string; at: number } | null = null;
 

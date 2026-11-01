@@ -7,6 +7,7 @@ export function reloadPage(): void {
   window.location.reload();
 }
 
+/** Navigates the browser to the home page with a full page load. */
 export function goHome(): void {
   window.location.assign("/");
 }

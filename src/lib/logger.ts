@@ -29,6 +29,7 @@ export interface BrowserLogger {
   error: (e: LogEvent) => void;
 }
 
+/** Builds a logger whose events carry `service`; see the module comment for the event shape. */
 export function createLogger(service: string): BrowserLogger {
   const emit = (level: "INFO" | "WARN" | "ERROR", e: LogEvent) => {
     const payload = {

@@ -81,12 +81,14 @@ export const LEGACY_HASH_REDIRECTS: Record<string, HelpTopic["path"]> = {
   etiquette: "/how-it-works/on-the-floor",
 };
 
+/** The help topic with this id; throws for an unknown id. */
 export function helpTopicById(id: HelpTopicId): HelpTopic {
   const topic = HELP_TOPICS.find((t) => t.id === id);
   if (!topic) throw new Error(`Unknown help topic: ${id}`);
   return topic;
 }
 
+/** The topics before and after `id` in HELP_TOPICS order, or null at either end. */
 export function helpTopicNeighbors(id: HelpTopicId): {
   prev: HelpTopic | null;
   next: HelpTopic | null;

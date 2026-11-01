@@ -27,11 +27,13 @@ export function setContractMode(mode: ContractMode | null): void {
   modeOverride = mode;
 }
 
+/** The active validation mode: the forced mode if set, otherwise report in production and strict elsewhere. */
 export function contractMode(): ContractMode {
   if (modeOverride) return modeOverride;
   return import.meta.env.MODE === "production" ? "report" : "strict";
 }
 
+/** Thrown in strict mode when a response does not match its endpoint's schema. */
 export class ContractViolation extends Error {
   readonly endpointId: string;
   readonly issues: z.ZodIssue[];

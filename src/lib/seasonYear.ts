@@ -4,6 +4,11 @@
  */
 export const SEASON_ROLLOVER_MONTH = 10;
 
+/**
+ * The season year for a YYYY-MM-DD date: the next calendar year from
+ * SEASON_ROLLOVER_MONTH onward, otherwise the date's own year. Returns ""
+ * when the date does not parse.
+ */
 export function seasonYearFromDateString(dateStr: string): string {
   const [yearStr, monthStr] = dateStr.split("-");
   const year = Number(yearStr);

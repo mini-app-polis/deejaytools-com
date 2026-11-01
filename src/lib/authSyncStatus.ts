@@ -15,10 +15,12 @@ let waiters: (() => void)[] = [];
 /** How long /me waits for a sync that has not reported back. */
 export const AUTH_SYNC_WAIT_MS = 10_000;
 
+/** Records that this tab's sync has started. */
 export function markAuthSyncPending(): void {
   status = "pending";
 }
 
+/** Records that this tab's sync has finished and releases everything waiting on it. */
 export function markAuthSyncSettled(): void {
   status = "settled";
   const settled = waiters;
