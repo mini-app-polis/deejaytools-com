@@ -982,10 +982,10 @@ describe("AdminPage — Run History section", () => {
     await user.click(screen.getByRole("button", { name: /future fest/i }));
     await waitFor(() => expect(apiGet).toHaveBeenCalledWith("/v1/runs?limit=500&event_id=e2"));
 
-    apiGet.mockClear();
+    // The unfiltered list is already cached, so no request is made: the empty
+    // state is what shows the selection was cleared.
     await user.click(toggle);
-    await waitFor(() => expect(apiGet).toHaveBeenCalledWith("/v1/runs?limit=500"));
-    expect(screen.getByText("No runs recorded yet.")).toBeInTheDocument();
+    expect(await screen.findByText("No runs recorded yet.")).toBeInTheDocument();
   });
 
   it("renders each run with its entity, song, session and who completed it", async () => {
@@ -1608,7 +1608,6 @@ describe("AdminPage — filters that reset", () => {
 
     await user.click(screen.getByRole("button", { name: "All events" }));
     expect(await screen.findByText("No runs recorded yet.")).toBeInTheDocument();
-    expect(apiGet).toHaveBeenLastCalledWith("/v1/runs?limit=500");
   });
 
   it("clears a division or partnership filter with its 'All' chip", async () => {

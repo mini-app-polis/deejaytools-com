@@ -1,16 +1,19 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, type RenderOptions, type RenderResult } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
+import { createQueryClient } from "../api/queryClient";
 
 /**
- * A query client for one test: no retries, so a failure shows at once. Each
- * render gets its own client, so one test's cache never reaches another.
+ * A query client for one test: the production defaults (so staleTime and the
+ * like behave as in the app), except no retries, so a failure shows at once.
+ * Each render gets its own client, so one test's cache never reaches another.
  */
 export function createTestQueryClient(): QueryClient {
+  const defaults = createQueryClient().getDefaultOptions();
   return new QueryClient({
     defaultOptions: {
-      queries: { retry: false, gcTime: Infinity, staleTime: 0 },
-      mutations: { retry: false },
+      queries: { ...defaults.queries, retry: false },
+      mutations: { ...defaults.mutations, retry: false },
     },
   });
 }
