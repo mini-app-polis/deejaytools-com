@@ -443,6 +443,37 @@ function resetAll() {
   apiDel.mockReset();
 }
 
+describe("AdminPage — requests per section", () => {
+  beforeEach(resetAll);
+
+  const requested = () => apiGet.mock.calls.map(([p]) => (p as string).split("?")[0]);
+
+  it("requests only the events list on /admin/events", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE] });
+    renderPage("/admin/events");
+
+    await screen.findByText("Swing Fling");
+    expect(requested()).toEqual(["/v1/events"]);
+    expect(requested()).not.toContain("/v1/admin/users");
+  });
+
+  it("requests only the users list on /admin/users", async () => {
+    routeGets({ "/v1/admin/users": [] });
+    renderPage("/admin/users");
+
+    await waitFor(() => expect(requested()).toContain("/v1/admin/users"));
+    expect(requested()).toEqual(["/v1/admin/users"]);
+  });
+
+  it("requests only the songs list on /admin/songs", async () => {
+    routeGets({ "/v1/admin/songs": [] });
+    renderPage("/admin/songs");
+
+    expect(await screen.findByText("No songs yet.")).toBeInTheDocument();
+    expect(requested()).toEqual(["/v1/admin/songs"]);
+  });
+});
+
 describe("AdminPage — Events section", () => {
   beforeEach(resetAll);
 
@@ -688,7 +719,7 @@ describe("AdminPage — Sessions section", () => {
     const row = title.closest("tr")!;
     expect(row).toHaveTextContent("Swing Fling");
     expect(row).toHaveTextContent("CDT");
-    expect(row).toHaveTextContent("checkin_open");
+    expect(row).toHaveTextContent("Check-in open");
     expect(row).toHaveTextContent("6:15 AM");
     expect(row).toHaveTextContent("10:00 AM");
     expect(screen.queryByText(/March 1, 2025/)).not.toBeInTheDocument();
@@ -723,7 +754,7 @@ describe("AdminPage — Sessions section", () => {
     renderWithDetailRoutes("/admin/sessions");
 
     const row = (await screen.findByRole("link", { name: SESS_OPEN_TITLE })).closest("tr")!;
-    await user.click(within(row).getByText("checkin_open"));
+    await user.click(within(row).getByText("Check-in open"));
     expect(await screen.findByText("session detail page")).toBeInTheDocument();
   });
 
@@ -982,10 +1013,10 @@ describe("AdminPage — Run History section", () => {
     await user.click(screen.getByRole("button", { name: /future fest/i }));
     await waitFor(() => expect(apiGet).toHaveBeenCalledWith("/v1/runs?limit=500&event_id=e2"));
 
-    apiGet.mockClear();
+    // The unfiltered list is already cached, so no request is made: the empty
+    // state is what shows the selection was cleared.
     await user.click(toggle);
-    await waitFor(() => expect(apiGet).toHaveBeenCalledWith("/v1/runs?limit=500"));
-    expect(screen.getByText("No runs recorded yet.")).toBeInTheDocument();
+    expect(await screen.findByText("No runs recorded yet.")).toBeInTheDocument();
   });
 
   it("renders each run with its entity, song, session and who completed it", async () => {
@@ -1608,7 +1639,6 @@ describe("AdminPage — filters that reset", () => {
 
     await user.click(screen.getByRole("button", { name: "All events" }));
     expect(await screen.findByText("No runs recorded yet.")).toBeInTheDocument();
-    expect(apiGet).toHaveBeenLastCalledWith("/v1/runs?limit=500");
   });
 
   it("clears a division or partnership filter with its 'All' chip", async () => {

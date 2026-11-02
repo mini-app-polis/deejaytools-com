@@ -277,7 +277,7 @@ describe("LiveQueueSection", () => {
     const moveDown = screen.getByRole("button", { name: "Move down" });
     fireEvent.click(moveDown);
     fireEvent.click(moveDown);
-    expect(apiPost).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(apiPost).toHaveBeenCalledTimes(1));
     for (const name of ["Run complete", "Run incomplete", "Move down", "Withdraw"]) {
       for (const b of screen.getAllByRole("button", { name })) expect(b).toBeDisabled();
     }
@@ -289,7 +289,7 @@ describe("LiveQueueSection", () => {
     const confirm = within(await screen.findByRole("dialog")).getByRole("button", { name: "Withdraw" });
     fireEvent.click(confirm);
     fireEvent.click(confirm);
-    expect(apiPost).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(apiPost).toHaveBeenCalledTimes(2));
     expect(apiPost).toHaveBeenLastCalledWith("/v1/queue/withdraw", { queueEntryId: "qe-2" });
     expect(within(screen.getByRole("dialog")).getByRole("button", { name: "Withdrawing…" })).toBeDisabled();
     pending[1]!({ withdrawn: true });

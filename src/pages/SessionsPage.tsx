@@ -2,6 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointQuery } from "@/api/queries";
 import QueryError from "@/components/QueryError";
+import SessionStatusBadge from "@/components/SessionStatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -16,27 +17,6 @@ import { CLICKABLE_CARD_CLASS, CLICKABLE_ROW_CLASS, ROW_LINK_CLASS } from "@/lib
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareSessionChrono } from "@/lib/chronoSort";
 import { cn } from "@/lib/utils";
-
-function sessionStatusBadge(status: string) {
-  switch (status) {
-    case "scheduled":
-      return <Badge variant="secondary">{status}</Badge>;
-    case "checkin_open":
-      return <Badge variant="default">{status}</Badge>;
-    case "in_progress":
-      return (
-        <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 border-transparent">
-          {status}
-        </Badge>
-      );
-    case "completed":
-      return <Badge variant="outline">{status}</Badge>;
-    case "cancelled":
-      return <Badge variant="destructive">{status}</Badge>;
-    default:
-      return <Badge variant="outline">{status}</Badge>;
-  }
-}
 
 export default function SessionsPage() {
   const navigate = useNavigate();
@@ -90,7 +70,7 @@ export default function SessionsPage() {
                   </Badge>
                 )}
               </p>
-              {sessionStatusBadge(s.status)}
+              <SessionStatusBadge status={s.status} />
             </div>
             <div className="text-sm text-muted-foreground space-y-0.5">
               <p>Open {formatTimeOnly(s.checkin_opens_at, s.event_timezone)}</p>
@@ -147,7 +127,7 @@ export default function SessionsPage() {
                     )}
                   </span>
                 </TableCell>
-                <TableCell>{sessionStatusBadge(s.status)}</TableCell>
+                <TableCell><SessionStatusBadge status={s.status} /></TableCell>
                 <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                   {formatTimeOnly(s.checkin_opens_at, s.event_timezone)}
                 </TableCell>

@@ -140,7 +140,11 @@ test("an organizer creates an event and its session, renames the event, then rem
       .click();
     await page.getByRole("dialog", { name: "Delete this session?" }).getByRole("button", { name: "Delete", exact: true }).click();
     await expect(page.getByText("Session deleted")).toBeVisible();
-    expect(await api.call<Session[]>("GET", `/v1/sessions?event_id=${encodeURIComponent(event.id)}`)).toEqual([]);
+    // Session reads are cached for a few seconds per API worker process, so
+    // another worker can still list the session for a moment.
+    await expect
+      .poll(() => api.call<Session[]>("GET", `/v1/sessions?event_id=${encodeURIComponent(event.id)}`), { timeout: 15_000 })
+      .toEqual([]);
   });
 
   await test.step("delete the event", async () => {

@@ -29,7 +29,7 @@ import {
 import { TabsContent } from "@/components/ui/tabs";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareSessionChrono } from "@/lib/chronoSort";
-import { sessionStatusBadge } from "@/components/admin/adminShared";
+import SessionStatusBadge from "@/components/SessionStatusBadge";
 
 /**
  * The admin Sessions section: every event's sessions bucketed by status,
@@ -37,7 +37,7 @@ import { sessionStatusBadge } from "@/components/admin/adminShared";
  * mounted while another admin section is shown, keeping its toggles and
  * dialogs as they were when the admin comes back.
  */
-export default function AdminSessionsSection() {
+export default function AdminSessionsSection({ open }: { open: boolean }) {
   const navigate = useNavigate();
   const [sessDialogOpen, setSessDialogOpen] = useState(false);
   /** The session the dialog edits; null while it creates a new one. */
@@ -50,10 +50,10 @@ export default function AdminSessionsSection() {
   const [showSessionsCancelled, setShowSessionsCancelled] = useState(false);
 
   // The dialog's event picker, and each row's event name, come from the events list.
-  const eventsQuery = useEndpointQuery(endpoints.events.list);
+  const eventsQuery = useEndpointQuery(endpoints.events.list, { enabled: open });
   const events = eventsQuery.data ?? null;
 
-  const sessionsQuery = useEndpointQuery(endpoints.sessions.list);
+  const sessionsQuery = useEndpointQuery(endpoints.sessions.list, { enabled: open });
   const sessions = sessionsQuery.data ?? null;
   const loadingSessions = sessionsQuery.isFetching;
 
@@ -127,7 +127,7 @@ export default function AdminSessionsSection() {
             </Badge>
           )}
         </TableCell>
-        <TableCell>{sessionStatusBadge(s.status)}</TableCell>
+        <TableCell><SessionStatusBadge status={s.status} /></TableCell>
         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
           {formatTimeOnly(s.checkin_opens_at, s.event_timezone)}
         </TableCell>

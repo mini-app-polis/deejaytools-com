@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
 import QueryError from "@/components/QueryError";
+import SessionStatusBadge from "@/components/SessionStatusBadge";
 import SongCard from "@/components/SongCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,15 +40,6 @@ function eventStatusBadge(status: string) {
     default:
       return <Badge variant="outline">{status}</Badge>;
   }
-}
-
-function sessionStatusBadge(status: string) {
-  if (status === "checkin_open") return <Badge variant="default">check-in open</Badge>;
-  if (status === "in_progress")
-    return (
-      <Badge className="bg-primary text-primary-foreground border-transparent">in progress</Badge>
-    );
-  return <Badge variant="outline">{status}</Badge>;
 }
 
 function queueStatusBadge(checkin: ApiMyCheckin) {
@@ -242,7 +234,7 @@ export default function MyContentPage() {
                           {eventName}
                         </Badge>
                       )}
-                      {sessionStatusBadge(s.status)}
+                      <SessionStatusBadge status={s.status} />
                     </div>
                     <p className="font-medium text-sm">
                       {formatSessionTitle(s, s.event_timezone)}

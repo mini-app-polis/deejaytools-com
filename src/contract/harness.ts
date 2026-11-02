@@ -100,6 +100,49 @@ export function loadConfig(): ContractConfig {
 // Transport
 // ---------------------------------------------------------------------------
 
+/**
+ * The edge in front of the API limits each client IP to a burst of requests
+ * per window, and the suite runs from one CI runner. Requests to the API are
+ * spaced out to stay under it, and one the edge still refuses is sent again
+ * after its block lifts. A 429 from the API itself (enveloped) is returned
+ * as-is, since the suite may be checking it.
+ */
+const MIN_REQUEST_GAP_MS = 250;
+const EDGE_BLOCK_WAIT_MS = 11_000;
+const MAX_EDGE_RETRIES = 3;
+
+async function isEdgeRateLimit(res: Response): Promise<boolean> {
+  if (res.status !== 429) return false;
+  const text = await res.clone().text();
+  return text.includes("error-1015");
+}
+
+/**
+ * Route every fetch to `apiUrl` — the suite's own clients and the app code
+ * it drives (chunked uploads) alike — through one pacer. Other hosts (Clerk)
+ * are untouched.
+ */
+export function paceApiRequests(apiUrl: string): void {
+  const realFetch = globalThis.fetch;
+  let nextSlot = 0;
+  const waitTurn = async () => {
+    const now = Date.now();
+    const at = Math.max(now, nextSlot);
+    nextSlot = at + MIN_REQUEST_GAP_MS;
+    if (at > now) await sleep(at - now);
+  };
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    if (!url.startsWith(apiUrl)) return realFetch(input, init);
+    for (let attempt = 0; ; attempt++) {
+      await waitTurn();
+      const res = await realFetch(input, init);
+      if (attempt >= MAX_EDGE_RETRIES || !(await isEdgeRateLimit(res))) return res;
+      nextSlot = Date.now() + EDGE_BLOCK_WAIT_MS;
+    }
+  };
+}
+
 /** A non-2xx response, with the error envelope's code when there is one. */
 export class ApiStatusError extends Error {
   constructor(

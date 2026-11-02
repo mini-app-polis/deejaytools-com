@@ -3,7 +3,6 @@
 
 type: react-app
 
-# TEST-001/002/003/004 covered by react-app type scoping.
 # XSTACK-001 does not apply: it is Python-only since common-typescript-utils was retired.
 
 exemptions:

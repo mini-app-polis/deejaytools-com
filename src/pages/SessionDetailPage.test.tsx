@@ -517,8 +517,40 @@ describe("SessionDetailPage — check-in button", () => {
     renderAt();
 
     await waitFor(() => {
-      expect(screen.getAllByText(/no songs uploaded/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByRole("button", { name: /^check in$/i })[0]).toBeEnabled();
     });
+    fireEvent.click(screen.getAllByRole("button", { name: /^check in$/i })[0]!);
+
+    expect(await screen.findByText(/no songs uploaded/i)).toBeInTheDocument();
+  });
+
+  it("loads pairs, songs and event submissions only when the check-in form opens", async () => {
+    signedIn = true;
+    stubGets({
+      session: openCheckinWindowSession(),
+      songs: sampleSongs,
+      eventSubmissions: [makeSubmission("song1")],
+    });
+    renderAt();
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: /^check in$/i })[0]).toBeEnabled();
+    });
+    const requested = (path: string) =>
+      apiGet.mock.calls.some(([p]) => String(p).startsWith(path));
+    expect(requested("/v1/checkins/mine")).toBe(true);
+    expect(requested("/v1/partners/leading-pairs")).toBe(false);
+    expect(requested("/v1/songs")).toBe(false);
+    expect(requested("/v1/event-song-submissions")).toBe(false);
+
+    fireEvent.click(screen.getAllByRole("button", { name: /^check in$/i })[0]!);
+
+    await waitFor(() => {
+      expect(screen.getByRole("radiogroup", { name: /^song$/i })).toBeInTheDocument();
+    });
+    expect(requested("/v1/partners/leading-pairs")).toBe(true);
+    expect(requested("/v1/songs")).toBe(true);
+    expect(requested("/v1/event-song-submissions")).toBe(true);
   });
 });
 
@@ -707,6 +739,11 @@ describe("SessionDetailPage — check-in song selector", () => {
     renderAt();
 
     await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: /^check in$/i })[0]).toBeEnabled();
+    });
+    fireEvent.click(screen.getAllByRole("button", { name: /^check in$/i })[0]!);
+
+    await waitFor(() => {
       expect(
         screen.getAllByText(/you haven't added any songs to this event yet/i).length
       ).toBeGreaterThan(0);
@@ -718,7 +755,6 @@ describe("SessionDetailPage — check-in song selector", () => {
       expect(link).toHaveAttribute("href", "/event-submissions/event-1");
     }
     expect(screen.queryByRole("radiogroup", { name: /^song$/i })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /^check in$/i })[0]).toBeDisabled();
   });
 
   it("sends entityManagedPartnershipId when checking in with a managed-partnership song", async () => {
@@ -1208,6 +1244,8 @@ describe("SessionDetailPage — a song shared by a linked partner", () => {
     });
     renderAt();
 
+    fireEvent.click((await screen.findAllByRole("button", { name: /^check in$/i }))[0]!);
+
     expect(
       (await screen.findAllByText(/haven't added any songs to this event yet/i)).length
     ).toBeGreaterThan(0);
@@ -1218,6 +1256,7 @@ describe("SessionDetailPage — a song shared by a linked partner", () => {
 describe("SessionDetailPage — clock and polling", () => {
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   function soonSession(opensInMs: number) {
@@ -1258,6 +1297,8 @@ describe("SessionDetailPage — clock and polling", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     signedIn = true;
     vi.mocked(toast.error).mockClear();
+    // Polling starts at a random offset; pin it so the first poll is at 60 s.
+    vi.spyOn(Math, "random").mockReturnValue(0);
     const session = openCheckinWindowSession();
     stubGets({
       session,
@@ -1284,5 +1325,32 @@ describe("SessionDetailPage — clock and polling", () => {
     apiGet.mockImplementation(ok);
     fireEvent.click(within(notice).getByRole("button", { name: "Retry now" }));
     await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
+  });
+
+  it("starts polling at a random offset, not at 60 s after load", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    signedIn = true;
+    // Offset of 50 s: the first poll lands at 50 s + 60 s.
+    vi.spyOn(Math, "random").mockReturnValue(50_000 / 60_000);
+    stubGets({ session: openCheckinWindowSession() });
+    renderAt();
+    expect(await screen.findByText("No one on deck.")).toBeInTheDocument();
+    const waitingCalls = () =>
+      apiGet.mock.calls.filter(([path]) => String(path).includes("/waiting")).length;
+    const loaded = waitingCalls();
+
+    // Each step is its own act so the render that turns polling on is flushed.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(55_000);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    expect(waitingCalls()).toBe(loaded);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(55_000);
+    });
+    await waitFor(() => expect(waitingCalls()).toBe(loaded + 1));
   });
 });

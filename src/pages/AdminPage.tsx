@@ -50,14 +50,15 @@ export default function AdminPage() {
           <Tabs> wrapper selects the section: Radix hides every TabsContent
           whose `value` doesn't match the controlled `value` prop. Each
           section renders its own TabsContent and dialogs, and stays
-          mounted so its state holds across a section switch. */}
+          mounted so its state holds across a section switch; `open`
+          keeps its queries from running while it is hidden. */}
       <Tabs value={section}>
-        <AdminEventsSection />
-        <AdminSessionsSection />
-        <AdminRunsSection />
-        <AdminSongsSection />
-        <AdminTestCheckinSection />
-        <AdminUsersSection />
+        <AdminEventsSection open={section === "events"} />
+        <AdminSessionsSection open={section === "sessions"} />
+        <AdminRunsSection open={section === "runs"} />
+        <AdminSongsSection open={section === "songs"} />
+        <AdminTestCheckinSection open={section === "test-checkin"} />
+        <AdminUsersSection open={section === "users"} />
       </Tabs>
     </div>
   );
