@@ -74,6 +74,7 @@ export default function LiveQueueSection({
   const showFilename = event ? richestEventRole(eventRoles, event.id) === "dj" : true;
   const sessionsQuery = useEndpointQuery(endpoints.sessions.list, {
     params: event ? { eventId: event.id } : undefined,
+    withToken: true,
   });
   const sessions = sessionsQuery.data ?? null;
   const [ownId, setOwnId] = useState("");

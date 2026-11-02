@@ -123,6 +123,14 @@ describe("endpoint paths", () => {
     ]);
   });
 
+  it("declares only reads public among the calls that go through the client", () => {
+    // The client drops the token only on GET; a public write would go out signed.
+    const publicWrites = allEndpoints().filter(
+      (e) => e.access === "public" && e.method !== "GET" && e.transport !== "fetch"
+    );
+    expect(publicWrites).toEqual([]);
+  });
+
   it("marks only the three deliberately out-of-client calls as fetch transport", () => {
     const fetchIds = allEndpoints()
       .filter((e) => e.transport === "fetch")
@@ -136,14 +144,28 @@ describe("call", () => {
   it("dispatches GET to the transport and returns the validated data", async () => {
     const api = fakeTransport([session]);
     const out = await call(api, endpoints.sessions.list, { params: { eventId: "e1" } });
-    expect(api.get).toHaveBeenCalledWith("/v1/sessions?event_id=e1");
+    expect(api.get).toHaveBeenCalledWith("/v1/sessions?event_id=e1", { anonymous: true });
     expect(out).toEqual([session]);
+  });
+
+  it("sends a public read without the token, unless the caller asks for it", async () => {
+    const api = fakeTransport([session]);
+    await call(api, endpoints.sessions.list, { withToken: true });
+    expect(api.get).toHaveBeenLastCalledWith("/v1/sessions");
+    await call(api, endpoints.sessions.get, { params: { id: "s1" } }).catch(() => undefined);
+    expect(api.get).toHaveBeenLastCalledWith("/v1/sessions/s1", { anonymous: true });
+  });
+
+  it("always sends the token on a non-public read", async () => {
+    const api = fakeTransport([]);
+    await call(api, endpoints.checkins.mine, { withToken: false });
+    expect(api.get).toHaveBeenCalledWith("/v1/checkins/mine");
   });
 
   it("works without any options for a parameterless GET", async () => {
     const api = fakeTransport([]);
     await call(api, endpoints.events.list);
-    expect(api.get).toHaveBeenCalledWith("/v1/events");
+    expect(api.get).toHaveBeenCalledWith("/v1/events", { anonymous: true });
   });
 
   it("dispatches POST, PATCH and PUT with the body", async () => {

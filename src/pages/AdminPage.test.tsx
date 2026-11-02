@@ -707,8 +707,188 @@ describe("AdminPage — Events section", () => {
   });
 });
 
+describe("AdminPage — Event managers", () => {
+  beforeEach(resetAll);
+
+  const ADA = fx.eventStaff({
+    event_id: "e1", user_id: "u_ada", role: "event-manager", email: "ada@example.com",
+    first_name: "Ada", last_name: "Lovelace",
+  });
+  const BOB = fx.eventStaff({
+    event_id: "e1", user_id: "u_bob", role: "coordinator", email: "bob@example.com",
+    first_name: "Bob", last_name: "Coord",
+  });
+
+  async function openManagers(user: ReturnType<typeof userEvent.setup>) {
+    renderPage("/admin/events");
+    await user.click(await screen.findByRole("button", { name: "Managers of Swing Fling" }));
+    return screen.findByRole("dialog", { name: "Event managers" });
+  }
+
+  it("lists only the event's managers", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE], "/v1/events/e1/staff": [ADA, BOB] });
+    const user = userEvent.setup();
+    const dialog = await openManagers(user);
+
+    expect(await within(dialog).findByText("Ada Lovelace")).toBeInTheDocument();
+    expect(within(dialog).queryByText("Bob Coord")).not.toBeInTheDocument();
+  });
+
+  it("grants the event-manager role to any user picked from the admin user search", async () => {
+    routeGets({
+      "/v1/events": [EV_ACTIVE],
+      "/v1/events/e1/staff": [],
+      "/v1/admin/users": [fx.adminUser({ id: "u_cy", email: "cy@example.com", first_name: "Cy", last_name: "New" })],
+    });
+    apiPut.mockResolvedValue(fx.eventStaff({ event_id: "e1", user_id: "u_cy", role: "event-manager", first_name: "Cy", last_name: "New" }));
+    const user = userEvent.setup();
+    const dialog = await openManagers(user);
+
+    expect(await within(dialog).findByText("This event has no managers yet.")).toBeInTheDocument();
+    const make = within(dialog).getByRole("button", { name: "Make event manager" });
+    expect(make).toBeDisabled();
+    await user.type(within(dialog).getByRole("combobox", { name: "Add an event manager" }), "cy");
+    await user.click(await screen.findByRole("option", { name: /Cy New/ }));
+    await user.click(make);
+
+    await waitFor(() => expect(apiPut).toHaveBeenCalledWith("/v1/events/e1/staff/u_cy/event-manager", undefined));
+    expect(toast.success).toHaveBeenCalledWith("Cy New is now an event manager");
+  });
+
+  it("revokes an event manager", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE], "/v1/events/e1/staff": [ADA] });
+    apiDel.mockResolvedValue({ deleted: true });
+    const user = userEvent.setup();
+    const dialog = await openManagers(user);
+
+    await user.click(await within(dialog).findByRole("button", { name: "Remove Ada Lovelace as event manager" }));
+
+    await waitFor(() => expect(apiDel).toHaveBeenCalledWith("/v1/events/e1/staff/u_ada/event-manager"));
+    expect(toast.success).toHaveBeenCalledWith("Removed Ada Lovelace as event manager");
+  });
+
+  it("toasts a failed grant and keeps the person picked", async () => {
+    routeGets({
+      "/v1/events": [EV_ACTIVE],
+      "/v1/events/e1/staff": [],
+      "/v1/admin/users": [fx.adminUser({ id: "u_cy", email: "cy@example.com", first_name: "Cy", last_name: "New" })],
+    });
+    apiPut.mockRejectedValue(new Error("User not found"));
+    const user = userEvent.setup();
+    const dialog = await openManagers(user);
+
+    await user.type(within(dialog).getByRole("combobox", { name: "Add an event manager" }), "cy");
+    await user.click(await screen.findByRole("option", { name: /Cy New/ }));
+    await user.click(within(dialog).getByRole("button", { name: "Make event manager" }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("User not found"));
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(within(dialog).getByRole("button", { name: "Make event manager" })).toBeEnabled();
+  });
+
+  it("toasts a failed revoke and keeps the manager listed", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE], "/v1/events/e1/staff": [ADA] });
+    apiDel.mockRejectedValue(new Error("Forbidden"));
+    const user = userEvent.setup();
+    const dialog = await openManagers(user);
+
+    const remove = await within(dialog).findByRole("button", { name: "Remove Ada Lovelace as event manager" });
+    await user.click(remove);
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Forbidden"));
+    expect(within(dialog).getByText("Ada Lovelace")).toBeInTheDocument();
+    await waitFor(() => expect(remove).toBeEnabled());
+  });
+
+  it("shows a failed managers load inline and retries it", async () => {
+    let fail = true;
+    routeGets({
+      "/v1/events": [EV_ACTIVE],
+      "/v1/events/e1/staff": () => {
+        if (fail) throw new Error("staff down");
+        return [ADA];
+      },
+    });
+    const user = userEvent.setup();
+    const dialog = await openManagers(user);
+
+    const retry = await within(dialog).findByRole("button", { name: "Try again" }, { timeout: 5000 });
+    fail = false;
+    await user.click(retry);
+
+    expect(await within(dialog).findByText("Ada Lovelace")).toBeInTheDocument();
+  });
+
+  it("closes on Escape", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE], "/v1/events/e1/staff": [ADA] });
+    const user = userEvent.setup();
+    await openManagers(user);
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Event managers" })).not.toBeInTheDocument());
+  });
+});
+
 describe("AdminPage — Sessions section", () => {
   beforeEach(resetAll);
+
+  it("sets a session's status only on Apply", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE], "/v1/sessions": [SESS_OPEN] });
+    apiPatch.mockResolvedValue({ ...SESS_OPEN, status: "in_progress" });
+    const user = userEvent.setup();
+    renderPage("/admin/sessions");
+
+    const status = await screen.findByRole("combobox", { name: `Status of ${SESS_OPEN_TITLE}` });
+    await user.selectOptions(status, "in_progress");
+    expect(apiPatch).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: `Apply status of ${SESS_OPEN_TITLE}` }));
+
+    await waitFor(() => expect(apiPatch).toHaveBeenCalledWith("/v1/sessions/s1/status", { status: "in_progress" }));
+    expect(toast.success).toHaveBeenCalledWith("Status updated");
+  });
+
+  it("asks before cancelling a session", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE], "/v1/sessions": [SESS_OPEN] });
+    apiPatch.mockResolvedValue({ ...SESS_OPEN, status: "cancelled" });
+    const user = userEvent.setup();
+    renderPage("/admin/sessions");
+
+    await user.selectOptions(await screen.findByRole("combobox", { name: `Status of ${SESS_OPEN_TITLE}` }), "cancelled");
+    await user.click(screen.getByRole("button", { name: `Apply status of ${SESS_OPEN_TITLE}` }));
+    const confirm = await screen.findByRole("dialog", { name: "Cancel this session?" });
+    expect(apiPatch).not.toHaveBeenCalled();
+    await user.click(within(confirm).getByRole("button", { name: "Cancel session" }));
+
+    await waitFor(() => expect(apiPatch).toHaveBeenCalledWith("/v1/sessions/s1/status", { status: "cancelled" }));
+  });
+
+  it("toasts a failed status change", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE], "/v1/sessions": [SESS_OPEN] });
+    apiPatch.mockRejectedValue(new Error("Invalid status transition"));
+    const user = userEvent.setup();
+    renderPage("/admin/sessions");
+
+    await user.selectOptions(await screen.findByRole("combobox", { name: `Status of ${SESS_OPEN_TITLE}` }), "in_progress");
+    await user.click(screen.getByRole("button", { name: `Apply status of ${SESS_OPEN_TITLE}` }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Invalid status transition"));
+    expect(toast.success).not.toHaveBeenCalledWith("Status updated");
+  });
+
+  it("closes the cancel confirmation on Escape without sending anything", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE], "/v1/sessions": [SESS_OPEN] });
+    const user = userEvent.setup();
+    renderPage("/admin/sessions");
+
+    await user.selectOptions(await screen.findByRole("combobox", { name: `Status of ${SESS_OPEN_TITLE}` }), "cancelled");
+    await user.click(screen.getByRole("button", { name: `Apply status of ${SESS_OPEN_TITLE}` }));
+    await screen.findByRole("dialog", { name: "Cancel this session?" });
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Cancel this session?" })).not.toBeInTheDocument());
+    expect(apiPatch).not.toHaveBeenCalled();
+  });
 
   it("lists active sessions with their event and times, hiding completed until toggled", async () => {
     routeGets({ "/v1/events": [EV_ACTIVE, EV_DONE], "/v1/sessions": [SESS_OPEN, SESS_DONE] });
@@ -826,10 +1006,10 @@ describe("AdminPage — Sessions section", () => {
 
   type Caps = { priority?: string; nonPriority?: string; runLimit?: string };
   it.each<[Caps, string]>([
-    [{ priority: "-1" }, "Active cap (priority) must be a non-negative number"],
-    [{ nonPriority: "-1" }, "Active cap (non-priority) must be a non-negative number"],
+    [{ priority: "-1" }, "Active cap (priority) must be a whole number, 0 or more"],
+    [{ nonPriority: "-1" }, "Active cap (non-priority) must be a whole number, 0 or more"],
     [{ priority: "2", nonPriority: "3" }, "Non-priority cap must be ≤ priority cap"],
-    [{ runLimit: "-1" }, "Priority run limit must be a non-negative number"],
+    [{ runLimit: "-1" }, "Priority run limit must be a whole number, 0 or more"],
   ])("rejects session caps %j with %s", async (caps, message) => {
     routeGets({ "/v1/events": [EV_ACTIVE], "/v1/sessions": [] });
     const user = userEvent.setup();
@@ -1742,15 +1922,43 @@ describe("AdminPage — dismissing dialogs", () => {
     renderPage("/admin/sessions");
 
     await user.click(await screen.findByRole("button", { name: /new session/i }));
-    await user.click(screen.getByRole("dialog", { name: "New session" }).parentElement!);
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    const dialog = screen.getByRole("dialog", { name: "New session" });
+    // The overlay behind the dialog: pressing outside the dialog closes it.
+    const overlay = [...document.body.children].find(
+      (el) => el !== dialog && el.getAttribute("data-state") === "open"
+    )!;
+    await user.click(overlay);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
     await user.click(screen.getByRole("button", { name: /new session/i }));
     await user.click(
       within(screen.getByRole("dialog", { name: "New session" })).getByRole("button", { name: "Close" })
     );
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(apiPost).not.toHaveBeenCalled();
+  });
+
+  it("closes the session form on Escape and hands focus back to the button that opened it", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE], "/v1/sessions": [SESS_OPEN] });
+    const user = userEvent.setup();
+    renderPage("/admin/sessions");
+
+    const create = await screen.findByRole("button", { name: /new session/i });
+    await user.click(create);
+    const dialog = await screen.findByRole("dialog", { name: "New session" });
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(create).toHaveFocus());
+
+    const edit = screen.getByRole("button", { name: "Edit" });
+    await user.click(edit);
+    await screen.findByRole("dialog", { name: "Edit session" });
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(edit).toHaveFocus());
+    expect(apiPost).not.toHaveBeenCalled();
+    expect(apiPatch).not.toHaveBeenCalled();
   });
 
   it("injects a test check-in with the leader first name as typed", async () => {

@@ -340,6 +340,68 @@ describe("SessionDetailPage — check-in button", () => {
     expect(screen.getAllByText(/priority/i).length).toBeGreaterThan(0);
   });
 
+  it("takes the caller's queue status from checkins/mine, not from the session read", async () => {
+    signedIn = true;
+    const queued = {
+      queueEntryId: "qe1",
+      checkinId: "c1",
+      position: 1,
+      enteredQueueAt: 1,
+      entityPairId: "pair_1",
+      entitySoloUserId: null,
+      entityLabel: "User One & Partner A",
+      divisionName: "Classic",
+      songId: "song1",
+      notes: null,
+      initialQueue: "priority",
+      checkedInAt: 1,
+      subQueue: "priority",
+    };
+    // The session claims an active check-in; checkins/mine has none.
+    stubGets({
+      session: makeSession({
+        checkinOpensAt: "2026-04-27T07:00:00",
+        floorTrialStartsAt: "2026-04-27T08:00:00",
+        floorTrialEndsAt: "2026-04-27T22:00:00",
+        hasActiveCheckin: true,
+        activeCheckinDivision: "Masters",
+      }),
+      waiting: [queued],
+      myCheckins: [],
+    });
+    apiGet.mockClear();
+    renderAt();
+
+    // The queue has loaded and checkins/mine has answered.
+    await screen.findAllByText(/User One & Partner A/);
+    await waitFor(() => {
+      expect(apiGet.mock.calls.some(([p]) => p === "/v1/checkins/mine")).toBe(true);
+    });
+    expect(screen.queryByText(/in queue/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Masters/)).not.toBeInTheDocument();
+  });
+
+  it("reads the session and queues without the token and checkins/mine with it", async () => {
+    signedIn = true;
+    stubGets({
+      session: makeSession({
+        checkinOpensAt: "2026-04-27T07:00:00",
+        floorTrialStartsAt: "2026-04-27T08:00:00",
+        floorTrialEndsAt: "2026-04-27T22:00:00",
+      }),
+    });
+    apiGet.mockClear();
+    renderAt();
+
+    await waitFor(() => {
+      expect(apiGet.mock.calls.some(([p]) => p === "/v1/checkins/mine")).toBe(true);
+    });
+    expect(apiGet).toHaveBeenCalledWith("/v1/sessions/s1", { anonymous: true });
+    expect(apiGet).toHaveBeenCalledWith("/v1/queue/s1/active", { anonymous: true });
+    expect(apiGet).toHaveBeenCalledWith("/v1/queue/s1/waiting", { anonymous: true });
+    expect(apiGet).toHaveBeenCalledWith("/v1/checkins/mine");
+  });
+
   it("shows a position line for each partnership when multiple are in queue", async () => {
     signedIn = true;
     stubGets({

@@ -56,7 +56,7 @@ describe("MyEventsPage", () => {
     expect(screen.getByText("Winter Ball").closest("a")).toHaveAttribute("href", "/events/ev-3/manage");
     expect(screen.getByText("Event manager portal →")).toBeInTheDocument();
     expect(screen.queryByText("Not Mine")).toBeNull();
-    expect(apiGet).toHaveBeenCalledWith("/v1/events");
+    expect(apiGet).toHaveBeenCalledWith("/v1/events", { anonymous: true });
   });
 
   it("drops an event the events list no longer has", async () => {

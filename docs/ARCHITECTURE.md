@@ -99,11 +99,13 @@ One default-export component per route. Pages orchestrate fetching, local state,
 | `QueryError.tsx` | What a page shows, with a retry, where a query's data would be when it fails (§3) |
 | `MaintenancePage.tsx` | Replaces the whole app when the build has `VITE_MAINTENANCE=1` |
 | `EventRoleGuard.tsx` | Requires a staff role, or a richer one, on the event in `:eventId` |
-| `admin/` | Admin dashboard sections that `AdminPage` renders, each owning its state, forms and queries (`AdminEventsSection`, `AdminSessionsSection` with its `AdminSessionDialog`, `AdminRunsSection`, `AdminSongsSection`, `AdminTestCheckinSection`, `AdminUsersSection`), and `adminShared.tsx` for the status badges, time formatting and field classes the sections share |
+| `admin/` | Admin dashboard sections that `AdminPage` renders, each owning its state, forms and queries (`AdminEventsSection` with its `AdminEventManagersDialog`, `AdminSessionsSection` with its `AdminSessionDialog`, `AdminRunsSection`, `AdminSongsSection`, `AdminTestCheckinSection`, `AdminUsersSection`), and `adminShared.tsx` for the status badges and time formatting the sections share |
 | `staff/` | Per-event staff portals: `StaffPortal` (shell + section tabs), `portalSections.tsx` (which sections each portal has) and one component per section |
 | `SongUploadForm.tsx` | Chunked upload form (self + managed variants) |
 | `SpecialUploadForm.tsx` | Portal-specific upload (Teams/Cabaret/etc.) |
 | `SessionInfoHeader.tsx` | Session title + metadata block |
+| `SessionFormDialog.tsx` | The one create / edit session dialog (shared Radix dialog), for the admin Sessions page (`AdminSessionDialog`, with the event picker) and the staff portal's Sessions section (event fixed); saving refreshes `sessions.list`, `sessions.get` and `events.get` |
+| `SessionStatusControl.tsx` | A session's status select with an explicit Apply, and a confirm before cancelling; admin Sessions page and staff portal |
 | `PartnersSection.tsx`, `TeamsSection.tsx`, `ManagedPartnershipsSection.tsx` | Profile / partnership UI |
 | `help/HelpLayout.tsx` | Shared shell for help sub-pages (hash scroll, prev/next) |
 | `help/HelpSection.tsx` | Section + subheading primitives with `scroll-mt-24` anchors |
@@ -134,11 +136,13 @@ One default-export component per route. Pages orchestrate fetching, local state,
 | `env.ts` | `isProdHost()` — true on `deejaytools.com` / `www.deejaytools.com` |
 | `eventDates.ts` | Parses and formats an event's calendar dates as local dates |
 | `eventRoles.ts` | Per-event staff role ranking, labels and portal paths |
+| `formFields.ts` | `FIELD_INPUT_CLASS` / `FIELD_LABEL_CLASS`, the classes every hand-built form field shares |
 | `floorTrials.ts` | Buckets sessions into active / upcoming / completed / cancelled and formats the counts |
 | `instrument.ts` | Sentry browser init (no-op without `SENTRY_DSN_DEEJAYTOOLS`) |
 | `logger.ts` | Structured console logger; `error` also forwards to Sentry |
 | `personSearch.ts` | Minimum length, debounce and labels for the event people search |
 | `seasonYear.ts` | Default season year from a date (seasons roll over on October 1) |
+| `sessionForm.ts` | The session form's schema (one rule set for admin and staff), its starting values and the API payload built from it |
 | `sessionFormat.ts` | Session title and time formatting with optional IANA timezone |
 | `songLabel.ts` | A song's display label and version |
 | `submittableSongs.ts` | Which of a user's songs may be submitted to an event |
@@ -183,9 +187,11 @@ Base URL: `import.meta.env.VITE_API_URL`, injected at build from `DEEJAYTOOLS_AP
 
 Every request runs through an internal `withAuth()` that:
 
-1. Calls Clerk `getToken()`
+1. Calls Clerk `getToken()`, unless the request is anonymous (below)
 2. Sets `Accept: application/json`
 3. Adds `Authorization: Bearer <token>` when a token exists
+
+`get(path, { anonymous: true })` sends no token, signed in or not. `call()` asks for that on every `public` endpoint, so public reads reach the API the same for everyone and can be served from a shared cache. A view whose answer depends on who is asking passes `withToken: true` to `useEndpointQuery` (cached under a separate `"signed-in"` scope of the same key, so invalidating the endpoint covers both): the admin and event-staff session lists do, because the API answers `GET /v1/sessions` fresh for admins and event staff who send a token.
 
 There is no refresh logic here — Clerk owns session lifetime.
 
@@ -301,8 +307,8 @@ Defined in `pages/App.tsx`. Pattern: public landing **outside** `Layout`; everyt
 A person granted a staff role on an event (`event_roles` on `GET /v1/auth/me`) sees **My events** in the nav and an **Event staff** sub-bar, one entry per event, opening the portal of their richest role there. Each portal shows only its event and calls only event-scoped routes, never `/v1/admin/*`:
 
 - **Coordinator** — the event's submissions (`GET /v1/events/:id/song-submissions`), filterable by division. Read-only.
-- **DJ** — live queue, sessions (create, edit, status, divisions, delete), run history (always filtered to the event), check in and upload for a dancer (uploads send `event_id`), submissions, and where to find the event's Drive folder.
-- **Event manager** — the DJ sections plus editing and deleting the event and its staff list, with grant and revoke for coordinator and DJ (`/v1/events/:id/staff`). Granting event manager and creating events stay with admins.
+- **DJ** — live queue, sessions (create, edit, status, divisions, delete; a status change takes an explicit Apply and cancelling asks first, through `SessionStatusControl`, which the admin Sessions section shares), run history (always filtered to the event), check in and upload for a dancer (uploads send `event_id`), submissions, and where to find the event's Drive folder.
+- **Event manager** — the DJ sections plus editing and deleting the event and its staff list, with grant and revoke for coordinator and DJ (`/v1/events/:id/staff`). Granting event manager and creating events stay with admins: the admin Events section's **Managers** dialog (`admin/AdminEventManagersDialog.tsx`) grants and revokes `event-manager` through the same staff routes, picking from every user.
 
 The section list for each portal is in `components/staff/portalSections.tsx`; a section's slug is its URL (`/events/:eventId/dj/queue`). Check in for, upload for and staff grant pick the person with `components/staff/PersonPicker.tsx`, which searches `GET /v1/events/:id/people?q=` (two characters or more, debounced). It finds only people already connected to the event (a submission, a check-in or queue entry in one of its sessions, or a staff grant), so granting staff to someone new to the event, or uploading for a dancer with no link to it yet, needs an admin.
 

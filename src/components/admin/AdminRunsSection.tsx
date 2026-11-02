@@ -34,7 +34,7 @@ export default function AdminRunsSection({ open }: { open: boolean }) {
   const events = eventsQuery.data ?? null;
   const loadingEvents = eventsQuery.isFetching;
 
-  const sessionsQuery = useEndpointQuery(endpoints.sessions.list, { enabled: open });
+  const sessionsQuery = useEndpointQuery(endpoints.sessions.list, { enabled: open, withToken: true });
   const sessions = sessionsQuery.data ?? null;
 
   // A session filter wins over an event filter; with neither, every run.

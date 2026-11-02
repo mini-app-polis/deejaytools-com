@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -120,8 +120,9 @@ describe("NavBar — signed in (admin)", () => {
     expect(screen.getAllByRole("link", { name: /^my profile$/i }).length).toBeGreaterThan(0);
     expect(screen.getByTestId("user-button")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^admin$/i })).toBeNull();
-    expect(screen.getByText("Superuser")).toBeInTheDocument();
-    expect(screen.getByText("Manager")).toBeInTheDocument();
+    // The closed mobile menu repeats these headings, out of the accessibility tree.
+    expect(within(screen.getByRole("navigation", { name: "Admin" })).getByText("Superuser")).toBeInTheDocument();
+    expect(within(screen.getByRole("navigation", { name: "Manager" })).getByText("Manager")).toBeInTheDocument();
     // Both an "Events" link exist for an admin — the public listing and the
     // Superuser section — so assert by href rather than by accessible name.
     const adminEventsLinks = screen.getAllByRole("link", { name: /^events$/i });
@@ -134,6 +135,22 @@ describe("NavBar — signed in (admin)", () => {
     expect(screen.getByRole("link", { name: /^checkin for$/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /^live queue$/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /^test inject$/i })).toBeNull();
+  });
+});
+
+describe("NavBar — landmarks", () => {
+  it("labels the main nav and the admin, manager and event staff sub-bars as nav landmarks", () => {
+    signedIn = true;
+    isAdmin = true;
+    eventRoles = [{ event_id: "ev-2", role: "dj" }];
+    staffEvents = [{ eventId: "ev-2", role: "dj", event: { name: "Fall Fling" } }];
+    renderNav();
+
+    expect(screen.getByRole("navigation", { name: "Main" })).toBeInTheDocument();
+    for (const [name, link] of [["Admin", "Users"], ["Manager", "Guide"], ["Event staff", "Fall Fling · DJ"]]) {
+      const bar = screen.getByRole("navigation", { name });
+      expect(within(bar).getByRole("link", { name: link })).toBeInTheDocument();
+    }
   });
 });
 
@@ -179,6 +196,42 @@ describe("NavBar — mobile menu", () => {
 
     await user.click(screen.getAllByRole("link", { name: "Test Checkin" })[1]);
     expect(screen.getAllByRole("link", { name: "Test Checkin" })).toHaveLength(1);
+  });
+
+  it("says whether the menu is open and points at the labelled menu it controls", async () => {
+    signedIn = false;
+    isAdmin = false;
+    const user = userEvent.setup();
+    renderNav();
+    const toggle = screen.getByRole("button", { name: /toggle menu/i });
+    const menuId = toggle.getAttribute("aria-controls")!;
+    const menu = document.getElementById(menuId)!;
+
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(menu.tagName).toBe("NAV");
+    expect(menu).toHaveAttribute("aria-label", "Menu");
+    expect(screen.queryByRole("navigation", { name: "Menu" })).not.toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("navigation", { name: "Menu" })).toBe(menu);
+  });
+
+  it("closes the menu on Escape and puts focus back on the toggle", async () => {
+    signedIn = false;
+    isAdmin = false;
+    const user = userEvent.setup();
+    renderNav();
+    const toggle = screen.getByRole("button", { name: /toggle menu/i });
+
+    await user.click(toggle);
+    const menu = screen.getByRole("navigation", { name: "Menu" });
+    menu.querySelector("a")!.focus();
+    await user.keyboard("{Escape}");
+
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("navigation", { name: "Menu" })).not.toBeInTheDocument();
+    expect(toggle).toHaveFocus();
   });
 
   it("closes the menu when the toggle is pressed again", async () => {
@@ -354,7 +407,7 @@ describe("NavBar — event staff", () => {
     );
     renderNav();
     expect(screen.getByRole("link", { name: /^my events$/i })).toHaveAttribute("href", "/my-events");
-    expect(screen.getByText("Event staff")).toBeInTheDocument();
+    expect(within(screen.getByRole("navigation", { name: "Event staff" })).getByText("Event staff")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Spring Swing · Coordinator" })).toHaveAttribute(
       "href",
       "/events/ev-1/coordinator"

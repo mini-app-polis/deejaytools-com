@@ -57,6 +57,11 @@ export type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
  * Who may call it: anyone, any signed-in user, an admin, or "event-staff":
  * an admin, or a person holding the scope on the event the request names
  * (its coordinator, DJ or event manager, as the route allows).
+ *
+ * A "public" endpoint goes out without the Clerk token, signed in or not, so
+ * the API answers it the same for everyone and it can come from a shared
+ * cache. A caller whose answer depends on who it is (an admin or event staff
+ * reading the session list fresh) asks for the token with `withToken`.
  */
 export type Access = "public" | "user" | "admin" | "event-staff";
 
@@ -467,22 +472,33 @@ export function allEndpoints(): Endpoint<unknown, unknown, unknown>[] {
 
 /** The subset of the API client `call()` needs. */
 export interface Transport {
-  get<T>(path: string): Promise<T>;
+  get<T>(path: string, opts?: { anonymous?: boolean }): Promise<T>;
   post<T>(path: string, body?: unknown): Promise<T>;
   patch<T>(path: string, body: unknown): Promise<T>;
   put<T>(path: string, body: unknown): Promise<T>;
   del(path: string): Promise<unknown>;
 }
 
+/**
+ * `withToken` sends the signed-in user's token on a public read, for a caller
+ * whose answer depends on who it is. Other endpoints always send it.
+ */
+type CallFlags = { withToken?: boolean };
+
 // Params (or a body) are optional exactly when `void` is one of their
 // allowed values — `void` itself, or e.g. `{ eventId?: string } | void`.
 export type CallArgs<P, B> = [void] extends [P]
   ? [void] extends [B]
-    ? [opts?: { params?: P; body?: B }]
-    : [opts: { params?: P; body: B }]
+    ? [opts?: { params?: P; body?: B } & CallFlags]
+    : [opts: { params?: P; body: B } & CallFlags]
   : [void] extends [B]
-    ? [opts: { params: P; body?: B }]
-    : [opts: { params: P; body: B }];
+    ? [opts: { params: P; body?: B } & CallFlags]
+    : [opts: { params: P; body: B } & CallFlags];
+
+/** Whether a call goes out without the Clerk token. */
+export function isAnonymous(ep: Pick<Endpoint<unknown, unknown, unknown>, "access">, withToken = false): boolean {
+  return ep.access === "public" && !withToken;
+}
 
 /** Call an endpoint through the API client and validate what comes back. */
 export async function call<P, B, R>(
@@ -490,12 +506,14 @@ export async function call<P, B, R>(
   ep: Endpoint<P, B, R>,
   ...args: CallArgs<P, B>
 ): Promise<R> {
-  const opts = (args[0] ?? {}) as { params?: P; body?: B };
+  const opts = (args[0] ?? {}) as { params?: P; body?: B } & CallFlags;
   const path = ep.path(opts.params as P);
   let data: unknown;
   switch (ep.method) {
     case "GET":
-      data = await api.get<unknown>(path);
+      data = await (isAnonymous(ep, opts.withToken)
+        ? api.get<unknown>(path, { anonymous: true })
+        : api.get<unknown>(path));
       break;
     case "POST":
       data = await api.post<unknown>(path, opts.body);

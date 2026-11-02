@@ -65,6 +65,17 @@ describe("useApiClient.get", () => {
     expect(headers.get("Accept")).toBe("application/json");
   });
 
+  it("sends no Authorization and asks Clerk for no token on an anonymous get, signed in or not", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ data: [], meta: { version: "v1", count: 0 } }));
+    const { result } = renderHook(() => useApiClient());
+    await result.current.get("/v1/events", { anonymous: true });
+
+    const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Headers;
+    expect(headers.get("Authorization")).toBeNull();
+    expect(headers.get("Accept")).toBe("application/json");
+    expect(getToken).not.toHaveBeenCalled();
+  });
+
   it("does not attach Authorization when getToken returns null (signed-out)", async () => {
     getToken.mockResolvedValueOnce(null);
     fetchMock.mockResolvedValue(jsonResponse({ data: [], meta: { version: "v1", count: 0 } }));

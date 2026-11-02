@@ -46,9 +46,26 @@ describe("useEndpointQuery", () => {
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(apiClient.get).toHaveBeenCalledWith("/v1/sessions?event_id=e1");
+    expect(apiClient.get).toHaveBeenCalledWith("/v1/sessions?event_id=e1", { anonymous: true });
     expect(result.current.data).toEqual([session]);
     expect(client.getQueryData(queryKey(endpoints.sessions.list, { eventId: "e1" }))).toEqual([session]);
+  });
+
+  it("sends the token on a public read when asked, cached apart under the same prefix", async () => {
+    const session = fx.session({ id: "s1" });
+    apiClient.get.mockResolvedValue([session]);
+    const { client, wrapper } = setup();
+
+    const { result } = renderHook(
+      () => useEndpointQuery(endpoints.sessions.list, { params: { eventId: "e1" }, withToken: true }),
+      { wrapper }
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(apiClient.get).toHaveBeenCalledWith("/v1/sessions?event_id=e1");
+    expect(client.getQueryData(queryKey(endpoints.sessions.list, { eventId: "e1" }))).toBeUndefined();
+    const cached = client.getQueriesData({ queryKey: queryKey(endpoints.sessions.list) });
+    expect(cached.map(([, data]) => data)).toEqual([[session]]);
   });
 
   it("surfaces a failed request as the query's error", async () => {

@@ -264,8 +264,8 @@ describe("FloorTrialsPage", () => {
       expect(screen.getByRole("link", { name: /open session/i })).toBeInTheDocument();
     });
 
-    expect(apiGet).toHaveBeenCalledWith("/v1/sessions");
-    expect(apiGet).toHaveBeenCalledWith("/v1/events");
+    expect(apiGet).toHaveBeenCalledWith("/v1/sessions", { anonymous: true });
+    expect(apiGet).toHaveBeenCalledWith("/v1/events", { anonymous: true });
     // No polling — exactly two calls total
     expect(apiGet).toHaveBeenCalledTimes(2);
   });

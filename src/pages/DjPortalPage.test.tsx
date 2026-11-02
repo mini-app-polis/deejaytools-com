@@ -132,6 +132,9 @@ describe("DjPortalPage", () => {
     renderAt("sessions");
     const status = await screen.findByRole("combobox", { name: /^Status of/ });
     fireEvent.change(status, { target: { value: "cancelled" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Apply status of/ }));
+    const confirm = await screen.findByRole("dialog", { name: "Cancel this session?" });
+    fireEvent.click(within(confirm).getByRole("button", { name: "Cancel session" }));
     await waitFor(() => expect(apiPatch).toHaveBeenCalledWith("/v1/sessions/s-1/status", { status: "cancelled" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));

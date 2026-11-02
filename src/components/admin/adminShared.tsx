@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 
-// Shared by the admin sections, so every section renders statuses, times
-// and form fields the same way.
+// Shared by the admin sections, so every section renders statuses and times
+// the same way.
 
 export function eventStatusBadge(status: string) {
   switch (status) {
@@ -28,7 +28,3 @@ export function formatTime(ts: number): string {
     timeStyle: "short",
   });
 }
-
-export const FIELD_INPUT_CLASS =
-  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
-export const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
