@@ -16,7 +16,7 @@ Orientation for a developer who has never opened this codebase. The app is a Vit
 | Server state | **TanStack Query** (`@tanstack/react-query`) | One `QueryClient` (`api/queryClient.ts`), provided in `main.tsx`; see §3 |
 | Components | **shadcn/ui** | Radix primitives + Tailwind; config in `components.json` |
 | Toasts | **sonner** | `<Toaster />` in `App.tsx` — not a shadcn toast |
-| Forms | **react-hook-form** + **@hookform/resolvers** | `useForm` with a zod schema through `zodResolver` holds a form's fields and validation; forms still keeping one `useState` per field are moving over to it |
+| Forms | **react-hook-form** + **@hookform/resolvers** | `useForm` with a zod schema through `zodResolver` holds a form's fields and validation |
 | Types | **`@/schemas`** (`src/schemas`) | API contract shapes — the app's own view of api-deejaytools' contract |
 | Envelopes | **`src/api/envelope.ts`** | `{ data, meta }` / `{ error }` response typing |
 | Observability | **@sentry/react** | Init in `lib/instrument.ts` before React mounts |
@@ -25,7 +25,7 @@ Orientation for a developer who has never opened this codebase. The app is a Vit
 
 - **No Redux, Zustand, Jotai, or similar** — no store file, no slices, no selectors.
 
-**Data fetching is moving onto TanStack Query** ([ADR-0003](decisions/ADR-0003-shared-data-fetching-with-tanstack-query.md)). Server state is read with `useEndpointQuery` and changed with `useEndpointMutation` (`api/queries.ts`, §3), which share one cache, deduplicate requests, cancel stale responses and refetch what a mutation invalidates. `useState` stays for what the user is editing and for UI state. Every page and section reads through the query hooks, and `useAuthMe`, `useDivisions` and `useApiVersion` are queries on the same client (§5). New code uses the query hooks — `SessionsPage` is the reference.
+**Data fetching is on TanStack Query** ([ADR-0003](decisions/ADR-0003-shared-data-fetching-with-tanstack-query.md)). Server state is read with `useEndpointQuery` and changed with `useEndpointMutation` (`api/queries.ts`, §3), which share one cache, deduplicate requests, cancel stale responses and refetch what a mutation invalidates. `useState` stays for what the user is editing and for UI state. Every page and section reads through the query hooks, and `useAuthMe`, `useDivisions` and `useApiVersion` are queries on the same client (§5). New code uses the query hooks — `SessionsPage` is the reference.
 
 ---
 
@@ -35,6 +35,7 @@ Orientation for a developer who has never opened this codebase. The app is a Vit
 src/
 ├── api/           HTTP client hook, endpoint catalog, and the TanStack Query layer over them
 ├── components/    Shared UI, guards, layout, domain sections
+│   ├── admin/     AdminPage's sections and their dialogs
 │   ├── help/      HelpLayout, HelpSection, HelpStillStuck, helpTopics
 │   ├── manager/   ManagerPage's sections (active sessions, event songs, upload for, check in for, guide)
 │   ├── staff/     Per-event staff portals and their sections
@@ -352,7 +353,7 @@ const { me, loading, error, reload, isAdmin, eventRoles } = useAuthMe();
 
 `useAuthMe` calls `useQuery` itself rather than `useEndpointQuery`, because its fetch does two things the shared hooks don't: on a brand-new account `/me` can answer `USER_NOT_SYNCED` before `AuthSync` has created the users row, so it waits for the sync (`lib/authSyncStatus.ts`) and asks once more; and it toasts a failure once per request, however many callers share it. To keep that one toast, the query is not retried, and a caller mounted after a failure shows it (with its retry) rather than asking again. `staleTime` is infinite: the record changes only when the caller changes something, and those changes invalidate it.
 
-**Keeping it fresh.** A mutation that changes the caller's record lists `endpoints.auth.me` in its `invalidates`: the profile update (`MyProfilePage`), staff grants and revokes (`EventStaffSection`, which may be the caller's own), and event edits and deletes (`EventDetailsSection`, `AdminPage` — the nav bar lists staff events by name). `invalidates` uses the prefix `["auth.me"]`, so it covers every user's entry. `reload()` invalidates the same prefix by hand; the guards and pages use it for "Try again".
+**Keeping it fresh.** A mutation that changes the caller's record lists `endpoints.auth.me` in its `invalidates`: the profile update (`MyProfilePage`), staff grants and revokes (`EventStaffSection`, which may be the caller's own), and event edits and deletes (`EventDetailsSection`, `AdminEventsSection` — the nav bar lists staff events by name). `invalidates` uses the prefix `["auth.me"]`, so it covers every user's entry. `reload()` invalidates the same prefix by hand; the guards and pages use it for "Try again".
 
 `useAuthMeQuery({ enabled })` is the raw query underneath, for a caller that wants the record only some of the time — `SongUploadForm` reads it only when uploading for the signed-in dancer, through the same key and fetch.
 
@@ -506,9 +507,10 @@ From `SessionDetailPage.test.tsx` — the pattern used across page tests:
 
 ```ts
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi } from "vitest";
+import { renderWithQueryClient } from "@/test/render";
 
 const apiGet = vi.fn();
 const apiClient = { get: apiGet, post: vi.fn(), patch: vi.fn(), del: vi.fn(), postForm: vi.fn() };
@@ -525,7 +527,7 @@ vi.mock("@clerk/clerk-react", () => ({
 
 // apiGet.mockImplementation((path) => { … return fixtures by path … });
 
-render(
+renderWithQueryClient(
   <MemoryRouter initialEntries={["/sessions/s1"]}>
     <Routes>
       <Route path="/sessions/:id" element={<SessionDetailPage />} />
@@ -537,7 +539,7 @@ await waitFor(() => expect(screen.getByText(/…/)).toBeInTheDocument());
 expect(apiGet).toHaveBeenCalledWith("/v1/sessions/s1");
 ```
 
-A component that reads through the query hooks renders with `renderWithQueryClient(ui)` from `src/test/render.tsx` instead of `render(ui)`: it wraps the tree in a `QueryClientProvider` with a fresh client per render and retries off, so no cache or retry leaks between tests (`SessionsPage.test.tsx`). The `@/api/client` mock stays the same — the query functions call through it.
+`renderWithQueryClient(ui)` from `src/test/render.tsx` stands in for `render(ui)` for a component that reads through the query hooks: it wraps the tree in a `QueryClientProvider` with a fresh client per render and retries off, so no cache or retry leaks between tests (`SessionsPage.test.tsx`). The `@/api/client` mock stays the same — the query functions call through it.
 
 **Key practices:**
 

@@ -51,9 +51,7 @@ chosen to defer rather than fix immediately. Each has a documented
 rationale and a revisit trigger. The API records its own deferrals and
 exemptions in api-deejaytools.
 
-| Rule | Scope | Rationale | Revisit when |
-|------|-------|-----------|--------------|
-| TEST-013 | this repo | UI timing `setTimeout` calls flagged as production timeouts. | Evaluator-cog scopes the check to retry/HTTP/Prefect contexts. |
+None at the moment.
 
 ---
 
@@ -71,8 +69,9 @@ reference for anyone tuning the setup.
 - **Frontend.** `SENTRY_DSN_DEEJAYTOOLS` is set in Doppler `prd`
   (syncs to Cloudflare Pages). `src/lib/instrument.ts`
   initializes `@sentry/react`, and `src/main.tsx` wires React 19
-  error hooks (`onUncaughtError`, `onCaughtError`, `onRecoverableError`)
-  through `Sentry.reactErrorHandler()`. `lib/logger.ts` also forwards
+  error hooks (`onUncaughtError`, `onRecoverableError`) through
+  `Sentry.reactErrorHandler()`; `AppErrorBoundary` reports the errors it
+  catches itself, so there is no `onCaughtError` hook. `lib/logger.ts` also forwards
   `logger.error` calls.
 - **Topology:** API events go to the shared `apis` project (filter by
   the `service` tag); browser events go to the project behind
