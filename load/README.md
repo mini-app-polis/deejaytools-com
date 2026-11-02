@@ -55,11 +55,12 @@ meets:
 
 - **Cloudflare's per-IP rule** on the API hosts (infra `cloudflare_rules.tf`)
   blocks an address for 10 s once it sends more than its allowance in 10 s.
-  The public reads (`GET` of `/version`, a session, a queue's active or
-  waiting list) are outside it; every other request counts, signed in or
-  not: `auth.me` and `checkins.mine` on each signed-in page load,
-  `checkins.mine` on focus, and every request of a check-in. Signed-in page
-  loads during the ramp and the reload burst, and the rush, all go over it.
+  The public reads (`GET` of `/version`, the session list, a session, a
+  queue's active or waiting list) are outside it; every other request counts,
+  signed in or not: `auth.me` and `checkins.mine` on each signed-in page
+  load, `checkins.mine` on focus, and every request of a check-in. The
+  allowance is a ceiling meant to sit above a venue's peak; `cf_block` in the
+  summary shows whether the ramp, the reload burst or the rush reached it.
 - **The API's per-user limit** (`RATE_LIMIT` in api-deejaytools'
   `middleware.py`, kept per worker) applies to signed-in requests; see
   "Test users" above.
