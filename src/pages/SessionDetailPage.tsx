@@ -60,11 +60,19 @@ export default function ApiSessionPage() {
   const [now, setNow] = useState(Date.now());
 
   // The session and its queues are public and refresh on their own.
-  const polled = { params: { sessionId: id ?? "" }, enabled: !!id, refetchInterval: QUEUE_POLL_MS };
+  // Polling starts at a random offset, so pages opened together (a reload
+  // burst, a trial starting) don't poll in lockstep afterwards.
+  const [pollOn, setPollOn] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setPollOn(true), Math.random() * QUEUE_POLL_MS);
+    return () => clearTimeout(t);
+  }, []);
+  const refetchInterval: number | false = pollOn ? QUEUE_POLL_MS : false;
+  const polled = { params: { sessionId: id ?? "" }, enabled: !!id, refetchInterval };
   const sessionQuery = useEndpointQuery(endpoints.sessions.get, {
     params: { id: id ?? "" },
     enabled: !!id,
-    refetchInterval: QUEUE_POLL_MS,
+    refetchInterval,
   });
   const activeQuery = useEndpointQuery(endpoints.queue.active, polled);
   const waitingQuery = useEndpointQuery(endpoints.queue.waiting, polled);
@@ -79,14 +87,17 @@ export default function ApiSessionPage() {
 
   // /v1/partners/leading-pairs, /v1/songs and /v1/checkins/mine all require
   // auth — skipped for a signed-out visitor. The session info and queues stay visible.
+  // Pairs, songs and event submissions only feed the check-in form, so they
+  // load when it opens.
   const signedIn = !!isSignedIn;
-  const pairsQuery = useEndpointQuery(endpoints.partners.leadingPairs, { enabled: signedIn });
-  const songsQuery = useEndpointQuery(endpoints.songs.list, { enabled: signedIn });
+  const formData = signedIn && checkinOpen;
+  const pairsQuery = useEndpointQuery(endpoints.partners.leadingPairs, { enabled: formData });
+  const songsQuery = useEndpointQuery(endpoints.songs.list, { enabled: formData });
   const myCheckinsQuery = useEndpointQuery(endpoints.checkins.mine, { enabled: signedIn });
   const eventId = session?.event_id ?? null;
   const submissionsQuery = useEndpointQuery(endpoints.eventSongSubmissions.list, {
     params: { eventId: eventId ?? "" },
-    enabled: signedIn && eventId !== null,
+    enabled: formData && eventId !== null,
   });
   const pairs = (signedIn && pairsQuery.data) || NO_ROWS;
   const songs = (signedIn && songsQuery.data) || NO_ROWS;
@@ -94,6 +105,7 @@ export default function ApiSessionPage() {
   // null when unknown, including when they fail to load: the picker then offers
   // every song and the API decides.
   const eventSubmissions = (signedIn && eventId !== null && submissionsQuery.data) || null;
+  const formLoading = [pairsQuery, songsQuery, submissionsQuery].some((q) => q.isLoading);
   const yourDataQueries = [pairsQuery, songsQuery, myCheckinsQuery];
   const yourDataError = signedIn
     ? (yourDataQueries.find((q) => q.error && q.data === undefined)?.error ?? null)
@@ -319,8 +331,7 @@ export default function ApiSessionPage() {
 
   const canCheckIn =
     !!session &&
-    checkinWindowOpen &&
-    checkinSongs.length > 0;
+    checkinWindowOpen;
 
   const openCheckin = () => {
     reset(EMPTY_CHECKIN);
@@ -441,19 +452,6 @@ export default function ApiSessionPage() {
               {now < session.checkin_opens_at
                 ? `Check-in opens ${formatDateTimeShort(session.checkin_opens_at, session.event_timezone)}`
                 : "Check-in closed"}
-            </p>
-          ) : !canCheckIn && checkinWindowOpen && noEventSongs ? (
-            <p className="text-sm text-muted-foreground">
-              You haven&apos;t added any songs to this event yet.{" "}
-              <Link to={submitSongsHref} className="underline">
-                Submit songs to this event
-              </Link>
-              .
-            </p>
-          ) : !canCheckIn && checkinWindowOpen && songs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              You have no songs uploaded —{" "}
-              <Link to="/songs/add" className="underline">add a song first</Link>.
             </p>
           ) : null}
         </div>
@@ -634,7 +632,9 @@ export default function ApiSessionPage() {
 
             <form onSubmit={(e) => void handleSubmit(submitCheckin, refuseCheckin)(e)} className="space-y-4">
               {/* Song — drives everything else */}
-              {noEventSongs ? (
+              {formLoading ? (
+                <Skeleton className="h-24 w-full" />
+              ) : noEventSongs ? (
                 <p className="text-sm text-muted-foreground">
                   You haven&apos;t added any songs to this event yet.{" "}
                   <Link to={submitSongsHref} className="underline">
@@ -647,6 +647,11 @@ export default function ApiSessionPage() {
                   >
                     Why? →
                   </Link>
+                </p>
+              ) : songsQuery.isSuccess && songs.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  You have no songs uploaded —{" "}
+                  <Link to="/songs/add" className="underline">add a song first</Link>.
                 </p>
               ) : (
                 <div>

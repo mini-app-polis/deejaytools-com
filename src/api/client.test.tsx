@@ -150,6 +150,26 @@ describe("useApiClient.get", () => {
     expect((err as ApiError).code).toBe("NOT_FOUND");
   });
 
+  it("carries a Retry-After given in seconds on the thrown error", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(
+        { error: { code: "RATE_LIMITED", message: "Slow down" } },
+        { status: 429, headers: { "Retry-After": "7" } }
+      )
+    );
+    const { result } = renderHook(() => useApiClient());
+    const err = await result.current.get("/v1/foo").catch((e: unknown) => e);
+    expect((err as ApiError).status).toBe(429);
+    expect((err as ApiError).retryAfterMs).toBe(7_000);
+  });
+
+  it("leaves retryAfterMs unset when Retry-After is absent or unreadable", async () => {
+    fetchMock.mockResolvedValue(new Response("slow down", { status: 429, headers: { "Retry-After": "soon" } }));
+    const { result } = renderHook(() => useApiClient());
+    const err = await result.current.get("/v1/foo").catch((e: unknown) => e);
+    expect((err as ApiError).retryAfterMs).toBeUndefined();
+  });
+
   it("rejects a success response whose body isn't JSON and reports it", async () => {
     fetchMock.mockResolvedValue(new Response("<html></html>", { status: 200 }));
     const { result } = renderHook(() => useApiClient());

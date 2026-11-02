@@ -23,7 +23,9 @@ export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
-    readonly code?: string
+    readonly code?: string,
+    /** How long the server asked us to wait (Retry-After), when it said. */
+    readonly retryAfterMs?: number
   ) {
     super(message);
     this.name = "ApiError";
@@ -50,6 +52,15 @@ function isErrorEnvelope(body: unknown): body is ErrorEnvelope {
   return typeof error === "object" && error !== null && "message" in error;
 }
 
+/** Retry-After as milliseconds: delta-seconds or an HTTP date; undefined if absent or unreadable. */
+function retryAfterMs(res: Response): number | undefined {
+  const value = res.headers.get("Retry-After")?.trim();
+  if (!value) return undefined;
+  if (/^\d+$/.test(value)) return Number(value) * 1000;
+  const at = Date.parse(value);
+  return Number.isNaN(at) ? undefined : Math.max(0, at - Date.now());
+}
+
 async function parseEnvelope<T>(res: Response): Promise<T> {
   const body = await readJsonBody(res);
   const parsed = body !== undefined;
@@ -57,16 +68,17 @@ async function parseEnvelope<T>(res: Response): Promise<T> {
     return (body as SuccessEnvelope<T>).data;
   }
 
+  const wait = retryAfterMs(res);
   let err: ApiError;
   if (isErrorEnvelope(body)) {
     const { code, message } = body.error;
-    err = new ApiError(FRIENDLY_MESSAGES[code] ?? message, res.status, code);
+    err = new ApiError(FRIENDLY_MESSAGES[code] ?? message, res.status, code, wait);
   } else if (res.status >= 500) {
-    err = new ApiError(SERVER_UNAVAILABLE_MESSAGE, res.status);
+    err = new ApiError(SERVER_UNAVAILABLE_MESSAGE, res.status, undefined, wait);
   } else if (res.ok) {
     err = new ApiError("The server sent a response this page couldn't read. Please try again.", res.status);
   } else {
-    err = new ApiError(`Request failed: ${res.status}`, res.status);
+    err = new ApiError(`Request failed: ${res.status}`, res.status, undefined, wait);
   }
   // 4xx are expected (validation, auth, not-found) — no need to track.
   // 5xx are unexpected server failures, and a success the page can't read is
