@@ -31,10 +31,12 @@ function isNotSynced(error: unknown): boolean {
 /**
  * Whether a failed query is worth trying again. A 4xx (validation, auth,
  * not-found) and a response that broke its contract will answer the same way
- * on a retry; a network error or a 5xx may not. A 429 or 503 is the server
- * asking to come back later, so it gets more tries.
+ * on a retry; a network error or a 5xx may not. The exceptions are
+ * USER_NOT_SYNCED, which clears once the first account sync lands, and a 429
+ * or 503, the server asking to come back later, which gets more tries.
  */
 export function shouldRetry(failureCount: number, error: unknown): boolean {
+  if (isNotSynced(error)) return failureCount < MAX_NOT_SYNCED_RETRIES;
   if (isThrottle(error)) return failureCount < MAX_THROTTLE_RETRIES;
   if (error instanceof ApiError && error.status >= 400 && error.status < 500) return false;
   if (error instanceof ContractViolation) return false;
@@ -42,11 +44,13 @@ export function shouldRetry(failureCount: number, error: unknown): boolean {
 }
 
 /**
- * How long to wait before retry number `failureCount`: exponential backoff, at
+ * How long to wait before retry number `failureCount`. USER_NOT_SYNCED waits a
+ * fixed short delay, since the sync lands within moments. Otherwise: exponential backoff, at
  * least the server's Retry-After, plus up to a second of jitter so clients that
  * were refused together don't come back together.
  */
 export function retryDelay(failureCount: number, error: unknown): number {
+  if (isNotSynced(error)) return NOT_SYNCED_RETRY_DELAY_MS;
   const backoff = Math.min(BACKOFF_BASE_MS * 2 ** failureCount, BACKOFF_CAP_MS);
   const asked = isThrottle(error) ? Math.min(error.retryAfterMs ?? 0, RETRY_AFTER_CAP_MS) : 0;
   return Math.max(backoff, asked) + Math.random() * BACKOFF_BASE_MS;
