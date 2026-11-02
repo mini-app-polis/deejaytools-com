@@ -13,7 +13,8 @@ const apiClient = {
   del: apiDel,
   postForm: vi.fn(),
 };
-vi.mock("@/api/client", () => ({
+vi.mock("@/api/client", async (importActual) => ({
+  ...(await importActual<typeof import("@/api/client")>()),
   useApiClient: () => apiClient,
 }));
 
@@ -25,6 +26,8 @@ import MyContentPage from "./MyContentPage";
 import { fx } from "@/test/fixtures";
 import { toast } from "sonner";
 import { renderWithQueryClient } from "@/test/render";
+import { ApiError } from "@/api/client";
+import { createQueryClient } from "@/api/queryClient";
 
 const EVENT = fx.event({
   id: "ev1",
@@ -101,6 +104,41 @@ describe("MyContentPage — hash deep links", () => {
       expect(screen.getByRole("heading", { name: /^songs$/i })).toBeInTheDocument();
     });
     expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+});
+
+describe("MyContentPage — brand-new account", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("shows its content, not the account-setup error, once the first sync lands", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let synced = false;
+    apiGet.mockReset();
+    apiGet.mockImplementation((path: string) => {
+      if (!synced) {
+        return Promise.reject(new ApiError("Call POST /v1/auth/sync first", 401, "USER_NOT_SYNCED"));
+      }
+      return defaultApiGet(path);
+    });
+
+    renderWithQueryClient(
+      <MemoryRouter>
+        <MyContentPage />
+      </MemoryRouter>,
+      { queryClient: createQueryClient() }
+    );
+
+    await vi.advanceTimersByTimeAsync(100);
+    synced = true;
+    await vi.advanceTimersByTimeAsync(1_500);
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /^songs$/i })).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/still setting up/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
   });
 });
 
