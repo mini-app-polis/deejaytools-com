@@ -1,14 +1,22 @@
-import type { ApiEvent, ApiListedEventSongSubmission } from "@/schemas";
+import type { ApiListedEventSongSubmission } from "@/schemas";
 import { ROUND_SPLIT_DIVISION, SUBMISSION_ROUNDS, isOpenEvent, type SubmissionRound } from "@/schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
-import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useDivisions } from "@/hooks/useDivisions";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
+import EventPicker from "@/components/dancer/EventPicker";
+import EventSubmissionsList from "@/components/dancer/EventSubmissionsList";
+import {
+  LoadError,
+  LoadingSkeleton,
+  PageHeader,
+  errorMessage,
+} from "@/components/dancer/eventSubmissionsShared";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -26,7 +34,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { partitionSubmittableSongs } from "@/lib/submittableSongs";
 import { songLabel } from "@/lib/songLabel";
 
@@ -38,60 +45,6 @@ const ROUND_OPTIONS: { value: SubmissionRound; label: string }[] = [
   { value: "prelims_only", label: "Prelims Only" },
   { value: "finals_only", label: "Finals Only" },
 ];
-
-function roundDisplayLabel(round: SubmissionRound): string {
-  switch (round) {
-    case "prelims_only":
-      return "Prelims only";
-    case "finals_only":
-      return "Finals only";
-    default:
-      return "Prelims & finals";
-  }
-}
-
-function eventOptionLabel(e: ApiEvent): string {
-  return `${e.name} · ${e.start_date}`;
-}
-
-function PageHeader({ title, subtitle }: { title: string; subtitle?: string }) {
-  return (
-    <div>
-      <Button variant="ghost" size="sm" className="px-0 mb-2" asChild>
-        <Link to="/my-content">← Back to My Content</Link>
-      </Button>
-      <h1 className="page-title text-2xl">{title}</h1>
-      {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
-    </div>
-  );
-}
-
-function LoadingSkeleton() {
-  return (
-    <div className="space-y-3">
-      <Skeleton className="h-8 w-48" />
-      <Skeleton className="h-40 w-full" />
-    </div>
-  );
-}
-
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : "Something went wrong.";
-}
-
-/** A failed load, said plainly, with a way to try it again. */
-function LoadError({ what, message, onRetry }: { what: string; message: string; onRetry: () => void }) {
-  return (
-    <div role="alert" className="space-y-2 rounded-lg border border-destructive/50 px-4 py-3">
-      <p className="text-sm text-destructive">
-        Couldn&apos;t load {what}: {message}
-      </p>
-      <Button type="button" size="sm" variant="outline" onClick={onRetry}>
-        Try again
-      </Button>
-    </div>
-  );
-}
 
 /**
  * Song submissions, keyed off the URL:
@@ -105,75 +58,6 @@ export default function EventSubmissionsPage() {
   const { eventId } = useParams<{ eventId: string }>();
   // Keyed so switching events starts from a clean form.
   return eventId ? <EventSubmissionForm key={eventId} eventId={eventId} /> : <EventPicker />;
-}
-
-function EventPicker() {
-  const navigate = useNavigate();
-  const eventsQuery = useEndpointQuery(endpoints.events.list);
-  const events = useMemo(
-    () => (eventsQuery.data ?? NO_ROWS).filter((e) => e.status !== "completed"),
-    [eventsQuery.data]
-  );
-
-  if (eventsQuery.isLoading) return <LoadingSkeleton />;
-
-  if (eventsQuery.error && !eventsQuery.data) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="Event submissions" />
-        <LoadError
-          what="the events"
-          message={errorMessage(eventsQuery.error)}
-          onRetry={() => void eventsQuery.refetch()}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <PageHeader title="Event submissions" />
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Submit songs to an event</CardTitle>
-          <CardDescription>
-            Choose an upcoming event, then add songs from your library.{" "}
-            <Link
-              to="/how-it-works/submitting-music#event-submission-required"
-              className="text-primary underline underline-offset-2"
-            >
-              About event submissions →
-            </Link>
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {events.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No upcoming events are available right now.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              <Label htmlFor="event-submissions-event">Event</Label>
-              <Select onValueChange={(id) => navigate(`/event-submissions/${id}`)}>
-                <SelectTrigger id="event-submissions-event">
-                  <SelectValue placeholder="Select an event" />
-                </SelectTrigger>
-                <SelectContent>
-                  {events.map((e) => (
-                    <SelectItem key={e.id} value={e.id}>
-                      {eventOptionLabel(e)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-sm text-muted-foreground">Select an event to manage submissions.</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
 }
 
 // Submit stays disabled until a song and a division are picked, so a refused
@@ -461,51 +345,14 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
           )}
 
           {!submissionsError && submissions.length > 0 && (
-            <div className={`space-y-3 pt-2${submissionsLoading ? " opacity-60" : ""}`}>
-              <p className="text-sm font-medium">Your submissions</p>
-              {submissions.map((submission) => {
-                const song = songs.find((s) => s.id === submission.song_id);
-                const busy = busySongId === submission.song_id;
-                return (
-                  <div
-                    key={submission.id}
-                    className="flex items-start justify-between gap-3 rounded-lg border px-4 py-3"
-                  >
-                    <div className="min-w-0 space-y-0.5">
-                      <p className="font-medium text-sm break-all">
-                        {submission.song_label || (song ? songLabel(song) : submission.song_id)}
-                      </p>
-                      {submission.division && (
-                        <p className="text-xs text-muted-foreground">
-                          Division {submission.division}
-                          {roundsAllowed &&
-                            submission.division === ROUND_SPLIT_DIVISION &&
-                            ` · ${roundDisplayLabel(submission.round)}`}
-                        </p>
-                      )}
-                      {!song && (
-                        <p className="text-xs text-muted-foreground">
-                          No longer in your library. It still counts against this event, so remove
-                          it if it should not be entered.
-                        </p>
-                      )}
-                    </div>
-                    {submission.can_withdraw && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="shrink-0 border-destructive/50 text-destructive hover:bg-destructive-strong hover:text-destructive-foreground"
-                        disabled={busy || submissionsLoading}
-                        onClick={() => void handleRemove(submission)}
-                      >
-                        {busy ? "Removing…" : "Remove"}
-                      </Button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+            <EventSubmissionsList
+              submissions={submissions}
+              songs={songs}
+              loading={submissionsLoading}
+              busySongId={busySongId}
+              showRounds={roundsAllowed}
+              onRemove={(submission) => void handleRemove(submission)}
+            />
           )}
 
           {hiddenLegacyCount > 0 && (

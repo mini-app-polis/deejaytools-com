@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
 import QueryError from "@/components/QueryError";
 import { useAuthMe } from "@/hooks/useAuthMe";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,7 +35,8 @@ export default function AdminUsersSection({ open }: { open: boolean }) {
   // actually fires the network request. 300 ms feels responsive without
   // hammering the API on every character.
   const [usersQuery, setUsersQuery] = useState("");
-  const [usersDebouncedQuery, setUsersDebouncedQuery] = useState("");
+  // Only the trailing value wins: typing "alic" asks once, for q=alic.
+  const usersDebouncedQuery = useDebouncedValue(usersQuery.trim(), 300);
   /** Per-row loading state while a role PATCH is in flight. */
   const [userRoleSubmitting, setUserRoleSubmitting] = useState<Record<string, boolean>>({});
 
@@ -47,14 +49,6 @@ export default function AdminUsersSection({ open }: { open: boolean }) {
   const usersLoading = usersQueryResult.isFetching;
 
   const setRole = useEndpointMutation(endpoints.admin.setUserRole, { invalidates: [endpoints.admin.users] });
-
-  // Debounce keystrokes in the search box → only the trailing value wins,
-  // so typing "alic" hits the API once with q=alic instead of four
-  // requests for q, qa, qal, qali.
-  useEffect(() => {
-    const t = setTimeout(() => setUsersDebouncedQuery(usersQuery.trim()), 300);
-    return () => clearTimeout(t);
-  }, [usersQuery]);
 
   /**
    * Patch a user's role server-side; the users list refetches, so the UI shows
