@@ -217,12 +217,13 @@ test("a dancer uploads a song, enters it, checks in, sees their place, withdraws
     await test.step("withdraw from My Content", async () => {
       await page.goto("/my-content");
       await expect(page.getByRole("heading", { name: "Check-ins" })).toBeVisible();
-      // The check-in card naming the song and holding its own Withdraw button.
+      // The check-in naming the song, as an item of the Check-ins list: a
+      // looser match also finds the page's containers whenever another
+      // check-in's Withdraw button is on the page.
       const entry = page
-        .locator("div")
-        .filter({ hasText: ROUTINE })
-        .filter({ has: page.getByRole("button", { name: "Withdraw from queue" }) })
-        .last();
+        .getByRole("list", { name: "Check-ins" })
+        .getByRole("listitem")
+        .filter({ hasText: ROUTINE });
       await expect(entry).toContainText("This entry is #1 in line");
       await expect(entry).toContainText("Standard queue");
       await entry.getByRole("button", { name: "Withdraw from queue" }).click();

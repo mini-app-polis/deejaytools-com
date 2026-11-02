@@ -185,12 +185,12 @@ test("a linked partner sees the shared song, its submission and its check-in, wi
   });
 
   await test.step("My Content shows the check-in, which only the partner may withdraw", async () => {
-    // The check-in card naming the song and saying who may withdraw it.
+    // The check-in naming the song, as an item of the Check-ins list.
     const entry = page
-      .locator("div")
-      .filter({ hasText: ROUTINE })
-      .filter({ hasText: "Only they can withdraw it." })
-      .last();
+      .getByRole("list", { name: "Check-ins" })
+      .getByRole("listitem")
+      .filter({ hasText: ROUTINE });
+    await expect(entry).toContainText("Only they can withdraw it.");
     await expect(entry).toBeVisible();
     await expect(entry).toContainText("This entry is #1 in line");
     await expect(entry.getByRole("button", { name: "Withdraw from queue" })).toHaveCount(0);
