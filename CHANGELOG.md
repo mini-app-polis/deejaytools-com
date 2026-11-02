@@ -1,3 +1,10 @@
+## [2.23.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.23.0...v2.23.1) (2026-11-02)
+
+
+### Bug Fixes
+
+* **forms:** show each validation error at its field, with aria-invalid and aria-describedby ([18de825](https://github.com/mini-app-polis/deejaytools-com/commit/18de8253d0a35a0a5d20ee72688e1ea1b6f3a62f))
+
 # [2.23.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.22.2...v2.23.0) (2026-11-02)
 
 
