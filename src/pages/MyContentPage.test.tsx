@@ -470,7 +470,7 @@ describe("MyContentPage — Songs section", () => {
     expect(card).toHaveTextContent("Routine Fever");
     expect(card).toHaveTextContent("Descriptor v3");
     expect(
-      within(card as HTMLElement).getByRole("link", { name: /open song in google drive/i })
+      within(card as HTMLElement).getByRole("link", { name: /open in google drive/i })
     ).toHaveAttribute("href", "https://drive.google.com/file/d/drive123/view");
 
     // Legacy songs have no audio and a placeholder entity is labelled as such.
@@ -540,7 +540,7 @@ describe("MyContentPage — Songs section", () => {
     )! as HTMLElement;
     expect(card).toHaveTextContent("Shared with you");
     expect(
-      within(card).getByRole("link", { name: /open song in google drive/i })
+      within(card).getByRole("link", { name: /open in google drive/i })
     ).toHaveAttribute("href", "https://drive.google.com/file/d/drive-shared/view");
     expect(within(card).queryByRole("button", { name: "Delete" })).toBeNull();
 
