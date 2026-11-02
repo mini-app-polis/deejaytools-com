@@ -766,6 +766,68 @@ describe("AdminPage — Event managers", () => {
     await waitFor(() => expect(apiDel).toHaveBeenCalledWith("/v1/events/e1/staff/u_ada/event-manager"));
     expect(toast.success).toHaveBeenCalledWith("Removed Ada Lovelace as event manager");
   });
+
+  it("toasts a failed grant and keeps the person picked", async () => {
+    routeGets({
+      "/v1/events": [EV_ACTIVE],
+      "/v1/events/e1/staff": [],
+      "/v1/admin/users": [fx.adminUser({ id: "u_cy", email: "cy@example.com", first_name: "Cy", last_name: "New" })],
+    });
+    apiPut.mockRejectedValue(new Error("User not found"));
+    const user = userEvent.setup();
+    const dialog = await openManagers(user);
+
+    await user.type(within(dialog).getByRole("combobox", { name: "Add an event manager" }), "cy");
+    await user.click(await screen.findByRole("option", { name: /Cy New/ }));
+    await user.click(within(dialog).getByRole("button", { name: "Make event manager" }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("User not found"));
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(within(dialog).getByRole("button", { name: "Make event manager" })).toBeEnabled();
+  });
+
+  it("toasts a failed revoke and keeps the manager listed", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE], "/v1/events/e1/staff": [ADA] });
+    apiDel.mockRejectedValue(new Error("Forbidden"));
+    const user = userEvent.setup();
+    const dialog = await openManagers(user);
+
+    const remove = await within(dialog).findByRole("button", { name: "Remove Ada Lovelace as event manager" });
+    await user.click(remove);
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Forbidden"));
+    expect(within(dialog).getByText("Ada Lovelace")).toBeInTheDocument();
+    await waitFor(() => expect(remove).toBeEnabled());
+  });
+
+  it("shows a failed managers load inline and retries it", async () => {
+    let fail = true;
+    routeGets({
+      "/v1/events": [EV_ACTIVE],
+      "/v1/events/e1/staff": () => {
+        if (fail) throw new Error("staff down");
+        return [ADA];
+      },
+    });
+    const user = userEvent.setup();
+    const dialog = await openManagers(user);
+
+    const retry = await within(dialog).findByRole("button", { name: "Try again" }, { timeout: 5000 });
+    fail = false;
+    await user.click(retry);
+
+    expect(await within(dialog).findByText("Ada Lovelace")).toBeInTheDocument();
+  });
+
+  it("closes on Escape", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE], "/v1/events/e1/staff": [ADA] });
+    const user = userEvent.setup();
+    await openManagers(user);
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Event managers" })).not.toBeInTheDocument());
+  });
 });
 
 describe("AdminPage — Sessions section", () => {
@@ -799,6 +861,33 @@ describe("AdminPage — Sessions section", () => {
     await user.click(within(confirm).getByRole("button", { name: "Cancel session" }));
 
     await waitFor(() => expect(apiPatch).toHaveBeenCalledWith("/v1/sessions/s1/status", { status: "cancelled" }));
+  });
+
+  it("toasts a failed status change", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE], "/v1/sessions": [SESS_OPEN] });
+    apiPatch.mockRejectedValue(new Error("Invalid status transition"));
+    const user = userEvent.setup();
+    renderPage("/admin/sessions");
+
+    await user.selectOptions(await screen.findByRole("combobox", { name: `Status of ${SESS_OPEN_TITLE}` }), "in_progress");
+    await user.click(screen.getByRole("button", { name: `Apply status of ${SESS_OPEN_TITLE}` }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Invalid status transition"));
+    expect(toast.success).not.toHaveBeenCalledWith("Status updated");
+  });
+
+  it("closes the cancel confirmation on Escape without sending anything", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE], "/v1/sessions": [SESS_OPEN] });
+    const user = userEvent.setup();
+    renderPage("/admin/sessions");
+
+    await user.selectOptions(await screen.findByRole("combobox", { name: `Status of ${SESS_OPEN_TITLE}` }), "cancelled");
+    await user.click(screen.getByRole("button", { name: `Apply status of ${SESS_OPEN_TITLE}` }));
+    await screen.findByRole("dialog", { name: "Cancel this session?" });
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Cancel this session?" })).not.toBeInTheDocument());
+    expect(apiPatch).not.toHaveBeenCalled();
   });
 
   it("lists active sessions with their event and times, hiding completed until toggled", async () => {
