@@ -28,7 +28,7 @@ const NO_TEAMS: readonly ApiTeam[] = [];
 
 const SPECIAL_DIVISION_OPTIONS = ["Teams", "Cabaret", "Exhibition", "My Division Is Not Listed"];
 
-// Checked in the order the old form read them; only the first problem is reported.
+// Checked in this order; only the first problem is reported.
 const specialUploadSchema = z
   .object({
     file: z.custom<File | null>(),

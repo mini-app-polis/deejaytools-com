@@ -1,9 +1,8 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { useApiClient } from "@/api/client";
-import { call, endpoints } from "@/api/endpoints";
-import { queryKey, type KeyedEndpoint } from "@/api/queryKeys";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointMutation } from "@/api/queries";
+import type { KeyedEndpoint } from "@/api/queryKeys";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -42,21 +41,28 @@ const QUEUE_ACTION_READS: readonly KeyedEndpoint<never>[] = [
  * confirmed.
  */
 export function useQueueActions() {
-  const api = useApiClient();
-  const client = useQueryClient();
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [pendingWithdraw, setPendingWithdraw] = useState<ApiQueueEntry | null>(null);
+  const options = { invalidates: QUEUE_ACTION_READS };
+  const complete = useEndpointMutation(endpoints.queue.complete, options);
+  const incomplete = useEndpointMutation(endpoints.queue.incomplete, options);
+  const moveDown = useEndpointMutation(endpoints.queue.moveDown, options);
+  const withdraw = useEndpointMutation(endpoints.queue.withdraw, options);
+  type Send = (variables: { body: { queueEntryId: string } }) => Promise<unknown>;
+  const mutations = new Map<QueueActionEndpoint, Send>([
+    [endpoints.queue.complete, complete.mutateAsync],
+    [endpoints.queue.incomplete, incomplete.mutateAsync],
+    [endpoints.queue.moveDown, moveDown.mutateAsync],
+    [endpoints.queue.withdraw, withdraw.mutateAsync],
+  ]);
 
   const run = async (ep: QueueActionEndpoint, queueEntryId: string) => {
     if (busyRef.current) return;
     busyRef.current = true;
     setBusy(true);
     try {
-      await call(api, ep as typeof endpoints.queue.complete, { body: { queueEntryId } });
-      await Promise.all(
-        QUEUE_ACTION_READS.map((read) => client.invalidateQueries({ queryKey: queryKey(read) }))
-      );
+      await mutations.get(ep)!({ body: { queueEntryId } });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Action failed");
     } finally {
