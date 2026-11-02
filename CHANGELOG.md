@@ -1,3 +1,18 @@
+## [2.22.2](https://github.com/mini-app-polis/deejaytools-com/compare/v2.22.1...v2.22.2) (2026-11-02)
+
+
+### Bug Fixes
+
+* **api:** retry queries that answer USER_NOT_SYNCED until the first account sync lands ([d5e20a6](https://github.com/mini-app-polis/deejaytools-com/commit/d5e20a686be4e232a01929e6ef7f806ccc404fb3))
+* **auth:** clear the query cache when the signed-in user changes ([93662a6](https://github.com/mini-app-polis/deejaytools-com/commit/93662a65488d8f0439607eb95f9d3fcbdd030b4b))
+* **query:** restore USER_NOT_SYNCED retries dropped in the mini-705 merge ([08a6d6a](https://github.com/mini-app-polis/deejaytools-com/commit/08a6d6ae3ab3c795343a9953bc713268dcadff6a))
+
+
+### Performance Improvements
+
+* **admin:** query each admin section only while it is shown ([e992ae5](https://github.com/mini-app-polis/deejaytools-com/commit/e992ae58ff8be5b64d34d96a1ee2d00db3a73394))
+* **session:** load check-in form data on demand, jitter queue polling, retry 429/503 with backoff ([2fb3c4c](https://github.com/mini-app-polis/deejaytools-com/commit/2fb3c4ce48083ebe5ee1d31812d03a5afd929b4a))
+
 ## [2.22.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.22.0...v2.22.1) (2026-11-02)
 
 
