@@ -331,7 +331,7 @@ describe("EventDetailPage", () => {
     renderPage();
 
     await waitFor(() =>
-      expect(screen.getByText("checkin_open")).toBeInTheDocument()
+      expect(screen.getByText("Check-in open")).toBeInTheDocument()
     );
   });
 

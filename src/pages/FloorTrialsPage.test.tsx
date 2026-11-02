@@ -291,9 +291,9 @@ describe("FloorTrialsPage — check-in flow", () => {
       expect(screen.getAllByRole("link", { name: /open session/i }).length).toBe(3);
     });
 
-    expect(screen.getByText("scheduled")).toBeInTheDocument();
-    expect(screen.getByText("checkin_open")).toBeInTheDocument();
-    expect(screen.getByText("in_progress")).toBeInTheDocument();
+    expect(screen.getByText("Scheduled")).toBeInTheDocument();
+    expect(screen.getByText("Check-in open")).toBeInTheDocument();
+    expect(screen.getByText("In progress")).toBeInTheDocument();
   });
 
   it("renders session cards as links that navigate to detail page", async () => {
@@ -336,7 +336,7 @@ describe("FloorTrialsPage — check-in flow", () => {
       expect(screen.getByText("Championship")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("checkin_open")).toBeInTheDocument();
+    expect(screen.getByText("Check-in open")).toBeInTheDocument();
   });
 
   it("applies timezone abbreviation badge when timezone is available", async () => {
@@ -383,7 +383,7 @@ describe("FloorTrialsPage — queue state", () => {
       expect(screen.getByText(/open session/i)).toBeInTheDocument();
     });
 
-    expect(screen.getByText("checkin_open")).toBeInTheDocument();
+    expect(screen.getByText("Check-in open")).toBeInTheDocument();
     expect(screen.getByText(/Check-in opens:/i)).toBeInTheDocument();
     expect(screen.getByText(/Floor trial:/i)).toBeInTheDocument();
   });
@@ -403,12 +403,12 @@ describe("FloorTrialsPage — queue state", () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText("scheduled")).toBeInTheDocument();
+      expect(screen.getByText("Scheduled")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("checkin_open")).toBeInTheDocument();
+    expect(screen.getByText("Check-in open")).toBeInTheDocument();
 
-    const badges = screen.getAllByText(/scheduled|checkin_open/i);
+    const badges = screen.getAllByText(/^(scheduled|check-in open)$/i);
     expect(badges).toHaveLength(2);
   });
 
@@ -433,7 +433,7 @@ describe("FloorTrialsPage — queue state", () => {
       expect(screen.getByText("Championship")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("checkin_open")).toBeInTheDocument();
+    expect(screen.getByText("Check-in open")).toBeInTheDocument();
   });
 
   it("applies timezone abbreviation badge when timezone is available", async () => {

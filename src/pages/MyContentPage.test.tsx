@@ -605,7 +605,7 @@ describe("MyContentPage — events and sessions details", () => {
       "/sessions/sess-active-1",
       "/sessions/later",
     ]);
-    expect(screen.getByText("in progress")).toBeInTheDocument();
+    expect(screen.getByText("In progress")).toBeInTheDocument();
   });
 
   it("hides the active floor trials section when sessions fail to load", async () => {

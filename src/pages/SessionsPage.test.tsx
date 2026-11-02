@@ -114,7 +114,7 @@ describe("SessionsPage", () => {
 
     await user.click(await screen.findByRole("button", { name: /try again/i }));
 
-    await waitFor(() => expect(screen.getAllByText("scheduled").length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText("Scheduled").length).toBeGreaterThan(0));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(apiGet).toHaveBeenCalledTimes(2);
   });
@@ -126,7 +126,7 @@ describe("SessionsPage", () => {
     renderPage();
 
     await waitFor(() =>
-      expect(screen.getAllByText("scheduled").length).toBeGreaterThan(0)
+      expect(screen.getAllByText("Scheduled").length).toBeGreaterThan(0)
     );
   });
 
@@ -141,12 +141,12 @@ describe("SessionsPage", () => {
     renderPage();
 
     await waitFor(() =>
-      expect(screen.getAllByText("scheduled").length).toBeGreaterThan(0)
+      expect(screen.getAllByText("Scheduled").length).toBeGreaterThan(0)
     );
-    expect(screen.getAllByText("checkin_open").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("in_progress").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("completed").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("cancelled").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Check-in open").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("In progress").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Completed").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Cancelled").length).toBeGreaterThan(0);
   });
 
   it("links mobile cards to /sessions/:id", async () => {

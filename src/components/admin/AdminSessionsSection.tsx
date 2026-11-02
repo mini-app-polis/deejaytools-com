@@ -29,7 +29,7 @@ import {
 import { TabsContent } from "@/components/ui/tabs";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareSessionChrono } from "@/lib/chronoSort";
-import { sessionStatusBadge } from "@/components/admin/adminShared";
+import SessionStatusBadge from "@/components/SessionStatusBadge";
 
 /**
  * The admin Sessions section: every event's sessions bucketed by status,
@@ -127,7 +127,7 @@ export default function AdminSessionsSection() {
             </Badge>
           )}
         </TableCell>
-        <TableCell>{sessionStatusBadge(s.status)}</TableCell>
+        <TableCell><SessionStatusBadge status={s.status} /></TableCell>
         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
           {formatTimeOnly(s.checkin_opens_at, s.event_timezone)}
         </TableCell>

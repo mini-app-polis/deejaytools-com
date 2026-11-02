@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
 import QueryError from "@/components/QueryError";
-import { Badge } from "@/components/ui/badge";
+import SessionStatusBadge from "@/components/SessionStatusBadge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -230,7 +230,7 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
               <div key={s.id} className="rounded-lg border px-4 py-3 space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="font-medium">{formatSessionTitle(s, sTz)}</p>
-                  <Badge variant="outline">{s.status}</Badge>
+                  <SessionStatusBadge status={s.status} />
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Check-in {formatTimeOnly(s.checkin_opens_at, sTz)} · Start{" "}
