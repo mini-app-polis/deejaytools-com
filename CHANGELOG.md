@@ -1,3 +1,15 @@
+# [2.23.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.22.2...v2.23.0) (2026-11-02)
+
+
+### Bug Fixes
+
+* **nav:** expose mobile menu state, close it on Escape and label the nav landmarks ([636e334](https://github.com/mini-app-polis/deejaytools-com/commit/636e33476efa7636b31a24faa48fa8d21b467c99))
+
+
+### Features
+
+* **sessions:** anonymous public reads, one session form, explicit status apply and admin event managers ([68cd61c](https://github.com/mini-app-polis/deejaytools-com/commit/68cd61c6f4cb90a5e700b3768644d855e1b742c0))
+
 ## [2.22.2](https://github.com/mini-app-polis/deejaytools-com/compare/v2.22.1...v2.22.2) (2026-11-02)
 
 
