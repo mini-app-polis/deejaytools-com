@@ -210,8 +210,14 @@ test("a dancer uploads a song, enters it, checks in, sees their place, withdraws
   const visitor = await browser.newPage({ baseURL: e2eConfig().baseUrl });
   try {
     await test.step("the public session page shows the dancer in the queue", async () => {
+      // The API caches queue reads for a few seconds per worker process, so a
+      // load can come back from before the check-in; the page itself only
+      // polls once a minute, so load it again until the entry shows.
       await visitor.goto(`/sessions/${sessionId}`);
-      await expect(visitor.getByText(PARTNER_LAST).first()).toBeVisible();
+      await expect(async () => {
+        await visitor.reload();
+        await expect(visitor.getByText(PARTNER_LAST).first()).toBeVisible({ timeout: 2_000 });
+      }).toPass({ timeout: 20_000 });
     });
 
     await test.step("withdraw from My Content", async () => {
@@ -236,8 +242,10 @@ test("a dancer uploads a song, enters it, checks in, sees their place, withdraws
     });
 
     await test.step("the entry is gone from the public queue", async () => {
-      await visitor.reload();
-      await expect(visitor.getByText("Standard queue is empty.")).toBeVisible();
+      await expect(async () => {
+        await visitor.reload();
+        await expect(visitor.getByText("Standard queue is empty.")).toBeVisible({ timeout: 2_000 });
+      }).toPass({ timeout: 20_000 });
       await expect(visitor.getByText(PARTNER_LAST)).toHaveCount(0);
     });
   } finally {
