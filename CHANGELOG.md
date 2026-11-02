@@ -1,3 +1,11 @@
+## [2.22.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.22.0...v2.22.1) (2026-11-02)
+
+
+### Bug Fixes
+
+* **my-content:** list check-ins as a labelled list, and find check-in cards by it in e2e ([c7e95a9](https://github.com/mini-app-polis/deejaytools-com/commit/c7e95a977d01691b1f8712b7b64a4968f5b21e03))
+* **songs:** give the Drive link an accessible name that contains its visible text ([f5d88d5](https://github.com/mini-app-polis/deejaytools-com/commit/f5d88d580a30eab228b723dea860e87703776018))
+
 # [2.22.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.21.0...v2.22.0) (2026-11-01)
 
 
