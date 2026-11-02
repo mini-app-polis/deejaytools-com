@@ -1,5 +1,5 @@
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/clerk-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -75,7 +75,20 @@ export default function NavBar() {
       : `api v${api.version}`
     : null;
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuToggleRef = useRef<HTMLButtonElement>(null);
   const showManagerBar = isAdmin;
+
+  // Escape closes the open mobile menu and puts focus back on its toggle.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setMenuOpen(false);
+      menuToggleRef.current?.focus();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [menuOpen]);
 
   const desktopLinkClass = ({ isActive }: { isActive: boolean }) =>
     cn(
@@ -98,7 +111,7 @@ export default function NavBar() {
     );
 
   return (
-    <nav className="border-b border-white/[0.07] bg-black/50 backdrop-blur-md sticky top-0 z-40">
+    <header className="border-b border-white/[0.07] bg-black/50 backdrop-blur-md sticky top-0 z-40">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
         <a href="/" className="flex items-center gap-2 shrink-0 group">
           <picture>
@@ -147,7 +160,7 @@ export default function NavBar() {
         </a>
 
         {/* Desktop nav */}
-        <div className="hidden sm:flex items-center gap-1 flex-1 ml-6">
+        <nav aria-label="Main" className="hidden sm:flex items-center gap-1 flex-1 ml-6">
           {PUBLIC_ITEMS.map((item) => (
             <NavLink key={item.to} to={item.to} className={desktopLinkClass}>
               {item.label}
@@ -165,17 +178,17 @@ export default function NavBar() {
               </NavLink>
             )}
           </SignedIn>
-        </div>
+        </nav>
 
         <div className="flex items-center gap-3">
-          <div className="hidden sm:flex items-center gap-1">
+          <nav aria-label="Help and contact" className="hidden sm:flex items-center gap-1">
             <NavLink to="/how-it-works" className={desktopLinkClass}>
               Help
             </NavLink>
             <NavLink to="/feedback" className={desktopLinkClass}>
               Contact
             </NavLink>
-          </div>
+          </nav>
           <SignedIn>
             <UserButton />
           </SignedIn>
@@ -187,16 +200,20 @@ export default function NavBar() {
             </SignInButton>
           </SignedOut>
           <button
+            ref={menuToggleRef}
+            type="button"
             className="sm:hidden flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground"
             onClick={() => setMenuOpen((o) => !o)}
             aria-label="Toggle menu"
+            aria-expanded={menuOpen}
+            aria-controls="mobile-menu"
           >
             {menuOpen ? (
-              <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+              <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5" aria-hidden="true">
                 <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             ) : (
-              <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+              <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5" aria-hidden="true">
                 <path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             )}
@@ -207,7 +224,7 @@ export default function NavBar() {
       {/* Superuser sub-bar — desktop, admins only */}
       <SignedIn>
         {isAdmin && (
-          <div className="hidden sm:block border-t border-white/[0.07] bg-black/30">
+          <nav aria-label="Admin" className="hidden sm:block border-t border-white/[0.07] bg-black/30">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 h-11 flex items-center gap-1 overflow-x-auto">
               <Badge variant="outline" className="mr-2 shrink-0 border-primary/40 text-primary">
                 Superuser
@@ -218,14 +235,14 @@ export default function NavBar() {
                 </NavLink>
               ))}
             </div>
-          </div>
+          </nav>
         )}
       </SignedIn>
 
       {/* Manager sub-bar — desktop, admins */}
       <SignedIn>
         {showManagerBar && (
-          <div className="hidden sm:block border-t border-white/[0.07] bg-black/20">
+          <nav aria-label="Manager" className="hidden sm:block border-t border-white/[0.07] bg-black/20">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 h-11 flex items-center gap-1 overflow-x-auto">
               <Badge variant="secondary" className="mr-2 shrink-0">
                 Manager
@@ -236,14 +253,14 @@ export default function NavBar() {
                 </NavLink>
               ))}
             </div>
-          </div>
+          </nav>
         )}
       </SignedIn>
 
       {/* Event staff sub-bar — desktop, people on the staff of an event */}
       <SignedIn>
         {staffEventItems.length > 0 && (
-          <div className="hidden sm:block border-t border-white/[0.07] bg-black/20">
+          <nav aria-label="Event staff" className="hidden sm:block border-t border-white/[0.07] bg-black/20">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 h-11 flex items-center gap-1 overflow-x-auto">
               <Badge variant="secondary" className="mr-2 shrink-0">
                 Event staff
@@ -254,78 +271,76 @@ export default function NavBar() {
                 </NavLink>
               ))}
             </div>
-          </div>
+          </nav>
         )}
       </SignedIn>
 
-      {/* Mobile menu */}
-      {menuOpen && (
-        <div className="sm:hidden border-t border-white/[0.07] bg-background">
-          <div className="max-w-6xl mx-auto px-4 py-3 flex flex-col gap-1">
-            {PUBLIC_ITEMS.map((item) => (
+      {/* Mobile menu — in the DOM while closed too, so the toggle's aria-controls always points at it */}
+      <nav id="mobile-menu" aria-label="Menu" hidden={!menuOpen} className="sm:hidden border-t border-white/[0.07] bg-background">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex flex-col gap-1">
+          {PUBLIC_ITEMS.map((item) => (
+            <NavLink key={item.to} to={item.to} onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
+              {item.label}
+            </NavLink>
+          ))}
+          <SignedIn>
+            {SIGNED_IN_ITEMS.map((item) => (
               <NavLink key={item.to} to={item.to} onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
                 {item.label}
               </NavLink>
             ))}
-            <SignedIn>
-              {SIGNED_IN_ITEMS.map((item) => (
-                <NavLink key={item.to} to={item.to} onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
-                  {item.label}
-                </NavLink>
-              ))}
-              {isEventStaff && (
-                <NavLink to={MY_EVENTS_ITEM.to} onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
-                  {MY_EVENTS_ITEM.label}
-                </NavLink>
-              )}
-            </SignedIn>
-            <NavLink to="/how-it-works" onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
-              Help
-            </NavLink>
-            <NavLink to="/feedback" onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
-              Contact
-            </NavLink>
-            <SignedIn>
-              {staffEventItems.length > 0 && (
-                <>
-                  <div className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Event staff
-                  </div>
-                  {staffEventItems.map((item) => (
-                    <NavLink key={item.to} to={item.to} onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
-                      {item.label}
-                    </NavLink>
-                  ))}
-                </>
-              )}
-              {showManagerBar && (
-                <>
-                  <div className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Manager
-                  </div>
-                  {MANAGER_ITEMS.map((item) => (
-                    <NavLink key={item.to} to={item.to} onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
-                      {item.label}
-                    </NavLink>
-                  ))}
-                </>
-              )}
-              {isAdmin && (
-                <>
-                  <div className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Superuser
-                  </div>
-                  {SUPERUSER_ITEMS.map((item) => (
-                    <NavLink key={item.to} to={item.to} onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
-                      {item.label}
-                    </NavLink>
-                  ))}
-                </>
-              )}
-            </SignedIn>
-          </div>
+            {isEventStaff && (
+              <NavLink to={MY_EVENTS_ITEM.to} onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
+                {MY_EVENTS_ITEM.label}
+              </NavLink>
+            )}
+          </SignedIn>
+          <NavLink to="/how-it-works" onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
+            Help
+          </NavLink>
+          <NavLink to="/feedback" onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
+            Contact
+          </NavLink>
+          <SignedIn>
+            {staffEventItems.length > 0 && (
+              <>
+                <div className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Event staff
+                </div>
+                {staffEventItems.map((item) => (
+                  <NavLink key={item.to} to={item.to} onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
+                    {item.label}
+                  </NavLink>
+                ))}
+              </>
+            )}
+            {showManagerBar && (
+              <>
+                <div className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Manager
+                </div>
+                {MANAGER_ITEMS.map((item) => (
+                  <NavLink key={item.to} to={item.to} onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
+                    {item.label}
+                  </NavLink>
+                ))}
+              </>
+            )}
+            {isAdmin && (
+              <>
+                <div className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Superuser
+                </div>
+                {SUPERUSER_ITEMS.map((item) => (
+                  <NavLink key={item.to} to={item.to} onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
+                    {item.label}
+                  </NavLink>
+                ))}
+              </>
+            )}
+          </SignedIn>
         </div>
-      )}
-    </nav>
+      </nav>
+    </header>
   );
 }
