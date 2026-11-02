@@ -19,7 +19,7 @@ import { compareSessionChrono } from "@/lib/chronoSort";
  * own TabsContent so it stays mounted while another admin section is shown,
  * keeping its filters as they were when the admin comes back.
  */
-export default function AdminRunsSection() {
+export default function AdminRunsSection({ open }: { open: boolean }) {
   const RUNS_FETCH_LIMIT = 500;
   const RUNS_PARTNERSHIP_CHIP_LIMIT = 10;
   const [runsEventId, setRunsEventId] = useState("");
@@ -30,11 +30,11 @@ export default function AdminRunsSection() {
   const [runsShowAllPartnerships, setRunsShowAllPartnerships] = useState(false);
 
   // The event and session pickers, and each run's session label, come from these lists.
-  const eventsQuery = useEndpointQuery(endpoints.events.list);
+  const eventsQuery = useEndpointQuery(endpoints.events.list, { enabled: open });
   const events = eventsQuery.data ?? null;
   const loadingEvents = eventsQuery.isFetching;
 
-  const sessionsQuery = useEndpointQuery(endpoints.sessions.list);
+  const sessionsQuery = useEndpointQuery(endpoints.sessions.list, { enabled: open });
   const sessions = sessionsQuery.data ?? null;
 
   // A session filter wins over an event filter; with neither, every run.
@@ -52,6 +52,7 @@ export default function AdminRunsSection() {
   const runsQuery = useEndpointQuery(endpoints.runs.list, {
     params: { query: runsQueryString },
     placeholderData: keepPreviousData,
+    enabled: open,
   });
   const runs = runsQuery.data ?? null;
   const runsLoading = runsQuery.isFetching;

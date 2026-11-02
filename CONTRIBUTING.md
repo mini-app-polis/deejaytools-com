@@ -134,7 +134,7 @@ Follow existing patterns; do not introduce a new test stack.
 
 Format and index: [`docs/decisions/README.md`](docs/decisions/README.md). Template: **Context → Decision → Consequences**, status line, date.
 
-**Naming:** `ADR-NNN-short-kebab-title.md` — **NNN** is a zero-padded three-digit sequence starting at `001`.
+**Naming:** `ADR-NNNN-short-kebab-title.md` — **NNNN** is a zero-padded four-digit sequence starting at `0001`.
 
 **Write an ADR when:**
 

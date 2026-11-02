@@ -63,7 +63,7 @@ const EMPTY_EVENT: EventForm = { name: "", startDate: "", endDate: "", seasonYea
  * another admin section is shown, keeping its toggles and dialogs as they
  * were when the admin comes back.
  */
-export default function AdminEventsSection() {
+export default function AdminEventsSection({ open }: { open: boolean }) {
   const navigate = useNavigate();
   const [evDialogOpen, setEvDialogOpen] = useState(false);
   const {
@@ -87,7 +87,7 @@ export default function AdminEventsSection() {
   /** Delete-confirmation dialog state. */
   const [pendingDeleteEventId, setPendingDeleteEventId] = useState<string | null>(null);
 
-  const eventsQuery = useEndpointQuery(endpoints.events.list);
+  const eventsQuery = useEndpointQuery(endpoints.events.list, { enabled: open });
   const events = eventsQuery.data ?? null;
   const loadingEvents = eventsQuery.isFetching;
 

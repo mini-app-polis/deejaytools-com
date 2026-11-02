@@ -17,6 +17,18 @@ function isThrottle(error: unknown): error is ApiError {
 }
 
 /**
+ * How many times, and how often, a query that answered USER_NOT_SYNCED is
+ * tried again: on a brand-new account the first reads can arrive before
+ * AuthSync has created the users row, which happens within moments.
+ */
+const MAX_NOT_SYNCED_RETRIES = 5;
+const NOT_SYNCED_RETRY_DELAY_MS = 1_000;
+
+function isNotSynced(error: unknown): boolean {
+  return error instanceof ApiError && error.code === "USER_NOT_SYNCED";
+}
+
+/**
  * Whether a failed query is worth trying again. A 4xx (validation, auth,
  * not-found) and a response that broke its contract will answer the same way
  * on a retry; a network error or a 5xx may not. A 429 or 503 is the server

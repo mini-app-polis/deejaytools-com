@@ -96,7 +96,7 @@ The nav bar's version text comes from `NavBar.tsx` importing `package.json` dire
 
 **`smoke` job:** waits (up to 15 minutes) for the "Cloudflare Pages" check on the commit, following the branch to a newer commit that contains it if Pages skipped this one, then tests the deploy's own preview URL. It checks that the site and a deep link (`/events`) load, that the bundle carries the right Clerk key for the environment (`pk_test_` on `dev`, `pk_live_` on `main`, never the other) and the right API URL, and that the API answers `/health`. All read-only, so it is safe against production.
 
-**`e2e` job** (`dev` only): runs `pnpm test:e2e` (Playwright, Chromium) against `https://dev.deejaytools-com.pages.dev`, signed in as the contract test users, and uploads the Playwright report on failure. It shares the `contract-dev-api` concurrency group with `contract.yml`: both write to the dev API and never run at once.
+**`e2e` job** (`dev` only): runs `pnpm test:e2e` (Playwright, Chromium) against the dev site (`SITE_URL_DEVELOPMENT`), signed in as the contract test users, and uploads the Playwright report on failure. It shares the `contract-dev-api` concurrency group with `contract.yml`: both write to the dev API and never run at once.
 
 ### `contract.yml`
 

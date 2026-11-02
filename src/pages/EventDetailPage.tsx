@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointQuery } from "@/api/queries";
 import QueryError from "@/components/QueryError";
+import SessionStatusBadge from "@/components/SessionStatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -14,27 +15,6 @@ import { countFloorTrials, floorTrialBucket, formatFloorTrials } from "@/lib/flo
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareSessionChrono } from "@/lib/chronoSort";
 import { cn } from "@/lib/utils";
-
-function sessionStatusBadge(status: string) {
-  switch (status) {
-    case "scheduled":
-      return <Badge variant="secondary">{status}</Badge>;
-    case "checkin_open":
-      return <Badge variant="default">{status}</Badge>;
-    case "in_progress":
-      return (
-        <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 border-transparent">
-          {status}
-        </Badge>
-      );
-    case "completed":
-      return <Badge variant="outline">{status}</Badge>;
-    case "cancelled":
-      return <Badge variant="destructive">{status}</Badge>;
-    default:
-      return <Badge variant="outline">{status}</Badge>;
-  }
-}
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -148,7 +128,7 @@ export default function EventDetailPage() {
               )}
             >
               <div className="flex flex-wrap items-center gap-2">
-                {sessionStatusBadge(sess.status)}
+                <SessionStatusBadge status={sess.status} />
               </div>
               <p className="flex flex-wrap items-center gap-2 font-medium text-base leading-snug transition-colors group-hover:text-primary">
                 {formatSessionTitle(sess, event.timezone)}

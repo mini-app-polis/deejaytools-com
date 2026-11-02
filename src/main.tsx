@@ -7,6 +7,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import AppErrorBoundary from "./components/AppErrorBoundary";
 import MaintenancePage from "./components/MaintenancePage";
+import QueryCacheReset from "./components/QueryCacheReset";
 import { queryClient } from "./api/queryClient";
 import App from "./pages/App";
 import "./index.css";
@@ -41,6 +42,7 @@ createRoot(container, {
       ) : (
         <ClerkProvider publishableKey={key}>
           <QueryClientProvider client={queryClient}>
+            <QueryCacheReset />
             <App />
           </QueryClientProvider>
         </ClerkProvider>

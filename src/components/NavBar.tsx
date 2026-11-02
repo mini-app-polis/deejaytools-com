@@ -222,7 +222,7 @@ export default function NavBar() {
         )}
       </SignedIn>
 
-      {/* Manager sub-bar — desktop, managers or admins */}
+      {/* Manager sub-bar — desktop, admins */}
       <SignedIn>
         {showManagerBar && (
           <div className="hidden sm:block border-t border-white/[0.07] bg-black/20">

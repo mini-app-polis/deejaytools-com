@@ -10,6 +10,13 @@ describe("shouldRetry", () => {
     expect(shouldRetry(0, new ApiError("Unauthorized", 401))).toBe(false);
   });
 
+  it("retries USER_NOT_SYNCED a bounded number of times", () => {
+    const notSynced = new ApiError("still setting up", 401, "USER_NOT_SYNCED");
+    expect(shouldRetry(0, notSynced)).toBe(true);
+    expect(shouldRetry(4, notSynced)).toBe(true);
+    expect(shouldRetry(5, notSynced)).toBe(false);
+  });
+
   it("does not retry a response that broke its contract", () => {
     expect(shouldRetry(0, new ContractViolation("sessions.list", []))).toBe(false);
   });
