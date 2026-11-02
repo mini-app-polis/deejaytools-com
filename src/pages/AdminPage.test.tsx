@@ -443,6 +443,37 @@ function resetAll() {
   apiDel.mockReset();
 }
 
+describe("AdminPage — requests per section", () => {
+  beforeEach(resetAll);
+
+  const requested = () => apiGet.mock.calls.map(([p]) => (p as string).split("?")[0]);
+
+  it("requests only the events list on /admin/events", async () => {
+    routeGets({ "/v1/events": [EV_ACTIVE] });
+    renderPage("/admin/events");
+
+    await screen.findByText("Swing Fling");
+    expect(requested()).toEqual(["/v1/events"]);
+    expect(requested()).not.toContain("/v1/admin/users");
+  });
+
+  it("requests only the users list on /admin/users", async () => {
+    routeGets({ "/v1/admin/users": [] });
+    renderPage("/admin/users");
+
+    await waitFor(() => expect(requested()).toContain("/v1/admin/users"));
+    expect(requested()).toEqual(["/v1/admin/users"]);
+  });
+
+  it("requests only the songs list on /admin/songs", async () => {
+    routeGets({ "/v1/admin/songs": [] });
+    renderPage("/admin/songs");
+
+    expect(await screen.findByText("No songs yet.")).toBeInTheDocument();
+    expect(requested()).toEqual(["/v1/admin/songs"]);
+  });
+});
+
 describe("AdminPage — Events section", () => {
   beforeEach(resetAll);
 

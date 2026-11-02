@@ -16,9 +16,10 @@ import { TabsContent } from "@/components/ui/tabs";
  * The admin Songs section: every uploaded song, searchable, with deleted
  * songs on request and year and division filters. It renders its own
  * TabsContent so it stays mounted while another admin section is shown,
- * keeping the search and filters as they were when the admin comes back.
+ * keeping the search and filters as they were when the admin comes back;
+ * `open` holds its queries back until the section is shown.
  */
-export default function AdminSongsSection() {
+export default function AdminSongsSection({ open }: { open: boolean }) {
   // Live keystrokes feed `adminSongsQuery`, debounced into
   // `adminSongsDebouncedQuery` to drive the API call.
   const [adminSongsQuery, setAdminSongsQuery] = useState("");
@@ -36,6 +37,7 @@ export default function AdminSongsSection() {
   const adminSongsQueryResult = useEndpointQuery(endpoints.admin.songs, {
     params: { query: adminSongsQueryString },
     placeholderData: keepPreviousData,
+    enabled: open,
   });
   const adminSongs = adminSongsQueryResult.data ?? null;
   const adminSongsLoading = adminSongsQueryResult.isFetching;
