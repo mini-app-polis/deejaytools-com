@@ -6,9 +6,8 @@ import ManagerCheckinForSection from "@/components/manager/ManagerCheckinForSect
 import ManagerEventSongsSection from "@/components/manager/ManagerEventSongsSection";
 import ManagerGuideSection from "@/components/manager/ManagerGuideSection";
 import ManagerUploadForSection from "@/components/manager/ManagerUploadForSection";
+import { MANAGER_SECTIONS, type ManagerSection } from "@/lib/managerSections";
 
-export const MANAGER_SECTIONS = ["active-sessions", "event-songs", "upload-for", "checkin-for", "guide"] as const;
-export type ManagerSection = (typeof MANAGER_SECTIONS)[number];
 const DEFAULT_MANAGER_SECTION: ManagerSection = "active-sessions";
 
 function isManagerSection(s: string | undefined): s is ManagerSection {

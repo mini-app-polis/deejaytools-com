@@ -6,25 +6,7 @@ import AdminSongsSection from "@/components/admin/AdminSongsSection";
 import AdminTestCheckinSection from "@/components/admin/AdminTestCheckinSection";
 import AdminUsersSection from "@/components/admin/AdminUsersSection";
 import { Tabs } from "@/components/ui/tabs";
-
-/**
- * The admin sections, in display order. The order also drives the
- * navbar dropdown and any future iteration over admin pages.
- *
- * Each admin section is its own route (`/admin/<section>`); the value
- * here is the URL slug and the corresponding Radix `<TabsContent value=...>`
- * identifier in the section's component. Keeping them in one constant keeps the route,
- * the param parsing, and the rendering in lock-step.
- */
-export const ADMIN_SECTIONS = [
-  "events",
-  "sessions",
-  "runs",
-  "songs",
-  "test-checkin",
-  "users",
-] as const;
-export type AdminSection = (typeof ADMIN_SECTIONS)[number];
+import { ADMIN_SECTIONS, type AdminSection } from "@/lib/adminSections";
 
 const DEFAULT_ADMIN_SECTION: AdminSection = "events";
 
