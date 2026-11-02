@@ -77,7 +77,7 @@ export default function SongCard({ song: s, onDelete, showFile = false }: SongCa
                 href={driveUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="Open song in Google Drive to check playback"
+                aria-label="Open in Google Drive to check playback"
               >
                 Open in Google Drive
               </a>

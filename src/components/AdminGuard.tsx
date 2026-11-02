@@ -19,6 +19,7 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
     return <AuthMeError message={error} onRetry={() => void reload()} />;
   }
 
+  // Guards the manager area too: the API has no global manager role, so it is admin-only.
   if (!isAdmin || !me) {
     return <Navigate to="/" replace />;
   }

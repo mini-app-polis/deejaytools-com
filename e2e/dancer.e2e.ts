@@ -51,9 +51,14 @@ async function sweep(): Promise<void> {
   for (const s of await api.call<Song[]>("GET", "/v1/songs")) {
     if (s.routine_name?.startsWith(`${PREFIX} `)) await api.call("DELETE", `/v1/songs/${s.id}`).catch(() => undefined);
   }
-  const partners = await api.call<{ id: string; first_name: string; last_name: string }[]>("GET", "/v1/partners");
+  // Never the partner linked to the dancer test user (roles.e2e.ts): that
+  // row is made once by hand and kept.
+  const partners = await api.call<{ id: string; first_name: string; last_name: string; linked_user_id: string | null }[]>(
+    "GET",
+    "/v1/partners"
+  );
   for (const p of partners) {
-    if (p.first_name === PARTNER_FIRST && p.last_name.startsWith("Dancer")) {
+    if (p.first_name === PARTNER_FIRST && p.last_name.startsWith("Dancer") && !p.linked_user_id) {
       await api.call("DELETE", `/v1/partners/${p.id}`).catch(() => undefined);
     }
   }
@@ -212,12 +217,13 @@ test("a dancer uploads a song, enters it, checks in, sees their place, withdraws
     await test.step("withdraw from My Content", async () => {
       await page.goto("/my-content");
       await expect(page.getByRole("heading", { name: "Check-ins" })).toBeVisible();
-      // The check-in card naming the song and holding its own Withdraw button.
+      // The check-in naming the song, as an item of the Check-ins list: a
+      // looser match also finds the page's containers whenever another
+      // check-in's Withdraw button is on the page.
       const entry = page
-        .locator("div")
-        .filter({ hasText: ROUTINE })
-        .filter({ has: page.getByRole("button", { name: "Withdraw from queue" }) })
-        .last();
+        .getByRole("list", { name: "Check-ins" })
+        .getByRole("listitem")
+        .filter({ hasText: ROUTINE });
       await expect(entry).toContainText("This entry is #1 in line");
       await expect(entry).toContainText("Standard queue");
       await entry.getByRole("button", { name: "Withdraw from queue" }).click();

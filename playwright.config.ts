@@ -12,6 +12,8 @@ import { defineConfig, devices } from "@playwright/test";
  *   CLERK_SECRET_KEY           the development instance's secret key
  *   CONTRACT_API_URL           the dev API the site calls
  *   CONTRACT_USER_ID           the test user (an admin in dev)
+ *   CONTRACT_DANCER_USER_ID    a plain user, linked as the admin's partner
+ *   CONTRACT_STAFF_USER_ID     a plain user the suite grants event staff roles to
  */
 export default defineConfig({
   testDir: "e2e",

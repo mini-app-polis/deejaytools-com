@@ -124,14 +124,14 @@ test.afterAll(async () => {
 test("at the desk, a manager uploads a dancer's song, checks them in, and works the queue", async ({ page }) => {
   test.setTimeout(240_000);
   const email = api.session.user.email;
-  // The search result for the dancer: a button naming them and their email.
+  // The search result for the dancer: an option naming them and their email.
   const dancerResult = () =>
-    page.getByRole("button", { name: new RegExp(email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).first();
+    page.getByRole("option", { name: new RegExp(email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).first();
   await signIn(page, email);
 
   await test.step("find the dancer and upload their song on Upload For", async () => {
     await page.goto("/manager/upload-for");
-    await page.getByPlaceholder("Search by name or email…").fill(email);
+    await page.getByRole("combobox", { name: "User to upload for" }).fill(email);
     await dancerResult().click();
     await expect(page.getByText("Uploading as:")).toContainText(email);
     await page
@@ -157,7 +157,7 @@ test("at the desk, a manager uploads a dancer's song, checks them in, and works 
 
   await test.step("check the dancer in on CheckIn For", async () => {
     await page.goto("/manager/checkin-for");
-    await page.getByPlaceholder("Search by name or email…").fill(email);
+    await page.getByRole("combobox", { name: "User to check in" }).fill(email);
     await dancerResult().click();
     await page
       .getByRole("radiogroup", { name: "Session" })

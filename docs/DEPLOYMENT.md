@@ -96,11 +96,30 @@ The nav bar's version text comes from `NavBar.tsx` importing `package.json` dire
 
 **`smoke` job:** waits (up to 15 minutes) for the "Cloudflare Pages" check on the commit, following the branch to a newer commit that contains it if Pages skipped this one, then tests the deploy's own preview URL. It checks that the site and a deep link (`/events`) load, that the bundle carries the right Clerk key for the environment (`pk_test_` on `dev`, `pk_live_` on `main`, never the other) and the right API URL, and that the API answers `/health`. All read-only, so it is safe against production.
 
-**`e2e` job** (`dev` only): runs `pnpm test:e2e` (Playwright, Chromium) against `https://dev.deejaytools-com.pages.dev`, signed in as the contract test user, and uploads the Playwright report on failure. It shares the `contract-dev-api` concurrency group with `contract.yml`: both write to the dev API and never run at once.
+**`e2e` job** (`dev` only): runs `pnpm test:e2e` (Playwright, Chromium) against `https://dev.deejaytools-com.pages.dev`, signed in as the contract test users, and uploads the Playwright report on failure. It shares the `contract-dev-api` concurrency group with `contract.yml`: both write to the dev API and never run at once.
 
 ### `contract.yml`
 
-Runs `pnpm test:contract` against the development API whenever either side of the contract changes: a push to `dev` here, or the `dev-api-deployed` dispatch api-deejaytools sends after a successful dev deploy (that run checks out `dev`). Fails when its configuration is missing. Configuration: secret `CONTRACT_CLERK_SECRET_KEY` (`sk_test_…`), variables `CONTRACT_API_URL` and `CONTRACT_USER_ID`; the e2e job uses the same three. See [ADR-0002](decisions/ADR-0002-api-contract.md).
+Runs `pnpm test:contract` against the development API whenever either side of the contract changes: a push to `dev` here, or the `dev-api-deployed` dispatch api-deejaytools sends after a successful dev deploy (that run checks out `dev`). Fails when its configuration is missing. Configuration: secret `CONTRACT_CLERK_SECRET_KEY` (`sk_test_…`), variables `CONTRACT_API_URL`, `CONTRACT_USER_ID` (the admin test user), `CONTRACT_DANCER_USER_ID` and `CONTRACT_STAFF_USER_ID` (two plain test users); the e2e job uses the same five. See [ADR-0002](decisions/ADR-0002-api-contract.md).
+
+#### Linked partner for the test suites
+
+Both suites check what a linked partner sees (songs, submissions and check-ins shared with them, which they may not withdraw), as the dancer test user. That needs a partner row in the admin test user's address book whose `linked_user_id` is the dancer test user, and no endpoint sets `linked_user_id`. So the row is made once, by hand, in the development database, and the suites only ever look it up (as the admin, `GET /v1/partners`, by `linked_user_id`): they never create, rename or delete it, and fail at once, naming this section, when it is missing.
+
+Both users need a `users` row first (the foreign keys), so let each sign in to the dev site once, or run either suite once — it syncs them before it looks for the row. Then, with the two Clerk user ids in the environment as the suites have them:
+
+```bash
+psql "$DATABASE_URL" -v admin_id="$CONTRACT_USER_ID" -v dancer_id="$CONTRACT_DANCER_USER_ID" <<'SQL'
+INSERT INTO partners (id, user_id, first_name, last_name, partner_role, kind, email, linked_user_id, created_at, updated_at)
+SELECT gen_random_uuid()::text, :'admin_id', 'E2E', 'Linked Dancer', 'follower', 'partner',
+       u.email, u.id, (extract(epoch FROM now()) * 1000)::bigint, (extract(epoch FROM now()) * 1000)::bigint
+FROM users u
+WHERE u.id = :'dancer_id'
+  AND NOT EXISTS (SELECT 1 FROM partners p WHERE p.user_id = :'admin_id' AND p.linked_user_id = :'dancer_id');
+SQL
+```
+
+`DATABASE_URL` is the dev API's database. The insert takes the email from the dancer's `users` row (`e2e-dancer+clerk_test@deejaytools.com`), inserts nothing when the row already exists, and inserts nothing — `INSERT 0 0` — when the dancer has not signed in yet. The suites' sweeps delete only partners by names they give their own (none matches "E2E Linked Dancer"), and the dancer suite's also skips any partner with a `linked_user_id`.
 
 ---
 

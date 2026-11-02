@@ -75,9 +75,9 @@ pnpm test:e2e       # Playwright end-to-end suite against a deployed dev site (s
 | `/admin` | Redirects to `/admin/events` | — |
 | `/admin/:section` | Admin dashboard (events, sessions, run history, songs, users, test checkin, …) | AdminGuard |
 | `/manager` | Redirects to `/manager/active-sessions` | — |
-| `/manager/:section` | Manager tools (active sessions, event songs, upload-for, checkin-for, guide) | ManagerGuard |
+| `/manager/:section` | Manager tools (active sessions, event songs, upload-for, checkin-for, guide) | AdminGuard |
 
-There is no top-level `/partners` route — partner records are managed on My Profile (`/my-profile`). Help content about partners lives at `/how-it-works/partners`. `/songs` and `/sessions` are reachable but absent from the nav bar (deep links); `/events` is in the public nav. `ManagerGuard` admits admins only — the API has no global manager role; per-event staff roles open the portals under `/events/:eventId/…`.
+There is no top-level `/partners` route — partner records are managed on My Profile (`/my-profile`). Help content about partners lives at `/how-it-works/partners`. `/songs` and `/sessions` are reachable but absent from the nav bar (deep links); `/events` is in the public nav. The manager area is admin-only (`AdminGuard`) — the API has no global manager role; per-event staff roles open the portals under `/events/:eventId/…`.
 
 ## Environment
 
@@ -89,11 +89,11 @@ Pure-function tests run in Node; component tests opt into jsdom per file via `//
 
 `pnpm test` runs the unit and component tests; `pnpm test:coverage` runs them with coverage and fails below the thresholds in `vitest.config.ts`.
 
-`pnpm test:contract` runs the live contract suite against a development API — every endpoint in `src/api/endpoints.ts`, validated against its schema. It needs `CONTRACT_API_URL`, `CONTRACT_CLERK_SECRET_KEY` (a dev-instance `sk_test_` key) and `CONTRACT_USER_ID` (an admin in that environment), and refuses production. See [ADR-0002](docs/decisions/ADR-0002-api-contract.md).
+`pnpm test:contract` runs the live contract suite against a development API — every endpoint in `src/api/endpoints.ts`, validated against its schema. It needs `CONTRACT_API_URL`, `CONTRACT_CLERK_SECRET_KEY` (a dev-instance `sk_test_` key), `CONTRACT_USER_ID` (an admin in that environment), and two plain users: `CONTRACT_DANCER_USER_ID` (the linked partner of a row in the admin's address book, set up once as in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md#linked-partner-for-the-test-suites)) and `CONTRACT_STAFF_USER_ID` (granted per-event staff roles by the tests). It refuses production. See [ADR-0002](docs/decisions/ADR-0002-api-contract.md).
 
 `pnpm test` also checks the endpoint catalog against a copy of api-deejaytools' committed OpenAPI document (`src/contract/api-deejaytools.openapi.json`, refreshed with `pnpm openapi:sync`), so a schema the API no longer satisfies fails in a pull request without a running API. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-`pnpm test:e2e` runs the Playwright suite (`e2e/`, `playwright.config.ts`) in a real browser against a deployed dev site, signed in as the contract test user, including an axe-core accessibility scan of the main pages. It writes to the dev API and needs `E2E_BASE_URL`, `CLERK_PUBLISHABLE_KEY` (`pk_test_…`), `CLERK_SECRET_KEY` (`sk_test_…`), `CONTRACT_API_URL` and `CONTRACT_USER_ID`; run `pnpm exec playwright install chromium` once first. CI runs it after each deploy of `dev`.
+`pnpm test:e2e` runs the Playwright suite (`e2e/`, `playwright.config.ts`) in a real browser against a deployed dev site, signed in as the contract test users (the admin, and the dancer and staff member for the partner and staff views), including an axe-core accessibility scan of the main pages. It writes to the dev API and needs `E2E_BASE_URL`, `CLERK_PUBLISHABLE_KEY` (`pk_test_…`), `CLERK_SECRET_KEY` (`sk_test_…`), `CONTRACT_API_URL`, `CONTRACT_USER_ID`, `CONTRACT_DANCER_USER_ID` and `CONTRACT_STAFF_USER_ID`; run `pnpm exec playwright install chromium` once first. CI runs it after each deploy of `dev`.
 
 ## Observability
 

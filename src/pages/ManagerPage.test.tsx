@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiGet = vi.fn();
@@ -376,6 +376,32 @@ describe("ManagerPage — Active Sessions", () => {
     expect(screen.getByRole("button", { name: /updated just now/i })).toBeInTheDocument();
   });
 
+  it("keeps a chosen session across a switch to another tab and back", async () => {
+    const live2 = fx.session({ id: "live2", status: "in_progress", event_timezone: TZ, floor_trial_starts_at: NOW + 60 * 60_000 });
+    routeGets({ "/v1/sessions": [LIVE, live2] });
+    const user = userEvent.setup();
+    renderWithQueryClient(
+      <MemoryRouter initialEntries={["/manager/active-sessions"]}>
+        <Link to="/manager/event-songs">Go to event songs</Link>
+        <Link to="/manager/active-sessions">Go to active sessions</Link>
+        <Routes>
+          <Route path="/manager/:section" element={<ManagerPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const later = "Saturday - 1:00 PM - May 23, 2026";
+    await user.click(await screen.findByRole("radio", { name: later }));
+    expect(screen.getByRole("radio", { name: later })).toHaveAttribute("aria-checked", "true");
+
+    await user.click(screen.getByRole("link", { name: "Go to event songs" }));
+    expect(screen.queryByRole("radiogroup", { name: "Session" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("link", { name: "Go to active sessions" }));
+
+    expect(await screen.findByRole("radio", { name: later })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: LIVE_TITLE })).toHaveAttribute("aria-checked", "false");
+  });
+
   it("shows empty queues", async () => {
     routeGets({ "/v1/sessions": [LIVE] });
     renderPage();
@@ -603,11 +629,12 @@ describe("ManagerPage — Upload For", () => {
     const user = userEvent.setup();
     renderPage("/manager/upload-for");
 
-    expect(await screen.findByText("Type a name or email to search.")).toBeInTheDocument();
-    await user.type(screen.getByRole("searchbox", { name: /user to upload for/i }), "ali");
+    expect(await screen.findByText("Any user can be found by name or email.")).toBeInTheDocument();
+    await user.type(screen.getByRole("combobox", { name: /user to upload for/i }), "ali");
 
-    expect(await screen.findByRole("button", { name: /alice smith/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /\(no name\)/i })).toBeInTheDocument();
+    expect(await screen.findByRole("option", { name: /alice smith/i })).toBeInTheDocument();
+    // A user with no name is listed by their email alone.
+    expect(screen.getByRole("option", { name: "x@example.com" })).toBeInTheDocument();
     expect(apiGet).toHaveBeenCalledWith("/v1/admin/users?q=ali");
   });
 
@@ -624,12 +651,12 @@ describe("ManagerPage — Upload For", () => {
 
     const box = await screen.findByPlaceholderText(/search by name or email/i);
     await user.type(box, "zz");
-    expect(await screen.findByText("No matches.")).toBeInTheDocument();
+    expect(await screen.findByText("No user matches that.")).toBeInTheDocument();
 
     fail = true;
     await user.type(box, "z");
-    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load users: search down");
-    expect(screen.queryByText("No matches.")).not.toBeInTheDocument();
+    expect(await screen.findByText("Couldn't search: search down")).toBeInTheDocument();
+    expect(screen.queryByText("No user matches that.")).not.toBeInTheDocument();
   });
 
   it("ignores a late result for an earlier query", async () => {
@@ -641,11 +668,11 @@ describe("ManagerPage — Upload For", () => {
     await user.type(box, "al");
     await waitFor(() => expect(apiGet).toHaveBeenCalledWith("/v1/admin/users?q=al"));
     await user.type(box, "ice");
-    expect(await screen.findByRole("button", { name: /alice smith/i })).toBeInTheDocument();
+    expect(await screen.findByRole("option", { name: /alice smith/i })).toBeInTheDocument();
 
     await act(async () => releaseSlow([fx.adminUser({ id: "u-bob", email: "bob@example.com", first_name: "Bob", last_name: "Stale" })]));
-    expect(screen.queryByRole("button", { name: /bob stale/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /alice smith/i })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /bob stale/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /alice smith/i })).toBeInTheDocument();
   });
 
   it("opens the upload form on behalf of the chosen user, and can switch back", async () => {
@@ -654,7 +681,7 @@ describe("ManagerPage — Upload For", () => {
     renderPage("/manager/upload-for");
 
     await user.type(await screen.findByPlaceholderText(/search by name or email/i), "alice");
-    await user.click(await screen.findByRole("button", { name: /alice smith/i }));
+    await user.click(await screen.findByRole("option", { name: /alice smith/i }));
 
     expect(screen.getByText("Upload For: Alice Smith")).toBeInTheDocument();
     expect(screen.getByText("Alice Smith (alice@example.com)")).toBeInTheDocument();
@@ -663,7 +690,7 @@ describe("ManagerPage — Upload For", () => {
 
     await user.click(screen.getByRole("button", { name: "Change user" }));
     expect(screen.getByPlaceholderText(/search by name or email/i)).toHaveValue("");
-    expect(screen.getByText("Type a name or email to search.")).toBeInTheDocument();
+    expect(screen.queryByRole("option")).not.toBeInTheDocument();
   });
 });
 
@@ -701,7 +728,7 @@ describe("ManagerPage — CheckIn For", () => {
 
   async function pickAlice(user: ReturnType<typeof userEvent.setup>) {
     await user.type(await screen.findByPlaceholderText(/search by name or email/i), "alice");
-    await user.click(await screen.findByRole("button", { name: /alice smith/i }));
+    await user.click(await screen.findByRole("option", { name: /alice smith/i }));
   }
 
   it("ignores a late user-search result for an earlier query", async () => {
@@ -713,11 +740,11 @@ describe("ManagerPage — CheckIn For", () => {
     await user.type(box, "al");
     await waitFor(() => expect(apiGet).toHaveBeenCalledWith("/v1/admin/users?q=al"));
     await user.type(box, "ice");
-    expect(await screen.findByRole("button", { name: /alice smith/i })).toBeInTheDocument();
+    expect(await screen.findByRole("option", { name: /alice smith/i })).toBeInTheDocument();
 
     await act(async () => releaseSlow([fx.adminUser({ id: "u-bob", email: "bob@example.com", first_name: "Bob", last_name: "Stale" })]));
-    expect(screen.queryByRole("button", { name: /bob stale/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /alice smith/i })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /bob stale/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /alice smith/i })).toBeInTheDocument();
   });
 
   it("checks a user in to a live session with their submitted song and its division", async () => {
@@ -818,13 +845,13 @@ describe("ManagerPage — CheckIn For", () => {
 
     await pickAlice(user);
     await user.click(screen.getByRole("button", { name: "Change user" }));
-    const box = screen.getByLabelText(/user to check in/i);
+    const box = screen.getByRole("combobox", { name: /user to check in/i });
     expect(box).toHaveValue("");
 
     fail = true;
     await user.type(box, "bob");
-    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load users: search down");
-    expect(screen.queryByText("No matches.")).not.toBeInTheDocument();
+    expect(await screen.findByText("Couldn't search: search down")).toBeInTheDocument();
+    expect(screen.queryByText("No user matches that.")).not.toBeInTheDocument();
   });
 });
 
@@ -1030,11 +1057,14 @@ describe("ManagerPage — retrying failed loads in the other sections", () => {
     const user = userEvent.setup();
     renderPage(path);
 
-    await user.type(await screen.findByLabelText(label), "alice");
-    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load users: search down");
+    const box = await screen.findByRole("combobox", { name: label });
+    await user.type(box, "alice");
+    expect(await screen.findByText("Couldn't search: search down")).toBeInTheDocument();
     users.recover();
-    await user.click(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByRole("button", { name: /alice smith/i })).toBeInTheDocument();
+    // Searching again retries.
+    await user.clear(box);
+    await user.type(box, "alice");
+    expect(await screen.findByRole("option", { name: /alice smith/i })).toBeInTheDocument();
   });
 
   it("retries a user's submitted songs for the chosen session from the inline error", async () => {
@@ -1057,7 +1087,7 @@ describe("ManagerPage — retrying failed loads in the other sections", () => {
     renderPage("/manager/checkin-for");
 
     await user.type(await screen.findByPlaceholderText(/search by name or email/i), "alice");
-    await user.click(await screen.findByRole("button", { name: /alice smith/i }));
+    await user.click(await screen.findByRole("option", { name: /alice smith/i }));
     await user.click(screen.getByRole("radio", { name: "Saturday - 12:00 PM - May 23, 2026" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load this user's songs: songs down");

@@ -277,9 +277,9 @@ export default function MyContentPage() {
           </Link>
         </div>
         <div className="p-4 space-y-3">
-            <div className="space-y-3">
+            <ul aria-labelledby="checkins" className="space-y-3">
               {checkins.map((ci) => (
-                <div key={ci.id} className="flex items-start gap-3">
+                <li key={ci.id} className="flex items-start gap-3">
                   {/* Entry card */}
                   <div className="flex-1 min-w-0 rounded-lg border px-4 py-3 text-sm space-y-2">
                     {/* Position + queue type */}
@@ -351,9 +351,9 @@ export default function MyContentPage() {
                       )}
                     </div>
                   </div>
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
         </div>
       </div>
       )}

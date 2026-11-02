@@ -150,6 +150,32 @@ describe("PersonPicker", () => {
     expect(screen.queryByRole("option")).toBeNull();
   });
 
+  it("with allUsers, searches every user through the admin search", async () => {
+    apiGet.mockResolvedValue([
+      fx.adminUser({ id: "user_ada", email: "ada@example.com", first_name: "Ada", last_name: "Lovelace" }),
+      fx.adminUser({ id: "user_x", email: "x@example.com", first_name: null, last_name: null }),
+    ]);
+    const onPick = vi.fn();
+    renderWithQueryClient(<PersonPicker id="pick" allUsers label="User" value={null} onChange={onPick} autoFocus />);
+    const input = screen.getByRole("combobox", { name: "User" });
+    expect(input).toHaveFocus();
+    expect(screen.getByText("Any user can be found by name or email.")).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: " ad " } });
+    await waitFor(() => expect(apiGet).toHaveBeenCalledWith("/v1/admin/users?q=ad"));
+    expect(peopleCalls()).toEqual([]);
+    // The whole email shows; a user with no name is known by it alone.
+    expect(await screen.findByRole("option", { name: "Ada Lovelace · ada@example.com" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("option", { name: "x@example.com" }));
+    expect(onPick).toHaveBeenLastCalledWith({ user_id: "user_x", display_name: "x@example.com", email_masked: null });
+  });
+
+  it("with allUsers, says when no user matches", async () => {
+    apiGet.mockResolvedValue([]);
+    renderWithQueryClient(<PersonPicker id="pick" allUsers label="User" value={null} onChange={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("User"), { target: { value: "zz" } });
+    expect(await screen.findByText("No user matches that.")).toBeInTheDocument();
+  });
+
   it("drops a response that arrives after the query changed", async () => {
     let resolveFirst!: (v: ApiEventPerson[]) => void;
     apiGet.mockImplementationOnce(() => new Promise((r) => { resolveFirst = r; }));
