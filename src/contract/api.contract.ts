@@ -40,6 +40,7 @@ import {
   Ledger,
   loadConfig,
   makeClient,
+  paceApiRequests,
   type SignedIn,
   signInAs,
   sleep,
@@ -243,6 +244,7 @@ async function expectForbidden(request: Promise<unknown>): Promise<void> {
 
 beforeAll(async () => {
   strictContracts();
+  paceApiRequests(cfg.apiUrl);
   session = await ClerkTestSession.start(cfg.clerkSecretKey, cfg.userId);
   api = makeClient(cfg.apiUrl, session);
   ledger = new Ledger(api, bareJsonTransport(cfg.apiUrl));
