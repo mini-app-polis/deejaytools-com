@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointQuery } from "@/api/queries";
 import QueryError from "@/components/QueryError";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { formatTime } from "@/components/admin/adminShared";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +24,9 @@ export default function AdminSongsSection({ open }: { open: boolean }) {
   // Live keystrokes feed `adminSongsQuery`, debounced into
   // `adminSongsDebouncedQuery` to drive the API call.
   const [adminSongsQuery, setAdminSongsQuery] = useState("");
-  const [adminSongsDebouncedQuery, setAdminSongsDebouncedQuery] = useState("");
+  // Only the trailing value hits the API; 300 ms feels responsive without a
+  // request per character.
+  const adminSongsDebouncedQuery = useDebouncedValue(adminSongsQuery.trim(), 300);
   const [adminSongsIncludeDeleted, setAdminSongsIncludeDeleted] = useState(false);
   const [adminSongsYear, setAdminSongsYear] = useState<string>("all");
   const [adminSongsDivision, setAdminSongsDivision] = useState<string>("all");
@@ -41,13 +44,6 @@ export default function AdminSongsSection({ open }: { open: boolean }) {
   });
   const adminSongs = adminSongsQueryResult.data ?? null;
   const adminSongsLoading = adminSongsQueryResult.isFetching;
-
-  // Debounce keystrokes so only the trailing value hits the API; 300 ms
-  // feels responsive without a request per character.
-  useEffect(() => {
-    const t = setTimeout(() => setAdminSongsDebouncedQuery(adminSongsQuery.trim()), 300);
-    return () => clearTimeout(t);
-  }, [adminSongsQuery]);
 
   const adminSongYears = useMemo(() => {
     const set = new Set<string>();

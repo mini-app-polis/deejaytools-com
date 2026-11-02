@@ -3,21 +3,22 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm, type FieldErrors } from "react-hook-form";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { z } from "zod";
-import { SignedIn, SignedOut, SignInButton, useAuth, useUser } from "@clerk/clerk-react";
+import { useAuth, useUser } from "@clerk/clerk-react";
 import type { ApiLeadingPair, ApiQueueEntry } from "@/schemas";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
 import QueryError from "@/components/QueryError";
 import { SessionInfoHeader } from "@/components/SessionInfoHeader";
+import SessionCheckinAction from "@/components/session/SessionCheckinAction";
+import SessionCheckinDialog, {
+  EMPTY_CHECKIN,
+  checkinSchema,
+  type CheckinForm,
+} from "@/components/session/SessionCheckinDialog";
+import SessionQueues from "@/components/session/SessionQueues";
 import { Button } from "@/components/ui/button";
-import { ChoiceGroup } from "@/components/ui/choice-group";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toastFirstError } from "@/lib/formErrors";
-import { formatDateTimeShort } from "@/lib/sessionFormat";
-import { songLabel } from "@/lib/songLabel";
-import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "@/lib/formFields";
 
 /** How often the queues and the session refresh on their own. */
 const QUEUE_POLL_MS = 60_000;
@@ -27,14 +28,6 @@ const NO_ROWS: readonly never[] = [];
 /** The longest the check-in clock goes without a tick. */
 const CLOCK_MAX_WAIT_MS = 60_000;
 
-const checkinSchema = z.object({
-  songId: z.string().min(1, "Pick a song"),
-  division: z.string().min(1, "Pick a division"),
-  notes: z.string(),
-});
-type CheckinForm = z.infer<typeof checkinSchema>;
-const EMPTY_CHECKIN: CheckinForm = { songId: "", division: "", notes: "" };
-
 export default function ApiSessionPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useUser();
@@ -42,14 +35,14 @@ export default function ApiSessionPage() {
   const [checkinOpen, setCheckinOpen] = useState(false);
 
   // Check-in form — song-first
+  const form = useForm<CheckinForm>({ resolver: zodResolver(checkinSchema), defaultValues: EMPTY_CHECKIN });
   const {
-    register,
     handleSubmit,
     reset,
     setValue,
     watch,
     formState: { isSubmitting: submitting },
-  } = useForm<CheckinForm>({ resolver: zodResolver(checkinSchema), defaultValues: EMPTY_CHECKIN });
+  } = form;
   const fSongId = watch("songId");
   const fDivision = watch("division");
 
@@ -402,70 +395,18 @@ export default function ApiSessionPage() {
   // both top (above the queues) and bottom (after the queues) so the action is
   // always reachable, with the same disabled-reason text in both places.
   const checkInBlock = (
-    <>
-      <SignedIn>
-        <div className="flex flex-wrap items-center gap-3">
-          <Button disabled={!canCheckIn} onClick={openCheckin} size="lg">
-            Check in
-          </Button>
-          {userQueueEntries.length > 0 ? (
-            // Show one line per partnership currently in queue.
-            <div className="flex flex-col gap-0.5">
-              {userQueueEntries.map((entry) => {
-                const pos = (() => {
-                  const isInActive = active.some((r) => r.queueEntryId === entry.queueEntryId);
-                  if (isInActive) return { subQueue: "active" as const, overall: entry.position };
-                  if (entry.subQueue === "priority")
-                    return { subQueue: "priority" as const, overall: active.length + entry.position };
-                  return {
-                    subQueue: "standard" as const,
-                    overall: active.length + priorityWaiting.length + entry.position,
-                  };
-                })();
-                return (
-                  <p key={entry.queueEntryId} className="text-sm">
-                    <span className="font-medium">#{pos.overall} in queue</span>
-                    <span className="text-muted-foreground">
-                      {" "}({pos.subQueue}
-                      {entry.divisionName ? `, ${entry.divisionName}` : ""}
-                      {userQueueEntries.length > 1 && entry.entityLabel && entry.entityLabel !== "—"
-                        ? ` · ${entry.entityLabel}`
-                        : ""}
-                      )
-                    </span>
-                    {((entry.entityPairId != null &&
-                      partnerCheckedInEntityIds.has(entry.entityPairId)) ||
-                      (entry.entityManagedPartnershipId != null &&
-                        partnerCheckedInEntityIds.has(entry.entityManagedPartnershipId))) && (
-                      <span className="text-muted-foreground"> · checked in by your partner</span>
-                    )}
-                  </p>
-                );
-              })}
-            </div>
-          ) : !canCheckIn && !checkinWindowOpen ? (
-            <p className="text-sm text-muted-foreground">
-              {now < session.checkin_opens_at
-                ? `Check-in opens ${formatDateTimeShort(session.checkin_opens_at, session.event_timezone)}`
-                : "Check-in closed"}
-            </p>
-          ) : null}
-        </div>
-      </SignedIn>
-      <SignedOut>
-        <div className="flex flex-wrap items-center gap-3">
-          <SignInButton
-            forceRedirectUrl={id ? `/sessions/${id}` : "/my-content"}
-            signUpForceRedirectUrl={id ? `/sessions/${id}` : "/my-content"}
-          >
-            <Button size="lg">Sign in to check in</Button>
-          </SignInButton>
-          <p className="text-sm text-muted-foreground">
-            Sign in to check in or upload a song.
-          </p>
-        </div>
-      </SignedOut>
-    </>
+    <SessionCheckinAction
+      id={id}
+      session={session}
+      now={now}
+      canCheckIn={canCheckIn}
+      checkinWindowOpen={checkinWindowOpen}
+      openCheckin={openCheckin}
+      userQueueEntries={userQueueEntries}
+      active={active}
+      priorityWaiting={priorityWaiting}
+      partnerCheckedInEntityIds={partnerCheckedInEntityIds}
+    />
   );
 
   return (
@@ -506,243 +447,36 @@ export default function ApiSessionPage() {
         </Link>
       </p>
 
-      {/* ── Active queue ── */}
-      <Card className="border-primary/30">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-primary">Active</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {activeSorted.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No one on deck.</p>
-          ) : (
-            activeSorted.map((r) => {
-              const isSlotOne = r.position === 1;
-              return (
-                <div key={r.queueEntryId} className="flex items-start gap-3">
-                  <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
-                    {isSlotOne && <span className="text-primary mr-0.5">▶</span>}
-                    #{r.position}
-                  </span>
-                  <div
-                    className={
-                      isSlotOne
-                        ? "border border-primary/50 bg-primary/10 rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5"
-                        : "border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5"
-                    }
-                  >
-                    <p className="font-medium">{renderEntityLabel(r)}</p>
-                    <p className="text-muted-foreground truncate">
-                      {r.divisionName}
-                    </p>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Priority + Standard queues — side by side when there's room ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Card className="border-amber-500/30">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-amber-500 dark:text-amber-400">Priority</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {priorityWaiting.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Priority queue is empty.</p>
-            ) : (
-              priorityWaiting.map((r, i) => (
-                <div key={r.queueEntryId} className="flex items-start gap-3">
-                  <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
-                    #{active.length + i + 1}
-                  </span>
-                  <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
-                    <p className="font-medium">{renderEntityLabel(r)}</p>
-                    <p className="text-muted-foreground truncate">
-                      {r.divisionName}
-                    </p>
-                  </div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="border-sky-500/30">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sky-500 dark:text-sky-400">Standard</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {standardWaiting.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Standard queue is empty.</p>
-            ) : (
-              standardWaiting.map((r, i) => (
-                <div key={r.queueEntryId} className="flex items-start gap-3">
-                  <span className="text-sm font-medium tabular-nums shrink-0 pt-2 w-12 text-right">
-                    #{active.length + priorityWaiting.length + i + 1}
-                  </span>
-                  <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
-                    <p className="font-medium">{renderEntityLabel(r)}</p>
-                    <p className="text-muted-foreground truncate">
-                      {r.divisionName}
-                    </p>
-                  </div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      <SessionQueues
+        activeSorted={activeSorted}
+        priorityWaiting={priorityWaiting}
+        standardWaiting={standardWaiting}
+        renderEntityLabel={renderEntityLabel}
+      />
 
       {/* ── Check-in action (bottom) — same block as top ── */}
       {checkInBlock}
 
       {checkinOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
-          onClick={closeCheckin}
-        >
-          <div
-            className="rounded-t-2xl sm:rounded-lg border bg-background p-6 shadow-lg w-full sm:max-w-lg max-h-[92vh] overflow-y-auto space-y-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="sm:hidden flex justify-center -mt-2 mb-2">
-              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
-            </div>
-
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <h2 className="text-lg font-semibold">Check in</h2>
-                <Link
-                  to="/how-it-works/checking-in"
-                  className="text-xs text-muted-foreground hover:underline shrink-0"
-                >
-                  Why? →
-                </Link>
-              </div>
-              <Button type="button" variant="ghost" size="sm" aria-label="Close" onClick={closeCheckin}>
-                ✕
-              </Button>
-            </div>
-
-            <form onSubmit={(e) => void handleSubmit(submitCheckin, refuseCheckin)(e)} className="space-y-4">
-              {/* Song — drives everything else */}
-              {formLoading ? (
-                <Skeleton className="h-24 w-full" />
-              ) : noEventSongs ? (
-                <p className="text-sm text-muted-foreground">
-                  You haven&apos;t added any songs to this event yet.{" "}
-                  <Link to={submitSongsHref} className="underline">
-                    Submit songs to this event
-                  </Link>
-                  .{" "}
-                  <Link
-                    to="/how-it-works/troubleshooting"
-                    className="text-xs text-muted-foreground underline underline-offset-2"
-                  >
-                    Why? →
-                  </Link>
-                </p>
-              ) : songsQuery.isSuccess && songs.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  You have no songs uploaded —{" "}
-                  <Link to="/songs/add" className="underline">add a song first</Link>.
-                </p>
-              ) : (
-                <div>
-                  <label className={FIELD_LABEL_CLASS}>Song</label>
-                  <ChoiceGroup
-                    ariaLabel="Song"
-                    options={checkinSongs.map((s) => ({
-                      value: s.id,
-                      label: songLabel(s),
-                    }))}
-                    value={fSongId}
-                    onChange={(v) => setValue("songId", v)}
-                  />
-                </div>
-              )}
-
-              {/* Confirmation card — shown once a song is selected */}
-              {fSongId && selectedSong && (
-                <div className="rounded-md border bg-muted/40 px-3 py-3 text-sm space-y-1.5">
-                  <div className="flex items-start gap-2">
-                    <span className="text-muted-foreground w-16 shrink-0 pt-px">You</span>
-                    <span className="font-medium">
-                      {user?.fullName ?? user?.firstName ?? "You"}
-                    </span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-muted-foreground w-16 shrink-0 pt-px">Partner</span>
-                    <span className="font-medium">
-                      {isManaged || !isSolo
-                        ? selectedSong.partnership_label?.trim() || "—"
-                        : <span className="text-muted-foreground italic">Solo</span>}
-                    </span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-muted-foreground w-16 shrink-0 pt-px">Song</span>
-                    <span className="font-medium break-all">
-                      {songLabel(selectedSong)}
-                    </span>
-                  </div>
-                  {selectedEntityInQueue && (
-                    <p className="text-xs text-destructive pt-0.5">
-                      {selectedEntityCheckedInByPartner
-                        ? "Your partner already checked this partnership in. Pick a different song."
-                        : "This partnership is already in the queue. Pick a different song or withdraw your current entry first."}{" "}
-                      <Link
-                        to="/how-it-works/troubleshooting"
-                        className="underline font-normal text-destructive/90"
-                      >
-                        Why? →
-                      </Link>
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Division — auto-filled from song; user can override if needed */}
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Division</label>
-                <ChoiceGroup
-                  ariaLabel="Division"
-                  options={sessionDivisions.map((d) => ({ value: d, label: d }))}
-                  value={fDivision}
-                  onChange={(v) => setValue("division", v)}
-                />
-                {selectedSong?.division && !divisionInSession && (
-                  <p className="text-xs text-amber-600 mt-1">
-                    Your song's division ({selectedSong.division}) isn't offered in this session.
-                    Please pick the closest match above.
-                  </p>
-                )}
-              </div>
-
-              {/* Notes */}
-              <div>
-                <label htmlFor="checkin-notes" className={FIELD_LABEL_CLASS}>Notes (optional)</label>
-                <textarea
-                  id="checkin-notes"
-                  className={FIELD_INPUT_CLASS}
-                  rows={2}
-                  {...register("notes")}
-                  placeholder="Any special instructions for the deejay"
-                />
-              </div>
-
-              <Button
-                type="submit"
-                disabled={submitting || selectedEntityInQueue || noEventSongs}
-                size="lg"
-                className="w-full"
-              >
-                {submitting ? "Submitting…" : "Check in"}
-              </Button>
-            </form>
-          </div>
-        </div>
+        <SessionCheckinDialog
+          form={form}
+          onSubmit={(e) => void handleSubmit(submitCheckin, refuseCheckin)(e)}
+          onClose={closeCheckin}
+          submitting={submitting}
+          formLoading={formLoading}
+          noEventSongs={noEventSongs}
+          noSongs={songsQuery.isSuccess && songs.length === 0}
+          submitSongsHref={submitSongsHref}
+          checkinSongs={checkinSongs}
+          selectedSong={selectedSong}
+          dancerName={user?.fullName ?? user?.firstName ?? "You"}
+          isManaged={isManaged}
+          isSolo={isSolo}
+          selectedEntityInQueue={selectedEntityInQueue}
+          selectedEntityCheckedInByPartner={selectedEntityCheckedInByPartner}
+          sessionDivisions={sessionDivisions}
+          divisionInSession={divisionInSession}
+        />
       )}
     </div>
   );

@@ -10,6 +10,9 @@ export function ChoiceGroup<T extends string>({
   ariaLabel,
   disabled,
   className,
+  id,
+  "aria-describedby": describedBy,
+  "aria-invalid": invalid,
 }: {
   options?: ChoiceOption<T>[];
   /**
@@ -23,7 +26,19 @@ export function ChoiceGroup<T extends string>({
   ariaLabel?: string;
   disabled?: boolean;
   className?: string;
+  /** Set by FormControl, with the two below, so the field's message describes the group. */
+  id?: string;
+  "aria-describedby"?: string;
+  "aria-invalid"?: boolean;
 }) {
+  const groupProps = {
+    id,
+    role: "radiogroup",
+    "aria-label": ariaLabel,
+    "aria-describedby": describedBy,
+    "aria-invalid": invalid || undefined,
+  };
+
   const renderOption = (opt: ChoiceOption<T>) => {
     const active = opt.value === value;
     return (
@@ -50,7 +65,7 @@ export function ChoiceGroup<T extends string>({
     const rows = groups.filter((g) => g.length > 0);
 
     return (
-      <div role="radiogroup" aria-label={ariaLabel} className={cn("space-y-2", className)}>
+      <div {...groupProps} className={cn("space-y-2", className)}>
         {rows.map((group, i) => (
           // presentation: the rows are visual grouping only — the radios must
           // still read as owned by the single radiogroup above.
@@ -63,7 +78,7 @@ export function ChoiceGroup<T extends string>({
   }
 
   return (
-    <div role="radiogroup" aria-label={ariaLabel} className={cn("flex flex-wrap gap-2", className)}>
+    <div {...groupProps} className={cn("flex flex-wrap gap-2", className)}>
       {(options ?? []).map(renderOption)}
     </div>
   );

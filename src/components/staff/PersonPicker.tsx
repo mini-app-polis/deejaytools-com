@@ -29,6 +29,9 @@ export type PersonPickerProps = {
   /** Said after the line about who appears here. */
   hint?: string;
   autoFocus?: boolean;
+  /** Set by FormControl, so the field's message describes the search box. */
+  "aria-describedby"?: string;
+  "aria-invalid"?: boolean;
 } & (
   /** Search the people connected to this event, as its staff may. */
   | { eventId: string; allUsers?: never }
@@ -53,6 +56,8 @@ export default function PersonPicker({
   onChange,
   hint,
   autoFocus,
+  "aria-describedby": describedBy,
+  "aria-invalid": invalid,
 }: PersonPickerProps) {
   const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
@@ -176,7 +181,8 @@ export default function PersonPicker({
             aria-expanded={showList}
             aria-controls={listboxId}
             aria-activedescendant={showList && active >= 0 ? `${id}-option-${active}` : undefined}
-            aria-describedby={`${statusId} ${helpId}`}
+            aria-describedby={[statusId, helpId, describedBy].filter(Boolean).join(" ")}
+            aria-invalid={invalid || undefined}
             value={text}
             onChange={(e) => {
               setText(e.target.value);

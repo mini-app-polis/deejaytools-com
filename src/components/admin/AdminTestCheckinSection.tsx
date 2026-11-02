@@ -21,6 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TabsContent } from "@/components/ui/tabs";
 import { formatSessionTitle } from "@/lib/sessionFormat";
@@ -77,19 +78,18 @@ export default function AdminTestCheckinSection({ open }: { open: boolean }) {
   const { divisions: divisionOptions } = useDivisions();
 
   const [tcInitialDancers] = useState(testDancers);
+  const form = useForm<TestCheckinForm>({
+    resolver: zodResolver(testCheckinSchema),
+    defaultValues: { sessionId: "", division: "", ...tcInitialDancers },
+  });
   const {
-    register: tcRegister,
     handleSubmit: tcValidate,
     getValues: tcGetValues,
     reset: tcReset,
     setValue: tcSetValue,
     watch: tcWatch,
     formState: { isSubmitting: tcSubmitting },
-  } = useForm<TestCheckinForm>({
-    resolver: zodResolver(testCheckinSchema),
-    defaultValues: { sessionId: "", division: "", ...tcInitialDancers },
-  });
-  const tcSessionId = tcWatch("sessionId");
+  } = form;
   const tcDivision = tcWatch("division");
   // A random division once the list loads, so each test checkin differs.
   useEffect(() => {
@@ -157,55 +157,111 @@ export default function AdminTestCheckinSection({ open }: { open: boolean }) {
           Adds made-up test dancers with a placeholder song, ignoring the check-in window. Each
           submission adds one entry to the selected session&apos;s queue.
         </div>
-        <form onSubmit={(e) => void tcValidate(submitTestCheckin, toastFirstError)(e)} className="space-y-4 max-w-lg">
-          <div>
-            <label className={FIELD_LABEL_CLASS}>Session</label>
-            <ChoiceGroup
-              ariaLabel="Session"
-              options={(sessions ?? [])
-                .slice()
-                .sort(compareSessionChrono)
-                .map((s) => ({
-                  value: s.id,
-                  label: formatSessionTitle(s, s.event_timezone),
-                }))}
-              value={tcSessionId}
-              onChange={(id) => tcSetValue("sessionId", id)}
+        <Form {...form}>
+          <form onSubmit={(e) => void tcValidate(submitTestCheckin, toastFirstError)(e)} className="space-y-4 max-w-lg">
+            <FormField
+              control={form.control}
+              name="sessionId"
+              render={({ field }) => (
+                <FormItem className="space-y-0">
+                  <label className={FIELD_LABEL_CLASS}>Session</label>
+                  <FormControl>
+                    <ChoiceGroup
+                      ariaLabel="Session"
+                      options={(sessions ?? [])
+                        .slice()
+                        .sort(compareSessionChrono)
+                        .map((s) => ({
+                          value: s.id,
+                          label: formatSessionTitle(s, s.event_timezone),
+                        }))}
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
+                  </FormControl>
+                  <FormMessage className="mt-1" />
+                </FormItem>
+              )}
             />
-          </div>
-          <div>
-            <label className={FIELD_LABEL_CLASS}>Division</label>
-            <ChoiceGroup
-              ariaLabel="Division"
-              options={divisionOptions.map((d) => ({ value: d, label: d }))}
-              value={tcDivision}
-              onChange={(d) => tcSetValue("division", d)}
+            <FormField
+              control={form.control}
+              name="division"
+              render={({ field }) => (
+                <FormItem className="space-y-0">
+                  <label className={FIELD_LABEL_CLASS}>Division</label>
+                  <FormControl>
+                    <ChoiceGroup
+                      ariaLabel="Division"
+                      options={divisionOptions.map((d) => ({ value: d, label: d }))}
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
+                  </FormControl>
+                  <FormMessage className="mt-1" />
+                </FormItem>
+              )}
             />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="tc-leader-first-name" className={FIELD_LABEL_CLASS}>Leader first name</label>
-              <input id="tc-leader-first-name" className={FIELD_INPUT_CLASS} {...tcRegister("leaderFirst")} />
+            <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="leaderFirst"
+                  render={({ field }) => (
+                    <FormItem className="space-y-0">
+                      <label htmlFor="tc-leader-first-name" className={FIELD_LABEL_CLASS}>Leader first name</label>
+                      <FormControl>
+                        <input id="tc-leader-first-name" className={FIELD_INPUT_CLASS} {...field} />
+                      </FormControl>
+                      <FormMessage className="mt-1" />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="leaderLast"
+                  render={({ field }) => (
+                    <FormItem className="space-y-0">
+                      <label htmlFor="tc-leader-last-name" className={FIELD_LABEL_CLASS}>Leader last name</label>
+                      <FormControl>
+                        <input id="tc-leader-last-name" className={FIELD_INPUT_CLASS} {...field} />
+                      </FormControl>
+                      <FormMessage className="mt-1" />
+                    </FormItem>
+                  )}
+                />
             </div>
-            <div>
-              <label htmlFor="tc-leader-last-name" className={FIELD_LABEL_CLASS}>Leader last name</label>
-              <input id="tc-leader-last-name" className={FIELD_INPUT_CLASS} {...tcRegister("leaderLast")} />
+            <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="followerFirst"
+                  render={({ field }) => (
+                    <FormItem className="space-y-0">
+                      <label htmlFor="tc-follower-first-name" className={FIELD_LABEL_CLASS}>Follower first name</label>
+                      <FormControl>
+                        <input id="tc-follower-first-name" className={FIELD_INPUT_CLASS} {...field} />
+                      </FormControl>
+                      <FormMessage className="mt-1" />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="followerLast"
+                  render={({ field }) => (
+                    <FormItem className="space-y-0">
+                      <label htmlFor="tc-follower-last-name" className={FIELD_LABEL_CLASS}>Follower last name</label>
+                      <FormControl>
+                        <input id="tc-follower-last-name" className={FIELD_INPUT_CLASS} {...field} />
+                      </FormControl>
+                      <FormMessage className="mt-1" />
+                    </FormItem>
+                  )}
+                />
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="tc-follower-first-name" className={FIELD_LABEL_CLASS}>Follower first name</label>
-              <input id="tc-follower-first-name" className={FIELD_INPUT_CLASS} {...tcRegister("followerFirst")} />
-            </div>
-            <div>
-              <label htmlFor="tc-follower-last-name" className={FIELD_LABEL_CLASS}>Follower last name</label>
-              <input id="tc-follower-last-name" className={FIELD_INPUT_CLASS} {...tcRegister("followerLast")} />
-            </div>
-          </div>
-          <Button type="submit" disabled={tcSubmitting} size="lg" className="w-full sm:w-auto">
-            {tcSubmitting ? "Checking in…" : "Test check-in"}
-          </Button>
-        </form>
+            <Button type="submit" disabled={tcSubmitting} size="lg" className="w-full sm:w-auto">
+              {tcSubmitting ? "Checking in…" : "Test check-in"}
+            </Button>
+          </form>
+        </Form>
 
         <section className="space-y-3 pt-2">
           <div className="flex items-center justify-between gap-3 flex-wrap">

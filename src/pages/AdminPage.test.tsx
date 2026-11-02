@@ -46,6 +46,7 @@ vi.mock("@clerk/clerk-react", () => ({
 import AdminPage from "./AdminPage";
 import { toast } from "sonner";
 import { fx } from "@/test/fixtures";
+import { expectFieldError } from "@/test/fieldErrors";
 import { renderWithQueryClient } from "@/test/render";
 
 // ---------------------------------------------------------------------------
@@ -168,6 +169,7 @@ describe("AdminPage", () => {
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith("Name is required");
     });
+    await expectFieldError(field("Name"), "Name is required");
   });
 
   it("shows toast error when event creation fails on the API", async () => {
@@ -257,6 +259,7 @@ describe("AdminPage", () => {
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith("Select an event");
     });
+    await expectFieldError(field("Event"), "Select an event");
   });
 
   it("renders Run History with All events and All sessions card pickers", async () => {
@@ -1420,6 +1423,7 @@ describe("AdminPage — Test check-in section", () => {
 
     await user.click(await screen.findByRole("button", { name: "Test check-in" }));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Select a session"));
+    await expectFieldError(screen.getByRole("radiogroup", { name: "Session" }), "Select a session");
     expect(apiPost).not.toHaveBeenCalled();
   });
 

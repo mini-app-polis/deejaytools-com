@@ -12,6 +12,7 @@ import { queryKey, type KeyedEndpoint } from "@/api/queryKeys";
 import QueryError from "@/components/QueryError";
 import { Button } from "@/components/ui/button";
 import { ChoiceGroup } from "@/components/ui/choice-group";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -115,15 +116,7 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadBytesSent, setUploadBytesSent] = useState(0);
   const staffOnBehalf = Boolean(onBehalf?.eventId);
-  const {
-    register,
-    handleSubmit,
-    reset,
-    getValues,
-    setValue,
-    watch,
-    formState: { isSubmitting },
-  } = useForm<SongUploadValues>({
+  const form = useForm<SongUploadValues>({
     resolver: zodResolver(songUploadSchema(variant, staffOnBehalf)),
     defaultValues: {
       file: null,
@@ -134,8 +127,16 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
       selectedManagedPartnershipId: "",
     },
   });
+  const {
+    register,
+    handleSubmit,
+    reset,
+    getValues,
+    setValue,
+    watch,
+    formState: { isSubmitting },
+  } = form;
   const file = watch("file");
-  const division = watch("division");
   const selectedPartnerId = watch("selectedPartnerId");
   const selectedManagedPartnershipId = watch("selectedManagedPartnershipId");
   const onBehalfUserId = onBehalf?.userId;
@@ -281,154 +282,202 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
     isSubmitting || (!staffOnBehalf && (partners.length === 0 || !selectedPartnerId));
 
   return (
-    <form onSubmit={(e) => void handleSubmit(handleUpload, toastFirstError)(e)} className="space-y-4">
-      {/* Who this upload is for */}
-      {onBehalf ? (
-        <p className="text-sm text-muted-foreground">
-          Uploading as: <span className="font-medium text-foreground">{onBehalf.label}</span>
-        </p>
-      ) : variant === "self" ? (
-        hasFullName ? (
+    <Form {...form}>
+      <form onSubmit={(e) => void handleSubmit(handleUpload, toastFirstError)(e)} className="space-y-4">
+        {/* Who this upload is for */}
+        {onBehalf ? (
           <p className="text-sm text-muted-foreground">
-            Uploading as:{" "}
-            <span className="font-medium text-foreground">{me!.first_name} {me!.last_name}</span>
+            Uploading as: <span className="font-medium text-foreground">{onBehalf.label}</span>
           </p>
-        ) : (
-          <p className="text-sm text-amber-600 dark:text-amber-500">
-            Set your first and last name on the{" "}
-            <Link to="/my-profile" className="underline font-medium">My Profile</Link>{" "}
-            page so we can label your uploads correctly.
-          </p>
-        )
-      ) : null}
-
-      {/* Entity selector */}
-      {staffOnBehalf ? (
-        <div className="space-y-2">
-          <Label>Partner</Label>
-          <ChoiceGroup
-            key={formKey}
-            ariaLabel="Partner"
-            options={[
-              ...partners.map((p) => ({ value: p.id, label: partnerLabel(p) })),
-              { value: NO_PARTNER, label: "No partner" },
-            ]}
-            value={selectedPartnerId || NO_PARTNER}
-            onChange={(v) => setValue("selectedPartnerId", v === NO_PARTNER ? "" : v)}
-          />
-          <p className="text-xs text-muted-foreground">
-            The dancer&apos;s partners. The song is submitted to this event when it uploads.
-          </p>
-        </div>
-      ) : variant === "self" ? (
-        <div className="space-y-2">
-          <Label>Partner</Label>
-          {partners.length > 0 && (
-            <ChoiceGroup
-              key={formKey}
-              ariaLabel="Partner"
-              options={partners.map((p) => ({ value: p.id, label: partnerLabel(p) }))}
-              value={selectedPartnerId}
-              onChange={(id) => setValue("selectedPartnerId", id)}
-            />
-          )}
-          {partners.length === 0 ? (
-            <p className="text-sm text-amber-600 dark:text-amber-500">
-              You need a partner to upload. Add one on the{" "}
-              <Link to="/my-profile" className="underline font-medium">My Profile</Link> page.
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Add partners on the <Link to="/my-profile" className="underline">My Profile</Link> page.
-            </p>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <Label>Partnership</Label>
-          {managedQuery.error && !managedQuery.data ? (
-            <QueryError
-              what="your managed partnerships"
-              error={managedQuery.error}
-              onRetry={() => void managedQuery.refetch()}
-            />
-          ) : managedPartnerships.length === 0 ? (
+        ) : variant === "self" ? (
+          hasFullName ? (
             <p className="text-sm text-muted-foreground">
-              You have no managed partnerships yet. Add them on{" "}
-              <Link to="/my-profile" className="underline">My Profile</Link>.
+              Uploading as:{" "}
+              <span className="font-medium text-foreground">{me!.first_name} {me!.last_name}</span>
             </p>
           ) : (
-            <>
-              <ChoiceGroup
-                key={formKey}
-                ariaLabel="Partnership"
-                options={managedPartnerships.map((mp) => ({
-                  value: mp.id,
-                  label: managedPartnershipLabel(mp),
-                }))}
-                value={selectedManagedPartnershipId}
-                onChange={(id) => setValue("selectedManagedPartnershipId", id)}
-              />
-              {selectedManaged && (
-                <p className="text-sm text-muted-foreground">{managedPartnershipSummary(selectedManaged)}</p>
-              )}
-            </>
-          )}
-        </div>
-      )}
+            <p className="text-sm text-amber-600 dark:text-amber-500">
+              Set your first and last name on the{" "}
+              <Link to="/my-profile" className="underline font-medium">My Profile</Link>{" "}
+              page so we can label your uploads correctly.
+            </p>
+          )
+        ) : null}
 
-      {/* Shared fields */}
-      <div className="space-y-2">
-        <Label>Division</Label>
-        {divisionsError ? (
-          <p className="text-sm text-destructive">Could not load the divisions: {divisionsError}</p>
-        ) : divisionsLoading ? (
-          <Skeleton className="h-16 w-full" />
+        {/* Entity selector */}
+        {staffOnBehalf ? (
+          <FormField
+            control={form.control}
+            name="selectedPartnerId"
+            render={({ field }) => (
+              <FormItem>
+                <Label>Partner</Label>
+                <FormControl>
+                  <ChoiceGroup
+                    key={formKey}
+                    ariaLabel="Partner"
+                    options={[
+                      ...partners.map((p) => ({ value: p.id, label: partnerLabel(p) })),
+                      { value: NO_PARTNER, label: "No partner" },
+                    ]}
+                    value={field.value || NO_PARTNER}
+                    onChange={(v) => field.onChange(v === NO_PARTNER ? "" : v)}
+                  />
+                </FormControl>
+                <FormDescription className="text-xs">
+                  The dancer&apos;s partners. The song is submitted to this event when it uploads.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        ) : variant === "self" ? (
+          <FormField
+            control={form.control}
+            name="selectedPartnerId"
+            render={({ field }) => (
+              <FormItem>
+                <Label>Partner</Label>
+                {partners.length > 0 && (
+                  <FormControl>
+                    <ChoiceGroup
+                      key={formKey}
+                      ariaLabel="Partner"
+                      options={partners.map((p) => ({ value: p.id, label: partnerLabel(p) }))}
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
+                  </FormControl>
+                )}
+                {partners.length === 0 ? (
+                  <p className="text-sm text-amber-600 dark:text-amber-500">
+                    You need a partner to upload. Add one on the{" "}
+                    <Link to="/my-profile" className="underline font-medium">My Profile</Link> page.
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Add partners on the <Link to="/my-profile" className="underline">My Profile</Link> page.
+                  </p>
+                )}
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         ) : (
-          <ChoiceGroup
-            key={formKey}
-            ariaLabel="Division"
-            groups={uploadGroups}
-            value={division}
-            onChange={(d) => setValue("division", d)}
+          <FormField
+            control={form.control}
+            name="selectedManagedPartnershipId"
+            render={({ field }) => (
+              <FormItem>
+                <Label>Partnership</Label>
+                {managedQuery.error && !managedQuery.data ? (
+                  <QueryError
+                    what="your managed partnerships"
+                    error={managedQuery.error}
+                    onRetry={() => void managedQuery.refetch()}
+                  />
+                ) : managedPartnerships.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    You have no managed partnerships yet. Add them on{" "}
+                    <Link to="/my-profile" className="underline">My Profile</Link>.
+                  </p>
+                ) : (
+                  <>
+                    <FormControl>
+                      <ChoiceGroup
+                        key={formKey}
+                        ariaLabel="Partnership"
+                        options={managedPartnerships.map((mp) => ({
+                          value: mp.id,
+                          label: managedPartnershipLabel(mp),
+                        }))}
+                        value={field.value}
+                        onChange={field.onChange}
+                      />
+                    </FormControl>
+                    {selectedManaged && (
+                      <p className="text-sm text-muted-foreground">{managedPartnershipSummary(selectedManaged)}</p>
+                    )}
+                  </>
+                )}
+                <FormMessage />
+              </FormItem>
+            )}
           />
         )}
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="song-routine">Routine / Song name</Label>
-        <Input id="song-routine" {...register("routineName")} placeholder="Optional — recommended" />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="song-descriptor">Personal descriptor</Label>
-        <Input id="song-descriptor" {...register("descriptor")} placeholder="e.g. 98%, -2%, v3, 2026-02-01" />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="song-file">Audio file</Label>
-        <Input key={fileInputKey} id="song-file" type="file" accept={isIOS() ? undefined : "audio/*"}
-          onChange={(e) => setValue("file", e.target.files?.[0] ?? null)} className="cursor-pointer" />
-        <p className="text-xs text-muted-foreground">MP3, WAV, FLAC, or M4A — max 100 MB</p>
-      </div>
 
-      <div className="sticky bottom-0 z-10 -mx-6 border-t bg-card/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/80 sm:static sm:mx-0 sm:border-t-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
-        <Button type="submit" disabled={variant === "managed" ? managedSubmitDisabled : selfSubmitDisabled} className="w-full sm:w-auto">
-          {isSubmitting ? "Uploading…" : "Upload song"}
-        </Button>
-      </div>
-      {uploadStage !== "idle" && (
-        <div className="mt-3 space-y-1">
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>
-              {uploadStage === "uploading" && file
-                ? `Uploading… ${formatMB(uploadBytesSent)} of ${formatMB(file.size)} MB`
-                : uploadStage === "processing" ? "Processing your file… this may take a moment" : "Saving…"}
-            </span>
-            <span>{uploadProgress}%</span>
-          </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-            <div className="h-full bg-primary transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
-          </div>
+        {/* Shared fields */}
+        <FormField
+          control={form.control}
+          name="division"
+          render={({ field }) => (
+            <FormItem>
+              <Label>Division</Label>
+              {divisionsError ? (
+                <p className="text-sm text-destructive">Could not load the divisions: {divisionsError}</p>
+              ) : divisionsLoading ? (
+                <Skeleton className="h-16 w-full" />
+              ) : (
+                <FormControl>
+                  <ChoiceGroup
+                    key={formKey}
+                    ariaLabel="Division"
+                    groups={uploadGroups}
+                    value={field.value}
+                    onChange={field.onChange}
+                  />
+                </FormControl>
+              )}
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <div className="space-y-2">
+          <Label htmlFor="song-routine">Routine / Song name</Label>
+          <Input id="song-routine" {...register("routineName")} placeholder="Optional — recommended" />
         </div>
-      )}
-    </form>
+        <div className="space-y-2">
+          <Label htmlFor="song-descriptor">Personal descriptor</Label>
+          <Input id="song-descriptor" {...register("descriptor")} placeholder="e.g. 98%, -2%, v3, 2026-02-01" />
+        </div>
+        <FormField
+          control={form.control}
+          name="file"
+          render={({ field }) => (
+            <FormItem>
+              <Label htmlFor="song-file">Audio file</Label>
+              <FormControl>
+                <Input key={fileInputKey} id="song-file" type="file" accept={isIOS() ? undefined : "audio/*"}
+                  name={field.name} ref={field.ref} onBlur={field.onBlur}
+                  onChange={(e) => field.onChange(e.target.files?.[0] ?? null)} className="cursor-pointer" />
+              </FormControl>
+              <FormDescription className="text-xs">MP3, WAV, FLAC, or M4A — max 100 MB</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="sticky bottom-0 z-10 -mx-6 border-t bg-card/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/80 sm:static sm:mx-0 sm:border-t-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
+          <Button type="submit" disabled={variant === "managed" ? managedSubmitDisabled : selfSubmitDisabled} className="w-full sm:w-auto">
+            {isSubmitting ? "Uploading…" : "Upload song"}
+          </Button>
+        </div>
+        {uploadStage !== "idle" && (
+          <div className="mt-3 space-y-1">
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>
+                {uploadStage === "uploading" && file
+                  ? `Uploading… ${formatMB(uploadBytesSent)} of ${formatMB(file.size)} MB`
+                  : uploadStage === "processing" ? "Processing your file… this may take a moment" : "Saving…"}
+              </span>
+              <span>{uploadProgress}%</span>
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div className="h-full bg-primary transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+            </div>
+          </div>
+        )}
+      </form>
+    </Form>
   );
 }

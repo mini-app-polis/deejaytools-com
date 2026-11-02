@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import type { ApiEvent } from "@/schemas";
 import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "@/lib/formFields";
 
@@ -56,11 +57,7 @@ export default function EventDetailsSection({
   const removeEvent = useEndpointMutation(endpoints.events.remove, {
     invalidates: [endpoints.events.list, endpoints.sessions.list, endpoints.auth.me],
   });
-  const {
-    register,
-    handleSubmit,
-    formState: { isSubmitting: saving },
-  } = useForm<EventDetailsForm, unknown, EventDetailsValues>({
+  const form = useForm<EventDetailsForm, unknown, EventDetailsValues>({
     resolver: zodResolver(eventDetailsSchema),
     defaultValues: {
       name: event.name,
@@ -69,6 +66,10 @@ export default function EventDetailsSection({
       timezone: event.timezone,
     },
   });
+  const {
+    handleSubmit,
+    formState: { isSubmitting: saving },
+  } = form;
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -110,29 +111,67 @@ export default function EventDetailsSection({
           <CardTitle>Event details</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={(e) => void handleSubmit(save, toastFirstError)(e)} className="space-y-4 max-w-lg">
-            <div>
-              <label htmlFor="ev-name" className={FIELD_LABEL_CLASS}>Name</label>
-              <input id="ev-name" className={FIELD_INPUT_CLASS} {...register("name")} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="ev-start" className={FIELD_LABEL_CLASS}>Start date</label>
-                <input id="ev-start" type="date" className={FIELD_INPUT_CLASS} {...register("startDate")} />
+          <Form {...form}>
+            <form onSubmit={(e) => void handleSubmit(save, toastFirstError)(e)} className="space-y-4 max-w-lg">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem className="space-y-0">
+                    <label htmlFor="ev-name" className={FIELD_LABEL_CLASS}>Name</label>
+                    <FormControl>
+                      <input id="ev-name" className={FIELD_INPUT_CLASS} {...field} />
+                    </FormControl>
+                    <FormMessage className="mt-1" />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="startDate"
+                  render={({ field }) => (
+                    <FormItem className="space-y-0">
+                      <label htmlFor="ev-start" className={FIELD_LABEL_CLASS}>Start date</label>
+                      <FormControl>
+                        <input id="ev-start" type="date" className={FIELD_INPUT_CLASS} {...field} />
+                      </FormControl>
+                      <FormMessage className="mt-1" />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="endDate"
+                  render={({ field }) => (
+                    <FormItem className="space-y-0">
+                      <label htmlFor="ev-end" className={FIELD_LABEL_CLASS}>End date</label>
+                      <FormControl>
+                        <input id="ev-end" type="date" className={FIELD_INPUT_CLASS} {...field} />
+                      </FormControl>
+                      <FormMessage className="mt-1" />
+                    </FormItem>
+                  )}
+                />
               </div>
-              <div>
-                <label htmlFor="ev-end" className={FIELD_LABEL_CLASS}>End date</label>
-                <input id="ev-end" type="date" className={FIELD_INPUT_CLASS} {...register("endDate")} />
-              </div>
-            </div>
-            <div>
-              <label htmlFor="ev-tz" className={FIELD_LABEL_CLASS}>Timezone</label>
-              <input id="ev-tz" className={FIELD_INPUT_CLASS} {...register("timezone")} />
-            </div>
-            <Button type="submit" disabled={saving}>
-              {saving ? "Saving…" : "Save changes"}
-            </Button>
-          </form>
+              <FormField
+                control={form.control}
+                name="timezone"
+                render={({ field }) => (
+                  <FormItem className="space-y-0">
+                    <label htmlFor="ev-tz" className={FIELD_LABEL_CLASS}>Timezone</label>
+                    <FormControl>
+                      <input id="ev-tz" className={FIELD_INPUT_CLASS} {...field} />
+                    </FormControl>
+                    <FormMessage className="mt-1" />
+                  </FormItem>
+                )}
+              />
+              <Button type="submit" disabled={saving}>
+                {saving ? "Saving…" : "Save changes"}
+              </Button>
+            </form>
+          </Form>
         </CardContent>
       </Card>
 

@@ -1,11 +1,17 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Locator, Page } from "@playwright/test";
+import { HELP_TOPICS } from "../src/components/help/helpTopics";
+import { ADMIN_SECTIONS } from "../src/lib/adminSections";
+import { MANAGER_SECTIONS } from "../src/lib/managerSections";
+import { e2eConfig } from "./env";
 import { Api, dateIn, expect, RUN_ID, signIn, test } from "./fixtures";
 
 /**
  * An automated accessibility scan (axe-core, WCAG 2.1 A and AA rules) of the
- * pages people use most: the public pages, a dancer's pages, and the
- * manager's and admin's. Axe catches what can be checked mechanically —
+ * site's pages: the public pages and the help, a dancer's pages, every
+ * manager and admin section, and, as the staff test user
+ * (CONTRACT_STAFF_USER_ID) made the event's manager, My events and the
+ * coordinator, DJ and event-manager portals. Axe catches what can be checked mechanically —
  * missing labels and names, contrast, ARIA misuse, landmark and list
  * structure — not everything a person with a screen reader would meet.
  *
@@ -20,11 +26,17 @@ const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
 const ENFORCE = process.env.A11Y_REPORT_ONLY !== "1";
 
 let api: Api;
+let staff: Api;
+let staffUserId: string;
 let eventId: string | undefined;
 let sessionId: string;
 
 test.beforeAll(async () => {
   api = await Api.start();
+  // Synced, so the staff user has a users row before the grant names them.
+  staff = await Api.start(e2eConfig().staffUserId);
+  await staff.sync();
+  staffUserId = (await staff.call<{ id: string }>("GET", "/v1/auth/me")).id;
   const me = await api.call<{ id: string }>("GET", "/v1/auth/me");
   for (const e of await api.call<{ id: string; name: string; created_by: string }[]>("GET", "/v1/events")) {
     if (e.name.startsWith(`${PREFIX} `) && e.created_by === me.id) {
@@ -71,8 +83,10 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
+  await staff?.end();
   if (!api) return;
-  // Deleting the event takes its session, check-ins and queue entries. The
+  // Deleting the event takes its session, check-ins, queue entries and staff
+  // roles. The
   // injected entries leave stub dancers behind; this removes them. It clears
   // every injection, which is safe because the suites run one at a time.
   if (eventId) await api.call("DELETE", `/v1/events/${eventId}`).catch(() => undefined);
@@ -92,35 +106,11 @@ interface Finding {
 /** The page's main heading, once the page has rendered its content. */
 const h1 = (page: Page): Locator => page.getByRole("heading", { level: 1 }).first();
 
-test("the main pages pass an automated accessibility scan", async ({ page }) => {
-  test.setTimeout(180_000);
-  const pages: [string, (p: Page) => Locator][] = [
-    ["/", h1],
-    ["/how-it-works", h1],
-    ["/events", h1],
-    [`/events/${eventId}`, h1],
-    ["/floor-trials", h1],
-  ];
-  const signedIn: [string, (p: Page) => Locator][] = [
-    ["/my-content", h1],
-    ["/songs/add", h1],
-    ["/my-profile", h1],
-    ["/event-submissions", h1],
-    [`/event-submissions/${eventId}`, h1],
-    ["/sessions", h1],
-    [`/sessions/${sessionId}`, h1],
-    ["/manager/active-sessions", h1],
-    ["/manager/checkin-for", h1],
-    ["/admin/events", h1],
-  ];
-
-  // Dialogs that only exist once opened: scanned open, so their fields are
-  // checked too.
-  const dialogs: [string, string, string][] = [
-    ["/admin/events", "New Event", "New event"],
-    ["/admin/sessions", "New Session", "New session"],
-  ];
-
+/**
+ * Scans pages with `page`, keeping every violation. `report` attaches and
+ * logs them, then fails the test on any (unless A11Y_REPORT_ONLY=1).
+ */
+function scanner(page: Page) {
   const findings: Finding[] = [];
   const scan = async (path: string, ready: (p: Page) => Locator, opens?: [string, string]) => {
     const label = opens ? `${path} (${opens[1]} dialog)` : path;
@@ -152,26 +142,93 @@ test("the main pages pass an automated accessibility scan", async ({ page }) => 
     });
   };
 
+  const report = async () => {
+    await test.info().attach("accessibility-findings.json", {
+      body: JSON.stringify(findings, null, 2),
+      contentType: "application/json",
+    });
+    for (const f of findings) {
+      test.info().annotations.push({
+        type: `a11y ${f.impact ?? "unknown"}`,
+        description: `${f.page} — ${f.rule}: ${f.help} (${f.targets.length} element${f.targets.length === 1 ? "" : "s"}) ${f.helpUrl}`,
+      });
+    }
+    console.log(
+      findings.length === 0
+        ? "Accessibility: no violations."
+        : `Accessibility: ${findings.length} violation(s)\n` +
+            findings.map((f) => `  [${f.impact}] ${f.page} ${f.rule} — ${f.help} (${f.targets.length})`).join("\n")
+    );
+    if (ENFORCE) expect(findings).toEqual([]);
+  };
+
+  return { scan, report };
+}
+
+test("the main pages pass an automated accessibility scan", async ({ page }) => {
+  test.setTimeout(300_000);
+  const pages: [string, (p: Page) => Locator][] = [
+    ["/", h1],
+    ["/how-it-works", h1],
+    ...HELP_TOPICS.map((t): [string, (p: Page) => Locator] => [t.path, h1]),
+    ["/feedback", h1],
+    ["/events", h1],
+    [`/events/${eventId}`, h1],
+    ["/floor-trials", h1],
+  ];
+  const signedIn: [string, (p: Page) => Locator][] = [
+    ["/my-content", h1],
+    ["/songs/add", h1],
+    ["/my-profile", h1],
+    ["/event-submissions", h1],
+    [`/event-submissions/${eventId}`, h1],
+    ["/sessions", h1],
+    [`/sessions/${sessionId}`, h1],
+    ...MANAGER_SECTIONS.map((s): [string, (p: Page) => Locator] => [`/manager/${s}`, h1]),
+    ...ADMIN_SECTIONS.map((s): [string, (p: Page) => Locator] => [`/admin/${s}`, h1]),
+  ];
+
+  // Dialogs that only exist once opened: scanned open, so their fields are
+  // checked too.
+  const dialogs: [string, string, string][] = [
+    ["/admin/events", "New Event", "New event"],
+    ["/admin/sessions", "New Session", "New session"],
+  ];
+
+  const { scan, report } = scanner(page);
   for (const [path, ready] of pages) await scan(path, ready);
   await signIn(page, api.session.user.email);
   for (const [path, ready] of signedIn) await scan(path, ready);
   for (const [path, button, dialog] of dialogs) await scan(path, h1, [button, dialog]);
+  await report();
+});
 
-  await test.info().attach("accessibility-findings.json", {
-    body: JSON.stringify(findings, null, 2),
-    contentType: "application/json",
-  });
-  for (const f of findings) {
-    test.info().annotations.push({
-      type: `a11y ${f.impact ?? "unknown"}`,
-      description: `${f.page} — ${f.rule}: ${f.help} (${f.targets.length} element${f.targets.length === 1 ? "" : "s"}) ${f.helpUrl}`,
-    });
+test("the staff portals pass an automated accessibility scan", async ({ page }) => {
+  test.setTimeout(300_000);
+  const base = `/events/${encodeURIComponent(eventId!)}`;
+  // Event manager admits the coordinator and DJ portals too. The grant
+  // queues a share of the event's Drive folder: revoked below, the share
+  // finds the role gone and does nothing.
+  const grant = `/v1/events/${eventId}/staff/${staffUserId}/event-manager`;
+  await api.call("PUT", grant);
+  try {
+    const { scan, report } = scanner(page);
+    await signIn(page, staff.session.user.email);
+    await scan("/my-events", h1);
+    await scan(`${base}/coordinator`, h1);
+    await scan(`${base}/dj`, h1);
+    // Every section of the manage portal, as its own section menu lists
+    // them: the DJ and coordinator sections are among them.
+    await page.goto(`${base}/manage`);
+    const menu = page.getByRole("navigation", { name: "Event manager sections" });
+    await expect(menu.getByRole("link").first()).toBeVisible();
+    const sections = await menu
+      .getByRole("link")
+      .evaluateAll((links) => links.map((a) => new URL((a as HTMLAnchorElement).href).pathname));
+    expect(sections.length).toBeGreaterThan(0);
+    for (const path of sections) await scan(path, h1);
+    await report();
+  } finally {
+    await api.call("DELETE", grant).catch(() => undefined);
   }
-  console.log(
-    findings.length === 0
-      ? "Accessibility: no violations."
-      : `Accessibility: ${findings.length} violation(s)\n` +
-          findings.map((f) => `  [${f.impact}] ${f.page} ${f.rule} — ${f.help} (${f.targets.length})`).join("\n")
-  );
-  if (ENFORCE) expect(findings).toEqual([]);
 });

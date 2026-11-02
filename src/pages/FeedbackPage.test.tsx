@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import FeedbackPage from "./FeedbackPage";
+import { expectFieldError } from "@/test/fieldErrors";
 
 // Feedback is public and posts with a bare fetch (no API client, no Clerk).
 const fetchMock = vi.fn();
@@ -121,6 +122,21 @@ describe("FeedbackPage", () => {
     });
   });
 
+  it("asks for a subject and a message at their fields, through its own checks", async () => {
+    const user = userEvent.setup();
+    render(<FeedbackPage />);
+
+    await user.type(screen.getByLabelText("Message"), "   ");
+    await user.click(screen.getByRole("button", { name: "Submit feedback" }));
+
+    await expectFieldError(screen.getByLabelText("Subject"), "Please enter a subject.");
+    await expectFieldError(screen.getByLabelText("Message"), "Please enter a message.");
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await user.type(screen.getByLabelText("Subject"), "Queue froze");
+    await waitFor(() => expect(screen.queryByText("Please enter a subject.")).not.toBeInTheDocument());
+  });
+
   it.each([
     ["", "Please enter an email or uncheck the contact permission."],
     ["not-an-email", "Please enter a valid email address."],
@@ -135,7 +151,7 @@ describe("FeedbackPage", () => {
     // otherwise intercept before the page's validation runs.
     fireEvent.submit(screen.getByRole("button", { name: "Submit feedback" }).closest("form")!);
 
-    expect(await screen.findByText(message)).toBeInTheDocument();
+    await expectFieldError(screen.getByLabelText(/best email/i), message);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

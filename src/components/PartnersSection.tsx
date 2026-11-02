@@ -247,15 +247,17 @@ export default function PartnersSection() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Their role</FormLabel>
-                    <ChoiceGroup
-                      ariaLabel="Their role"
-                      options={[
-                        { value: "leader", label: "Leader" },
-                        { value: "follower", label: "Follower" },
-                      ]}
-                      value={field.value}
-                      onChange={field.onChange}
-                    />
+                    <FormControl>
+                      <ChoiceGroup
+                        ariaLabel="Their role"
+                        options={[
+                          { value: "leader", label: "Leader" },
+                          { value: "follower", label: "Follower" },
+                        ]}
+                        value={field.value}
+                        onChange={field.onChange}
+                      />
+                    </FormControl>
                     <FormDescription>Your role will be the opposite.</FormDescription>
                     <FormMessage />
                   </FormItem>

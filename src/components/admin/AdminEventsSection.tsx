@@ -34,6 +34,7 @@ import { TabsContent } from "@/components/ui/tabs";
 import { formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareEventChrono } from "@/lib/chronoSort";
 import { eventStatusBadge } from "@/components/admin/adminShared";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "@/lib/formFields";
 import AdminEventManagersDialog from "@/components/admin/AdminEventManagersDialog";
 
@@ -69,15 +70,15 @@ const EMPTY_EVENT: EventForm = { name: "", startDate: "", endDate: "", seasonYea
 export default function AdminEventsSection({ open }: { open: boolean }) {
   const navigate = useNavigate();
   const [evDialogOpen, setEvDialogOpen] = useState(false);
+  const form = useForm<EventForm>({ resolver: zodResolver(eventFormSchema), defaultValues: EMPTY_EVENT });
   const {
-    register: evRegister,
     handleSubmit: evValidate,
     reset: evReset,
     getValues: evGetValues,
     setValue: evSetValue,
     watch: evWatch,
     formState: { isSubmitting: evSubmitting },
-  } = useForm<EventForm>({ resolver: zodResolver(eventFormSchema), defaultValues: EMPTY_EVENT });
+  } = form;
   const evStartDate = evWatch("startDate");
   /** True once the admin has typed in the season year field — blocks auto-suggest. */
   const [evSeasonTouched, setEvSeasonTouched] = useState(false);
@@ -340,100 +341,151 @@ export default function AdminEventsSection({ open }: { open: boolean }) {
               <h2 id="ev-dialog-title" className="text-lg font-semibold">{evEditId ? "Edit event" : "New event"}</h2>
               <Button type="button" variant="ghost" size="sm" aria-label="Close" onClick={() => setEvDialogOpen(false)}>✕</Button>
             </div>
-            <form onSubmit={(e) => void evValidate(submitEventDialog, toastFirstError)(e)} className="space-y-4">
-              <div>
-                <label htmlFor="ev-name" className={FIELD_LABEL_CLASS}>Name</label>
-                <input id="ev-name"
-                  className={FIELD_INPUT_CLASS}
-                  {...evRegister("name")}
-                  autoFocus
+            <Form {...form}>
+              <form noValidate onSubmit={(e) => void evValidate(submitEventDialog, toastFirstError)(e)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem className="space-y-0">
+                      <label htmlFor="ev-name" className={FIELD_LABEL_CLASS}>Name</label>
+                      <FormControl>
+                        <input id="ev-name"
+                          className={FIELD_INPUT_CLASS}
+                          {...field}
+                          autoFocus
+                        />
+                      </FormControl>
+                      <FormMessage className="mt-1" />
+                    </FormItem>
+                  )}
                 />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label htmlFor="ev-start-date" className={FIELD_LABEL_CLASS}>Start date</label>
-                  <input id="ev-start-date"
-                    type="date"
-                    className={FIELD_INPUT_CLASS}
-                    {...evRegister("startDate", {
-                      onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
-                        const v = e.target.value;
-                        const evEndDate = evGetValues("endDate");
-                        if (evEndDate && v > evEndDate) evSetValue("endDate", v);
-                        if (!evEditId && !evSeasonTouched && v) {
-                          evSetValue("seasonYear", seasonYearFromDateString(v));
-                        }
-                      },
-                    })}
-                    required
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField
+                    control={form.control}
+                    name="startDate"
+                    render={({ field }) => (
+                      <FormItem className="space-y-0">
+                        <label htmlFor="ev-start-date" className={FIELD_LABEL_CLASS}>Start date</label>
+                        <FormControl>
+                          <input id="ev-start-date"
+                            type="date"
+                            className={FIELD_INPUT_CLASS}
+                            {...field}
+                            onChange={(e) => {
+                              field.onChange(e);
+                              const v = e.target.value;
+                              const evEndDate = evGetValues("endDate");
+                              if (evEndDate && v > evEndDate) evSetValue("endDate", v);
+                              if (!evEditId && !evSeasonTouched && v) {
+                                evSetValue("seasonYear", seasonYearFromDateString(v));
+                              }
+                            }}
+                            required
+                          />
+                        </FormControl>
+                        <FormMessage className="mt-1" />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="endDate"
+                    render={({ field }) => (
+                      <FormItem className="space-y-0">
+                        <label htmlFor="ev-end-date" className={FIELD_LABEL_CLASS}>End date</label>
+                        <FormControl>
+                          <input id="ev-end-date"
+                            type="date"
+                            className={FIELD_INPUT_CLASS}
+                            min={evStartDate || undefined}
+                            {...field}
+                            required
+                          />
+                        </FormControl>
+                        <FormMessage className="mt-1" />
+                      </FormItem>
+                    )}
                   />
                 </div>
-                <div>
-                  <label htmlFor="ev-end-date" className={FIELD_LABEL_CLASS}>End date</label>
-                  <input id="ev-end-date"
-                    type="date"
-                    className={FIELD_INPUT_CLASS}
-                    min={evStartDate || undefined}
-                    {...evRegister("endDate")}
-                    required
-                  />
-                </div>
-              </div>
-              <div>
-                <label htmlFor="ev-season-year" className={FIELD_LABEL_CLASS}>Season year</label>
-                <input id="ev-season-year"
-                  className={FIELD_INPUT_CLASS}
-                  inputMode="numeric"
-                  pattern="\d{4}"
-                  placeholder="2027"
-                  {...evRegister("seasonYear", { onChange: () => setEvSeasonTouched(true) })}
+                <FormField
+                  control={form.control}
+                  name="seasonYear"
+                  render={({ field }) => (
+                    <FormItem className="space-y-0">
+                      <label htmlFor="ev-season-year" className={FIELD_LABEL_CLASS}>Season year</label>
+                      <FormControl>
+                        <input id="ev-season-year"
+                          className={FIELD_INPUT_CLASS}
+                          inputMode="numeric"
+                          pattern="\d{4}"
+                          placeholder="2027"
+                          {...field}
+                          onChange={(e) => {
+                            field.onChange(e);
+                            setEvSeasonTouched(true);
+                          }}
+                        />
+                      </FormControl>
+                      <FormDescription className="text-xs mt-1">
+                        Defaults from the start date — seasons roll over October 1.
+                      </FormDescription>
+                      <FormMessage className="mt-1" />
+                    </FormItem>
+                  )}
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Defaults from the start date — seasons roll over October 1.
-                </p>
-              </div>
-              <div>
-                <label htmlFor="ev-timezone" className={FIELD_LABEL_CLASS}>Timezone</label>
-                <select id="ev-timezone"
-                  className={FIELD_INPUT_CLASS}
-                  {...evRegister("timezone")}
-                >
-                  <optgroup label="United States">
-                    <option value="America/New_York">Eastern — New York / Miami</option>
-                    <option value="America/Chicago">Central — Chicago / Dallas</option>
-                    <option value="America/Denver">Mountain — Denver / Salt Lake City</option>
-                    <option value="America/Phoenix">Mountain (no DST) — Phoenix</option>
-                    <option value="America/Los_Angeles">Pacific — Los Angeles / Seattle</option>
-                    <option value="America/Anchorage">Alaska — Anchorage</option>
-                    <option value="Pacific/Honolulu">Hawaii — Honolulu</option>
-                  </optgroup>
-                  <optgroup label="Canada">
-                    <option value="America/Toronto">Eastern — Toronto</option>
-                    <option value="America/Winnipeg">Central — Winnipeg</option>
-                    <option value="America/Edmonton">Mountain — Edmonton</option>
-                    <option value="America/Vancouver">Pacific — Vancouver</option>
-                  </optgroup>
-                  <optgroup label="Europe">
-                    <option value="Europe/London">London / Dublin</option>
-                    <option value="Europe/Paris">Central European — Paris / Berlin</option>
-                    <option value="Europe/Helsinki">Eastern European — Helsinki / Kyiv</option>
-                  </optgroup>
-                  <optgroup label="Asia / Pacific">
-                    <option value="Asia/Tokyo">Tokyo / Osaka</option>
-                    <option value="Asia/Seoul">Seoul</option>
-                    <option value="Asia/Shanghai">Shanghai / Beijing</option>
-                    <option value="Asia/Singapore">Singapore / Kuala Lumpur</option>
-                    <option value="Australia/Sydney">Sydney / Melbourne</option>
-                    <option value="Pacific/Auckland">Auckland</option>
-                  </optgroup>
-                </select>
-              </div>
-              <Button type="submit" disabled={evSubmitting} size="lg" className="w-full">
-                {evSubmitting
-                  ? evEditId ? "Saving…" : "Creating…"
-                  : evEditId ? "Save changes" : "Create event"}
-              </Button>
-            </form>
+                <FormField
+                  control={form.control}
+                  name="timezone"
+                  render={({ field }) => (
+                    <FormItem className="space-y-0">
+                      <label htmlFor="ev-timezone" className={FIELD_LABEL_CLASS}>Timezone</label>
+                      <FormControl>
+                        <select id="ev-timezone"
+                          className={FIELD_INPUT_CLASS}
+                          {...field}
+                        >
+                          <optgroup label="United States">
+                            <option value="America/New_York">Eastern — New York / Miami</option>
+                            <option value="America/Chicago">Central — Chicago / Dallas</option>
+                            <option value="America/Denver">Mountain — Denver / Salt Lake City</option>
+                            <option value="America/Phoenix">Mountain (no DST) — Phoenix</option>
+                            <option value="America/Los_Angeles">Pacific — Los Angeles / Seattle</option>
+                            <option value="America/Anchorage">Alaska — Anchorage</option>
+                            <option value="Pacific/Honolulu">Hawaii — Honolulu</option>
+                          </optgroup>
+                          <optgroup label="Canada">
+                            <option value="America/Toronto">Eastern — Toronto</option>
+                            <option value="America/Winnipeg">Central — Winnipeg</option>
+                            <option value="America/Edmonton">Mountain — Edmonton</option>
+                            <option value="America/Vancouver">Pacific — Vancouver</option>
+                          </optgroup>
+                          <optgroup label="Europe">
+                            <option value="Europe/London">London / Dublin</option>
+                            <option value="Europe/Paris">Central European — Paris / Berlin</option>
+                            <option value="Europe/Helsinki">Eastern European — Helsinki / Kyiv</option>
+                          </optgroup>
+                          <optgroup label="Asia / Pacific">
+                            <option value="Asia/Tokyo">Tokyo / Osaka</option>
+                            <option value="Asia/Seoul">Seoul</option>
+                            <option value="Asia/Shanghai">Shanghai / Beijing</option>
+                            <option value="Asia/Singapore">Singapore / Kuala Lumpur</option>
+                            <option value="Australia/Sydney">Sydney / Melbourne</option>
+                            <option value="Pacific/Auckland">Auckland</option>
+                          </optgroup>
+                        </select>
+                      </FormControl>
+                      <FormMessage className="mt-1" />
+                    </FormItem>
+                  )}
+                />
+                <Button type="submit" disabled={evSubmitting} size="lg" className="w-full">
+                  {evSubmitting
+                    ? evEditId ? "Saving…" : "Creating…"
+                    : evEditId ? "Save changes" : "Create event"}
+                </Button>
+              </form>
+            </Form>
           </div>
         </div>
       )}

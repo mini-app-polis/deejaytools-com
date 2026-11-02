@@ -47,6 +47,7 @@ vi.mock("@clerk/clerk-react", () => ({
 import SessionDetailPage from "./SessionDetailPage";
 import { toast } from "sonner";
 import { fx } from "@/test/fixtures";
+import { expectFieldError } from "@/test/fieldErrors";
 import { renderWithQueryClient } from "@/test/render";
 
 // ---------------------------------------------------------------------------
@@ -1206,6 +1207,7 @@ describe("SessionDetailPage — submitting a check-in", () => {
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith("Pick a division");
     });
+    await expectFieldError(division, "Pick a division");
     expect(apiPost).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -40,6 +40,7 @@ vi.mock("@clerk/clerk-react", () => ({
 import ManagerPage from "./ManagerPage";
 import { fx } from "@/test/fixtures";
 import { toast } from "sonner";
+import { expectFieldError } from "@/test/fieldErrors";
 import { renderWithQueryClient } from "@/test/render";
 
 function renderPage(path: string = "/manager/active-sessions") {
@@ -792,6 +793,19 @@ describe("ManagerPage — CheckIn For", () => {
     );
     expect(toast.success).toHaveBeenCalledWith("Checked in Alice Smith");
     expect(screen.getByRole("radio", { name: "Our Classic" })).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("says at the session picker when no session is picked", async () => {
+    routeGets({ "/v1/sessions": [OPEN], "/v1/admin/users": [ALICE] });
+    const user = userEvent.setup();
+    renderPage("/manager/checkin-for");
+
+    await pickAlice(user);
+    // Check in stays disabled until the form is complete: submit the form itself.
+    fireEvent.submit(screen.getByRole("button", { name: "Check in" }).closest("form")!);
+
+    await expectFieldError(screen.getByRole("radiogroup", { name: "Session" }), "Select a session");
+    expect(apiPost).not.toHaveBeenCalled();
   });
 
   it("explains when the session has no event or the user has no songs for it", async () => {

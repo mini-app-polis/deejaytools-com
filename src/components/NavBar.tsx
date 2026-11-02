@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ADMIN_SECTION_LABELS, ADMIN_SECTIONS } from "@/lib/adminSections";
+import { MANAGER_SECTION_LABELS, MANAGER_SECTIONS } from "@/lib/managerSections";
 import { cn } from "@/lib/utils";
 import { isProdHost } from "@/lib/env";
 import { useApiVersion } from "@/hooks/useApiVersion";
@@ -23,26 +25,17 @@ const SIGNED_IN_ITEMS: NavItem[] = [
   { to: "/my-profile", label: "My Profile" },
 ];
 
-// Admin pages (events, sessions, songs, users, run history, test check-in),
-// shown in the Superuser bar to admins only.
-const SUPERUSER_ITEMS: NavItem[] = [
-  { to: "/admin/events", label: "Events" },
-  { to: "/admin/sessions", label: "Sessions" },
-  { to: "/admin/songs", label: "Songs" },
-  { to: "/admin/users", label: "Users" },
-  { to: "/admin/runs", label: "Run History" },
-  { to: "/admin/test-checkin", label: "Test Checkin" },
-];
+// The admin sections, shown in the Superuser bar to admins only.
+const SUPERUSER_ITEMS: NavItem[] = ADMIN_SECTIONS.map((s) => ({
+  to: `/admin/${s}`,
+  label: ADMIN_SECTION_LABELS[s],
+}));
 
-// Manager pages (active sessions, event songs, upload/check-in on behalf of
-// others, guide), shown in the Manager bar. Currently admin-only (showManagerBar).
-const MANAGER_ITEMS: NavItem[] = [
-  { to: "/manager/active-sessions", label: "Active Sessions" },
-  { to: "/manager/event-songs", label: "Event Songs" },
-  { to: "/manager/upload-for", label: "Upload For" },
-  { to: "/manager/checkin-for", label: "CheckIn For" },
-  { to: "/manager/guide", label: "Guide" },
-];
+// The manager sections, shown in the Manager bar. Currently admin-only (showManagerBar).
+const MANAGER_ITEMS: NavItem[] = MANAGER_SECTIONS.map((s) => ({
+  to: `/manager/${s}`,
+  label: MANAGER_SECTION_LABELS[s],
+}));
 
 // Shown only to people on the staff of at least one event.
 const MY_EVENTS_ITEM: NavItem = { to: "/my-events", label: "My events" };
