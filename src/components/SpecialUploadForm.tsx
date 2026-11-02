@@ -12,6 +12,7 @@ import { queryKey } from "@/api/queryKeys";
 import QueryError from "@/components/QueryError";
 import { Button } from "@/components/ui/button";
 import { ChoiceGroup } from "@/components/ui/choice-group";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -82,6 +83,10 @@ export default function SpecialUploadForm() {
   const teams = teamsQuery.data ?? NO_TEAMS;
   const loading = teamsQuery.isLoading;
 
+  const form = useForm<SpecialUploadValues>({
+    resolver: zodResolver(specialUploadSchema),
+    defaultValues: EMPTY_FORM,
+  });
   const {
     register,
     handleSubmit,
@@ -90,10 +95,7 @@ export default function SpecialUploadForm() {
     setValue,
     watch,
     formState: { isSubmitting },
-  } = useForm<SpecialUploadValues>({
-    resolver: zodResolver(specialUploadSchema),
-    defaultValues: EMPTY_FORM,
-  });
+  } = form;
   const file = watch("file");
   const division = watch("division");
   const entityName = watch("entityName");
@@ -176,107 +178,148 @@ export default function SpecialUploadForm() {
     (division === "Teams" ? teams.length === 0 || !selectedTeamId : !entityName.trim());
 
   return (
-    <form onSubmit={(e) => void handleSubmit(handleUpload, toastFirstError)(e)} className="space-y-4">
-      <div className="space-y-2">
-        <Label>Division</Label>
-        <ChoiceGroup
-          key={formKey}
-          ariaLabel="Division"
-          options={SPECIAL_DIVISION_OPTIONS.map((d) => ({ value: d, label: d }))}
-          value={division}
-          onChange={(d) => setValue("division", d)}
-        />
-      </div>
-
-      {division === "Teams" && (
-        <div className="space-y-2">
-          <Label>Team</Label>
-          {teamsQuery.error && !teamsQuery.data ? (
-            <QueryError what="your teams" error={teamsQuery.error} onRetry={() => void teamsQuery.refetch()} />
-          ) : teams.length === 0 ? (
-            <p className="text-sm text-amber-600 dark:text-amber-500">
-              You need a team to upload. Add one on the{" "}
-              <Link to="/my-profile" className="underline font-medium">My Profile</Link> page.
-            </p>
-          ) : (
-            <ChoiceGroup
-              key={`${formKey}-team`}
-              ariaLabel="Team"
-              options={teams.map((t) => ({ value: t.id, label: t.identifier }))}
-              value={selectedTeamId}
-              onChange={(id) => setValue("selectedTeamId", id)}
-            />
+    <Form {...form}>
+      <form noValidate onSubmit={(e) => void handleSubmit(handleUpload, toastFirstError)(e)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="division"
+          render={({ field }) => (
+            <FormItem>
+              <Label>Division</Label>
+              <FormControl>
+                <ChoiceGroup
+                  key={formKey}
+                  ariaLabel="Division"
+                  options={SPECIAL_DIVISION_OPTIONS.map((d) => ({ value: d, label: d }))}
+                  value={field.value}
+                  onChange={field.onChange}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
           )}
-        </div>
-      )}
+        />
 
-      {division && division !== "Teams" && (
+        {division === "Teams" && (
+          <FormField
+            control={form.control}
+            name="selectedTeamId"
+            render={({ field }) => (
+              <FormItem>
+                <Label>Team</Label>
+                {teamsQuery.error && !teamsQuery.data ? (
+                  <QueryError what="your teams" error={teamsQuery.error} onRetry={() => void teamsQuery.refetch()} />
+                ) : teams.length === 0 ? (
+                  <p className="text-sm text-amber-600 dark:text-amber-500">
+                    You need a team to upload. Add one on the{" "}
+                    <Link to="/my-profile" className="underline font-medium">My Profile</Link> page.
+                  </p>
+                ) : (
+                  <FormControl>
+                    <ChoiceGroup
+                      key={`${formKey}-team`}
+                      ariaLabel="Team"
+                      options={teams.map((t) => ({ value: t.id, label: t.identifier }))}
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
+                  </FormControl>
+                )}
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+        {division && division !== "Teams" && (
+          <FormField
+            control={form.control}
+            name="entityName"
+            render={({ field }) => (
+              <FormItem>
+                <Label htmlFor="special-group-name">Group Name</Label>
+                <FormControl>
+                  <Input
+                    id="special-group-name"
+                    {...field}
+                    placeholder="Enter the group name"
+                    required
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
         <div className="space-y-2">
-          <Label htmlFor="special-group-name">Group Name</Label>
+          <Label htmlFor="special-routine">Routine / Song name</Label>
           <Input
-            id="special-group-name"
-            {...register("entityName")}
-            placeholder="Enter the group name"
-            required
+            id="special-routine"
+            {...register("routineName")}
+            placeholder="Optional — recommended"
           />
         </div>
-      )}
-
-      <div className="space-y-2">
-        <Label htmlFor="special-routine">Routine / Song name</Label>
-        <Input
-          id="special-routine"
-          {...register("routineName")}
-          placeholder="Optional — recommended"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="special-descriptor">Personal descriptor</Label>
-        <Input
-          id="special-descriptor"
-          {...register("descriptor")}
-          placeholder="e.g. 98%, -2%, v3, 2026-02-01"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="special-file">Audio file</Label>
-        <Input
-          key={fileInputKey}
-          id="special-file"
-          type="file"
-          accept={isIOS() ? undefined : "audio/*"}
-          onChange={(e) => setValue("file", e.target.files?.[0] ?? null)}
-          className="cursor-pointer"
-        />
-        <p className="text-xs text-muted-foreground">MP3, WAV, FLAC, or M4A — max 100 MB</p>
-      </div>
-
-      <div className="sticky bottom-0 z-10 -mx-6 border-t bg-card/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/80 sm:static sm:mx-0 sm:border-t-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
-        <Button type="submit" disabled={submitDisabled} className="w-full sm:w-auto">
-          {isSubmitting ? "Uploading…" : "Upload song"}
-        </Button>
-      </div>
-
-      {uploadStage !== "idle" && (
-        <div className="mt-3 space-y-1">
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>
-              {uploadStage === "uploading" && file
-                ? `Uploading… ${formatMB(uploadBytesSent)} of ${formatMB(file.size)} MB`
-                : uploadStage === "processing"
-                  ? "Processing your file… this may take a moment"
-                  : "Saving…"}
-            </span>
-            <span>{uploadProgress}%</span>
-          </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full bg-primary transition-all duration-300"
-              style={{ width: `${uploadProgress}%` }}
-            />
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor="special-descriptor">Personal descriptor</Label>
+          <Input
+            id="special-descriptor"
+            {...register("descriptor")}
+            placeholder="e.g. 98%, -2%, v3, 2026-02-01"
+          />
         </div>
-      )}
-    </form>
+        <FormField
+          control={form.control}
+          name="file"
+          render={({ field }) => (
+            <FormItem>
+              <Label htmlFor="special-file">Audio file</Label>
+              <FormControl>
+                <Input
+                  key={fileInputKey}
+                  id="special-file"
+                  type="file"
+                  accept={isIOS() ? undefined : "audio/*"}
+                  name={field.name}
+                  ref={field.ref}
+                  onBlur={field.onBlur}
+                  onChange={(e) => field.onChange(e.target.files?.[0] ?? null)}
+                  className="cursor-pointer"
+                />
+              </FormControl>
+              <FormDescription className="text-xs">MP3, WAV, FLAC, or M4A — max 100 MB</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="sticky bottom-0 z-10 -mx-6 border-t bg-card/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/80 sm:static sm:mx-0 sm:border-t-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
+          <Button type="submit" disabled={submitDisabled} className="w-full sm:w-auto">
+            {isSubmitting ? "Uploading…" : "Upload song"}
+          </Button>
+        </div>
+
+        {uploadStage !== "idle" && (
+          <div className="mt-3 space-y-1">
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>
+                {uploadStage === "uploading" && file
+                  ? `Uploading… ${formatMB(uploadBytesSent)} of ${formatMB(file.size)} MB`
+                  : uploadStage === "processing"
+                    ? "Processing your file… this may take a moment"
+                    : "Saving…"}
+              </span>
+              <span>{uploadProgress}%</span>
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full bg-primary transition-all duration-300"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+          </div>
+        )}
+      </form>
+    </Form>
   );
 }

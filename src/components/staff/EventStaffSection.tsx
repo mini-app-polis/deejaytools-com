@@ -10,6 +10,7 @@ import PersonPicker from "@/components/staff/PersonPicker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChoiceGroup } from "@/components/ui/choice-group";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EVENT_ROLE_LABELS } from "@/lib/eventRoles";
 import { toastFirstError } from "@/lib/formErrors";
@@ -52,16 +53,16 @@ export default function EventStaffSection({ event }: { event: ApiEvent }) {
   const revokeStaff = useEndpointMutation(endpoints.events.revokeStaff, {
     invalidates: [endpoints.events.staff, endpoints.auth.me],
   });
-  const {
-    handleSubmit,
-    reset,
-    setValue,
-    watch,
-    formState: { isSubmitting: granting },
-  } = useForm<GrantForm, unknown, GrantValues>({
+  const form = useForm<GrantForm, unknown, GrantValues>({
     resolver: zodResolver(grantSchema),
     defaultValues: { person: null, role: "" },
   });
+  const {
+    handleSubmit,
+    reset,
+    watch,
+    formState: { isSubmitting: granting },
+  } = form;
   const person = watch("person");
   const role = watch("role");
   const [revoking, setRevoking] = useState<string | null>(null);
@@ -144,29 +145,51 @@ export default function EventStaffSection({ event }: { event: ApiEvent }) {
           <CardTitle>Add staff</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={(e) => void handleSubmit(grant, toastFirstError)(e)} className="space-y-4 max-w-lg">
-            <PersonPicker
-              id="staff-grant-user"
-              eventId={event.id}
-              label="Person"
-              value={person}
-              onChange={(p) => setValue("person", p)}
-              hint="To add someone new to the event, ask an admin."
-            />
-            <div className="space-y-1">
-              <span className="block text-sm font-medium">Role</span>
-              <ChoiceGroup
-                ariaLabel="Role"
-                options={GRANTABLE.map((r) => ({ value: r, label: EVENT_ROLE_LABELS[r] }))}
-                value={role}
-                onChange={(r) => setValue("role", r)}
+          <Form {...form}>
+            <form onSubmit={(e) => void handleSubmit(grant, toastFirstError)(e)} className="space-y-4 max-w-lg">
+              <FormField
+                control={form.control}
+                name="person"
+                render={({ field }) => (
+                  <FormItem className="space-y-1">
+                    <FormControl>
+                      <PersonPicker
+                        id="staff-grant-user"
+                        eventId={event.id}
+                        label="Person"
+                        value={field.value}
+                        onChange={field.onChange}
+                        hint="To add someone new to the event, ask an admin."
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-              <p className="text-xs text-muted-foreground">An admin adds event managers.</p>
-            </div>
-            <Button type="submit" disabled={granting || !person || !role}>
-              {granting ? "Adding…" : "Add to staff"}
-            </Button>
-          </form>
+              <FormField
+                control={form.control}
+                name="role"
+                render={({ field }) => (
+                  <FormItem className="space-y-1">
+                    <span className="block text-sm font-medium">Role</span>
+                    <FormControl>
+                      <ChoiceGroup
+                        ariaLabel="Role"
+                        options={GRANTABLE.map((r) => ({ value: r, label: EVENT_ROLE_LABELS[r] }))}
+                        value={field.value}
+                        onChange={field.onChange}
+                      />
+                    </FormControl>
+                    <FormDescription className="text-xs">An admin adds event managers.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button type="submit" disabled={granting || !person || !role}>
+                {granting ? "Adding…" : "Add to staff"}
+              </Button>
+            </form>
+          </Form>
         </CardContent>
       </Card>
     </div>

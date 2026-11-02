@@ -36,6 +36,7 @@ vi.mock("@/lib/chunkedSongUpload", async (importOriginal) => ({
 import SpecialUploadForm from "./SpecialUploadForm";
 import { fx } from "@/test/fixtures";
 import { toast } from "sonner";
+import { expectFieldError } from "@/test/fieldErrors";
 import { renderWithQueryClient } from "@/test/render";
 
 const TEAM_A = fx.team({ id: "team-a", identifier: "Swing Kids" });
@@ -138,6 +139,7 @@ describe("SpecialUploadForm", () => {
     await user.click(await screen.findByRole("radio", { name: "Teams" }));
     await user.click(screen.getByRole("button", { name: "Upload song" }));
     expect(toast.error).toHaveBeenCalledWith("Please select an audio file.");
+    await expectFieldError(fileInput(), "Please select an audio file.");
     expect(uploadSongInChunks).not.toHaveBeenCalled();
   });
 

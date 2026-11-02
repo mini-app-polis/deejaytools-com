@@ -40,6 +40,7 @@ import LiveQueueSection from "./LiveQueueSection";
 import RunHistorySection from "./RunHistorySection";
 import StaffPortal from "./StaffPortal";
 import UploadForSection from "./UploadForSection";
+import { expectFieldError } from "@/test/fieldErrors";
 import { renderWithQueryClient } from "@/test/render";
 import type { QueryClient } from "@tanstack/react-query";
 
@@ -119,6 +120,7 @@ describe("EventSessionsSection", () => {
     fireEvent.change(pmax, { target: { value: "-1" } });
     submitForm();
     await waitFor(() => expect(toastError).toHaveBeenLastCalledWith("Active cap (priority) must be a whole number, 0 or more"));
+    await expectFieldError(pmax, "Active cap (priority) must be a whole number, 0 or more");
 
     fireEvent.change(pmax, { target: { value: "2" } });
     fireEvent.change(npmax, { target: { value: "-1" } });
@@ -555,6 +557,16 @@ describe("CheckinForSection", () => {
     expect(allPaths().some((p) => p.includes("/people"))).toBe(false);
   });
 
+  it("says at the session picker when no session is picked", async () => {
+    apiGet.mockImplementation((p: string) => Promise.resolve(p === "/v1/sessions?event_id=ev-1" ? [live("s-1")] : []));
+    inRouter(<CheckinForSection event={event} />);
+    const sessions = await screen.findByRole("radiogroup", { name: "Session" });
+    // Check in stays disabled until the form is complete: submit the form itself.
+    fireEvent.submit(screen.getByRole("button", { name: "Check in" }).closest("form")!);
+    await expectFieldError(sessions, "Select a session");
+    expect(apiPost).not.toHaveBeenCalled();
+  });
+
   it("toasts a refused check-in", async () => {
     apiGet.mockImplementation((p: string) => {
       if (p === "/v1/sessions?event_id=ev-1") return Promise.resolve([live("s-1")]);
@@ -600,6 +612,7 @@ describe("EventDetailsSection", () => {
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: " " } });
     fireEvent.click(save);
     await waitFor(() => expect(toastError).toHaveBeenLastCalledWith("Name is required"));
+    await expectFieldError(screen.getByLabelText("Name"), "Name is required");
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "X" } });
     fireEvent.change(screen.getByLabelText("Start date"), { target: { value: "" } });
     fireEvent.click(save);
@@ -695,6 +708,15 @@ describe("EventStaffSection", () => {
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("User not found"));
     expect(apiPut).toHaveBeenCalledWith("/v1/events/ev-1/staff/user_x/coordinator", undefined);
     expect(allPaths().some((p) => p.startsWith("/v1/admin"))).toBe(false);
+  });
+
+  it("says at the person picker when no one is picked", async () => {
+    inRouter(<EventStaffSection event={event} />);
+    const person = await screen.findByRole("combobox", { name: "Person" });
+    // Add to staff stays disabled until the form is complete: submit the form itself.
+    fireEvent.submit(screen.getByRole("button", { name: "Add to staff" }).closest("form")!);
+    await expectFieldError(person, "Choose a person");
+    expect(apiPut).not.toHaveBeenCalled();
   });
 
   it("toasts a failed revoke and keeps the row", async () => {

@@ -35,6 +35,7 @@ import SongUploadForm from "./SongUploadForm";
 import { MAX_FILE_BYTES } from "@/lib/chunkedSongUpload";
 import { toast } from "sonner";
 import { fx } from "@/test/fixtures";
+import { expectFieldError } from "@/test/fieldErrors";
 import { renderWithQueryClient } from "@/test/render";
 
 const EXPECTED_UPLOAD_DIVISIONS = [
@@ -146,6 +147,7 @@ describe("SongUploadForm — checks before uploading", () => {
     await screen.findByLabelText(/audio file/i);
     submit();
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Please select an audio file."));
+    await expectFieldError(screen.getByLabelText(/audio file/i), "Please select an audio file.");
     expect(uploadSongInChunks).not.toHaveBeenCalled();
   });
 
@@ -167,6 +169,7 @@ describe("SongUploadForm — checks before uploading", () => {
     chooseFile(audioFile());
     submit();
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Please select a division."));
+    await expectFieldError(screen.getByRole("radiogroup", { name: "Division" }), "Please select a division.");
     expect(uploadSongInChunks).not.toHaveBeenCalled();
   });
 });

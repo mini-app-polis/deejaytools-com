@@ -9,6 +9,7 @@ import QueryError from "@/components/QueryError";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChoiceGroup } from "@/components/ui/choice-group";
+import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { toastFirstError } from "@/lib/formErrors";
 import { formatSessionTitle } from "@/lib/sessionFormat";
 import type { ApiEvent } from "@/schemas";
@@ -41,15 +42,16 @@ export default function CheckinForSection({ event }: { event: ApiEvent }) {
   const submissionsQuery = useEndpointQuery(endpoints.events.songSubmissions, { params: { id: event.id } });
   const sessions = sessionsQuery.data ?? NO_ROWS;
   const submissions = submissionsQuery.data ?? NO_ROWS;
+  const form = useForm<CheckinForForm>({
+    resolver: zodResolver(checkinForSchema),
+    defaultValues: { sessionId: "", submissionId: "", division: "" },
+  });
   const {
     handleSubmit,
     setValue,
     watch,
     formState: { isSubmitting: submitting },
-  } = useForm<CheckinForForm>({
-    resolver: zodResolver(checkinForSchema),
-    defaultValues: { sessionId: "", submissionId: "", division: "" },
-  });
+  } = form;
   const sessionId = watch("sessionId");
   const submissionId = watch("submissionId");
   const division = watch("division");
@@ -66,8 +68,8 @@ export default function CheckinForSection({ event }: { event: ApiEvent }) {
 
   const submission = submissions.find((s) => s.id === submissionId) ?? null;
 
+  // A picked song brings its division, when this session offers it.
   const pickSong = (id: string) => {
-    setValue("submissionId", id);
     const d = submissions.find((s) => s.id === id)?.division ?? "";
     setDivision(sessionDivisions.includes(d) ? d : "");
   };
@@ -92,72 +94,104 @@ export default function CheckinForSection({ event }: { event: ApiEvent }) {
         <CardTitle>Check in for a dancer</CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={(e) => void handleSubmit(submit, toastFirstError)(e)} className="space-y-4 max-w-lg">
-          <div>
-            <span className={FIELD_LABEL_CLASS}>Session</span>
-            {sessionsQuery.error && !sessionsQuery.data ? (
-              <QueryError what="the sessions" error={sessionsQuery.error} onRetry={() => void sessionsQuery.refetch()} />
-            ) : sessionsQuery.isLoading ? null : openSessions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No session of this event is open for check-in.</p>
-            ) : (
-              <ChoiceGroup
-                ariaLabel="Session"
-                options={openSessions.map((s) => ({
-                  value: s.id,
-                  label: formatSessionTitle(s, s.event_timezone ?? event.timezone),
-                }))}
-                value={sessionId}
-                onChange={(id) => {
-                  setValue("sessionId", id);
-                  setDivision("");
-                }}
-              />
-            )}
-          </div>
-          <div>
-            <span className={FIELD_LABEL_CLASS}>Song</span>
-            {submissionsQuery.error && !submissionsQuery.data ? (
-              <QueryError
-                what="the submitted songs"
-                error={submissionsQuery.error}
-                onRetry={() => void submissionsQuery.refetch()}
-              />
-            ) : submissionsQuery.isLoading ? null : submissions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No songs submitted to this event yet.</p>
-            ) : (
-              <ChoiceGroup
-                ariaLabel="Song"
-                options={submissions.map((s) => ({
-                  value: s.id,
-                  label: `${s.partnership_label} · ${s.song_label}`,
-                }))}
-                value={submissionId}
-                onChange={pickSong}
-              />
-            )}
-          </div>
-          <div>
-            <span className={FIELD_LABEL_CLASS}>Division</span>
-            <ChoiceGroup
-              ariaLabel="Division"
-              options={sessionDivisions.map((d) => ({ value: d, label: d }))}
-              value={division}
-              onChange={setDivision}
-              disabled={!sessionId || sessionDivisions.length === 0}
+        <Form {...form}>
+          <form onSubmit={(e) => void handleSubmit(submit, toastFirstError)(e)} className="space-y-4 max-w-lg">
+            <FormField
+              control={form.control}
+              name="sessionId"
+              render={({ field }) => (
+                <FormItem className="space-y-0">
+                  <span className={FIELD_LABEL_CLASS}>Session</span>
+                  {sessionsQuery.error && !sessionsQuery.data ? (
+                    <QueryError what="the sessions" error={sessionsQuery.error} onRetry={() => void sessionsQuery.refetch()} />
+                  ) : sessionsQuery.isLoading ? null : openSessions.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No session of this event is open for check-in.</p>
+                  ) : (
+                    <FormControl>
+                      <ChoiceGroup
+                        ariaLabel="Session"
+                        options={openSessions.map((s) => ({
+                          value: s.id,
+                          label: formatSessionTitle(s, s.event_timezone ?? event.timezone),
+                        }))}
+                        value={field.value}
+                        onChange={(id) => {
+                          field.onChange(id);
+                          setDivision("");
+                        }}
+                      />
+                    </FormControl>
+                  )}
+                  <FormMessage className="mt-1" />
+                </FormItem>
+              )}
             />
-          </div>
-          <Button
-            type="submit"
-            size="lg"
-            className="w-full sm:w-auto"
-            disabled={submitting || !sessionId || !submission || !division}
-          >
-            {submitting ? "Checking in…" : "Check in"}
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            To withdraw a dancer, use Withdraw on their entry in the live queue.
-          </p>
-        </form>
+            <FormField
+              control={form.control}
+              name="submissionId"
+              render={({ field }) => (
+                <FormItem className="space-y-0">
+                  <span className={FIELD_LABEL_CLASS}>Song</span>
+                  {submissionsQuery.error && !submissionsQuery.data ? (
+                    <QueryError
+                      what="the submitted songs"
+                      error={submissionsQuery.error}
+                      onRetry={() => void submissionsQuery.refetch()}
+                    />
+                  ) : submissionsQuery.isLoading ? null : submissions.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No songs submitted to this event yet.</p>
+                  ) : (
+                    <FormControl>
+                      <ChoiceGroup
+                        ariaLabel="Song"
+                        options={submissions.map((s) => ({
+                          value: s.id,
+                          label: `${s.partnership_label} · ${s.song_label}`,
+                        }))}
+                        value={field.value}
+                        onChange={(id) => {
+                          field.onChange(id);
+                          pickSong(id);
+                        }}
+                      />
+                    </FormControl>
+                  )}
+                  <FormMessage className="mt-1" />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="division"
+              render={({ field }) => (
+                <FormItem className="space-y-0">
+                  <span className={FIELD_LABEL_CLASS}>Division</span>
+                  <FormControl>
+                    <ChoiceGroup
+                      ariaLabel="Division"
+                      options={sessionDivisions.map((d) => ({ value: d, label: d }))}
+                      value={field.value}
+                      onChange={field.onChange}
+                      disabled={!sessionId || sessionDivisions.length === 0}
+                    />
+                  </FormControl>
+                  <FormMessage className="mt-1" />
+                </FormItem>
+              )}
+            />
+            <Button
+              type="submit"
+              size="lg"
+              className="w-full sm:w-auto"
+              disabled={submitting || !sessionId || !submission || !division}
+            >
+              {submitting ? "Checking in…" : "Check in"}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              To withdraw a dancer, use Withdraw on their entry in the live queue.
+            </p>
+          </form>
+        </Form>
       </CardContent>
     </Card>
   );

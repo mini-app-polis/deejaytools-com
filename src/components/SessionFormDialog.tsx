@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { useDivisions } from "@/hooks/useDivisions";
 import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "@/lib/formFields";
 import { toastFirstError } from "@/lib/formErrors";
@@ -71,16 +72,16 @@ export default function SessionFormDialog(props: SessionFormDialogProps) {
       ? sessionFormFromSession(editing, editing.event_timezone ?? timezoneOf(editing.event_id ?? ""))
       : newSessionForm(props.event ?? events?.[0])
   );
+  const form = useForm<SessionForm>({
+    resolver: zodResolver(sessionFormSchema(divisionList.length > 0)),
+    defaultValues: initial,
+  });
   const {
-    register,
     handleSubmit,
     setValue,
     watch,
     formState: { isSubmitting: submitting },
-  } = useForm<SessionForm>({
-    resolver: zodResolver(sessionFormSchema(divisionList.length > 0)),
-    defaultValues: initial,
-  });
+  } = form;
   const eventId = watch("eventId");
   const date = watch("date");
   const startTime = watch("startTime");
@@ -145,106 +146,189 @@ export default function SessionFormDialog(props: SessionFormDialogProps) {
             {props.event ? props.event.name : "Times are in the event's timezone."}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={(e) => void handleSubmit(submit, toastFirstError)(e)} className="space-y-4">
-          {pickEvent && (
-            <div>
-              <label htmlFor="sess-event" className={FIELD_LABEL_CLASS}>Event</label>
-              <select
-                id="sess-event"
-                className={FIELD_INPUT_CLASS}
-                {...register("eventId", {
-                  onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
-                    const ev = events?.find((ev) => ev.id === e.target.value);
-                    if (ev) setValue("date", ev.start_date);
-                  },
-                })}
-              >
-                <option value="">Select event…</option>
-                {events?.map((ev) => (
-                  <option key={ev.id} value={ev.id}>{ev.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
-          <div>
-            <label htmlFor="sess-date" className={FIELD_LABEL_CLASS}>Date</label>
-            <input id="sess-date" type="date" className={FIELD_INPUT_CLASS} {...register("date")} required />
-          </div>
-          <div>
-            <label htmlFor="sess-start-time" className={FIELD_LABEL_CLASS}>
-              Start time
-              {eventTz && (
-                <span className="ml-1.5 font-normal text-muted-foreground">
-                  ({formatTimezoneAbbr(eventTz, date && startTime ? toEpochInTz(date, startTime, eventTz) : undefined)})
-                </span>
+        <Form {...form}>
+          <form noValidate onSubmit={(e) => void handleSubmit(submit, toastFirstError)(e)} className="space-y-4">
+            {pickEvent && (
+              <FormField
+                control={form.control}
+                name="eventId"
+                render={({ field }) => (
+                  <FormItem className="space-y-0">
+                    <label htmlFor="sess-event" className={FIELD_LABEL_CLASS}>Event</label>
+                    <FormControl>
+                      <select
+                        id="sess-event"
+                        className={FIELD_INPUT_CLASS}
+                        {...field}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          const ev = events?.find((ev) => ev.id === e.target.value);
+                          if (ev) setValue("date", ev.start_date);
+                        }}
+                      >
+                        <option value="">Select event…</option>
+                        {events?.map((ev) => (
+                          <option key={ev.id} value={ev.id}>{ev.name}</option>
+                        ))}
+                      </select>
+                    </FormControl>
+                    <FormMessage className="mt-1" />
+                  </FormItem>
+                )}
+              />
+            )}
+            <FormField
+              control={form.control}
+              name="date"
+              render={({ field }) => (
+                <FormItem className="space-y-0">
+                  <label htmlFor="sess-date" className={FIELD_LABEL_CLASS}>Date</label>
+                  <FormControl>
+                    <input id="sess-date" type="date" className={FIELD_INPUT_CLASS} {...field} required />
+                  </FormControl>
+                  <FormMessage className="mt-1" />
+                </FormItem>
               )}
-            </label>
-            <input id="sess-start-time" type="time" className={FIELD_INPUT_CLASS} {...register("startTime")} required />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="sess-checkin-opens" className={FIELD_LABEL_CLASS}>Check-in opens</label>
-              <select id="sess-checkin-opens" className={FIELD_INPUT_CLASS} {...register("checkinOffsetMins")}>
-                {withCurrent(
-                  CHECKIN_OFFSET_OPTIONS,
-                  savedOffset,
-                  savedOffset === "0" ? "Same as start" : `${savedOffset} min before`
-                ).map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
+            />
+            <FormField
+              control={form.control}
+              name="startTime"
+              render={({ field }) => (
+                <FormItem className="space-y-0">
+                  <label htmlFor="sess-start-time" className={FIELD_LABEL_CLASS}>
+                    Start time
+                    {eventTz && (
+                      <span className="ml-1.5 font-normal text-muted-foreground">
+                        ({formatTimezoneAbbr(eventTz, date && startTime ? toEpochInTz(date, startTime, eventTz) : undefined)})
+                      </span>
+                    )}
+                  </label>
+                  <FormControl>
+                    <input id="sess-start-time" type="time" className={FIELD_INPUT_CLASS} {...field} required />
+                  </FormControl>
+                  <FormMessage className="mt-1" />
+                </FormItem>
+              )}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <FormField
+                control={form.control}
+                name="checkinOffsetMins"
+                render={({ field }) => (
+                  <FormItem className="space-y-0">
+                    <label htmlFor="sess-checkin-opens" className={FIELD_LABEL_CLASS}>Check-in opens</label>
+                    <FormControl>
+                      <select id="sess-checkin-opens" className={FIELD_INPUT_CLASS} {...field}>
+                        {withCurrent(
+                          CHECKIN_OFFSET_OPTIONS,
+                          savedOffset,
+                          savedOffset === "0" ? "Same as start" : `${savedOffset} min before`
+                        ).map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </FormControl>
+                    <FormMessage className="mt-1" />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="durationMins"
+                render={({ field }) => (
+                  <FormItem className="space-y-0">
+                    <label htmlFor="sess-duration" className={FIELD_LABEL_CLASS}>Floor trial duration</label>
+                    <FormControl>
+                      <select id="sess-duration" className={FIELD_INPUT_CLASS} {...field}>
+                        {withCurrent(DURATION_OPTIONS, savedDuration, `${savedDuration} min`).map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </FormControl>
+                    <FormMessage className="mt-1" />
+                  </FormItem>
+                )}
+              />
             </div>
-            <div>
-              <label htmlFor="sess-duration" className={FIELD_LABEL_CLASS}>Floor trial duration</label>
-              <select id="sess-duration" className={FIELD_INPUT_CLASS} {...register("durationMins")}>
-                {withCurrent(DURATION_OPTIONS, savedDuration, `${savedDuration} min`).map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
+            <div className="grid grid-cols-2 gap-3">
+              <FormField
+                control={form.control}
+                name="priorityMax"
+                render={({ field }) => (
+                  <FormItem className="space-y-0">
+                    <label htmlFor="sess-priority-max" className={FIELD_LABEL_CLASS}>Active cap (priority)</label>
+                    <FormControl>
+                      <input id="sess-priority-max" type="number" min={0} step={1} className={FIELD_INPUT_CLASS} {...field} />
+                    </FormControl>
+                    <FormMessage className="mt-1" />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="nonPriorityMax"
+                render={({ field }) => (
+                  <FormItem className="space-y-0">
+                    <label htmlFor="sess-non-priority-max" className={FIELD_LABEL_CLASS}>Active cap (non-priority)</label>
+                    <FormControl>
+                      <input id="sess-non-priority-max" type="number" min={0} step={1} className={FIELD_INPUT_CLASS} {...field} />
+                    </FormControl>
+                    <FormMessage className="mt-1" />
+                  </FormItem>
+                )}
+              />
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="sess-priority-max" className={FIELD_LABEL_CLASS}>Active cap (priority)</label>
-              <input id="sess-priority-max" type="number" min={0} step={1} className={FIELD_INPUT_CLASS} {...register("priorityMax")} />
-            </div>
-            <div>
-              <label htmlFor="sess-non-priority-max" className={FIELD_LABEL_CLASS}>Active cap (non-priority)</label>
-              <input id="sess-non-priority-max" type="number" min={0} step={1} className={FIELD_INPUT_CLASS} {...register("nonPriorityMax")} />
-            </div>
-          </div>
-          <div>
-            <label htmlFor="sess-priority-run-limit" className={FIELD_LABEL_CLASS}>Priority run limit</label>
-            <input id="sess-priority-run-limit" type="number" min={0} step={1} className={FIELD_INPUT_CLASS} {...register("priorityRunLimit")} />
-            <p className="text-xs text-muted-foreground mt-1">
-              Number of runs that count as priority for each priority division.
-            </p>
-          </div>
-          <fieldset>
-            <legend className={FIELD_LABEL_CLASS}>Divisions</legend>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
-              {divisionList.map((d) => (
-                <label key={d} className="flex items-center gap-2 text-sm cursor-pointer py-0.5">
-                  <input
-                    type="checkbox"
-                    checked={divisionPriority[d] ?? false}
-                    onChange={() => setValue("divisionPriority", { ...divisionPriority, [d]: !divisionPriority[d] })}
-                  />
-                  <span>{d}</span>
-                  {divisionPriority[d] && <span className="text-xs text-primary font-medium">priority</span>}
-                </label>
-              ))}
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              All divisions are always included. Check the ones that grant priority status.
-            </p>
-          </fieldset>
-          <Button type="submit" disabled={submitting} size="lg" className="w-full">
-            {submitting
-              ? editing ? "Saving…" : "Creating…"
-              : editing ? "Save changes" : "Create session"}
-          </Button>
-        </form>
+            <FormField
+              control={form.control}
+              name="priorityRunLimit"
+              render={({ field }) => (
+                <FormItem className="space-y-0">
+                  <label htmlFor="sess-priority-run-limit" className={FIELD_LABEL_CLASS}>Priority run limit</label>
+                  <FormControl>
+                    <input id="sess-priority-run-limit" type="number" min={0} step={1} className={FIELD_INPUT_CLASS} {...field} />
+                  </FormControl>
+                  <FormDescription className="text-xs mt-1">
+                    Number of runs that count as priority for each priority division.
+                  </FormDescription>
+                  <FormMessage className="mt-1" />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="divisionPriority"
+              render={() => (
+                <FormItem className="space-y-0">
+                  <fieldset>
+                    <legend className={FIELD_LABEL_CLASS}>Divisions</legend>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
+                      {divisionList.map((d) => (
+                        <label key={d} className="flex items-center gap-2 text-sm cursor-pointer py-0.5">
+                          <input
+                            type="checkbox"
+                            checked={divisionPriority[d] ?? false}
+                            onChange={() => setValue("divisionPriority", { ...divisionPriority, [d]: !divisionPriority[d] })}
+                          />
+                          <span>{d}</span>
+                          {divisionPriority[d] && <span className="text-xs text-primary font-medium">priority</span>}
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      All divisions are always included. Check the ones that grant priority status.
+                    </p>
+                  </fieldset>
+                  <FormMessage className="mt-1" />
+                </FormItem>
+              )}
+            />
+            <Button type="submit" disabled={submitting} size="lg" className="w-full">
+              {submitting
+                ? editing ? "Saving…" : "Creating…"
+                : editing ? "Save changes" : "Create session"}
+            </Button>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );

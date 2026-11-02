@@ -10,6 +10,7 @@ import QueryError from "@/components/QueryError";
 import { Button } from "@/components/ui/button";
 import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { TabsContent } from "@/components/ui/tabs";
 import { toastFirstError } from "@/lib/formErrors";
 import { formatSessionTitle } from "@/lib/sessionFormat";
@@ -38,16 +39,17 @@ export default function ManagerCheckinForSection() {
   const sessionsQuery = useEndpointQuery(endpoints.sessions.list, { withToken: true });
   const sessions = sessionsQuery.data ?? null;
 
+  const form = useForm<CheckinForForm, unknown, CheckinForValues>({
+    resolver: zodResolver(checkinForSchema),
+    defaultValues: { user: null, sessionId: "", songId: "", division: "" },
+  });
   const {
     handleSubmit: cfValidate,
     reset: cfReset,
     setValue: cfSetValue,
     watch: cfWatch,
     formState: { isSubmitting: cfSubmitting },
-  } = useForm<CheckinForForm, unknown, CheckinForValues>({
-    resolver: zodResolver(checkinForSchema),
-    defaultValues: { user: null, sessionId: "", songId: "", division: "" },
-  });
+  } = form;
   const cfSelectedUser = cfWatch("user");
   const cfSessionId = cfWatch("sessionId");
   const cfSongId = cfWatch("songId");
@@ -76,8 +78,8 @@ export default function ManagerCheckinForSection() {
   const cfSubmissions =
     !cfSelectedUser || !cfSessionId ? null : !cfEventId ? [] : (cfSubmissionsQuery.data ?? null);
 
+  // A picked song brings its division, when this session offers it.
   const selectCfSong = (songId: string) => {
-    setCfSongId(songId);
     const submission = cfSubmissions?.find((s) => s.song_id === songId);
     if (!submission) return;
     const d = submission.division ?? "";
@@ -141,73 +143,105 @@ export default function ManagerCheckinForSection() {
             </div>
           </CardHeader>
           <CardContent>
-            <form onSubmit={(e) => void cfValidate(submitCheckinFor, toastFirstError)(e)} className="space-y-4 max-w-lg">
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Session</label>
-                <ChoiceGroup
-                  ariaLabel="Session"
-                  options={cfActiveSessions.map((s) => ({
-                    value: s.id,
-                    label: formatSessionTitle(s, s.event_timezone),
-                  }))}
-                  value={cfSessionId}
-                  onChange={(id) => cfSetValue("sessionId", id)}
+            <Form {...form}>
+              <form onSubmit={(e) => void cfValidate(submitCheckinFor, toastFirstError)(e)} className="space-y-4 max-w-lg">
+                <FormField
+                  control={form.control}
+                  name="sessionId"
+                  render={({ field }) => (
+                    <FormItem className="space-y-0">
+                      <label className={FIELD_LABEL_CLASS}>Session</label>
+                      <FormControl>
+                        <ChoiceGroup
+                          ariaLabel="Session"
+                          options={cfActiveSessions.map((s) => ({
+                            value: s.id,
+                            label: formatSessionTitle(s, s.event_timezone),
+                          }))}
+                          value={field.value}
+                          onChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormMessage className="mt-1" />
+                    </FormItem>
+                  )}
                 />
-              </div>
 
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Song</label>
-                {cfSessionObj && !cfSessionObj.event_id ? (
-                  <p className="text-sm text-muted-foreground">This session has no event</p>
-                ) : cfSubmissionsQuery.error && cfSubmissions === null ? (
-                  <QueryError
-                    what="this user's songs"
-                    error={cfSubmissionsQuery.error}
-                    onRetry={() => void cfSubmissionsQuery.refetch()}
-                  />
-                ) : cfSubmissions !== null && cfSubmissions.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No songs submitted to this event for this user
-                  </p>
-                ) : (
-                  <ChoiceGroup
-                    ariaLabel="Song"
-                    options={(cfSubmissions ?? []).map((sub) => ({
-                      value: sub.song_id,
-                      label: sub.song_label,
-                    }))}
-                    value={cfSongId}
-                    onChange={selectCfSong}
-                    disabled={!cfSessionId || cfSubmissions === null}
-                  />
-                )}
-              </div>
-
-              <div>
-                <label className={FIELD_LABEL_CLASS}>Division</label>
-                <ChoiceGroup
-                  ariaLabel="Division"
-                  options={cfSessionDivisions.map((d) => ({ value: d, label: d }))}
-                  value={cfDivision}
-                  onChange={setCfDivision}
-                  disabled={!cfSessionId || cfSessionDivisions.length === 0}
+                <FormField
+                  control={form.control}
+                  name="songId"
+                  render={({ field }) => (
+                    <FormItem className="space-y-0">
+                      <label className={FIELD_LABEL_CLASS}>Song</label>
+                      {cfSessionObj && !cfSessionObj.event_id ? (
+                        <p className="text-sm text-muted-foreground">This session has no event</p>
+                      ) : cfSubmissionsQuery.error && cfSubmissions === null ? (
+                        <QueryError
+                          what="this user's songs"
+                          error={cfSubmissionsQuery.error}
+                          onRetry={() => void cfSubmissionsQuery.refetch()}
+                        />
+                      ) : cfSubmissions !== null && cfSubmissions.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          No songs submitted to this event for this user
+                        </p>
+                      ) : (
+                        <FormControl>
+                          <ChoiceGroup
+                            ariaLabel="Song"
+                            options={(cfSubmissions ?? []).map((sub) => ({
+                              value: sub.song_id,
+                              label: sub.song_label,
+                            }))}
+                            value={field.value}
+                            onChange={(songId) => {
+                              field.onChange(songId);
+                              selectCfSong(songId);
+                            }}
+                            disabled={!cfSessionId || cfSubmissions === null}
+                          />
+                        </FormControl>
+                      )}
+                      <FormMessage className="mt-1" />
+                    </FormItem>
+                  )}
                 />
-              </div>
 
-              <Button
-                type="submit"
-                disabled={
-                  cfSubmitting ||
-                  !cfSessionId ||
-                  !cfSongId ||
-                  !cfDivision
-                }
-                size="lg"
-                className="w-full sm:w-auto"
-              >
-                {cfSubmitting ? "Checking in…" : "Check in"}
-              </Button>
-            </form>
+                <FormField
+                  control={form.control}
+                  name="division"
+                  render={({ field }) => (
+                    <FormItem className="space-y-0">
+                      <label className={FIELD_LABEL_CLASS}>Division</label>
+                      <FormControl>
+                        <ChoiceGroup
+                          ariaLabel="Division"
+                          options={cfSessionDivisions.map((d) => ({ value: d, label: d }))}
+                          value={field.value}
+                          onChange={field.onChange}
+                          disabled={!cfSessionId || cfSessionDivisions.length === 0}
+                        />
+                      </FormControl>
+                      <FormMessage className="mt-1" />
+                    </FormItem>
+                  )}
+                />
+
+                <Button
+                  type="submit"
+                  disabled={
+                    cfSubmitting ||
+                    !cfSessionId ||
+                    !cfSongId ||
+                    !cfDivision
+                  }
+                  size="lg"
+                  className="w-full sm:w-auto"
+                >
+                  {cfSubmitting ? "Checking in…" : "Check in"}
+                </Button>
+              </form>
+            </Form>
           </CardContent>
         </Card>
       )}
