@@ -5,15 +5,39 @@ import { ContractViolation } from "./contract";
 /** How many times a failed query is tried again before its error is shown. */
 const MAX_RETRIES = 2;
 
+/** Retries for a 429 or 503, which the server sends to say "later", not "no". */
+const MAX_THROTTLE_RETRIES = 4;
+const BACKOFF_BASE_MS = 1_000;
+const BACKOFF_CAP_MS = 30_000;
+/** The longest a Retry-After is honoured, so one odd header can't park a query. */
+const RETRY_AFTER_CAP_MS = 60_000;
+
+function isThrottle(error: unknown): error is ApiError {
+  return error instanceof ApiError && (error.status === 429 || error.status === 503);
+}
+
 /**
  * Whether a failed query is worth trying again. A 4xx (validation, auth,
  * not-found) and a response that broke its contract will answer the same way
- * on a retry; a network error or a 5xx may not.
+ * on a retry; a network error or a 5xx may not. A 429 or 503 is the server
+ * asking to come back later, so it gets more tries.
  */
 export function shouldRetry(failureCount: number, error: unknown): boolean {
+  if (isThrottle(error)) return failureCount < MAX_THROTTLE_RETRIES;
   if (error instanceof ApiError && error.status >= 400 && error.status < 500) return false;
   if (error instanceof ContractViolation) return false;
   return failureCount < MAX_RETRIES;
+}
+
+/**
+ * How long to wait before retry number `failureCount`: exponential backoff, at
+ * least the server's Retry-After, plus up to a second of jitter so clients that
+ * were refused together don't come back together.
+ */
+export function retryDelay(failureCount: number, error: unknown): number {
+  const backoff = Math.min(BACKOFF_BASE_MS * 2 ** failureCount, BACKOFF_CAP_MS);
+  const asked = isThrottle(error) ? Math.min(error.retryAfterMs ?? 0, RETRY_AFTER_CAP_MS) : 0;
+  return Math.max(backoff, asked) + Math.random() * BACKOFF_BASE_MS;
 }
 
 /**
@@ -25,6 +49,7 @@ export function createQueryClient(): QueryClient {
     defaultOptions: {
       queries: {
         retry: shouldRetry,
+        retryDelay,
         // Long enough that screens reading the same list on one visit share
         // one request; short enough that coming back later refetches.
         staleTime: 30_000,
