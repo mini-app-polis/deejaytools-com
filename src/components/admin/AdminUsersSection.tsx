@@ -25,7 +25,7 @@ import { TabsContent } from "@/components/ui/tabs";
  * mounted while another admin section is shown, keeping the search as it
  * was when the admin comes back.
  */
-export default function AdminUsersSection() {
+export default function AdminUsersSection({ open }: { open: boolean }) {
   // Identifies the current admin so the role toggle is hidden on their own
   // row (the API also rejects self-demotion).
   const { me } = useAuthMe();
@@ -41,6 +41,7 @@ export default function AdminUsersSection() {
   const usersQueryResult = useEndpointQuery(endpoints.admin.users, {
     params: usersDebouncedQuery ? { q: usersDebouncedQuery } : undefined,
     placeholderData: keepPreviousData,
+    enabled: open,
   });
   const users = usersQueryResult.data ?? null;
   const usersLoading = usersQueryResult.isFetching;

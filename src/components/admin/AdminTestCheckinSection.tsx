@@ -72,7 +72,7 @@ function testDancers() {
  * another admin section is shown, keeping the form as it was when the
  * admin comes back.
  */
-export default function AdminTestCheckinSection() {
+export default function AdminTestCheckinSection({ open }: { open: boolean }) {
   const { divisions: divisionOptions } = useDivisions();
 
   const [tcInitialDancers] = useState(testDancers);
@@ -98,10 +98,10 @@ export default function AdminTestCheckinSection() {
   const [pendingDeleteAllTestCheckins, setPendingDeleteAllTestCheckins] = useState(false);
 
   // The session picker, and each row's session label, come from the sessions list.
-  const sessionsQuery = useEndpointQuery(endpoints.sessions.list);
+  const sessionsQuery = useEndpointQuery(endpoints.sessions.list, { enabled: open });
   const sessions = sessionsQuery.data ?? null;
 
-  const tcQuery = useEndpointQuery(endpoints.admin.testCheckins);
+  const tcQuery = useEndpointQuery(endpoints.admin.testCheckins, { enabled: open });
   const tcData = tcQuery.data ?? null;
 
   const injectCheckin = useEndpointMutation(endpoints.admin.injectCheckin, {
