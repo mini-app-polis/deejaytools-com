@@ -25,6 +25,24 @@ export default function ManagerGuideSection() {
 
       <Section title="Before the event">
         <div>
+          <p className="font-medium text-foreground">Event-day runbook</p>
+          <p className="mt-1">
+            The{" "}
+            <a
+              href="https://github.com/mini-app-polis/api-deejaytools/blob/main/docs/EVENT-RUNBOOK.md"
+              target="_blank"
+              rel="noreferrer"
+            >
+              event-day runbook
+            </a>{" "}
+            covers what to check the week and the day before, what to watch during the event, and
+            how to keep the floor running on paper if the app goes down.{" "}
+            <strong>Print its fallback page</strong> for the desk and the event managers before the
+            event: if the app is down, so is this guide.
+          </p>
+        </div>
+
+        <div>
           <p className="font-medium text-foreground">Create an event</p>
           <p className="mt-1">
             Admin → <Link to="/admin/events">Events</Link> → New event. Set name, start date, end
