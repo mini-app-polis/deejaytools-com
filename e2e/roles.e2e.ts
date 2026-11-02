@@ -240,7 +240,8 @@ test("a staff member finds their event on My events and opens each portal it all
   staffEventId = event.id;
   const base = `/events/${encodeURIComponent(staffEventId)}`;
   const staffPath = (role: string) => `/v1/events/${staffEventId}/staff/${staffMe.id}/${role}`;
-  const card = () => page.getByRole("link").filter({ hasText: STAFF_EVENT });
+  // The My events card, not the nav bar's staff menu, which lists the event too.
+  const card = () => page.getByRole("main").getByRole("link").filter({ hasText: STAFF_EVENT });
   const portalHeading = () => page.getByRole("heading", { level: 1, name: STAFF_EVENT });
 
   await admin.call("PUT", staffPath("coordinator"));

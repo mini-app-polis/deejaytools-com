@@ -133,7 +133,7 @@ test("at the desk, a manager uploads a dancer's song, checks them in, and works 
     await page.goto("/manager/upload-for");
     await page.getByRole("combobox", { name: "User to upload for" }).fill(email);
     await dancerResult().click();
-    await expect(page.getByRole("group", { name: "User to upload for" })).toContainText(email);
+    await expect(page.getByText("Uploading as:")).toContainText(email);
     await page
       .getByRole("radiogroup", { name: "Partner" })
       .getByRole("radio", { name: `${PARTNER_FIRST} ${PARTNER_LAST}`, exact: true })
