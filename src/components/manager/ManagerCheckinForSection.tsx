@@ -14,8 +14,7 @@ import { TabsContent } from "@/components/ui/tabs";
 import { toastFirstError } from "@/lib/formErrors";
 import { formatSessionTitle } from "@/lib/sessionFormat";
 import PersonPicker from "@/components/staff/PersonPicker";
-
-const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
+import { FIELD_LABEL_CLASS } from "@/lib/formFields";
 
 /** CheckIn For: the user is picked by search, then the session, song and division. */
 const checkinForSchema = z.object({
@@ -36,7 +35,7 @@ type CheckinForValues = z.output<typeof checkinForSchema>;
  * section is shown, keeping the form as it was.
  */
 export default function ManagerCheckinForSection() {
-  const sessionsQuery = useEndpointQuery(endpoints.sessions.list);
+  const sessionsQuery = useEndpointQuery(endpoints.sessions.list, { withToken: true });
   const sessions = sessionsQuery.data ?? null;
 
   const {

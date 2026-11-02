@@ -17,11 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toastFirstError } from "@/lib/formErrors";
 import { formatDateTimeShort } from "@/lib/sessionFormat";
 import { songLabel } from "@/lib/songLabel";
-
-const FIELD_INPUT_CLASS =
-  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
-
-const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
+import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "@/lib/formFields";
 
 /** How often the queues and the session refresh on their own. */
 const QUEUE_POLL_MS = 60_000;

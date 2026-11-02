@@ -17,7 +17,10 @@ const ALL = "__all__";
  * event needs the global scope, which no event's staff holds.
  */
 export default function RunHistorySection({ event }: { event: ApiEvent }) {
-  const sessionsQuery = useEndpointQuery(endpoints.sessions.list, { params: { eventId: event.id } });
+  const sessionsQuery = useEndpointQuery(endpoints.sessions.list, {
+    params: { eventId: event.id },
+    withToken: true,
+  });
   const sessions = sessionsQuery.data ?? [];
   const [sessionId, setSessionId] = useState<string>(ALL);
   const [division, setDivision] = useState<string>(ALL);

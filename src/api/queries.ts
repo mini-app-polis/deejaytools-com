@@ -9,7 +9,15 @@ import { useApiClient } from "./client";
 import { call, type CallArgs, type Endpoint } from "./endpoints";
 import { queryKey, type KeyedEndpoint } from "./queryKeys";
 
-type QueryOptions<R> = Omit<UseQueryOptions<R, Error>, "queryKey" | "queryFn">;
+type QueryOptions<R> = Omit<UseQueryOptions<R, Error>, "queryKey" | "queryFn"> & {
+  /**
+   * Send the signed-in user's token on a public read, for a view whose answer
+   * depends on who is asking (admin and event-staff pages reading the session
+   * list fresh). Cached apart from the anonymous read, under the same prefix,
+   * so invalidating the endpoint refreshes both.
+   */
+  withToken?: boolean;
+};
 
 // Params are required exactly when the endpoint's params type does not allow
 // `void` — the same rule `call()` uses.
@@ -24,11 +32,11 @@ export type EndpointQueryArgs<P, R> = [void] extends [P]
  */
 export function useEndpointQuery<P, R>(ep: Endpoint<P, void, R>, ...args: EndpointQueryArgs<P, R>) {
   const api = useApiClient();
-  const { params, ...options } = (args[0] ?? {}) as { params?: P } & QueryOptions<R>;
+  const { params, withToken, ...options } = (args[0] ?? {}) as { params?: P } & QueryOptions<R>;
   return useQuery<R, Error>({
     ...options,
-    queryKey: queryKey(ep, params),
-    queryFn: () => call(api, ep, ...([{ params }] as CallArgs<P, void>)),
+    queryKey: queryKey(ep, params, withToken && ep.access === "public" ? "signed-in" : undefined),
+    queryFn: () => call(api, ep, ...([{ params, withToken }] as CallArgs<P, void>)),
   });
 }
 

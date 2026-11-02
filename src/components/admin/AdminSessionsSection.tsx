@@ -30,10 +30,12 @@ import { TabsContent } from "@/components/ui/tabs";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareSessionChrono } from "@/lib/chronoSort";
 import SessionStatusBadge from "@/components/SessionStatusBadge";
+import SessionStatusControl from "@/components/SessionStatusControl";
 
 /**
  * The admin Sessions section: every event's sessions bucketed by status,
- * with create, edit and delete. It renders its own TabsContent so it stays
+ * with create, edit, delete and setting any session's status (an explicit
+ * apply; cancelling asks first). It renders its own TabsContent so it stays
  * mounted while another admin section is shown, keeping its toggles and
  * dialogs as they were when the admin comes back.
  */
@@ -53,7 +55,7 @@ export default function AdminSessionsSection({ open }: { open: boolean }) {
   const eventsQuery = useEndpointQuery(endpoints.events.list, { enabled: open });
   const events = eventsQuery.data ?? null;
 
-  const sessionsQuery = useEndpointQuery(endpoints.sessions.list, { enabled: open });
+  const sessionsQuery = useEndpointQuery(endpoints.sessions.list, { enabled: open, withToken: true });
   const sessions = sessionsQuery.data ?? null;
   const loadingSessions = sessionsQuery.isFetching;
 
@@ -138,7 +140,13 @@ export default function AdminSessionsSection({ open }: { open: boolean }) {
           {formatTimeOnly(s.floor_trial_ends_at, s.event_timezone)}
         </TableCell>
         <TableCell onClick={(e) => e.stopPropagation()}>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <SessionStatusControl
+              session={s}
+              label={formatSessionTitle(s, s.event_timezone)}
+              invalidates={[endpoints.sessions.list, endpoints.sessions.get]}
+              disabled={sessDeletingId === s.id}
+            />
             <Button
               variant="outline"
               size="sm"
@@ -180,7 +188,7 @@ export default function AdminSessionsSection({ open }: { open: boolean }) {
               <TableHead>Open</TableHead>
               <TableHead>Start</TableHead>
               <TableHead>End</TableHead>
-              <TableHead className="w-[160px]">Actions</TableHead>
+              <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>{rows.map((s) => renderSessionRow(s))}</TableBody>

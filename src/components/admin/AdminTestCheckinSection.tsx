@@ -6,7 +6,8 @@ import { z } from "zod";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
 import QueryError from "@/components/QueryError";
-import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS, formatTime } from "@/components/admin/adminShared";
+import { formatTime } from "@/components/admin/adminShared";
+import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "@/lib/formFields";
 import { useDivisions } from "@/hooks/useDivisions";
 import { toastFirstError } from "@/lib/formErrors";
 import { Badge } from "@/components/ui/badge";
@@ -98,7 +99,7 @@ export default function AdminTestCheckinSection({ open }: { open: boolean }) {
   const [pendingDeleteAllTestCheckins, setPendingDeleteAllTestCheckins] = useState(false);
 
   // The session picker, and each row's session label, come from the sessions list.
-  const sessionsQuery = useEndpointQuery(endpoints.sessions.list, { enabled: open });
+  const sessionsQuery = useEndpointQuery(endpoints.sessions.list, { enabled: open, withToken: true });
   const sessions = sessionsQuery.data ?? null;
 
   const tcQuery = useEndpointQuery(endpoints.admin.testCheckins, { enabled: open });

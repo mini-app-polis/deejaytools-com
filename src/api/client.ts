@@ -92,16 +92,27 @@ async function parseEnvelope<T>(res: Response): Promise<T> {
   throw err;
 }
 
+/** Per-request options for `get`. */
+export interface GetOptions {
+  /**
+   * Send no Authorization header, signed in or not. Public reads go this way
+   * so the API answers them the same for everyone and they can be served
+   * from a shared cache.
+   */
+  anonymous?: boolean;
+}
+
 /**
  * React hook returning get/post/postForm/patch/put/del helpers that call the
- * API with the signed-in user's Clerk token and unwrap the response envelope.
+ * API with the signed-in user's Clerk token (unless a get asks for an
+ * anonymous request) and unwrap the response envelope.
  */
 export function useApiClient() {
   const { getToken } = useAuth();
 
   const withAuth = useCallback(
-    async (init: RequestInit = {}) => {
-      const token = await getToken();
+    async (init: RequestInit = {}, anonymous = false) => {
+      const token = anonymous ? null : await getToken();
       const headers = new Headers(init.headers);
       headers.set("Accept", "application/json");
       if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -111,8 +122,8 @@ export function useApiClient() {
   );
 
   const get = useCallback(
-    async <T>(path: string) => {
-      const res = await fetch(`${base}${path}`, await withAuth());
+    async <T>(path: string, opts: GetOptions = {}) => {
+      const res = await fetch(`${base}${path}`, await withAuth({}, opts.anonymous));
       return parseEnvelope<T>(res);
     },
     [withAuth]

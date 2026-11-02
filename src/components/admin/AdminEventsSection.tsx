@@ -33,7 +33,9 @@ import {
 import { TabsContent } from "@/components/ui/tabs";
 import { formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareEventChrono } from "@/lib/chronoSort";
-import { eventStatusBadge, FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "@/components/admin/adminShared";
+import { eventStatusBadge } from "@/components/admin/adminShared";
+import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "@/lib/formFields";
+import AdminEventManagersDialog from "@/components/admin/AdminEventManagersDialog";
 
 /** The event dialog, checked in the order it reads; only the first problem is reported. */
 const eventFormSchema = z
@@ -59,7 +61,8 @@ const EMPTY_EVENT: EventForm = { name: "", startDate: "", endDate: "", seasonYea
 
 /**
  * The admin Events section: events bucketed by status, with create, edit
- * and delete. It renders its own TabsContent so it stays mounted while
+ * and delete, and each event's managers (granting event manager is
+ * admin-only). It renders its own TabsContent so it stays mounted while
  * another admin section is shown, keeping its toggles and dialogs as they
  * were when the admin comes back.
  */
@@ -86,6 +89,8 @@ export default function AdminEventsSection({ open }: { open: boolean }) {
   const [showEventsCompleted, setShowEventsCompleted] = useState(false);
   /** Delete-confirmation dialog state. */
   const [pendingDeleteEventId, setPendingDeleteEventId] = useState<string | null>(null);
+  /** The event whose managers dialog is open. */
+  const [managersEvent, setManagersEvent] = useState<ApiEvent | null>(null);
 
   const eventsQuery = useEndpointQuery(endpoints.events.list, { enabled: open });
   const events = eventsQuery.data ?? null;
@@ -219,6 +224,14 @@ export default function AdminEventsSection({ open }: { open: boolean }) {
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => openEvEditDialog(ev)}>
             Edit
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={`Managers of ${ev.name}`}
+            onClick={() => setManagersEvent(ev)}
+          >
+            Managers
           </Button>
           <Button variant="destructive" size="sm" onClick={() => deleteEvent(ev.id)}>
             Delete
@@ -423,6 +436,10 @@ export default function AdminEventsSection({ open }: { open: boolean }) {
             </form>
           </div>
         </div>
+      )}
+
+      {managersEvent && (
+        <AdminEventManagersDialog event={managersEvent} onClose={() => setManagersEvent(null)} />
       )}
     </>
   );

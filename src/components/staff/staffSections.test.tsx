@@ -118,12 +118,12 @@ describe("EventSessionsSection", () => {
 
     fireEvent.change(pmax, { target: { value: "-1" } });
     submitForm();
-    await waitFor(() => expect(toastError).toHaveBeenLastCalledWith("Active cap (priority) must be a non-negative number"));
+    await waitFor(() => expect(toastError).toHaveBeenLastCalledWith("Active cap (priority) must be a whole number, 0 or more"));
 
     fireEvent.change(pmax, { target: { value: "2" } });
     fireEvent.change(npmax, { target: { value: "-1" } });
     submitForm();
-    await waitFor(() => expect(toastError).toHaveBeenLastCalledWith("Active cap (non-priority) must be a non-negative number"));
+    await waitFor(() => expect(toastError).toHaveBeenLastCalledWith("Active cap (non-priority) must be a whole number, 0 or more"));
 
     fireEvent.change(npmax, { target: { value: "3" } });
     submitForm();
@@ -132,7 +132,7 @@ describe("EventSessionsSection", () => {
     fireEvent.change(npmax, { target: { value: "1" } });
     fireEvent.change(runLimit, { target: { value: "-2" } });
     submitForm();
-    await waitFor(() => expect(toastError).toHaveBeenLastCalledWith("Priority run limit must be a non-negative number"));
+    await waitFor(() => expect(toastError).toHaveBeenLastCalledWith("Priority run limit must be a whole number, 0 or more"));
     expect(apiPost).not.toHaveBeenCalled();
   });
 
@@ -169,6 +169,73 @@ describe("EventSessionsSection", () => {
     );
   });
 
+  it("refreshes the session lists, the session and its event after a save", async () => {
+    apiPost.mockResolvedValue(live("s-2"));
+    const { queryClient } = inRouter(<EventSessionsSection event={event} />);
+    queryClient.setQueryData(["sessions.get", { id: "s-1" }], live("s-1"));
+    queryClient.setQueryData(["events.get", { id: "ev-1" }], event);
+    fireEvent.click(await screen.findByRole("button", { name: "New session" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Create session" }));
+
+    await waitFor(() => expect(apiPost).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(queryClient.getQueryState(["sessions.get", { id: "s-1" }])?.isInvalidated).toBe(true);
+      expect(queryClient.getQueryState(["events.get", { id: "ev-1" }])?.isInvalidated).toBe(true);
+    });
+    expect(apiGet.mock.calls.filter(([p]) => p === "/v1/sessions?event_id=ev-1").length).toBeGreaterThan(1);
+  });
+
+  it("closes the session form on Escape and hands focus back to New session", async () => {
+    inRouter(<EventSessionsSection event={event} />);
+    const create = await screen.findByRole("button", { name: "New session" });
+    create.focus();
+    fireEvent.click(create);
+    const dialog = await screen.findByRole("dialog", { name: "New session" });
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(create).toHaveFocus());
+    expect(apiPost).not.toHaveBeenCalled();
+  });
+
+  it("sends nothing while the status select is arrowed through, and applies on Apply", async () => {
+    apiPatch.mockResolvedValue({ ...live("s-1"), status: "completed" });
+    inRouter(<EventSessionsSection event={event} />);
+    const status = await screen.findByRole("combobox", { name: /^Status of/ });
+    const apply = screen.getByRole("button", { name: /^Apply status of/ });
+    expect(apply).toBeDisabled();
+
+    // A native select fires change on every arrow press.
+    status.focus();
+    for (const value of ["completed", "cancelled", "completed"]) {
+      fireEvent.keyDown(status, { key: "ArrowDown" });
+      fireEvent.change(status, { target: { value } });
+    }
+    expect(apiPatch).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    fireEvent.click(apply);
+    await waitFor(() => expect(apiPatch).toHaveBeenCalledWith("/v1/sessions/s-1/status", { status: "completed" }));
+    expect(apiPatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks before cancelling a session, and sends nothing when kept", async () => {
+    apiPatch.mockResolvedValue({ ...live("s-1"), status: "cancelled" });
+    inRouter(<EventSessionsSection event={event} />);
+    const status = await screen.findByRole("combobox", { name: /^Status of/ });
+    fireEvent.change(status, { target: { value: "cancelled" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Apply status of/ }));
+
+    const keep = await screen.findByRole("dialog", { name: "Cancel this session?" });
+    fireEvent.click(within(keep).getByRole("button", { name: "Keep session" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(apiPatch).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Apply status of/ }));
+    const confirm = await screen.findByRole("dialog", { name: "Cancel this session?" });
+    fireEvent.click(within(confirm).getByRole("button", { name: "Cancel session" }));
+    await waitFor(() => expect(apiPatch).toHaveBeenCalledWith("/v1/sessions/s-1/status", { status: "cancelled" }));
+  });
+
   it("toasts failed create, status and delete calls", async () => {
     apiPost.mockRejectedValue(new Error("overlaps"));
     apiPatch.mockRejectedValue(new Error("no status"));
@@ -178,7 +245,8 @@ describe("EventSessionsSection", () => {
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("overlaps"));
     fireEvent.keyDown(dialog, { key: "Escape" });
 
-    fireEvent.change(screen.getByRole("combobox", { name: /^Status of/ }), { target: { value: "cancelled" } });
+    fireEvent.change(screen.getByRole("combobox", { name: /^Status of/ }), { target: { value: "completed" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Apply status of/ }));
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("no status"));
 
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));

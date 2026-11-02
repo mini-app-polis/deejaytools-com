@@ -1,11 +1,11 @@
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
 import QueryError from "@/components/QueryError";
+import SessionFormDialog from "@/components/SessionFormDialog";
 import SessionStatusBadge from "@/components/SessionStatusBadge";
+import SessionStatusControl from "@/components/SessionStatusControl";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,71 +17,29 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { compareSessionChrono } from "@/lib/chronoSort";
-import { toastFirstError } from "@/lib/formErrors";
-import { sessionFormSchema, type SessionForm } from "@/lib/sessionForm";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
-import { epochToTimeInTz, toEpochInTz } from "@/lib/zonedTime";
-import { useDivisions } from "@/hooks/useDivisions";
-import { SessionStatusSchema, type ApiEvent, type ApiSession } from "@/schemas";
-
-const FIELD_INPUT_CLASS =
-  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
-const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
-
-type SessionStatus = (typeof SessionStatusSchema.options)[number];
-const STATUS_OPTIONS = SessionStatusSchema.options;
-
-// No division flagged priority. A division missing from the map is not priority.
-function noPriorityDivisions(): Record<string, boolean> {
-  return {};
-}
+import type { ApiEvent, ApiSession } from "@/schemas";
 
 /**
  * The event's floor-trial sessions: create, edit (times, caps, priority
- * divisions), set status, and delete. The same form and calls as the admin
- * Sessions page, fixed to one event, so every call names a session of this
- * event (or, on create, this event's id) and the API decides it against the
- * event.
+ * divisions), set status (an explicit apply; cancelling asks first), and
+ * delete. The same form as the admin Sessions page, with the event fixed, so
+ * every call names a session of this event (or, on create, this event's id)
+ * and the API decides it against the event.
  */
 export default function EventSessionsSection({ event }: { event: ApiEvent }) {
-  const { divisions: divisionList } = useDivisions();
   const tz = event.timezone;
-  const sessionsQuery = useEndpointQuery(endpoints.sessions.list, { params: { eventId: event.id } });
+  const sessionsQuery = useEndpointQuery(endpoints.sessions.list, {
+    params: { eventId: event.id },
+    withToken: true,
+  });
   const sessions = sessionsQuery.data ?? null;
   // A session's changes show on every session list and on the session itself.
   const sessionReads = [endpoints.sessions.list, endpoints.sessions.get];
-  const createSession = useEndpointMutation(endpoints.sessions.create, { invalidates: sessionReads });
-  const updateSession = useEndpointMutation(endpoints.sessions.update, { invalidates: sessionReads });
-  const setSessionDivisions = useEndpointMutation(endpoints.sessions.setDivisions, { invalidates: sessionReads });
-  const setSessionStatus = useEndpointMutation(endpoints.sessions.setStatus, { invalidates: sessionReads });
   const removeSession = useEndpointMutation(endpoints.sessions.remove, { invalidates: sessionReads });
 
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const newSessionForm = (): SessionForm => ({
-    date: event.start_date,
-    startTime: "07:00",
-    checkinOffsetMins: "30",
-    durationMins: "120",
-    priorityMax: "6",
-    nonPriorityMax: "4",
-    priorityRunLimit: "1",
-    divisionPriority: noPriorityDivisions(),
-  });
-  const {
-    register,
-    handleSubmit,
-    reset,
-    setValue,
-    watch,
-    formState: { isSubmitting: submitting },
-  } = useForm<SessionForm>({
-    resolver: zodResolver(sessionFormSchema(divisionList.length > 0)),
-    defaultValues: newSessionForm(),
-  });
-  const date = watch("date");
-  const startTime = watch("startTime");
-  const divisionPriority = watch("divisionPriority");
+  /** The session form: null while closed, "new" to create, or the session to edit. */
+  const [formFor, setFormFor] = useState<ApiSession | "new" | null>(null);
   const [pendingDelete, setPendingDelete] = useState<ApiSession | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -89,110 +47,6 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
     () => (sessions ?? []).slice().sort((a, b) => compareSessionChrono(a, b)),
     [sessions]
   );
-
-  const openCreate = () => {
-    setEditId(null);
-    reset(newSessionForm());
-    setDialogOpen(true);
-  };
-
-  const openEdit = (s: ApiSession) => {
-    const sTz = s.event_timezone ?? tz;
-    setEditId(s.id);
-    const flags = noPriorityDivisions();
-    let runLimit = 1;
-    for (const d of s.divisions ?? []) {
-      flags[d.division_name] = d.is_priority;
-      const limit = d.priority_run_limit ?? 0;
-      if (d.is_priority && limit > 0) runLimit = limit;
-    }
-    reset({
-      date: s.date ?? event.start_date,
-      startTime: epochToTimeInTz(s.floor_trial_starts_at, sTz),
-      checkinOffsetMins: String(Math.max(0, Math.round((s.floor_trial_starts_at - s.checkin_opens_at) / 60_000))),
-      durationMins: String(Math.max(1, Math.round((s.floor_trial_ends_at - s.floor_trial_starts_at) / 60_000))),
-      priorityMax: String(s.active_priority_max ?? 6),
-      nonPriorityMax: String(s.active_non_priority_max ?? 4),
-      priorityRunLimit: String(runLimit),
-      divisionPriority: flags,
-    });
-    setDialogOpen(true);
-  };
-
-  // The schema has checked the fields, so the numbers parse and are in range.
-  const submit = async (v: SessionForm) => {
-    const { date, startTime, checkinOffsetMins, durationMins, divisionPriority } = v;
-    const pMax = Number(v.priorityMax);
-    const npMax = Number(v.nonPriorityMax);
-    const runLimitNum = Number(v.priorityRunLimit);
-
-    const floorStartsAt = toEpochInTz(date, startTime, tz);
-    const checkinOpensAt = floorStartsAt - Number(checkinOffsetMins) * 60_000;
-    const floorEndsAt = floorStartsAt + Number(durationMins) * 60_000;
-    const name = new Date(`${date}T12:00:00`).toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-    const divisions = divisionList.map((d, i) => ({
-      division_name: d,
-      is_priority: divisionPriority[d] ?? false,
-      sort_order: i,
-      priority_run_limit: (divisionPriority[d] ?? false) ? runLimitNum : 0,
-    }));
-    const fields = {
-      event_id: event.id,
-      name,
-      date,
-      checkin_opens_at: checkinOpensAt,
-      floor_trial_starts_at: floorStartsAt,
-      floor_trial_ends_at: floorEndsAt,
-      active_priority_max: pMax,
-      active_non_priority_max: npMax,
-    };
-
-    try {
-      if (editId) {
-        try {
-          await updateSession.mutateAsync({ params: { id: editId }, body: fields });
-        } catch (err) {
-          throw new Error(
-            `Failed to update session fields: ${err instanceof Error ? err.message : String(err)}`,
-            { cause: err }
-          );
-        }
-        try {
-          await setSessionDivisions.mutateAsync({ params: { id: editId }, body: { divisions } });
-        } catch (err) {
-          throw new Error(
-            `Session fields saved, but failed to update divisions: ${err instanceof Error ? err.message : String(err)}`,
-            { cause: err }
-          );
-        }
-        toast.success("Session updated");
-      } else {
-        await createSession.mutateAsync({ body: { ...fields, divisions } });
-        toast.success("Session created");
-      }
-      setDialogOpen(false);
-      setEditId(null);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save session");
-    }
-  };
-
-  const setStatus = async (s: ApiSession, status: SessionStatus) => {
-    setBusyId(s.id);
-    try {
-      await setSessionStatus.mutateAsync({ params: { id: s.id }, body: { status } });
-      toast.success("Status updated");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to set status");
-    } finally {
-      setBusyId(null);
-    }
-  };
 
   const confirmDelete = async () => {
     if (!pendingDelete) return;
@@ -211,7 +65,7 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
 
   return (
     <div className="space-y-4">
-      <Button onClick={openCreate} className="w-full sm:w-auto">
+      <Button onClick={() => setFormFor("new")} className="w-full sm:w-auto">
         New session
       </Button>
 
@@ -241,21 +95,13 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
                   Priority divisions: {priority.length > 0 ? priority.join(", ") : "none"}
                 </p>
                 <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <label className="flex items-center gap-2 text-sm">
-                    <span className="text-muted-foreground">Status</span>
-                    <select
-                      aria-label={`Status of ${formatSessionTitle(s, sTz)}`}
-                      className="rounded-md border border-input bg-background px-2 py-1 text-sm"
-                      value={s.status}
-                      disabled={busyId === s.id}
-                      onChange={(e) => void setStatus(s, e.target.value as SessionStatus)}
-                    >
-                      {STATUS_OPTIONS.map((o) => (
-                        <option key={o} value={o}>{o}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <Button size="sm" variant="outline" onClick={() => openEdit(s)}>
+                  <SessionStatusControl
+                    session={s}
+                    label={formatSessionTitle(s, sTz)}
+                    invalidates={sessionReads}
+                    disabled={busyId === s.id}
+                  />
+                  <Button size="sm" variant="outline" onClick={() => setFormFor(s)}>
                     Edit
                   </Button>
                   <Button
@@ -274,92 +120,13 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
         </div>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={(open: boolean) => { if (!open) setDialogOpen(false); }}>
-        <DialogContent className="max-h-[92vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editId ? "Edit session" : "New session"}</DialogTitle>
-            <DialogDescription>{event.name}</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={(e) => void handleSubmit(submit, toastFirstError)(e)} className="space-y-4">
-            <div>
-              <label htmlFor="staff-sess-date" className={FIELD_LABEL_CLASS}>Date</label>
-              <input id="staff-sess-date" type="date" className={FIELD_INPUT_CLASS} {...register("date")} required />
-            </div>
-            <div>
-              <label htmlFor="staff-sess-start" className={FIELD_LABEL_CLASS}>
-                Start time
-                <span className="ml-1.5 font-normal text-muted-foreground">
-                  ({formatTimezoneAbbr(tz, date && startTime ? toEpochInTz(date, startTime, tz) : undefined)})
-                </span>
-              </label>
-              <input id="staff-sess-start" type="time" className={FIELD_INPUT_CLASS} {...register("startTime")} required />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="staff-sess-checkin" className={FIELD_LABEL_CLASS}>Check-in opens</label>
-                <select id="staff-sess-checkin" className={FIELD_INPUT_CLASS} {...register("checkinOffsetMins")}>
-                  <option value="0">Same as start</option>
-                  <option value="15">15 min before</option>
-                  <option value="30">30 min before</option>
-                  <option value="45">45 min before</option>
-                  <option value="60">1 hour before</option>
-                  <option value="90">1.5 hours before</option>
-                  <option value="120">2 hours before</option>
-                </select>
-              </div>
-              <div>
-                <label htmlFor="staff-sess-duration" className={FIELD_LABEL_CLASS}>Floor trial duration</label>
-                <select id="staff-sess-duration" className={FIELD_INPUT_CLASS} {...register("durationMins")}>
-                  {[60, 90, 120, 150, 180, 210, 240, 270, 300].map((m) => (
-                    <option key={m} value={String(m)}>{m % 60 === 0 ? `${m / 60} hour${m === 60 ? "" : "s"}` : `${m / 60} hours`}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="staff-sess-pmax" className={FIELD_LABEL_CLASS}>Active cap (priority)</label>
-                <input id="staff-sess-pmax" type="number" min={0} className={FIELD_INPUT_CLASS} {...register("priorityMax")} />
-              </div>
-              <div>
-                <label htmlFor="staff-sess-npmax" className={FIELD_LABEL_CLASS}>Active cap (non-priority)</label>
-                <input id="staff-sess-npmax" type="number" min={0} className={FIELD_INPUT_CLASS} {...register("nonPriorityMax")} />
-              </div>
-            </div>
-            <div>
-              <label htmlFor="staff-sess-runlimit" className={FIELD_LABEL_CLASS}>Priority run limit</label>
-              <input id="staff-sess-runlimit" type="number" min={0} className={FIELD_INPUT_CLASS} {...register("priorityRunLimit")} />
-              <p className="text-xs text-muted-foreground mt-1">
-                Number of runs that count as priority for each priority division.
-              </p>
-            </div>
-            <div>
-              <span className={FIELD_LABEL_CLASS}>Divisions</span>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
-                {divisionList.map((d) => (
-                  <label key={d} className="flex items-center gap-2 text-sm cursor-pointer py-0.5">
-                    <input
-                      type="checkbox"
-                      checked={divisionPriority[d] ?? false}
-                      onChange={() => setValue("divisionPriority", { ...divisionPriority, [d]: !divisionPriority[d] })}
-                    />
-                    <span>{d}</span>
-                    {divisionPriority[d] && <span className="text-xs text-primary font-medium">priority</span>}
-                  </label>
-                ))}
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                All divisions are always included. Check the ones that grant priority status.
-              </p>
-            </div>
-            <Button type="submit" disabled={submitting} size="lg" className="w-full">
-              {submitting
-                ? editId ? "Saving…" : "Creating…"
-                : editId ? "Save changes" : "Create session"}
-            </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {formFor !== null && (
+        <SessionFormDialog
+          event={event}
+          editing={formFor === "new" ? null : formFor}
+          onClose={() => setFormFor(null)}
+        />
+      )}
 
       <Dialog open={!!pendingDelete} onOpenChange={(open: boolean) => { if (!open) setPendingDelete(null); }}>
         <DialogContent>

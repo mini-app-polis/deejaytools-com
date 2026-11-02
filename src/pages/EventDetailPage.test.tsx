@@ -377,7 +377,7 @@ describe("EventDetailPage", () => {
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: /custom event/i })).toBeInTheDocument()
     );
-    expect(apiGet).toHaveBeenCalledWith("/v1/events/custom-id");
+    expect(apiGet).toHaveBeenCalledWith("/v1/events/custom-id", { anonymous: true });
   });
 
   it("ignores a late response for the previous :id", async () => {
@@ -397,7 +397,7 @@ describe("EventDetailPage", () => {
       </MemoryRouter>
     );
 
-    await waitFor(() => expect(apiGet).toHaveBeenCalledWith("/v1/events/ev-a"));
+    await waitFor(() => expect(apiGet).toHaveBeenCalledWith("/v1/events/ev-a", { anonymous: true }));
     await user.click(screen.getByRole("link", { name: "go to b" }));
     expect(await screen.findByRole("heading", { name: "Event B" })).toBeInTheDocument();
 
@@ -437,7 +437,7 @@ describe("EventDetailPage", () => {
     renderPage("ev-1");
 
     await waitFor(() =>
-      expect(apiGet).toHaveBeenCalledWith(expect.stringContaining("event_id=ev-1"))
+      expect(apiGet).toHaveBeenCalledWith(expect.stringContaining("event_id=ev-1"), { anonymous: true })
     );
   });
 });

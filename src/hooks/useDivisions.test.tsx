@@ -46,7 +46,7 @@ describe("useDivisions", () => {
     expect(result.current.groups).toEqual(LIST.groups);
     expect(result.current.divisions).toEqual(LIST.divisions);
     expect(result.current.error).toBeNull();
-    expect(apiGet).toHaveBeenCalledWith("/v1/divisions");
+    expect(apiGet).toHaveBeenCalledWith("/v1/divisions", { anonymous: true });
   });
 
   it("fetches once for every caller", async () => {

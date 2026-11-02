@@ -12,8 +12,7 @@ import { ChoiceGroup } from "@/components/ui/choice-group";
 import { toastFirstError } from "@/lib/formErrors";
 import { formatSessionTitle } from "@/lib/sessionFormat";
 import type { ApiEvent } from "@/schemas";
-
-const FIELD_LABEL_CLASS = "block text-sm font-medium mb-1";
+import { FIELD_LABEL_CLASS } from "@/lib/formFields";
 
 // A stable empty list while a query has no data, so memos over it hold.
 const NO_ROWS: readonly never[] = [];
@@ -35,7 +34,10 @@ type CheckinForForm = z.infer<typeof checkinForSchema>;
  * dancer is done from the live queue.
  */
 export default function CheckinForSection({ event }: { event: ApiEvent }) {
-  const sessionsQuery = useEndpointQuery(endpoints.sessions.list, { params: { eventId: event.id } });
+  const sessionsQuery = useEndpointQuery(endpoints.sessions.list, {
+    params: { eventId: event.id },
+    withToken: true,
+  });
   const submissionsQuery = useEndpointQuery(endpoints.events.songSubmissions, { params: { id: event.id } });
   const sessions = sessionsQuery.data ?? NO_ROWS;
   const submissions = submissionsQuery.data ?? NO_ROWS;

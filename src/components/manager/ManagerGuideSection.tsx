@@ -57,7 +57,8 @@ export default function ManagerGuideSection() {
             </li>
             <li>
               <strong>Check-in opens</strong> — how long before start check-in unlocks. Options from
-              same as start through 2 hours before; default is 30 minutes.
+              15 minutes through 2 hours before; default is 30 minutes. Check-in always opens
+              before the start.
             </li>
             <li>
               <strong>Floor trial duration</strong> — 1 to 5 hours in half-hour steps; default 2
@@ -231,6 +232,17 @@ export default function ManagerGuideSection() {
 
       <Section title="Admin screens">
         <ul>
+          <li>
+            <Link to="/admin/events">Events</Link> — <strong>Managers</strong> on an event&apos;s
+            row grants or revokes its event managers. Pick anyone by name or email; they get the
+            event&apos;s manager portal under My events. Only admins can make event managers; an
+            event manager adds the event&apos;s coordinators and DJs.
+          </li>
+          <li>
+            <Link to="/admin/sessions">Sessions</Link> — set any session&apos;s status: pick it in
+            the Status select, then press <strong>Apply</strong>. Nothing changes until you apply;
+            choosing <strong>cancelled</strong> asks you to confirm first.
+          </li>
           <li>
             <Link to="/admin/runs">Run History</Link> — Completed runs filterable by event and
             session (card pickers), with division summary chips. <strong>by &lt;name&gt;</strong> is
