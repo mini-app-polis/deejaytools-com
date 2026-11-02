@@ -169,11 +169,18 @@ function dateIn(timezone: string, offsetDays: number): string {
   }).format(new Date(Date.now() + offsetDays * 86_400_000));
 }
 
-async function waitForActive(sessionId: string): Promise<string> {
+/**
+ * Wait for an active entry other than `done`. The API caches queue reads for
+ * a few seconds in each worker process, and a mutation clears only the
+ * cache of the worker that served it, so an entry just completed can still
+ * be listed as active for a moment.
+ */
+async function waitForActive(sessionId: string, done: string[] = []): Promise<string> {
   const deadline = Date.now() + QUEUE_FILL_TIMEOUT_MS;
   while (Date.now() < deadline) {
     const active = await ledger.hit(endpoints.queue.active, { params: { sessionId } });
-    if (active.length > 0) return active[0].queueEntryId;
+    const next = active.find((e) => !done.includes(e.queueEntryId));
+    if (next) return next.queueEntryId;
     await sleep(QUEUE_POLL_MS);
   }
   throw new Error(
@@ -850,7 +857,7 @@ describe("contract", () => {
     const publicActive = await ledger.hit(endpoints.queue.active, { params: { sessionId } });
     expect(publicActive.every((e) => e.notes === null)).toBe(true);
     await ledger.hit(endpoints.queue.complete, { body: { queueEntryId: first } });
-    const second = await waitForActive(sessionId);
+    const second = await waitForActive(sessionId, [first]);
     await ledger.hit(endpoints.queue.incomplete, { body: { queueEntryId: second } });
 
     const runs = await ledger.hit(endpoints.runs.list, { params: { query: `session_id=${encodeURIComponent(sessionId)}` } });
