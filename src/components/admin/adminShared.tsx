@@ -22,27 +22,6 @@ export function eventStatusBadge(status: string) {
   }
 }
 
-export function sessionStatusBadge(status: string) {
-  switch (status) {
-    case "scheduled":
-      return <Badge variant="secondary">{status}</Badge>;
-    case "checkin_open":
-      return <Badge variant="default">{status}</Badge>;
-    case "in_progress":
-      return (
-        <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 border-transparent">
-          {status}
-        </Badge>
-      );
-    case "completed":
-      return <Badge variant="outline">{status}</Badge>;
-    case "cancelled":
-      return <Badge variant="destructive">{status}</Badge>;
-    default:
-      return <Badge variant="outline">{status}</Badge>;
-  }
-}
-
 export function formatTime(ts: number): string {
   return new Date(ts).toLocaleString(undefined, {
     dateStyle: "short",

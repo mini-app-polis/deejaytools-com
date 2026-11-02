@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointQuery } from "@/api/queries";
 import QueryError from "@/components/QueryError";
+import SessionStatusBadge from "@/components/SessionStatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,27 +23,6 @@ import { cn } from "@/lib/utils";
 function isListable(status: string): boolean {
   const bucket = floorTrialBucket(status);
   return bucket === "active" || bucket === "upcoming";
-}
-
-function sessionStatusBadge(status: string) {
-  switch (status) {
-    case "scheduled":
-      return <Badge variant="secondary">{status}</Badge>;
-    case "checkin_open":
-      return <Badge variant="default">{status}</Badge>;
-    case "in_progress":
-      return (
-        <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 border-transparent">
-          {status}
-        </Badge>
-      );
-    case "completed":
-      return <Badge variant="outline">{status}</Badge>;
-    case "cancelled":
-      return <Badge variant="destructive">{status}</Badge>;
-    default:
-      return <Badge variant="outline">{status}</Badge>;
-  }
 }
 
 export default function FloorTrialsPage() {
@@ -135,7 +115,7 @@ export default function FloorTrialsPage() {
                       {eventName}
                     </Badge>
                   )}
-                  {sessionStatusBadge(s.status)}
+                  <SessionStatusBadge status={s.status} />
                 </div>
                 <p className="flex flex-wrap items-center gap-2 font-medium text-base leading-snug transition-colors group-hover:text-primary">
                   {formatSessionTitle(s, eventTz)}

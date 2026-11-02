@@ -688,7 +688,7 @@ describe("AdminPage — Sessions section", () => {
     const row = title.closest("tr")!;
     expect(row).toHaveTextContent("Swing Fling");
     expect(row).toHaveTextContent("CDT");
-    expect(row).toHaveTextContent("checkin_open");
+    expect(row).toHaveTextContent("Check-in open");
     expect(row).toHaveTextContent("6:15 AM");
     expect(row).toHaveTextContent("10:00 AM");
     expect(screen.queryByText(/March 1, 2025/)).not.toBeInTheDocument();
@@ -723,7 +723,7 @@ describe("AdminPage — Sessions section", () => {
     renderWithDetailRoutes("/admin/sessions");
 
     const row = (await screen.findByRole("link", { name: SESS_OPEN_TITLE })).closest("tr")!;
-    await user.click(within(row).getByText("checkin_open"));
+    await user.click(within(row).getByText("Check-in open"));
     expect(await screen.findByText("session detail page")).toBeInTheDocument();
   });
 
