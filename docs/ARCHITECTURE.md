@@ -36,7 +36,7 @@ src/
 ├── api/           HTTP client hook, endpoint catalog, and the TanStack Query layer over them
 ├── components/    Shared UI, guards, layout, domain sections
 │   ├── help/      HelpLayout, HelpSection, HelpStillStuck, helpTopics
-│   ├── manager/   ManagerGuideSection (manager ops guide tab)
+│   ├── manager/   ManagerPage's sections (active sessions, event songs, upload for, check in for, guide)
 │   ├── staff/     Per-event staff portals and their sections
 │   └── ui/        shadcn primitives (+ the custom choice-group)
 ├── hooks/         Cross-cutting React hooks (auth profile, divisions, staff events, API version)
@@ -98,7 +98,7 @@ One default-export component per route. Pages orchestrate fetching, local state,
 | `QueryError.tsx` | What a page shows, with a retry, where a query's data would be when it fails (§3) |
 | `MaintenancePage.tsx` | Replaces the whole app when the build has `VITE_MAINTENANCE=1` |
 | `EventRoleGuard.tsx` | Requires a staff role, or a richer one, on the event in `:eventId` |
-| `admin/` | Admin dashboard sections that `AdminPage` renders, each owning its state, forms and queries (`AdminEventsSection`, `AdminSessionsSection` with its `AdminSessionDialog`), and `adminShared.tsx` for the status badges, time formatting and field classes the sections share |
+| `admin/` | Admin dashboard sections that `AdminPage` renders, each owning its state, forms and queries (`AdminEventsSection`, `AdminSessionsSection` with its `AdminSessionDialog`, `AdminRunsSection`, `AdminSongsSection`, `AdminTestCheckinSection`, `AdminUsersSection`), and `adminShared.tsx` for the status badges, time formatting and field classes the sections share |
 | `staff/` | Per-event staff portals: `StaffPortal` (shell + section tabs), `portalSections.tsx` (which sections each portal has) and one component per section |
 | `SongUploadForm.tsx` | Chunked upload form (self + managed variants) |
 | `SpecialUploadForm.tsx` | Portal-specific upload (Teams/Cabaret/etc.) |
@@ -107,6 +107,7 @@ One default-export component per route. Pages orchestrate fetching, local state,
 | `help/HelpLayout.tsx` | Shared shell for help sub-pages (hash scroll, prev/next) |
 | `help/HelpSection.tsx` | Section + subheading primitives with `scroll-mt-24` anchors |
 | `help/helpTopics.ts` | `HELP_TOPICS` (hub grid + nav order) and `LEGACY_HASH_REDIRECTS` (old `/how-it-works#…` → sub-page + hash) |
+| `manager/ManagerActiveSessionsSection.tsx`, `ManagerEventSongsSection.tsx`, `ManagerUploadForSection.tsx`, `ManagerCheckinForSection.tsx` | `ManagerPage`'s sections; each renders its own `<TabsContent>` and stays mounted |
 | `manager/ManagerGuideSection.tsx` | Manager ops guide at `/manager/guide` |
 | `ui/` | shadcn primitives (see §7) |
 
@@ -324,7 +325,7 @@ export const MANAGER_SECTIONS = [
 ] as const;
 ```
 
-`active-sessions` renders the staff `LiveQueueSection` over today's sessions across all events, and check-in-for and upload-for pick the person with `PersonPicker` searching every user (admins only reach this page). `guide` renders `ManagerGuideSection` (floor-trial ops reference). NavBar lists **Guide** last in `MANAGER_ITEMS` (`/manager/guide`); the bare `/manager` redirect lands on `active-sessions`.
+`ManagerPage` is a shell: each section is a component in `components/manager/` (`ManagerActiveSessionsSection`, `ManagerEventSongsSection`, `ManagerUploadForSection`, `ManagerCheckinForSection`) that renders its own `<TabsContent>` and stays mounted, so its state holds across a section switch. The page keeps the active-sessions session id itself, because the live queue inside unmounts on a switch. `active-sessions` renders the staff `LiveQueueSection` over today's sessions across all events, and check-in-for and upload-for pick the person with `PersonPicker` searching every user (admins only reach this page). `guide` renders `ManagerGuideSection` (floor-trial ops reference). NavBar lists **Guide** last in `MANAGER_ITEMS` (`/manager/guide`); the bare `/manager` redirect lands on `active-sessions`.
 
 Each page reads `:section` from `useParams`, validates against its `*_SECTIONS` array, and falls back to a default (`events` / `active-sessions`) when the slug is missing or unknown — so `/admin/foo` shows the default section instead of a blank screen.
 
@@ -601,7 +602,7 @@ A failed refresh shows `Couldn't refresh the queue; it may be out of date` with 
 
 ### A new manager section
 
-Same pattern with `MANAGER_SECTIONS`, `ManagerPage.tsx` `<TabsContent>`, and `MANAGER_ITEMS` in `NavBar.tsx`.
+Same pattern with `MANAGER_SECTIONS`, a section component under `components/manager/` rendered from `ManagerPage.tsx`, and `MANAGER_ITEMS` in `NavBar.tsx`.
 
 ### A new API call
 
