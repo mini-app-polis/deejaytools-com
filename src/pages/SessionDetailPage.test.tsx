@@ -81,8 +81,8 @@ function makeSession(opts: {
     })),
     queue_depth: { priority: 0, non_priority: 0, active: 0 },
   });
-  // The detail read's fields, plus per-caller fields the API no longer sends:
-  // a test sets those to check the page ignores them.
+  // The detail read's fields, plus per-caller fields outside its schema: a
+  // test sets those to check the page ignores them.
   return {
     ...session,
     event_name: opts.eventName ?? null,
