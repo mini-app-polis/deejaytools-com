@@ -1,3 +1,10 @@
+## [2.23.3](https://github.com/mini-app-polis/deejaytools-com/compare/v2.23.2...v2.23.3) (2026-11-03)
+
+
+### Bug Fixes
+
+* **schemas:** require the fields each session and waiting-list response always sends ([c55f289](https://github.com/mini-app-polis/deejaytools-com/commit/c55f2893e2d4637e2a6b65392e0beee477b483f3))
+
 ## [2.23.2](https://github.com/mini-app-polis/deejaytools-com/compare/v2.23.1...v2.23.2) (2026-11-03)
 
 
