@@ -246,6 +246,10 @@ export default function ApiSessionPage() {
     return s;
   }, [myCheckins, id]);
 
+  // Where the caller's entries stand, for the check-in status: their own
+  // check-ins in this session, read fresh with their token.
+  const myPlaces = useMemo(() => myCheckins.filter((ci) => ci.sessionId === id), [myCheckins, id]);
+
   // Find ALL of the current user's active queue entries — one per entity
   // (pair, solo, or managed partnership). A user with multiple partnerships can have several.
   const userQueueEntries = useMemo(() => {
@@ -402,10 +406,7 @@ export default function ApiSessionPage() {
       canCheckIn={canCheckIn}
       checkinWindowOpen={checkinWindowOpen}
       openCheckin={openCheckin}
-      userQueueEntries={userQueueEntries}
-      active={active}
-      priorityWaiting={priorityWaiting}
-      partnerCheckedInEntityIds={partnerCheckedInEntityIds}
+      myPlaces={myPlaces}
     />
   );
 
