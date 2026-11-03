@@ -1,11 +1,14 @@
 import { SignedIn, SignedOut, SignInButton } from "@clerk/clerk-react";
 import { Button } from "@/components/ui/button";
 import { formatDateTimeShort } from "@/lib/sessionFormat";
-import type { ApiQueueEntry, ApiSession } from "@/schemas";
+import type { ApiMyCheckin, ApiSession } from "@/schemas";
 
 /**
  * The check-in button with its status: where the caller's entries stand in
  * line, or when check-in opens or that it has closed; Sign in for a visitor.
+ * Where the caller stands comes from their own check-ins (/v1/checkins/mine),
+ * which are read fresh: the public queue lists can be a few seconds old at
+ * the edge, and the caller's own place must show as soon as they check in.
  * The page shows it above and below the queues, so the action is always
  * reachable, with the same text in both places.
  */
@@ -16,10 +19,7 @@ export default function SessionCheckinAction({
   canCheckIn,
   checkinWindowOpen,
   openCheckin,
-  userQueueEntries,
-  active,
-  priorityWaiting,
-  partnerCheckedInEntityIds,
+  myPlaces,
 }: {
   id: string;
   session: ApiSession;
@@ -27,10 +27,8 @@ export default function SessionCheckinAction({
   canCheckIn: boolean;
   checkinWindowOpen: boolean;
   openCheckin: () => void;
-  userQueueEntries: readonly ApiQueueEntry[];
-  active: readonly ApiQueueEntry[];
-  priorityWaiting: readonly ApiQueueEntry[];
-  partnerCheckedInEntityIds: ReadonlySet<string>;
+  /** The caller's live check-ins in this session, from /v1/checkins/mine. */
+  myPlaces: readonly ApiMyCheckin[];
 }) {
   return (
     <>
@@ -39,40 +37,25 @@ export default function SessionCheckinAction({
           <Button disabled={!canCheckIn} onClick={openCheckin} size="lg">
             Check in
           </Button>
-          {userQueueEntries.length > 0 ? (
+          {myPlaces.length > 0 ? (
             // Show one line per partnership currently in queue.
             <div className="flex flex-col gap-0.5">
-              {userQueueEntries.map((entry) => {
-                const pos = (() => {
-                  const isInActive = active.some((r) => r.queueEntryId === entry.queueEntryId);
-                  if (isInActive) return { subQueue: "active" as const, overall: entry.position };
-                  if (entry.subQueue === "priority")
-                    return { subQueue: "priority" as const, overall: active.length + entry.position };
-                  return {
-                    subQueue: "standard" as const,
-                    overall: active.length + priorityWaiting.length + entry.position,
-                  };
-                })();
-                return (
-                  <p key={entry.queueEntryId} className="text-sm">
-                    <span className="font-medium">#{pos.overall} in queue</span>
-                    <span className="text-muted-foreground">
-                      {" "}({pos.subQueue}
-                      {entry.divisionName ? `, ${entry.divisionName}` : ""}
-                      {userQueueEntries.length > 1 && entry.entityLabel && entry.entityLabel !== "—"
-                        ? ` · ${entry.entityLabel}`
-                        : ""}
-                      )
-                    </span>
-                    {((entry.entityPairId != null &&
-                      partnerCheckedInEntityIds.has(entry.entityPairId)) ||
-                      (entry.entityManagedPartnershipId != null &&
-                        partnerCheckedInEntityIds.has(entry.entityManagedPartnershipId))) && (
-                      <span className="text-muted-foreground"> · checked in by your partner</span>
-                    )}
-                  </p>
-                );
-              })}
+              {myPlaces.map((place) => (
+                <p key={place.queueEntryId} className="text-sm">
+                  <span className="font-medium">#{place.overallPosition} in queue</span>
+                  <span className="text-muted-foreground">
+                    {" "}({place.queueType === "non_priority" ? "standard" : place.queueType}
+                    {place.divisionName ? `, ${place.divisionName}` : ""}
+                    {myPlaces.length > 1 && place.entityLabel && place.entityLabel !== "—"
+                      ? ` · ${place.entityLabel}`
+                      : ""}
+                    )
+                  </span>
+                  {!place.canWithdraw && (
+                    <span className="text-muted-foreground"> · checked in by your partner</span>
+                  )}
+                </p>
+              ))}
             </div>
           ) : !canCheckIn && !checkinWindowOpen ? (
             <p className="text-sm text-muted-foreground">

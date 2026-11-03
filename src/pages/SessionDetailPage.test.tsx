@@ -125,6 +125,10 @@ function makeMyCheckin(opts: {
   entityManagedPartnershipId?: string | null;
   divisionName?: string;
   canWithdraw?: boolean;
+  entityLabel?: string;
+  queueType?: string;
+  queuePosition?: number;
+  overallPosition?: number;
 }) {
   return fx.myCheckin({
     id: `ci_${opts.queueEntryId ?? "qe1"}`,
@@ -138,15 +142,15 @@ function makeMyCheckin(opts: {
     entityPairId: opts.entityPairId ?? null,
     entitySoloUserId: opts.entitySoloUserId ?? null,
     entityManagedPartnershipId: opts.entityManagedPartnershipId ?? null,
-    entityLabel: "Test Entity",
+    entityLabel: opts.entityLabel ?? "Test Entity",
     songDisplayName: null,
     songProcessedFilename: null,
     notes: null,
     checkedInAt: 1,
     queueEntryId: opts.queueEntryId ?? "qe1",
-    queueType: "priority",
-    queuePosition: 1,
-    overallPosition: 1,
+    queueType: opts.queueType ?? "priority",
+    queuePosition: opts.queuePosition ?? 1,
+    overallPosition: opts.overallPosition ?? 1,
     runCount: 0,
     ...(opts.canWithdraw === undefined ? {} : { canWithdraw: opts.canWithdraw }),
   });
@@ -403,6 +407,60 @@ describe("SessionDetailPage — check-in button", () => {
     expect(apiGet).toHaveBeenCalledWith("/v1/checkins/mine");
   });
 
+  it("shows the caller's place from checkins/mine before the queue lists catch up", async () => {
+    signedIn = true;
+    stubGets({
+      session: makeSession({
+        checkinOpensAt: "2026-04-27T07:00:00",
+        floorTrialStartsAt: "2026-04-27T08:00:00",
+        floorTrialEndsAt: "2026-04-27T22:00:00",
+      }),
+      // The public queue lists can be a few seconds old at the edge: the
+      // caller's new entry isn't in them yet.
+      active: [],
+      waiting: [],
+      pairs: [],
+      songs: [],
+      myCheckins: [
+        makeMyCheckin({
+          entityPairId: "pair_new",
+          queueEntryId: "qe_new",
+          divisionName: "Novice",
+          queueType: "non_priority",
+          queuePosition: 3,
+          overallPosition: 7,
+        }),
+      ],
+    });
+    renderAt();
+
+    await waitFor(() => {
+      expect(screen.getAllByText("#7 in queue").length).toBeGreaterThan(0);
+    });
+    expect(screen.getAllByText(/\(standard, Novice\)/).length).toBeGreaterThan(0);
+  });
+
+  it("says when the caller's partner checked them in", async () => {
+    signedIn = true;
+    stubGets({
+      session: makeSession({
+        checkinOpensAt: "2026-04-27T07:00:00",
+        floorTrialStartsAt: "2026-04-27T08:00:00",
+        floorTrialEndsAt: "2026-04-27T22:00:00",
+      }),
+      active: [],
+      waiting: [],
+      pairs: [],
+      songs: [],
+      myCheckins: [makeMyCheckin({ entityPairId: "pair_p", queueEntryId: "qe_p", canWithdraw: false })],
+    });
+    renderAt();
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/checked in by your partner/).length).toBeGreaterThan(0);
+    });
+  });
+
   it("shows a position line for each partnership when multiple are in queue", async () => {
     signedIn = true;
     stubGets({
@@ -450,8 +508,22 @@ describe("SessionDetailPage — check-in button", () => {
       ],
       songs: [],
       myCheckins: [
-        makeMyCheckin({ entityPairId: "pair_1", queueEntryId: "qe1", divisionName: "Classic" }),
-        makeMyCheckin({ entityPairId: "pair_2", queueEntryId: "qe2", divisionName: "Showcase" }),
+        makeMyCheckin({
+          entityPairId: "pair_1",
+          queueEntryId: "qe1",
+          divisionName: "Classic",
+          entityLabel: "User One & Partner A",
+          queueType: "priority",
+          overallPosition: 1,
+        }),
+        makeMyCheckin({
+          entityPairId: "pair_2",
+          queueEntryId: "qe2",
+          divisionName: "Showcase",
+          entityLabel: "User One & Partner B",
+          queueType: "non_priority",
+          overallPosition: 2,
+        }),
       ],
     });
     renderAt();
@@ -494,7 +566,16 @@ describe("SessionDetailPage — check-in button", () => {
       ],
       pairs: [],
       songs: [],
-      myCheckins: [makeMyCheckin({ entityPairId: "pair_team", queueEntryId: "qe_team", divisionName: "Teams" })],
+      myCheckins: [
+        makeMyCheckin({
+          entityPairId: "pair_team",
+          queueEntryId: "qe_team",
+          divisionName: "Teams",
+          queueType: "non_priority",
+          queuePosition: 2,
+          overallPosition: 2,
+        }),
+      ],
     });
     renderAt();
 
