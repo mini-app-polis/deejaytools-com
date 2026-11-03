@@ -64,10 +64,9 @@ function makeSession(opts: {
   divisions?: { division_name: string; is_priority: boolean }[];
   eventName?: string | null;
 }) {
-  return fx.session({
+  const session = fx.session({
     id: "s1",
     event_id: opts.eventName ? "event-1" : null,
-    event_name: opts.eventName ?? null,
     name: "ignored",
     date: opts.floorTrialStartsAt.slice(0, 10),
     checkin_opens_at: new Date(opts.checkinOpensAt).getTime(),
@@ -80,10 +79,17 @@ function makeSession(opts: {
       priority_run_limit: null,
       ...d,
     })),
-    has_active_checkin: opts.hasActiveCheckin ?? false,
-    active_checkin_division: opts.activeCheckinDivision ?? undefined,
     queue_depth: { priority: 0, non_priority: 0, active: 0 },
   });
+  // The detail read's fields, plus per-caller fields the API no longer sends:
+  // a test sets those to check the page ignores them.
+  return {
+    ...session,
+    event_name: opts.eventName ?? null,
+    event_timezone: null,
+    has_active_checkin: opts.hasActiveCheckin ?? false,
+    active_checkin_division: opts.activeCheckinDivision ?? undefined,
+  };
 }
 
 /** Stub the GET calls SessionDetailPage makes. */

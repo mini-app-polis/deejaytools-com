@@ -22,6 +22,8 @@ import {
   ApiPartnerSchema,
   ApiQueueEntrySchema,
   ApiRunSchema,
+  ApiSessionDetailSchema,
+  ApiSessionListItemSchema,
   ApiSessionSchema,
   ApiSongSchema,
   ApiSongUploadChunkSchema,
@@ -29,6 +31,7 @@ import {
   ApiTestInjectionCreatedSchema,
   ApiTestInjectionSchema,
   ApiVersionSchema,
+  ApiWaitingEntrySchema,
   createCheckinBodySchema,
   createEventSongSubmissionBodySchema,
   createManagedPartnershipBodySchema,
@@ -200,15 +203,15 @@ export const endpoints = {
   },
 
   sessions: {
-    list: endpoint<{ eventId?: string } | void, void, z.infer<typeof ApiSessionSchema>[]>({
+    list: endpoint<{ eventId?: string } | void, void, z.infer<typeof ApiSessionListItemSchema>[]>({
       id: "sessions.list", method: "GET", access: "public",
       path: (p) =>
         p && p.eventId ? `/v1/sessions?event_id=${encodeURIComponent(p.eventId)}` : "/v1/sessions",
-      response: z.array(ApiSessionSchema),
+      response: z.array(ApiSessionListItemSchema),
     }),
-    get: endpoint<{ id: string }, void, z.infer<typeof ApiSessionSchema>>({
+    get: endpoint<{ id: string }, void, z.infer<typeof ApiSessionDetailSchema>>({
       id: "sessions.get", method: "GET", access: "public",
-      path: (p) => `/v1/sessions/${id(p)}`, response: ApiSessionSchema,
+      path: (p) => `/v1/sessions/${id(p)}`, response: ApiSessionDetailSchema,
     }),
     create: endpoint<void, Body, z.infer<typeof ApiSessionSchema>>({
       id: "sessions.create", method: "POST", access: "event-staff",
@@ -244,10 +247,10 @@ export const endpoints = {
       path: (p) => `/v1/queue/${encodeURIComponent(p.sessionId)}/active/staff`,
       response: z.array(ApiQueueEntrySchema),
     }),
-    waiting: endpoint<{ sessionId: string }, void, z.infer<typeof ApiQueueEntrySchema>[]>({
+    waiting: endpoint<{ sessionId: string }, void, z.infer<typeof ApiWaitingEntrySchema>[]>({
       id: "queue.waiting", method: "GET", access: "public",
       path: (p) => `/v1/queue/${encodeURIComponent(p.sessionId)}/waiting`,
-      response: z.array(ApiQueueEntrySchema),
+      response: z.array(ApiWaitingEntrySchema),
     }),
     priority: endpoint<{ sessionId: string }, void, z.infer<typeof ApiQueueEntrySchema>[]>({
       id: "queue.priority", method: "GET", access: "event-staff",

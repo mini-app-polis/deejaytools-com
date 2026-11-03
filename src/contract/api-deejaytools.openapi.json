@@ -2023,7 +2023,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionResponse"
+                  "$ref": "#/components/schemas/SessionDetailResponse"
                 }
               }
             }
@@ -9504,11 +9504,303 @@
         "title": "SessionData",
         "description": "A session on the wire. ``status`` is derived from the clock."
       },
+      "SessionDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Session id."
+          },
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id",
+            "description": "Event id."
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Session name."
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date",
+            "description": "Display date."
+          },
+          "checkin_opens_at": {
+            "type": "integer",
+            "title": "Checkin Opens At",
+            "description": "Epoch ms."
+          },
+          "floor_trial_starts_at": {
+            "type": "integer",
+            "title": "Floor Trial Starts At",
+            "description": "Epoch ms."
+          },
+          "floor_trial_ends_at": {
+            "type": "integer",
+            "title": "Floor Trial Ends At",
+            "description": "Epoch ms."
+          },
+          "active_priority_max": {
+            "type": "integer",
+            "title": "Active Priority Max",
+            "description": "Priority slots."
+          },
+          "active_non_priority_max": {
+            "type": "integer",
+            "title": "Active Non Priority Max",
+            "description": "Standard slots."
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Status now; 'cancelled' is kept as stored."
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By",
+            "description": "users.id of the creator."
+          },
+          "created_at": {
+            "type": "integer",
+            "title": "Created At",
+            "description": "Epoch ms."
+          },
+          "divisions": {
+            "items": {
+              "$ref": "#/components/schemas/DivisionData"
+            },
+            "type": "array",
+            "title": "Divisions",
+            "description": "Divisions, in order."
+          },
+          "queue_depth": {
+            "$ref": "#/components/schemas/QueueDepth",
+            "description": "Queue sizes."
+          },
+          "event_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Name",
+            "description": "The event's name."
+          },
+          "event_timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Timezone",
+            "description": "The event's IANA timezone."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "checkin_opens_at",
+          "floor_trial_starts_at",
+          "floor_trial_ends_at",
+          "active_priority_max",
+          "active_non_priority_max",
+          "status",
+          "created_at",
+          "divisions",
+          "queue_depth",
+          "event_name",
+          "event_timezone"
+        ],
+        "title": "SessionDetail",
+        "description": "The session of ``GET /v1/sessions/{id}``."
+      },
+      "SessionDetailResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SessionDetail",
+            "description": "The session."
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta",
+            "description": "Semantic value for meta."
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "SessionDetailResponse",
+        "description": "One session with its event's name and timezone."
+      },
+      "SessionListItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Session id."
+          },
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id",
+            "description": "Event id."
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Session name."
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date",
+            "description": "Display date."
+          },
+          "checkin_opens_at": {
+            "type": "integer",
+            "title": "Checkin Opens At",
+            "description": "Epoch ms."
+          },
+          "floor_trial_starts_at": {
+            "type": "integer",
+            "title": "Floor Trial Starts At",
+            "description": "Epoch ms."
+          },
+          "floor_trial_ends_at": {
+            "type": "integer",
+            "title": "Floor Trial Ends At",
+            "description": "Epoch ms."
+          },
+          "active_priority_max": {
+            "type": "integer",
+            "title": "Active Priority Max",
+            "description": "Priority slots."
+          },
+          "active_non_priority_max": {
+            "type": "integer",
+            "title": "Active Non Priority Max",
+            "description": "Standard slots."
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Status now; 'cancelled' is kept as stored."
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By",
+            "description": "users.id of the creator."
+          },
+          "created_at": {
+            "type": "integer",
+            "title": "Created At",
+            "description": "Epoch ms."
+          },
+          "divisions": {
+            "items": {
+              "$ref": "#/components/schemas/DivisionData"
+            },
+            "type": "array",
+            "title": "Divisions",
+            "description": "Divisions, in order."
+          },
+          "queue_depth": {
+            "$ref": "#/components/schemas/QueueDepth",
+            "description": "Queue sizes."
+          },
+          "event_timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Timezone",
+            "description": "The event's IANA timezone."
+          },
+          "has_active_checkin": {
+            "type": "boolean",
+            "title": "Has Active Checkin",
+            "description": "Whether the caller has a live entry; only for a synced caller.",
+            "default": false
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "checkin_opens_at",
+          "floor_trial_starts_at",
+          "floor_trial_ends_at",
+          "active_priority_max",
+          "active_non_priority_max",
+          "status",
+          "created_at",
+          "divisions",
+          "queue_depth",
+          "event_timezone"
+        ],
+        "title": "SessionListItem",
+        "description": "A session in ``GET /v1/sessions``."
+      },
       "SessionListResponse": {
         "properties": {
           "data": {
             "items": {
-              "$ref": "#/components/schemas/SessionData"
+              "$ref": "#/components/schemas/SessionListItem"
             },
             "type": "array",
             "title": "Data",
@@ -9525,7 +9817,7 @@
           "meta"
         ],
         "title": "SessionListResponse",
-        "description": "Sessions, newest date first. has_active_checkin appears only for a\nsynced caller."
+        "description": "Sessions, newest date first."
       },
       "SessionResponse": {
         "properties": {
@@ -9544,7 +9836,7 @@
           "meta"
         ],
         "title": "SessionResponse",
-        "description": "One session. Event fields appear only where the route adds them."
+        "description": "One session, as a write returns it."
       },
       "SongData": {
         "properties": {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { ApiSession } from "@/schemas";
+import type { ApiSession, ApiZonedSession } from "@/schemas";
 import { Badge } from "@/components/ui/badge";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 
@@ -33,7 +33,8 @@ export function SessionInfoHeader({
   session,
   showTitle = true,
 }: {
-  session: ApiSession;
+  /** A session read; the detail read also carries the event's name. */
+  session: ApiZonedSession & { event_name?: string | null };
   showTitle?: boolean;
 }) {
   const [now, setNow] = useState(() => Date.now());

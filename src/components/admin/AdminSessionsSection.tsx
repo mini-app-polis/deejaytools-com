@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { type ApiSession } from "@/schemas";
+import { type ApiZonedSession } from "@/schemas";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
 import QueryError from "@/components/QueryError";
@@ -43,11 +43,11 @@ export default function AdminSessionsSection({ open }: { open: boolean }) {
   const navigate = useNavigate();
   const [sessDialogOpen, setSessDialogOpen] = useState(false);
   /** The session the dialog edits; null while it creates a new one. */
-  const [sessEditing, setSessEditing] = useState<ApiSession | null>(null);
+  const [sessEditing, setSessEditing] = useState<ApiZonedSession | null>(null);
   /** Tracks the row currently mid-delete so its button can disable + show "Deleting…". */
   const [sessDeletingId, setSessDeletingId] = useState<string | null>(null);
   /** Delete-confirmation dialog state. */
-  const [pendingDeleteSession, setPendingDeleteSession] = useState<ApiSession | null>(null);
+  const [pendingDeleteSession, setPendingDeleteSession] = useState<ApiZonedSession | null>(null);
   const [showSessionsCompleted, setShowSessionsCompleted] = useState(false);
   const [showSessionsCancelled, setShowSessionsCancelled] = useState(false);
 
@@ -68,12 +68,12 @@ export default function AdminSessionsSection({ open }: { open: boolean }) {
     setSessDialogOpen(true);
   };
 
-  const openSessEditDialog = (s: ApiSession) => {
+  const openSessEditDialog = (s: ApiZonedSession) => {
     setSessEditing(s);
     setSessDialogOpen(true);
   };
 
-  const deleteSession = (s: ApiSession) => {
+  const deleteSession = (s: ApiZonedSession) => {
     setPendingDeleteSession(s);
   };
 
@@ -102,7 +102,7 @@ export default function AdminSessionsSection({ open }: { open: boolean }) {
     };
   }, [sessions]);
 
-  const renderSessionRow = (s: ApiSession) => {
+  const renderSessionRow = (s: ApiZonedSession) => {
     const eventName = events?.find((ev) => ev.id === s.event_id)?.name ?? "—";
     return (
       <TableRow
@@ -169,7 +169,7 @@ export default function AdminSessionsSection({ open }: { open: boolean }) {
     );
   };
 
-  const renderSessionBox = (title: string, rows: ApiSession[]) => (
+  const renderSessionBox = (title: string, rows: ApiZonedSession[]) => (
     <section className="rounded-lg border bg-card overflow-hidden">
       <div className="px-4 py-3 border-b flex items-center gap-2">
         <h2 className="font-semibold">{title}</h2>

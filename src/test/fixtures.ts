@@ -17,7 +17,7 @@ import {
   ApiPartnerSchema,
   ApiQueueEntrySchema,
   ApiRunSchema,
-  ApiSessionSchema,
+  ApiSessionListItemSchema,
   ApiSongSchema,
   ApiTeamSchema,
   ApiTestInjectionSchema,
@@ -46,11 +46,12 @@ export const fx = {
     timezone: "America/Chicago", season_year: "2026", status: "upcoming",
     created_by: "user_admin", created_at: T, updated_at: T,
   }),
-  session: factory(ApiSessionSchema, {
+  session: factory(ApiSessionListItemSchema, {
     id: "s-1", event_id: null, name: "Session", date: "2026-06-01",
     checkin_opens_at: T, floor_trial_starts_at: T + 3_600_000, floor_trial_ends_at: T + 7_200_000,
     active_priority_max: 6, active_non_priority_max: 4, status: "scheduled",
-    created_by: "user_admin", created_at: T,
+    created_by: "user_admin", created_at: T, event_timezone: null,
+    divisions: [], queue_depth: { priority: 0, non_priority: 0, active: 0 },
   }),
   queueEntry: factory(ApiQueueEntrySchema, {
     queueEntryId: "qe-1", checkinId: "ci-1", position: 1, enteredQueueAt: T,

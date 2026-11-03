@@ -18,7 +18,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { compareSessionChrono } from "@/lib/chronoSort";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
-import type { ApiEvent, ApiSession } from "@/schemas";
+import type { ApiEvent, ApiZonedSession } from "@/schemas";
 
 /**
  * The event's floor-trial sessions: create, edit (times, caps, priority
@@ -39,8 +39,8 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
   const removeSession = useEndpointMutation(endpoints.sessions.remove, { invalidates: sessionReads });
 
   /** The session form: null while closed, "new" to create, or the session to edit. */
-  const [formFor, setFormFor] = useState<ApiSession | "new" | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<ApiSession | null>(null);
+  const [formFor, setFormFor] = useState<ApiZonedSession | "new" | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<ApiZonedSession | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const sorted = useMemo(

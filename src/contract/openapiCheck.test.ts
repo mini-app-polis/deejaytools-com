@@ -32,7 +32,7 @@ function edited(name: string, edit: (schema: Record<string, unknown>) => void): 
 
 describe("the real snapshot catches what would break the app", () => {
   it("a renamed field", () => {
-    const doc = edited("SessionData", (s) => {
+    const doc = edited("SessionDetail", (s) => {
       const props = s.properties as Record<string, unknown>;
       props.title = props.name;
       delete props.name;
@@ -44,7 +44,7 @@ describe("the real snapshot catches what would break the app", () => {
   });
 
   it("a field made nullable, and a retyped one", () => {
-    const doc = edited("SessionData", (s) => {
+    const doc = edited("SessionDetail", (s) => {
       const props = s.properties as Record<string, Record<string, unknown>>;
       props.name = { anyOf: [{ type: "string" }, { type: "null" }] };
       props.created_at = { type: "string" };

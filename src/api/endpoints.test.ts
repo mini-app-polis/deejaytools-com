@@ -31,6 +31,10 @@ const session = {
   status: "scheduled",
   created_by: "u1",
   created_at: 0,
+  divisions: [],
+  queue_depth: { priority: 0, non_priority: 0, active: 0 },
+  // The list adds the timezone; the detail adds the name too.
+  event_timezone: "UTC",
 };
 
 beforeEach(() => {
