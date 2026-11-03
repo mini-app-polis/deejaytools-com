@@ -1,3 +1,10 @@
+## [2.23.2](https://github.com/mini-app-polis/deejaytools-com/compare/v2.23.1...v2.23.2) (2026-11-03)
+
+
+### Bug Fixes
+
+* **session:** show the dancer's place from their own check-ins, not the edge-cached queue lists ([b1dadb6](https://github.com/mini-app-polis/deejaytools-com/commit/b1dadb6b3c040ee87927778977991a17c7d4b5b1))
+
 ## [2.23.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.23.0...v2.23.1) (2026-11-02)
 
 
