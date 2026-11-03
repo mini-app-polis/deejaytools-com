@@ -1,5 +1,5 @@
 import SessionFormDialog from "@/components/SessionFormDialog";
-import type { ApiEvent, ApiSession } from "@/schemas";
+import type { ApiEvent, ApiZonedSession } from "@/schemas";
 
 /**
  * The admin Sessions page's create / edit dialog: the shared session form,
@@ -10,7 +10,7 @@ export default function AdminSessionDialog({
   events,
   onClose,
 }: {
-  editing: ApiSession | null;
+  editing: ApiZonedSession | null;
   events: ApiEvent[] | null;
   onClose: () => void;
 }) {

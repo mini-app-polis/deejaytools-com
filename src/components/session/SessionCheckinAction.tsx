@@ -1,7 +1,7 @@
 import { SignedIn, SignedOut, SignInButton } from "@clerk/clerk-react";
 import { Button } from "@/components/ui/button";
 import { formatDateTimeShort } from "@/lib/sessionFormat";
-import type { ApiMyCheckin, ApiSession } from "@/schemas";
+import type { ApiMyCheckin, ApiZonedSession } from "@/schemas";
 
 /**
  * The check-in button with its status: where the caller's entries stand in
@@ -22,7 +22,7 @@ export default function SessionCheckinAction({
   myPlaces,
 }: {
   id: string;
-  session: ApiSession;
+  session: ApiZonedSession;
   now: number;
   canCheckIn: boolean;
   checkinWindowOpen: boolean;

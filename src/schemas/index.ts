@@ -232,18 +232,28 @@ export const ApiSessionSchema = z.object({
   status: SessionStatusSchema,
   created_by: z.string().nullable(),
   created_at: z.number(),
-  // Optional fields — present on GET /v1/sessions (list) and GET /v1/sessions/:id (detail)
-  event_timezone: z.string().nullable().optional(),
-  // Detail-endpoint-only fields
-  event_name: z.string().nullable().optional(),
-  active_checkin_division: z.string().optional(),
-  divisions: z.array(ApiSessionDivisionSchema).optional(),
-  queue_depth: z
-    .object({ priority: z.number(), non_priority: z.number(), active: z.number() })
-    .optional(),
-  has_active_checkin: z.boolean().optional(),
+  divisions: z.array(ApiSessionDivisionSchema),
+  queue_depth: z.object({ priority: z.number(), non_priority: z.number(), active: z.number() }),
 });
 export type ApiSession = z.infer<typeof ApiSessionSchema>;
+
+/** A session in GET /v1/sessions, which adds the event's timezone. */
+export const ApiSessionListItemSchema = ApiSessionSchema.extend({
+  event_timezone: z.string().nullable(),
+  // Only for a synced caller.
+  has_active_checkin: z.boolean().optional(),
+});
+export type ApiSessionListItem = z.infer<typeof ApiSessionListItemSchema>;
+
+/** GET /v1/sessions/:id, which adds the event's name and timezone. */
+export const ApiSessionDetailSchema = ApiSessionSchema.extend({
+  event_name: z.string().nullable(),
+  event_timezone: z.string().nullable(),
+});
+export type ApiSessionDetail = z.infer<typeof ApiSessionDetailSchema>;
+
+/** A session read with its event's timezone: a list item or the detail. */
+export type ApiZonedSession = ApiSession & { event_timezone: string | null };
 
 export const ApiQueueEntrySchema = z.object({
   queueEntryId: z.string(),
@@ -261,10 +271,14 @@ export const ApiQueueEntrySchema = z.object({
   notes: z.string().nullable(),
   initialQueue: z.string(),
   checkedInAt: z.number(),
-  /** Present on /waiting — distinguishes priority vs non-priority entries. */
-  subQueue: z.enum(["priority", "non_priority"]).optional(),
 });
 export type ApiQueueEntry = z.infer<typeof ApiQueueEntrySchema>;
+
+/** An entry of GET /v1/queue/:id/waiting, which tags each with its queue. */
+export const ApiWaitingEntrySchema = ApiQueueEntrySchema.extend({
+  subQueue: z.enum(["priority", "non_priority"]),
+});
+export type ApiWaitingEntry = z.infer<typeof ApiWaitingEntrySchema>;
 
 export const ApiMyCheckinSchema = z.object({
   id: z.string(),

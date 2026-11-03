@@ -27,7 +27,7 @@ import {
 } from "@/lib/sessionForm";
 import { formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { toEpochInTz } from "@/lib/zonedTime";
-import type { ApiEvent, ApiSession } from "@/schemas";
+import type { ApiEvent, ApiZonedSession } from "@/schemas";
 
 const browserTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -41,7 +41,7 @@ function withCurrent(options: readonly { value: string; label: string }[], curre
 
 export type SessionFormDialogProps = {
   /** The session to edit, or null to create one. */
-  editing: ApiSession | null;
+  editing: ApiZonedSession | null;
   onClose: () => void;
 } & (
   /** The staff portal: the session's event is fixed. */
