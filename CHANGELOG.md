@@ -1,3 +1,10 @@
+# [2.24.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.23.3...v2.24.0) (2026-11-05)
+
+
+### Features
+
+* **facts:** publish the test-function count ([8dc7086](https://github.com/mini-app-polis/deejaytools-com/commit/8dc7086b56f61fb64810c345fb86434fb5cb6ab5))
+
 ## [2.23.3](https://github.com/mini-app-polis/deejaytools-com/compare/v2.23.2...v2.23.3) (2026-11-03)
 
 
