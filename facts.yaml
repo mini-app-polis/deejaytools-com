@@ -1,0 +1,9 @@
+# The figures this repository owns, computed into facts.json by `facts
+# generate` (common-python-utils). Facts are generated, never edited by hand.
+repo: deejaytools-com
+facts:
+  test_functions:
+    description: Test cases in the test suites (it and test calls, it.each once)
+    matches:
+      file: [src/**/*.test.ts, src/**/*.test.tsx, src/**/*.contract.ts]
+      pattern: '(?m)^\s*(?:it|test)(?:\.\w+)?\('
