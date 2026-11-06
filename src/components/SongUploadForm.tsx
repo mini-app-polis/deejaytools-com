@@ -18,7 +18,14 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthMeQuery } from "@/hooks/useAuthMe";
 import { useDivisions } from "@/hooks/useDivisions";
-import type { ApiManagedPartnership, ApiPartner } from "@/schemas";
+import {
+  ROUND_SPLIT_DIVISION,
+  SUBMISSION_ROUNDS,
+  type ApiManagedPartnership,
+  type ApiPartner,
+  type SubmissionRound,
+} from "@/schemas";
+import { roundDisplayLabel } from "@/lib/submissionRounds";
 import { toastFirstError } from "@/lib/formErrors";
 import {
   MAX_FILE_BYTES,
@@ -49,6 +56,8 @@ function isIOS(): boolean {
   if (ua.includes("Mac") && typeof document !== "undefined" && "ontouchend" in document) return true;
   return false;
 }
+const ROUND_OPTIONS = SUBMISSION_ROUNDS.map((value) => ({ value, label: roundDisplayLabel(value) }));
+
 /** The staff partner picker's "no partner" choice. */
 const NO_PARTNER = "__none__";
 function partnerLabel(p: Partner) { return `${p.first_name} ${p.last_name}`.trim(); }
@@ -73,6 +82,7 @@ function songUploadSchema(variant: "self" | "managed", staffOnBehalf: boolean) {
       descriptor: z.string(),
       selectedPartnerId: z.string(),
       selectedManagedPartnershipId: z.string(),
+      round: z.enum(SUBMISSION_ROUNDS),
     })
     .superRefine((v, ctx) => {
       const fail = (path: string, message: string) => ctx.addIssue({ code: "custom", path: [path], message });
@@ -99,7 +109,13 @@ export type SongUploadFormProps = {
       dancer's partners come from the event's own route, the upload carries
       event_id, which the API authorizes the delegation on, and the song is
       submitted to the event in the same request (submit_to_event). */
-  onBehalf?: { userId: string; label: string; eventId?: string };
+  onBehalf?: {
+    userId: string;
+    label: string;
+    eventId?: string;
+    /** With `eventId`: the event splits Classic into rounds (The Open). */
+    roundsAllowed?: boolean;
+  };
   /** Optional callback after a successful upload (e.g. to keep the picked user). */
   onUploaded?: () => void;
 };
@@ -125,6 +141,7 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
       descriptor: "",
       selectedPartnerId: "",
       selectedManagedPartnershipId: "",
+      round: "prelims_and_finals",
     },
   });
   const {
@@ -137,6 +154,11 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
     formState: { isSubmitting },
   } = form;
   const file = watch("file");
+  const division = watch("division");
+  const round = watch("round");
+  // The entry's rounds: a staff upload for Classic at The Open.
+  const showRoundField =
+    staffOnBehalf && !!onBehalf?.roundsAllowed && division === ROUND_SPLIT_DIVISION;
   const selectedPartnerId = watch("selectedPartnerId");
   const selectedManagedPartnershipId = watch("selectedManagedPartnershipId");
   const onBehalfUserId = onBehalf?.userId;
@@ -177,7 +199,8 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
   }, [managedPartnerships, getValues, setValue]);
 
   const handleUpload = async (values: SongUploadValues) => {
-    const { file, division, routineName, descriptor, selectedPartnerId, selectedManagedPartnershipId } = values;
+    const { file, division, routineName, descriptor, selectedPartnerId, selectedManagedPartnershipId, round } =
+      values;
     // The schema has refused a submit without a file.
     if (!file) return;
     try {
@@ -199,6 +222,7 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
           if (onBehalf?.eventId) {
             fields.event_id = onBehalf.eventId;
             fields.submit_to_event = "true";
+            if (showRoundField) fields.round = round;
           }
           return fields;
         },
@@ -233,6 +257,7 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
         routineName: "",
         descriptor: "",
         selectedPartnerId: partners.length > 0 ? partners[0].id : "",
+        round: "prelims_and_finals",
       });
       setUploadBytesSent(0);
       setFileInputKey((k) => k + 1);
@@ -241,7 +266,9 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
     } catch (err) {
       if (staffOnBehalf && err instanceof UploadRefused && err.code === "ENTITY_SLOT_TAKEN") {
         toast.error(
-          `${onBehalf!.label} already has a song submitted for ${division} at this event. Nothing was uploaded.`
+          showRoundField
+            ? `${onBehalf!.label} already has a ${division} song for ${roundDisplayLabel(round).toLowerCase()} at this event. Nothing was uploaded.`
+            : `${onBehalf!.label} already has a song submitted for ${division} at this event. Nothing was uploaded.`
         );
         return;
       }
@@ -424,7 +451,11 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
                     ariaLabel="Division"
                     groups={uploadGroups}
                     value={field.value}
-                    onChange={field.onChange}
+                    onChange={(value: string) => {
+                      field.onChange(value);
+                      // A round belongs to the division it was chosen under.
+                      setValue("round", "prelims_and_finals");
+                    }}
                   />
                 </FormControl>
               )}
@@ -432,6 +463,21 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
             </FormItem>
           )}
         />
+        {showRoundField && (
+          <div className="space-y-2">
+            <Label>Round</Label>
+            <ChoiceGroup
+              options={ROUND_OPTIONS}
+              value={round}
+              onChange={(value: SubmissionRound) => setValue("round", value)}
+              ariaLabel="Submission round"
+              disabled={isSubmitting}
+            />
+            <p className="text-xs text-muted-foreground">
+              Prelims Only or Finals Only when the dancer has a different song for each round.
+            </p>
+          </div>
+        )}
         <div className="space-y-2">
           <Label htmlFor="song-routine">Routine / Song name</Label>
           <Input id="song-routine" {...register("routineName")} placeholder="Optional — recommended" />

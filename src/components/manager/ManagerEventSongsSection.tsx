@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { type ApiAdminEventSongSubmission } from "@/schemas";
+import { isOpenEvent, type ApiAdminEventSongSubmission } from "@/schemas";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointQuery } from "@/api/queries";
 import QueryError from "@/components/QueryError";
@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TabsContent } from "@/components/ui/tabs";
+import { classicRoundLabel } from "@/lib/submissionRounds";
 import { cn } from "@/lib/utils";
 
 // A stable empty list while a query has no data, so memos over it hold.
@@ -70,6 +71,9 @@ export default function ManagerEventSongsSection({ open }: { open: boolean }) {
     });
     return keys.map((division) => ({ division, rows: map.get(division)! }));
   }, [esSubmissions]);
+
+  // Rounds split for Classic at The Open only.
+  const esRoundsAllowed = isOpenEvent(esEvents.find((ev) => ev.id === esEventId)?.name ?? "");
 
   return (
     <TabsContent value="event-songs" className="mt-4 space-y-4">
@@ -189,6 +193,11 @@ export default function ManagerEventSongsSection({ open }: { open: boolean }) {
                                 </span>
                                 <span className="text-muted-foreground text-right shrink-0">
                                   {row.song_label}
+                                  {classicRoundLabel(row, esRoundsAllowed) && (
+                                    <span className="block text-xs font-medium text-foreground">
+                                      {classicRoundLabel(row, esRoundsAllowed)}
+                                    </span>
+                                  )}
                                 </span>
                               </div>
                             ))}

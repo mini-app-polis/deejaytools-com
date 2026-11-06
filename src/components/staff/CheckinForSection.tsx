@@ -12,7 +12,8 @@ import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { toastFirstError } from "@/lib/formErrors";
 import { formatSessionTitle } from "@/lib/sessionFormat";
-import type { ApiEvent } from "@/schemas";
+import { classicRoundLabel } from "@/lib/submissionRounds";
+import { isOpenEvent, type ApiEvent } from "@/schemas";
 import { FIELD_LABEL_CLASS } from "@/lib/formFields";
 
 // A stable empty list while a query has no data, so memos over it hold.
@@ -144,10 +145,13 @@ export default function CheckinForSection({ event }: { event: ApiEvent }) {
                     <FormControl>
                       <ChoiceGroup
                         ariaLabel="Song"
-                        options={submissions.map((s) => ({
-                          value: s.id,
-                          label: `${s.partnership_label} · ${s.song_label}`,
-                        }))}
+                        options={submissions.map((s) => {
+                          const round = classicRoundLabel(s, isOpenEvent(event.name));
+                          return {
+                            value: s.id,
+                            label: `${s.partnership_label} · ${s.song_label}${round ? ` · ${round}` : ""}`,
+                          };
+                        })}
                         value={field.value}
                         onChange={(id) => {
                           field.onChange(id);

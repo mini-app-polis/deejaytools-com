@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ApiEventSongSubmission, ApiSong, SubmissionRound } from "@/schemas";
-import { missingClassicRounds, roundDisplayLabel } from "./submissionRounds";
+import { classicRoundLabel, missingClassicRounds, roundDisplayLabel } from "./submissionRounds";
 
 function song(id: string, partnerId: string | null = "p1"): ApiSong {
   return { id, user_id: "u1", partner_id: partnerId, managed_partnership_id: null } as ApiSong;
@@ -48,5 +48,16 @@ describe("missingClassicRounds", () => {
 
   it("ignores other divisions", () => {
     expect(missingClassicRounds([sub("a", "prelims_and_finals", "Showcase")], [song("a")])).toEqual([]);
+  });
+});
+
+describe("classicRoundLabel", () => {
+  it("labels a Classic entry where rounds split", () => {
+    expect(classicRoundLabel({ division: "Classic", round: "prelims_only" }, true)).toBe("Prelims only");
+  });
+
+  it("is null for other divisions or where rounds do not split", () => {
+    expect(classicRoundLabel({ division: "Showcase", round: "prelims_and_finals" }, true)).toBeNull();
+    expect(classicRoundLabel({ division: "Classic", round: "finals_only" }, false)).toBeNull();
   });
 });

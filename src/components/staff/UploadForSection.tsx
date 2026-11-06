@@ -3,7 +3,7 @@ import SongUploadForm from "@/components/SongUploadForm";
 import PersonPicker from "@/components/staff/PersonPicker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { ApiEvent, ApiEventPerson } from "@/schemas";
+import { isOpenEvent, type ApiEvent, type ApiEventPerson } from "@/schemas";
 
 /**
  * Upload a song for a dancer at the event. The upload form the admins use,
@@ -40,7 +40,12 @@ export default function UploadForSection({ event }: { event: ApiEvent }) {
         ) : (
           <SongUploadForm
             variant="self"
-            onBehalf={{ userId: dancer.user_id, label: dancer.display_name, eventId: event.id }}
+            onBehalf={{
+              userId: dancer.user_id,
+              label: dancer.display_name,
+              eventId: event.id,
+              roundsAllowed: isOpenEvent(event.name),
+            }}
           />
         )}
       </CardContent>

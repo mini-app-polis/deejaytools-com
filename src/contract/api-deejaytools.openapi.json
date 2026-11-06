@@ -3770,7 +3770,7 @@
           "songs"
         ],
         "summary": "Upload one chunk of a song",
-        "description": "Chunked upload, multipart/form-data. Each chunk is staged; the final one is assembled, checked by its magic bytes and becomes a song, returned at once. Tagging, the Drive upload and the Drive fields follow in the background; the song is removed again if that fails and nothing references it yet. Requires deejaytools.songs.write; on_behalf_of_user_id also needs deejaytools.delegation.act: through a role (an admin's), or on the event event_id names (that event's DJ or event manager). submit_to_event=true (with on_behalf_of_user_id and event_id) also submits the song to that event in the same request, the dancer as submitter, refused with 409 ENTITY_SLOT_TAKEN before anything is saved when the slot is taken.",
+        "description": "Chunked upload, multipart/form-data. Each chunk is staged; the final one is assembled, checked by its magic bytes and becomes a song, returned at once. Tagging, the Drive upload and the Drive fields follow in the background; the song is removed again if that fails and nothing references it yet. Requires deejaytools.songs.write; on_behalf_of_user_id also needs deejaytools.delegation.act: through a role (an admin's), or on the event event_id names (that event's DJ or event manager). submit_to_event=true (with on_behalf_of_user_id and event_id) also submits the song to that event in the same request, the dancer as submitter, refused with 409 ENTITY_SLOT_TAKEN before anything is saved when the slot is taken; its optional round (default prelims_and_finals) splits only for Classic at The Open, as POST /v1/event-song-submissions does.",
         "operationId": "upload_chunk_v1_songs_upload_chunk_post",
         "parameters": [
           {
@@ -7101,7 +7101,12 @@
               }
             ],
             "title": "Division",
-            "description": "The song's division."
+            "description": "The division it is entered under: the override, else the song's."
+          },
+          "round": {
+            "type": "string",
+            "title": "Round",
+            "description": "Rounds it is entered for: prelims_and_finals, prelims_only or finals_only (Classic at The Open only splits)."
           },
           "song_id": {
             "type": "string",
@@ -7139,6 +7144,7 @@
           "id",
           "event_id",
           "event_name",
+          "round",
           "song_id",
           "owner_user_id",
           "song_label",
