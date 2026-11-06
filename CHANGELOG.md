@@ -1,3 +1,10 @@
+# [2.26.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.25.0...v2.26.0) (2026-11-06)
+
+
+### Features
+
+* **staff:** show each Classic entry's round at The Open and let Upload For choose it ([7f49c9d](https://github.com/mini-app-polis/deejaytools-com/commit/7f49c9d6e29f42bdf22eed4f838cce9b4d614341))
+
 # [2.25.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.24.0...v2.25.0) (2026-11-06)
 
 
