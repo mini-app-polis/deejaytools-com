@@ -1,3 +1,15 @@
+# [2.25.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.24.0...v2.25.0) (2026-11-06)
+
+
+### Bug Fixes
+
+* **select:** cap the dropdown at the available height so long lists scroll instead of running off screen ([b081dc3](https://github.com/mini-app-polis/deejaytools-com/commit/b081dc31658a226b14d4b30290eb928c618c01de))
+
+
+### Features
+
+* **my-content:** show each Classic entry's round at The Open and warn when only one round has a song ([d97304f](https://github.com/mini-app-polis/deejaytools-com/commit/d97304f351486d4dffcd4cb7174fdd275b37fe9b))
+
 # [2.24.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.23.3...v2.24.0) (2026-11-05)
 
 
