@@ -1,5 +1,6 @@
 import type { ApiEventSongSubmission } from "@/schemas";
-import { isOpenEvent } from "@/schemas";
+import { ROUND_SPLIT_DIVISION, isOpenEvent } from "@/schemas";
+import { missingClassicRounds, roundDisplayLabel } from "@/lib/submissionRounds";
 import { songPieces } from "@/lib/songLabel";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -276,6 +277,9 @@ export default function MyContentPage() {
             <div className="space-y-3">
               {eventsWithSongs.map((event) => {
                 const subs = submissionsByEventId.get(event.id) ?? [];
+                // Rounds are a Classic-at-The-Open choice.
+                const showRounds = isOpenEvent(event.name);
+                const missingRounds = showRounds ? missingClassicRounds(subs, songs) : [];
                 return (
                   <div
                     key={event.id}
@@ -293,11 +297,28 @@ export default function MyContentPage() {
                         <li key={s.id} className="text-sm">
                           <span className="font-medium">{s.song_label}</span>
                           {s.division && (
-                            <span className="text-muted-foreground"> · {s.division}</span>
+                            <span className="text-muted-foreground">
+                              {" "}
+                              · {s.division}
+                              {showRounds &&
+                                s.division === ROUND_SPLIT_DIVISION &&
+                                ` · ${roundDisplayLabel(s.round)}`}
+                            </span>
                           )}
                         </li>
                       ))}
                     </ul>
+                    {missingRounds.map(({ missing, entered }) => (
+                      <p
+                        key={`${missing}-${entered[0].id}`}
+                        className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400"
+                      >
+                        No Classic song is entered for {missing === "prelims" ? "Prelims" : "Finals"}{" "}
+                        alongside {entered.map((e) => e.song_label).join(" and ")}. Submit a song for{" "}
+                        {missing === "prelims" ? "Prelims" : "Finals"}, or re-enter this one as Prelims
+                        &amp; Finals.
+                      </p>
+                    ))}
                     <div className="flex flex-col sm:flex-row sm:justify-end gap-2 pt-1">
                       {event.status === "active" && (
                         <Button asChild size="sm" className="w-full sm:w-auto">

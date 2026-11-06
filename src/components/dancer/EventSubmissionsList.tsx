@@ -1,22 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { songLabel } from "@/lib/songLabel";
+import { roundDisplayLabel } from "@/lib/submissionRounds";
 import {
   ROUND_SPLIT_DIVISION,
   type ApiListedEventSongSubmission,
   type ApiSong,
-  type SubmissionRound,
 } from "@/schemas";
-
-function roundDisplayLabel(round: SubmissionRound): string {
-  switch (round) {
-    case "prelims_only":
-      return "Prelims only";
-    case "finals_only":
-      return "Finals only";
-    default:
-      return "Prelims & finals";
-  }
-}
 
 /**
  * The dancer's submissions to an event, each with Remove where they may
