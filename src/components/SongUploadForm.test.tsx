@@ -268,6 +268,31 @@ describe("SongUploadForm — uploading", () => {
     expect(apiGet.mock.calls.some(([path]) => String(path).startsWith("/v1/admin"))).toBe(false);
   });
 
+  it("lets event staff at The Open choose a Classic round, and only for Classic", async () => {
+    apiGet.mockReset();
+    apiGet.mockResolvedValue([]);
+    uploadSongInChunks.mockResolvedValue(undefined);
+    renderWithQueryClient(
+      <MemoryRouter>
+        <SongUploadForm
+          variant="self"
+          onBehalf={{ userId: "u9", label: "Dana Fox", eventId: "ev-1", roundsAllowed: true }}
+        />
+      </MemoryRouter>
+    );
+    await screen.findByRole("radio", { name: "No partner" });
+    chooseDivision("Showcase");
+    expect(screen.queryByRole("radiogroup", { name: "Submission round" })).not.toBeInTheDocument();
+    chooseDivision("Classic");
+    expect(screen.getByRole("radio", { name: "Prelims & finals" })).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: "Finals only" }));
+    chooseFile(audioFile());
+    submit();
+    await waitFor(() => expect(uploadSongInChunks).toHaveBeenCalled());
+    const [{ buildFormFields }] = uploadSongInChunks.mock.calls[0]!;
+    expect(buildFormFields()).toMatchObject({ division: "Classic", submit_to_event: "true", round: "finals_only" });
+  });
+
   it("lets event staff upload with no partner", async () => {
     apiGet.mockReset();
     apiGet.mockResolvedValue([]);

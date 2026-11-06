@@ -133,7 +133,7 @@ export const fx = {
     round: "prelims_and_finals", created_at: T, can_withdraw: true,
   }),
   adminEventSongSubmission: factory(ApiAdminEventSongSubmissionSchema, {
-    id: "sub-1", event_id: "ev-1", event_name: "Test Event", division: null,
+    id: "sub-1", event_id: "ev-1", event_name: "Test Event", division: null, round: "prelims_and_finals",
     song_id: "song-1", owner_user_id: "user-1", song_label: "Song", partnership_label: "Leader & Follower",
     submitter_email: "user@example.com", created_at: T,
   }),

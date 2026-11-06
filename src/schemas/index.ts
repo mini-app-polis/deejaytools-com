@@ -615,7 +615,9 @@ export const ApiAdminEventSongSubmissionSchema = z.object({
   id: z.string(),
   event_id: z.string(),
   event_name: z.string(),
+  /** The division it is entered under: the stored override, else the song's. */
   division: z.string().nullable(),
+  round: z.enum(SUBMISSION_ROUNDS),
   song_id: z.string(),
   /** The song owner's user id: what a staff check-in for this song sends as on_behalf_of_user_id. */
   owner_user_id: z.string(),

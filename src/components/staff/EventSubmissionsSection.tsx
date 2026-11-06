@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDivisions } from "@/hooks/useDivisions";
-import type { ApiAdminEventSongSubmission, ApiEvent } from "@/schemas";
+import { classicRoundLabel } from "@/lib/submissionRounds";
+import { isOpenEvent, type ApiAdminEventSongSubmission, type ApiEvent } from "@/schemas";
 
 const ALL = "__all__";
 const UNSPECIFIED = "Unspecified";
@@ -38,6 +39,7 @@ export default function EventSubmissionsSection({ event }: { event: ApiEvent }) 
   const rows = rowsQuery.data ?? null;
   const [division, setDivision] = useState<string>(ALL);
   const { divisions: divisionOrder } = useDivisions();
+  const roundsAllowed = isOpenEvent(event.name);
 
   const groups = useMemo(() => {
     const map = new Map<string, ApiAdminEventSongSubmission[]>();
@@ -80,15 +82,21 @@ export default function EventSubmissionsSection({ event }: { event: ApiEvent }) 
                 <h3 className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
                   {g.division} <span className="text-xs font-normal">{g.rows.length}</span>
                 </h3>
-                {g.rows.map((row) => (
-                  <div
-                    key={row.id}
-                    className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1 sm:gap-4 rounded-lg bg-white/[0.06] px-4 py-3 text-sm"
-                  >
-                    <span className="font-medium min-w-0 truncate">{row.partnership_label}</span>
-                    <span className="text-muted-foreground sm:text-right break-all">{row.song_label}</span>
-                  </div>
-                ))}
+                {g.rows.map((row) => {
+                  const round = classicRoundLabel(row, roundsAllowed);
+                  return (
+                    <div
+                      key={row.id}
+                      className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1 sm:gap-4 rounded-lg bg-white/[0.06] px-4 py-3 text-sm"
+                    >
+                      <span className="font-medium min-w-0 truncate">{row.partnership_label}</span>
+                      <span className="text-muted-foreground sm:text-right break-all">
+                        {row.song_label}
+                        {round && <span className="block text-xs font-medium text-foreground">{round}</span>}
+                      </span>
+                    </div>
+                  );
+                })}
               </section>
             ))}
           </>

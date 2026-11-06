@@ -19,6 +19,17 @@ export function roundDisplayLabel(round: SubmissionRound): string {
   }
 }
 
+/**
+ * A Classic entry's round label where rounds split (The Open), else null.
+ */
+export function classicRoundLabel(
+  entry: { division: string | null; round: SubmissionRound },
+  roundsAllowed: boolean
+): string | null {
+  if (!roundsAllowed || entry.division?.trim() !== ROUND_SPLIT_DIVISION) return null;
+  return roundDisplayLabel(entry.round);
+}
+
 export type MissingRound = {
   /** The round no song covers yet. */
   missing: "prelims" | "finals";

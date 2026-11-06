@@ -520,6 +520,27 @@ describe("RunHistorySection", () => {
   });
 });
 
+describe("EventSubmissionsSection at The Open", () => {
+  it("groups by the division entered under and shows each Classic entry's round", async () => {
+    apiGet.mockImplementation((p: string) =>
+      Promise.resolve(
+        p === "/v1/events/ev-open/song-submissions"
+          ? [
+              fx.adminEventSongSubmission({ id: "sub-p", division: "Classic", round: "prelims_only", song_label: "Song P" }),
+              fx.adminEventSongSubmission({ id: "sub-f", division: "Classic", round: "finals_only", song_label: "Song F" }),
+              fx.adminEventSongSubmission({ id: "sub-s", division: "Showcase", song_label: "Song S" }),
+            ]
+          : []
+      )
+    );
+    inRouter(<EventSubmissionsSection event={fx.event({ id: "ev-open", name: "The Open 2026" })} />);
+    expect(await screen.findByText("Prelims only")).toBeInTheDocument();
+    expect(screen.getByText("Finals only")).toBeInTheDocument();
+    // Showcase entries carry no round.
+    expect(screen.getAllByText(/only$|& finals$/)).toHaveLength(2);
+  });
+});
+
 describe("CheckinForSection", () => {
   it("says when no session is open and nothing is submitted", async () => {
     inRouter(<CheckinForSection event={event} />);
