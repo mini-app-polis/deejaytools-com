@@ -25,6 +25,7 @@ import {
   reconcileRegistrations,
   registrationLines,
   registrationName,
+  sameLabel,
   type ReconciledRegistration,
   type RegistrationStatus,
 } from "@/lib/eventRegistrations";
@@ -44,9 +45,10 @@ const STATUS_LABELS: Record<RegistrationStatus, string> = {
   "missing-round": "Missing a round",
   submitted: "Submitted",
   handled: "Handled",
+  scratched: "Scratched",
 };
 
-const STATUS_ORDER: readonly RegistrationStatus[] = ["missing", "possible", "missing-round", "submitted", "handled"];
+const STATUS_ORDER: readonly RegistrationStatus[] = ["missing", "possible", "missing-round", "submitted", "handled", "scratched"];
 
 function statusBadge(r: ReconciledRegistration) {
   const label =
@@ -84,7 +86,9 @@ function submissionLine(s: ApiAdminEventSongSubmission, roundsSplit: boolean): s
  * from the event's own export, against the songs submitted to it, so the
  * admin sees who is still missing music. Optional per event. Matching is by
  * name; an entry the match misses can be linked to a submission by hand or
- * marked as handled elsewhere, and those marks survive a re-import. It
+ * marked as handled elsewhere or scratched (no longer competing: their songs
+ * stay submitted, hidden from the event page), and those marks survive a
+ * re-import. It
  * renders its own TabsContent so it stays mounted while another admin
  * section is shown; `open` holds its queries back until it is.
  */
@@ -124,7 +128,14 @@ export default function AdminRegistrationsSection({ open }: { open: boolean }) {
   const [editing, setEditing] = useState<ReconciledRegistration | null>(null);
 
   const counts = useMemo(() => {
-    const c: Record<RegistrationStatus, number> = { missing: 0, possible: 0, "missing-round": 0, submitted: 0, handled: 0 };
+    const c: Record<RegistrationStatus, number> = {
+      missing: 0,
+      possible: 0,
+      "missing-round": 0,
+      submitted: 0,
+      handled: 0,
+      scratched: 0,
+    };
     for (const r of reconciled?.rows ?? []) c[r.status]++;
     return c;
   }, [reconciled]);
@@ -265,15 +276,26 @@ export default function AdminRegistrationsSection({ open }: { open: boolean }) {
                   >
                     <div className="min-w-0 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium">{registrationName(r.entry)}</span>
+                        <span className={cn("font-medium", r.status === "scratched" && "line-through text-muted-foreground")}>
+                          {registrationName(r.entry)}
+                        </span>
                         {statusBadge(r)}
                         {r.entry.linked_label && <Badge variant="outline">Linked</Badge>}
                       </div>
                       {r.matches.map((s) => (
                         <p key={s.id} className="text-muted-foreground break-all">
                           {submissionLine(s, roundsSplit)}
+                          {r.entry.hidden_submission_ids.includes(s.id) && (
+                            <span className="block text-xs">Hidden from the event page</span>
+                          )}
                         </p>
                       ))}
+                      {r.status === "scratched" &&
+                        r.matches.some((s) => !r.entry.hidden_submission_ids.includes(s.id)) && (
+                          <p className="text-xs text-amber-300">
+                            A song is still listed on the event page: open Edit and save to hide it.
+                          </p>
+                        )}
                       {r.candidates.length > 0 && (
                         <p className="text-muted-foreground break-all">
                           Looks like: {r.candidates.map((s) => `${s.partnership_label} (${s.division ?? "no division"})`).join("; ")}
@@ -351,7 +373,8 @@ function ImportDialog({ event, hasList, onClose }: { event: ApiEvent; hasList: b
           <DialogDescription>
             Copy the registration sheet&apos;s rows (with its header row, if it has one) and paste them here. Rows
             without a division and a first dancer are skipped; other columns are ignored.
-            {hasList && " This replaces the current list; entries that are unchanged keep their links, handled marks and notes."}
+            {hasList &&
+              " This replaces the current list; entries that are unchanged keep their links, handled and scratched marks, and notes."}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
@@ -395,6 +418,7 @@ function EditDialog({
 }) {
   const [linked, setLinked] = useState(row.entry.linked_label ?? NO_LINK);
   const [handled, setHandled] = useState(row.entry.handled);
+  const [scratched, setScratched] = useState(row.entry.scratched);
   const [note, setNote] = useState(row.entry.note ?? "");
   const update = useEndpointMutation(endpoints.admin.updateEventRegistration, {
     invalidates: [endpoints.admin.eventRegistrations],
@@ -417,11 +441,23 @@ function EditDialog({
   // A link to a label no submission carries any more still shows, so it can be cleared.
   const staleLink = row.entry.linked_label && !labels.some((l) => l.label === row.entry.linked_label);
 
+  // The songs a scratch hides: the chosen link's, else what the name match found.
+  const hideIds = () => {
+    if (linked !== NO_LINK) return submissions.filter((s) => sameLabel(s.partnership_label, linked)).map((s) => s.id);
+    return row.entry.linked_label ? [] : row.matches.map((s) => s.id);
+  };
+
   const save = async () => {
     try {
       await update.mutateAsync({
         params: { id: row.entry.id },
-        body: { linked_label: linked === NO_LINK ? null : linked, handled, note: note.trim() || null },
+        body: {
+          linked_label: linked === NO_LINK ? null : linked,
+          handled,
+          note: note.trim() || null,
+          scratched,
+          ...(scratched ? { hide_submission_ids: hideIds() } : {}),
+        },
       });
       toast.success("Saved");
       onClose();
@@ -464,6 +500,20 @@ function EditDialog({
             <input type="checkbox" className="h-4 w-4" checked={handled} onChange={(e) => setHandled(e.target.checked)} />
             Handled elsewhere: needs no submission here
           </label>
+          <div className="space-y-1">
+            <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                checked={scratched}
+                onChange={(e) => setScratched(e.target.checked)}
+              />
+              Scratched: signed up but no longer competing
+            </label>
+            <p className="text-xs text-muted-foreground">
+              Their songs stay submitted to the event, but are hidden from its public event page.
+            </p>
+          </div>
           <div className="space-y-1">
             <label htmlFor="admin-registration-note" className={FIELD_LABEL_CLASS}>
               Note

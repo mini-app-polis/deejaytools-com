@@ -675,7 +675,7 @@
           "events"
         ],
         "summary": "Entities entered in an event",
-        "description": "Entities with at least one song submitted to the event, grouped by division, with how many songs each has there. Carries no song identity. Requires deejaytools.entities.read.",
+        "description": "Entities with at least one song submitted to the event, grouped by division, with how many songs each has there. Songs hidden by a scratched registration are left out. Carries no song identity. Requires deejaytools.entities.read.",
         "operationId": "event_entities_v1_events__id__entities_get",
         "parameters": [
           {
@@ -5217,7 +5217,7 @@
           "admin-event-registrations"
         ],
         "summary": "Mark a registration entry",
-        "description": "Sets the admin's marks on one entry: linked_label, handled and note; fields not sent are left as they are. Requires deejaytools.registrations.write.",
+        "description": "Sets the admin's marks on one entry: linked_label, handled, note and scratched; fields not sent are left as they are. A scratched entry hides hide_submission_ids from the event's public entry list; unscratching unhides them. Requires deejaytools.registrations.write.",
         "operationId": "patch_registration_v1_admin_event_registrations__id__patch",
         "parameters": [
           {
@@ -9589,6 +9589,19 @@
             "title": "Note",
             "description": "Admin note."
           },
+          "scratched": {
+            "type": "boolean",
+            "title": "Scratched",
+            "description": "Signed up but no longer competing."
+          },
+          "hidden_submission_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Hidden Submission Ids",
+            "description": "The event's submissions it hides from the public entry list."
+          },
           "created_at": {
             "type": "integer",
             "title": "Created At",
@@ -9608,6 +9621,8 @@
           "division",
           "dancer_1",
           "handled",
+          "scratched",
+          "hidden_submission_ids",
           "created_at",
           "updated_at"
         ],
@@ -12602,6 +12617,36 @@
             "default": null,
             "description": "Admin note; null or empty clears it.",
             "title": "Note"
+          },
+          "scratched": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Signed up but no longer competing. Unscratching unhides every submission it hid.",
+            "title": "Scratched"
+          },
+          "hide_submission_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "With a scratched entry: the event's submissions to hide from its public entry list, replacing those it hid before. Ids of other events' submissions are ignored.",
+            "title": "Hide Submission Ids"
           }
         },
         "title": "PatchRegistrationBody",

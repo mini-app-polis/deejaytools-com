@@ -768,6 +768,12 @@ describe("contract", () => {
     });
     expect(again).toHaveLength(1);
     expect(again[0]).toMatchObject({ id: imported[0].id, handled: true, note: "contract suite" });
+    const scratched = await ledger.hit(endpoints.admin.updateEventRegistration, {
+      params: { id: imported[0].id },
+      body: { scratched: true, hide_submission_ids: [] },
+    });
+    expect(scratched).toMatchObject({ scratched: true, hidden_submission_ids: [] });
+    await ledger.hit(endpoints.admin.updateEventRegistration, { params: { id: imported[0].id }, body: { scratched: false } });
     expect(await ledger.hit(endpoints.admin.eventRegistrations, { params: { eventId } })).toHaveLength(1);
     await ledger.hit(endpoints.admin.importEventRegistrations, { params: { eventId }, body: { entries: [] } });
     expect(await ledger.hit(endpoints.admin.eventRegistrations, { params: { eventId } })).toEqual([]);

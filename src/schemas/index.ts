@@ -645,6 +645,10 @@ export const ApiEventRegistrationSchema = z.object({
   /** Marked as needing no submission here (handled elsewhere). */
   handled: z.boolean(),
   note: z.string().nullable(),
+  /** Signed up but no longer competing. */
+  scratched: z.boolean(),
+  /** The event's submissions it hides from the public entry list (GET /v1/events/:id/entities). */
+  hidden_submission_ids: z.array(z.string()),
   created_at: z.number(),
   updated_at: z.number(),
 });
@@ -668,6 +672,10 @@ export const patchEventRegistrationBodySchema = z.object({
   linked_label: z.string().trim().max(200).nullable().optional(),
   handled: z.boolean().optional(),
   note: z.string().trim().max(1000).nullable().optional(),
+  /** Signed up but no longer competing; unscratching unhides its submissions. */
+  scratched: z.boolean().optional(),
+  /** With a scratched entry: the submissions to hide from the event's public entry list. */
+  hide_submission_ids: z.array(z.string().trim().min(1)).max(50).optional(),
 });
 
 /**
