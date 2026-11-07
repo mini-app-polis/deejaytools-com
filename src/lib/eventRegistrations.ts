@@ -156,9 +156,14 @@ function similar(a: string, b: string): boolean {
   return editDistance(a, b) <= (longest >= 7 ? 2 : 1);
 }
 
-/** How two written names compare: "exact" (case, accents, punctuation and spacing aside), "close", or "none". */
+/** How two written names compare: "exact", "close", or "none". */
 export type NameCloseness = "exact" | "close" | "none";
 
+/**
+ * How two written names compare: "exact" when they are the same apart from
+ * case, accents, punctuation and spacing; "close" when they differ by a typo
+ * or a shortened first name; "none" otherwise.
+ */
 export function nameCloseness(a: string, b: string): NameCloseness {
   const pa = plain(a);
   const pb = plain(b);
