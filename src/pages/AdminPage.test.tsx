@@ -48,6 +48,7 @@ import { toast } from "sonner";
 import { fx } from "@/test/fixtures";
 import { expectFieldError } from "@/test/fieldErrors";
 import { renderWithQueryClient } from "@/test/render";
+import { TEST_DIVISIONS } from "@/test/divisions";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1981,6 +1982,86 @@ describe("AdminPage — dismissing dialogs", () => {
         "/v1/admin/checkins",
         expect.objectContaining({ leaderFirstName: "Ada" })
       )
+    );
+  });
+});
+
+describe("AdminPage — Registrations section", () => {
+  beforeEach(resetAll);
+
+  const OPEN = fx.event({ id: "open", name: "The Open 2026", status: "upcoming", start_date: "2026-11-26", end_date: "2026-11-29" });
+  const reg = (over: Record<string, unknown>) => ({
+    id: "r1", event_id: "open", position: 0, division: "Classic (NASDE)", dancer_1: "Ada Lovelace",
+    dancer_2: "Bob Jones", linked_label: null, handled: false, note: null, created_at: 1, updated_at: 1,
+    ...over,
+  });
+  const divisions = { groups: [TEST_DIVISIONS], divisions: TEST_DIVISIONS };
+
+  it("shows who is missing, hides who has submitted, and lists submissions not on the list", async () => {
+    routeGets({
+      "/v1/events": [EV_DONE, OPEN],
+      "/v1/divisions": divisions,
+      "/v1/admin/events/open/registrations": [
+        reg({ id: "r1" }),
+        reg({ id: "r2", position: 1, dancer_1: "Cy Dee", dancer_2: "Eve Eff" }),
+      ],
+      "/v1/admin/event-song-submissions": [
+        fx.adminEventSongSubmission({ id: "s1", event_id: "open", division: "Classic", partnership_label: "Ada Lovelace & Bob Jones", song_label: "Ada Lovelace & Bob Jones Classic" }),
+        fx.adminEventSongSubmission({ id: "s2", event_id: "open", division: "Showcase", partnership_label: "Gee Aitch", song_label: "Gee Aitch Showcase" }),
+      ],
+    });
+    renderPage("/admin/registrations");
+
+    expect(await screen.findByText("Cy Dee & Eve Eff")).toBeInTheDocument();
+    expect(screen.queryByText("Ada Lovelace & Bob Jones")).not.toBeInTheDocument();
+    expect(screen.getByText("Gee Aitch")).toBeInTheDocument();
+    expect(
+      screen.getByText((_, el) => el?.tagName === "P" && /^1 of 2 entries need attention/.test(el.textContent ?? ""))
+    ).toBeInTheDocument();
+    expect(apiGet.mock.calls.map(([p]) => p)).toContain("/v1/admin/event-song-submissions?event_id=open");
+  });
+
+  it("imports a pasted list for the event", async () => {
+    const user = userEvent.setup();
+    routeGets({ "/v1/events": [OPEN], "/v1/divisions": divisions, "/v1/admin/events/open/registrations": [] });
+    apiPut.mockResolvedValue([reg({})]);
+    renderPage("/admin/registrations");
+
+    await user.click(await screen.findByRole("button", { name: "Import list" }));
+    const paste = ["\tDivision\tDancer 1\t\t\tDancer 2", "CLASSIC", "1\tClassic (NASDE)\tAda Lovelace\tP\tX\tBob Jones\tP\tY"].join("\n");
+    fireEvent.change(screen.getByLabelText("Registration rows"), { target: { value: paste } });
+    await user.click(screen.getByRole("button", { name: "Import 1" }));
+
+    await waitFor(() =>
+      expect(apiPut).toHaveBeenCalledWith("/v1/admin/events/open/registrations", {
+        entries: [{ division: "Classic (NASDE)", dancer_1: "Ada Lovelace", dancer_2: "Bob Jones" }],
+      })
+    );
+  });
+
+  it("marks an entry handled elsewhere", async () => {
+    const user = userEvent.setup();
+    routeGets({
+      "/v1/events": [OPEN],
+      "/v1/divisions": divisions,
+      "/v1/admin/events/open/registrations": [reg({})],
+      "/v1/admin/event-song-submissions": [],
+    });
+    apiPatch.mockResolvedValue(reg({ handled: true }));
+    renderPage("/admin/registrations");
+
+    await screen.findByText("Ada Lovelace & Bob Jones");
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByLabelText(/handled elsewhere/i));
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(apiPatch).toHaveBeenCalledWith("/v1/admin/event-registrations/r1", {
+        linked_label: null,
+        handled: true,
+        note: null,
+      })
     );
   });
 });

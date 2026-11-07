@@ -273,6 +273,12 @@ export default function ManagerGuideSection() {
             hidden unless you turn on Show deleted.
           </li>
           <li>
+            <Link to="/admin/registrations">Registrations</Link> — Paste an event&apos;s registration
+            list to see who has not submitted music. <strong>Possible match</strong> means a name
+            looks close but not certain: use <strong>Edit</strong> to link it to the right
+            submission, or mark it handled elsewhere. Re-importing keeps those marks.
+          </li>
+          <li>
             <Link to="/admin/users">Users</Link> — Grant or revoke admin. You cannot change your own
             role (your row shows “you”).
           </li>

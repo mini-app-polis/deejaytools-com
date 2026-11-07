@@ -5001,6 +5001,327 @@
         }
       }
     },
+    "/v1/admin/events/{id}/registrations": {
+      "get": {
+        "tags": [
+          "admin-event-registrations"
+        ],
+        "summary": "List an event's registrations",
+        "description": "The event's imported registration list, in order; empty when none was imported. Requires deejaytools.registrations.read.",
+        "operationId": "list_registrations_v1_admin_events__id__registrations_get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Event id.",
+              "title": "Id"
+            },
+            "description": "Event id."
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistrationListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Lacks the scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The query or write failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is refused (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "admin-event-registrations"
+        ],
+        "summary": "Replace an event's registrations",
+        "description": "Replaces the event's list with entries, in order. An entry whose division and dancers match one already there (case, accents and spacing ignored) keeps its id and its marks; the rest are new, and entries no longer sent are removed. Requires deejaytools.registrations.write.",
+        "operationId": "put_registrations_v1_admin_events__id__registrations_put",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Event id.",
+              "title": "Id"
+            },
+            "description": "Event id."
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistrationListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Lacks the scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The query or write failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutRegistrationsBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/event-registrations/{id}": {
+      "patch": {
+        "tags": [
+          "admin-event-registrations"
+        ],
+        "summary": "Mark a registration entry",
+        "description": "Sets the admin's marks on one entry: linked_label, handled and note; fields not sent are left as they are. Requires deejaytools.registrations.write.",
+        "operationId": "patch_registration_v1_admin_event_registrations__id__patch",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Registration entry id.",
+              "title": "Id"
+            },
+            "description": "Registration entry id."
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistrationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Lacks the scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such entry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The query or write failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchRegistrationBody"
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/admin/drive-jobs/summary": {
       "get": {
         "tags": [
@@ -9200,6 +9521,141 @@
         "title": "QueueListResponse",
         "description": "A queue, front first."
       },
+      "RegistrationData": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Entry id."
+          },
+          "event_id": {
+            "type": "string",
+            "title": "Event Id",
+            "description": "Event id."
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position",
+            "description": "Order in the imported list, from 0."
+          },
+          "division": {
+            "type": "string",
+            "title": "Division",
+            "description": "Division, as the registration names it."
+          },
+          "dancer_1": {
+            "type": "string",
+            "title": "Dancer 1",
+            "description": "First dancer (or team name)."
+          },
+          "dancer_2": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dancer 2",
+            "description": "Second dancer, if any."
+          },
+          "linked_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linked Label",
+            "description": "Partnership label the admin linked it to by hand."
+          },
+          "handled": {
+            "type": "boolean",
+            "title": "Handled",
+            "description": "Marked as needing no submission here."
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note",
+            "description": "Admin note."
+          },
+          "created_at": {
+            "type": "integer",
+            "title": "Created At",
+            "description": "First imported, epoch ms."
+          },
+          "updated_at": {
+            "type": "integer",
+            "title": "Updated At",
+            "description": "Last changed, epoch ms."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "event_id",
+          "position",
+          "division",
+          "dancer_1",
+          "handled",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "RegistrationData",
+        "description": "A registration entry as the API returns it."
+      },
+      "RegistrationListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/RegistrationData"
+            },
+            "type": "array",
+            "title": "Data",
+            "description": "The entries."
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta",
+            "description": "Semantic value for meta."
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "RegistrationListResponse",
+        "description": "An event's registration list, in imported order."
+      },
+      "RegistrationResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/RegistrationData",
+            "description": "The entry."
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta",
+            "description": "Semantic value for meta."
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "RegistrationResponse",
+        "description": "One registration entry."
+      },
       "RetryData": {
         "properties": {
           "id": {
@@ -12050,6 +12506,105 @@
           "role"
         ],
         "title": "UpdateRoleBody",
+        "type": "object"
+      },
+      "RegistrationItem": {
+        "description": "One entry as an import sends it.",
+        "properties": {
+          "division": {
+            "description": "Division, as the registration names it.",
+            "title": "Division",
+            "type": "string"
+          },
+          "dancer_1": {
+            "description": "First dancer (or team name).",
+            "title": "Dancer 1",
+            "type": "string"
+          },
+          "dancer_2": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Second dancer; omit or empty for none.",
+            "title": "Dancer 2"
+          }
+        },
+        "required": [
+          "division",
+          "dancer_1"
+        ],
+        "title": "RegistrationItem",
+        "type": "object"
+      },
+      "PutRegistrationsBody": {
+        "description": "Body of ``PUT /v1/admin/events/{id}/registrations``.",
+        "properties": {
+          "entries": {
+            "description": "The whole list, in order. An empty list clears it.",
+            "items": {
+              "$ref": "#/components/schemas/RegistrationItem"
+            },
+            "maxItems": 2000,
+            "title": "Entries",
+            "type": "array"
+          }
+        },
+        "required": [
+          "entries"
+        ],
+        "title": "PutRegistrationsBody",
+        "type": "object"
+      },
+      "PatchRegistrationBody": {
+        "description": "Body of ``PATCH /v1/admin/event-registrations/{id}``.\n\nEvery field is optional; ``linked_label`` and ``note`` take null to clear.",
+        "properties": {
+          "linked_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "A submission's partnership label; null or empty clears it.",
+            "title": "Linked Label"
+          },
+          "handled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Needs no submission here (handled elsewhere).",
+            "title": "Handled"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Admin note; null or empty clears it.",
+            "title": "Note"
+          }
+        },
+        "title": "PatchRegistrationBody",
         "type": "object"
       },
       "CreateCheckinBody": {
