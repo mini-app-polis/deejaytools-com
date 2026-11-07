@@ -94,6 +94,8 @@ function entry(over: Partial<ApiEventRegistration> & Pick<ApiEventRegistration, 
     linked_label: null,
     handled: false,
     note: null,
+    scratched: false,
+    hidden_submission_ids: [],
     created_at: 0,
     updated_at: 0,
     ...over,
@@ -183,6 +185,15 @@ describe("reconcileRegistrations", () => {
     const subs = [sub("BIM Crew", "Cabaret")];
     const { rows, unregistered } = reconcileRegistrations(entries, subs, TEST_DIVISIONS, false);
     expect(rows.map((r) => r.status)).toEqual(["submitted", "handled"]);
+    expect(unregistered).toEqual([]);
+  });
+
+  it("shows a scratched entry as scratched, its songs still accounted for", () => {
+    const entries = [entry({ division: "Classic (NASDE)", dancer_1: "Ada Lovelace", dancer_2: "Bob Jones", scratched: true, handled: true })];
+    const subs = [sub("Ada Lovelace & Bob Jones", "Classic")];
+    const { rows, unregistered } = reconcileRegistrations(entries, subs, TEST_DIVISIONS, false);
+    expect(rows[0].status).toBe("scratched");
+    expect(rows[0].matches).toHaveLength(1);
     expect(unregistered).toEqual([]);
   });
 
