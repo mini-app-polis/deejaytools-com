@@ -235,7 +235,7 @@ export type RegistrationStatus =
   | "submitted"
   /** Classic at The Open with a song for only one of prelims and finals. */
   | "missing-round"
-  /** Nothing certain, but a submission looks like it (one name, or another division). */
+  /** Nothing certain, but a submission looks like it (one name in its division, or all in another). */
   | "possible"
   /** Nothing submitted. */
   | "missing"
@@ -284,7 +284,8 @@ function roundGap(subs: readonly ApiAdminEventSongSubmission[]): "prelims" | "fi
  * An entry linked by hand (`linked_label`) is covered by every submission
  * with that partnership label, in any division. Otherwise it is covered by
  * submissions in its division (any, when its division is not recognised)
- * whose label names all its dancers. `roundsSplit` (The Open) checks a
+ * whose label names all its dancers. It looks like a submission naming all
+ * its dancers in another division, or some of them in its own. `roundsSplit` (The Open) checks a
  * Classic entry's songs cover both prelims and finals.
  */
 export function reconcileRegistrations(
@@ -309,7 +310,9 @@ export function reconcileRegistrations(
       for (const s of submissions) {
         const how = nameMatch(entry, s.partnership_label, isTeam);
         if (how === "full" && inDivision(s)) matches.push(s);
-        else if (how !== "none") candidates.push(s);
+        // One shared name elsewhere is usually a pro with another amateur:
+        // only a full match counts across divisions.
+        else if (how === "full" || (how === "partial" && inDivision(s))) candidates.push(s);
       }
     }
     for (const s of matches) accounted.add(s.id);
