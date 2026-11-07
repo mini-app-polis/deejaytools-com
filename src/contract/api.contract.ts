@@ -743,6 +743,36 @@ describe("contract", () => {
     await ledger.hit(endpoints.admin.eventSongSubmissions, { params: { eventId: state.eventId! } });
   });
 
+  // An event's registration list: imported, marked, re-imported with the
+  // marks kept, then cleared. The suite's event is deleted at the end, which
+  // would remove the list too; clearing it here keeps the test self-contained.
+  it("event registrations", async () => {
+    const eventId = state.eventId!;
+    const entries = [
+      { division: "Classic (NASDE)", dancer_1: "Contract Leader", dancer_2: "Contract Follower" },
+      { division: "Teams", dancer_1: "Contract Team" },
+    ];
+    const imported = await ledger.hit(endpoints.admin.importEventRegistrations, { params: { eventId }, body: { entries } });
+    expect(imported.map((r) => [r.position, r.dancer_1, r.dancer_2])).toEqual([
+      [0, "Contract Leader", "Contract Follower"],
+      [1, "Contract Team", null],
+    ]);
+    const marked = await ledger.hit(endpoints.admin.updateEventRegistration, {
+      params: { id: imported[0].id },
+      body: { handled: true, note: "contract suite" },
+    });
+    expect(marked).toMatchObject({ id: imported[0].id, handled: true, note: "contract suite", linked_label: null });
+    const again = await ledger.hit(endpoints.admin.importEventRegistrations, {
+      params: { eventId },
+      body: { entries: [entries[0]] },
+    });
+    expect(again).toHaveLength(1);
+    expect(again[0]).toMatchObject({ id: imported[0].id, handled: true, note: "contract suite" });
+    expect(await ledger.hit(endpoints.admin.eventRegistrations, { params: { eventId } })).toHaveLength(1);
+    await ledger.hit(endpoints.admin.importEventRegistrations, { params: { eventId }, body: { entries: [] } });
+    expect(await ledger.hit(endpoints.admin.eventRegistrations, { params: { eventId } })).toEqual([]);
+  });
+
   // The per-event staff routes, as an admin (who holds their scopes on every
   // event) calls them. Coordinator is granted to the test user itself: it
   // carries no Drive folder share, so nothing is queued.
