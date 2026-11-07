@@ -10,9 +10,11 @@ import {
  *
  * The list comes from the event's own registration export, pasted in, so its
  * division names and spellings are the registration's, not deejaytools'.
- * Matching is by name and is deliberately forgiving (case, accents,
- * punctuation, a typo or two, a shortened first name); anything it is unsure
- * of is shown as a possible match for the admin to link by hand.
+ * An entry is covered when a submission in its division names all its
+ * dancers exactly (ignoring only case, accents, punctuation and spacing).
+ * Names that are almost the same (a typo, a shortened first name), or an
+ * exact match in another division, are shown as a possible match for the
+ * admin to link by hand. One shared name is not a match at all.
  */
 
 // ---------------------------------------------------------------------------
@@ -154,12 +156,19 @@ function similar(a: string, b: string): boolean {
   return editDistance(a, b) <= (longest >= 7 ? 2 : 1);
 }
 
-/** Whether two written names are the same person (or team). */
-export function sameName(a: string, b: string): boolean {
+/** How two written names compare: "exact" (case, accents, punctuation and spacing aside), "close", or "none". */
+export type NameCloseness = "exact" | "close" | "none";
+
+export function nameCloseness(a: string, b: string): NameCloseness {
   const pa = plain(a);
   const pb = plain(b);
-  if (!pa || !pb) return false;
-  if (pa === pb || pa.replace(/ /g, "") === pb.replace(/ /g, "")) return true;
+  if (!pa || !pb) return "none";
+  if (pa === pb || pa.replace(/ /g, "") === pb.replace(/ /g, "")) return "exact";
+  return almostSameName(pa, pb) ? "close" : "none";
+}
+
+/** Two plain names that differ by a typo or a shortened first name. */
+function almostSameName(pa: string, pb: string): boolean {
   const ta = pa.split(" ");
   const tb = pb.split(" ");
   if (ta.length >= 2 && tb.length >= 2) {
@@ -187,43 +196,44 @@ function entryNames(entry: Pick<ApiEventRegistration, "dancer_1" | "dancer_2">):
   return [entry.dancer_1, entry.dancer_2].filter((n): n is string => !!n && !!n.trim());
 }
 
-/** How many of `names` each find a distinct match among `parts`. */
-function countMatched(names: readonly string[], parts: readonly string[]): number {
+/**
+ * Whether every one of `names` finds a distinct part: "exact" when each does
+ * exactly, "close" when some only almost do, "none" when any finds nothing.
+ */
+function matchAll(names: readonly string[], parts: readonly string[]): NameCloseness {
   const free = [...parts];
-  let matched = 0;
+  let close = false;
   for (const name of names) {
-    const at = free.findIndex((p) => sameName(name, p));
-    if (at !== -1) {
-      free.splice(at, 1);
-      matched++;
+    let at = free.findIndex((p) => nameCloseness(name, p) === "exact");
+    if (at === -1) {
+      at = free.findIndex((p) => nameCloseness(name, p) === "close");
+      close = true;
     }
+    if (at === -1) return "none";
+    free.splice(at, 1);
   }
-  return matched;
+  return close ? "close" : "exact";
 }
-
-type NameMatch = "full" | "partial" | "none";
 
 /**
  * How an entry's names meet a submission's partnership label. A team
- * entry matches on any one name (its team name or its contact).
+ * entry matches on any one name (its team name or its contact), or when the
+ * label contains its team name.
  */
 function nameMatch(
   entry: Pick<ApiEventRegistration, "dancer_1" | "dancer_2">,
   label: string,
   isTeam: boolean
-): NameMatch {
+): NameCloseness {
   const names = entryNames(entry);
   const parts = labelNames(label);
   if (isTeam) {
     const whole = plain(label);
-    const hit = names.some(
-      (n) => parts.some((p) => sameName(n, p)) || (plain(n).length >= 4 && whole.includes(plain(n)))
-    );
-    return hit ? "full" : "none";
+    const each = names.flatMap((n) => parts.map((p) => nameCloseness(n, p)));
+    if (each.includes("exact") || names.some((n) => plain(n).length >= 4 && whole.includes(plain(n)))) return "exact";
+    return each.includes("close") ? "close" : "none";
   }
-  const matched = countMatched(names, parts);
-  if (matched === 0) return "none";
-  return matched === names.length ? "full" : "partial";
+  return matchAll(names, parts);
 }
 
 // ---------------------------------------------------------------------------
@@ -235,7 +245,7 @@ export type RegistrationStatus =
   | "submitted"
   /** Classic at The Open with a song for only one of prelims and finals. */
   | "missing-round"
-  /** Nothing certain, but a submission looks like it (one name in its division, or all in another). */
+  /** Not covered, but a submission almost names its dancers, or names them in another division. */
   | "possible"
   /** Nothing submitted. */
   | "missing"
@@ -284,8 +294,8 @@ function roundGap(subs: readonly ApiAdminEventSongSubmission[]): "prelims" | "fi
  * An entry linked by hand (`linked_label`) is covered by every submission
  * with that partnership label, in any division. Otherwise it is covered by
  * submissions in its division (any, when its division is not recognised)
- * whose label names all its dancers. It looks like a submission naming all
- * its dancers in another division, or some of them in its own. `roundsSplit` (The Open) checks a
+ * whose label names all its dancers exactly. It looks like a submission whose
+ * label almost names them (any division) or names them in another division. `roundsSplit` (The Open) checks a
  * Classic entry's songs cover both prelims and finals.
  */
 export function reconcileRegistrations(
@@ -309,10 +319,8 @@ export function reconcileRegistrations(
       matches = [];
       for (const s of submissions) {
         const how = nameMatch(entry, s.partnership_label, isTeam);
-        if (how === "full" && inDivision(s)) matches.push(s);
-        // One shared name elsewhere is usually a pro with another amateur:
-        // only a full match counts across divisions.
-        else if (how === "full" || (how === "partial" && inDivision(s))) candidates.push(s);
+        if (how === "exact" && inDivision(s)) matches.push(s);
+        else if (how !== "none") candidates.push(s);
       }
     }
     for (const s of matches) accounted.add(s.id);

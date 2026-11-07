@@ -6,7 +6,7 @@ import {
   parseRegistrationPaste,
   reconcileRegistrations,
   registrationLines,
-  sameName,
+  nameCloseness,
 } from "./eventRegistrations";
 
 const row = (...cells: string[]) => cells.join("\t");
@@ -68,19 +68,20 @@ describe("divisionForRegistration", () => {
   });
 });
 
-describe("sameName", () => {
+describe("nameCloseness", () => {
   it.each([
-    ["Hugo Miquez", "Hugo Miguez", true],
-    ["Jaden Pfieffer", "Jaden Pfeiffer", true],
-    ["Gordon Mac Donald", "Gordon MacDonald", true],
-    ["MURIEL HOUIS", "Muriel Houis", true],
-    ["Maïna Vila Cobarsi", "Maina Vila Cobarsi", true],
-    ["Chris Low", "Christopher Low", true],
-    ["Jennifer Sogluizzo", "Joey Sogluizzo", false],
-    ["Ben McHenry", "Cameo McHenry", false],
-    ["Kevin Kane", "Nataliya Kane", false],
-  ])("%s / %s → %s", (a, b, same) => {
-    expect(sameName(a, b)).toBe(same);
+    ["MURIEL HOUIS", "Muriel Houis", "exact"],
+    ["Maïna Vila Cobarsi", "Maina Vila Cobarsi", "exact"],
+    ["Gordon Mac Donald", "Gordon MacDonald", "exact"],
+    ["Hugo Miquez", "Hugo Miguez", "close"],
+    ["Jaden Pfieffer", "Jaden Pfeiffer", "close"],
+    ["Chris Low", "Christopher Low", "close"],
+    ["Douglas Rousar", "Doug Rousar", "close"],
+    ["Jennifer Sogluizzo", "Joey Sogluizzo", "none"],
+    ["Ben McHenry", "Cameo McHenry", "none"],
+    ["Kevin Kane", "Nataliya Kane", "none"],
+  ])("%s / %s → %s", (a, b, closeness) => {
+    expect(nameCloseness(a, b)).toBe(closeness);
   });
 });
 
@@ -127,15 +128,15 @@ describe("reconcileRegistrations", () => {
     expect(unregistered).toEqual([]);
   });
 
-  it("tells pro-am entries sharing a pro apart, and lists the leftover submission", () => {
+  it("tells pro-am entries sharing a pro apart: one shared name is not a match", () => {
     const entries = [
       entry({ division: "SWING - Pro Am Routine - Open Leader AM (ages 6+)", dancer_1: "Idris Bah", dancer_2: "Jennifer Sogluizzo" }),
       entry({ division: "SWING - Pro Am Routine - Open Leader AM (ages 6+)", dancer_1: "Samuel Williams", dancer_2: "Jennifer Sogluizzo" }),
     ];
     const subs = [sub("Idris Bah & Jennifer Sogluizzo", "ProAm LeaderAm"), sub("Someone Else", "Showcase")];
     const { rows, unregistered } = reconcileRegistrations(entries, subs, TEST_DIVISIONS, false);
-    expect(rows.map((r) => r.status)).toEqual(["submitted", "possible"]);
-    expect(rows[1].candidates.map((s) => s.id)).toEqual([subs[0].id]);
+    expect(rows.map((r) => r.status)).toEqual(["submitted", "missing"]);
+    expect(rows[1].candidates).toEqual([]);
     expect(unregistered.map((s) => s.id)).toEqual([subs[1].id]);
   });
 
@@ -144,6 +145,15 @@ describe("reconcileRegistrations", () => {
     const subs = [sub("Derek Leyva & Jennifer Norris", "Masters")];
     const { rows, unregistered } = reconcileRegistrations(entries, subs, TEST_DIVISIONS, false);
     expect(rows[0].status).toBe("possible");
+    expect(unregistered).toHaveLength(1);
+  });
+
+  it("flags names that are almost the same as a possible match, not as submitted", () => {
+    const entries = [entry({ division: "Masters  (age 50+)", dancer_1: "Douglas Rousar", dancer_2: "Jeanne DeGeyter" })];
+    const subs = [sub("Doug Rousar & Jeanne DeGeyter", "Masters")];
+    const { rows, unregistered } = reconcileRegistrations(entries, subs, TEST_DIVISIONS, false);
+    expect(rows[0].status).toBe("possible");
+    expect(rows[0].candidates.map((s) => s.id)).toEqual([subs[0].id]);
     expect(unregistered).toHaveLength(1);
   });
 
