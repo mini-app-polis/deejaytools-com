@@ -147,6 +147,15 @@ describe("reconcileRegistrations", () => {
     expect(unregistered).toHaveLength(1);
   });
 
+  it("ignores one shared name in another division (a pro with another amateur)", () => {
+    const entries = [entry({ division: "Showcase (NASDE)", dancer_1: "Kevin Kane", dancer_2: "Nataliya Kane" })];
+    const subs = [sub("Melissa Liao & Kevin Kane", "ProAm FollowerAm")];
+    const { rows, unregistered } = reconcileRegistrations(entries, subs, TEST_DIVISIONS, false);
+    expect(rows[0].status).toBe("missing");
+    expect(rows[0].candidates).toEqual([]);
+    expect(unregistered).toHaveLength(1);
+  });
+
   it("flags a Classic entry at The Open with only one round covered", () => {
     const entries = [entry({ division: "Classic (NASDE)", dancer_1: "Zac Skinner", dancer_2: "Maddy Skinner" })];
     const subs = [sub("Zac Skinner & Maddy Skinner", "Classic", "prelims_only")];
