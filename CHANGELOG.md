@@ -1,3 +1,10 @@
+## [2.27.2](https://github.com/mini-app-polis/deejaytools-com/compare/v2.27.1...v2.27.2) (2026-11-07)
+
+
+### Bug Fixes
+
+* **admin:** a registration is submitted only on an exact name match; near names and other-division matches are flagged as possible ([3b33a91](https://github.com/mini-app-polis/deejaytools-com/commit/3b33a91c5c2799d8a0d25719bdb98b06b947e844))
+
 ## [2.27.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.27.0...v2.27.1) (2026-11-07)
 
 
