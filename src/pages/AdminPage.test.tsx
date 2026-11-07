@@ -2050,15 +2050,15 @@ describe("AdminPage — Registrations section", () => {
       ],
       "/v1/admin/event-song-submissions": [
         fx.adminEventSongSubmission({ id: "s1", event_id: "open", division: "Classic", partnership_label: "Ada Lovelace & Bob Jones", song_label: "Ada Song", round: "prelims_only" }),
-        fx.adminEventSongSubmission({ id: "s2", event_id: "open", division: "Classic", partnership_label: "Cy Dee", song_label: "Cy Song" }),
+        fx.adminEventSongSubmission({ id: "s2", event_id: "open", division: "Showcase", partnership_label: "Cy Dee & Eve Eff", song_label: "Cy Song" }),
       ],
     });
     renderPage("/admin/registrations");
 
-    // Ada has only prelims at The Open; Cy alone looks like Cy & Eve.
+    // Ada has only prelims at The Open; Cy & Eve submitted under another division.
     expect(await screen.findByText("Missing finals")).toBeInTheDocument();
     expect(screen.getByText("Ada Song (Prelims only)")).toBeInTheDocument();
-    expect(screen.getByText("Looks like: Cy Dee (Classic)")).toBeInTheDocument();
+    expect(screen.getByText("Looks like: Cy Dee & Eve Eff (Showcase)")).toBeInTheDocument();
 
     await user.click(screen.getByRole("radio", { name: /^Submitted \(0\)/ }));
     expect(screen.getByText("Nothing to show for this filter.")).toBeInTheDocument();
@@ -2084,25 +2084,24 @@ describe("AdminPage — Registrations section", () => {
       "/v1/admin/events/old/registrations": [reg({ event_id: "old", dancer_1: "Cy Dee", dancer_2: "Eve Eff" })],
       "/v1/admin/event-song-submissions": [
         fx.adminEventSongSubmission({ id: "s1", event_id: "old", division: "Showcase", partnership_label: "Aaa Zed" }),
-        fx.adminEventSongSubmission({ id: "s2", event_id: "old", division: "Classic", partnership_label: "Cy Dee" }),
+        fx.adminEventSongSubmission({ id: "s2", event_id: "old", division: "Showcase", partnership_label: "Cy Dee & Eve Eff" }),
       ],
     });
-    apiPatch.mockResolvedValue(reg({ linked_label: "Cy Dee", note: "solo upload" }));
+    apiPatch.mockResolvedValue(reg({ linked_label: "Cy Dee & Eve Eff", note: "solo upload" }));
     renderPage("/admin/registrations");
 
-    await screen.findByText("Cy Dee & Eve Eff");
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(await screen.findByRole("button", { name: "Edit" }));
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("combobox", { name: "Linked submission" }));
     const options = (await screen.findAllByRole("option")).map((o) => o.textContent);
-    expect(options).toEqual(["None: match by name", "Cy Dee · Classic", "Aaa Zed · Showcase"]);
-    await user.click(screen.getByRole("option", { name: "Cy Dee · Classic" }));
+    expect(options).toEqual(["None: match by name", "Cy Dee & Eve Eff · Showcase", "Aaa Zed · Showcase"]);
+    await user.click(screen.getByRole("option", { name: "Cy Dee & Eve Eff · Showcase" }));
     await user.type(within(dialog).getByLabelText("Note"), "solo upload");
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
       expect(apiPatch).toHaveBeenCalledWith("/v1/admin/event-registrations/r1", {
-        linked_label: "Cy Dee",
+        linked_label: "Cy Dee & Eve Eff",
         handled: false,
         note: "solo upload",
       })

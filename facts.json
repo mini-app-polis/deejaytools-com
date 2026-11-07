@@ -2,7 +2,7 @@
   "repo": "deejaytools-com",
   "facts": {
     "test_functions": {
-      "value": 892,
+      "value": 893,
       "description": "Test cases in the test suites (it and test calls, it.each once)",
       "source": "matches: src/**/*.test.ts, src/**/*.test.tsx, src/**/*.contract.ts /(?m)^\\s*(?:it|test)(?:\\.\\w+)?\\(/",
       "as_of": "2026-11-07"
