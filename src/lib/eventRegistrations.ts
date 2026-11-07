@@ -250,7 +250,9 @@ export type RegistrationStatus =
   /** Nothing submitted. */
   | "missing"
   /** The admin marked it as needing no submission here. */
-  | "handled";
+  | "handled"
+  /** Signed up but no longer competing; any songs stay submitted, off the event page. */
+  | "scratched";
 
 export type ReconciledRegistration = {
   entry: ApiEventRegistration;
@@ -271,7 +273,8 @@ export type Reconciliation = {
   unregistered: ApiAdminEventSongSubmission[];
 };
 
-function sameLabel(a: string, b: string): boolean {
+/** Whether two partnership labels are the same, case, accents and punctuation aside. */
+export function sameLabel(a: string, b: string): boolean {
   return plain(a) === plain(b);
 }
 
@@ -328,7 +331,8 @@ export function reconcileRegistrations(
 
     let status: RegistrationStatus;
     let missingRound: "prelims" | "finals" | undefined;
-    if (entry.handled) status = "handled";
+    if (entry.scratched) status = "scratched";
+    else if (entry.handled) status = "handled";
     else if (matches.length > 0) {
       missingRound = roundsSplit && division === ROUND_SPLIT_DIVISION ? roundGap(matches) : undefined;
       status = missingRound ? "missing-round" : "submitted";

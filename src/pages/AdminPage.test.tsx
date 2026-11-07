@@ -1992,7 +1992,8 @@ describe("AdminPage — Registrations section", () => {
   const OPEN = fx.event({ id: "open", name: "The Open 2026", status: "upcoming", start_date: "2026-11-26", end_date: "2026-11-29" });
   const reg = (over: Record<string, unknown>) => ({
     id: "r1", event_id: "open", position: 0, division: "Classic (NASDE)", dancer_1: "Ada Lovelace",
-    dancer_2: "Bob Jones", linked_label: null, handled: false, note: null, created_at: 1, updated_at: 1,
+    dancer_2: "Bob Jones", linked_label: null, handled: false, note: null, scratched: false,
+    hidden_submission_ids: [], created_at: 1, updated_at: 1,
     ...over,
   });
   const divisions = { groups: [TEST_DIVISIONS], divisions: TEST_DIVISIONS };
@@ -2104,6 +2105,7 @@ describe("AdminPage — Registrations section", () => {
         linked_label: "Cy Dee & Eve Eff",
         handled: false,
         note: "solo upload",
+        scratched: false,
       })
     );
   });
@@ -2155,7 +2157,54 @@ describe("AdminPage — Registrations section", () => {
         linked_label: null,
         handled: true,
         note: null,
+        scratched: false,
       })
     );
+  });
+  it("scratches an entry, hiding its matched songs from the event page", async () => {
+    const user = userEvent.setup();
+    routeGets({
+      "/v1/events": [OPEN],
+      "/v1/divisions": divisions,
+      "/v1/admin/events/open/registrations": [reg({})],
+      "/v1/admin/event-song-submissions": [
+        fx.adminEventSongSubmission({ id: "s1", event_id: "open", division: "Classic", partnership_label: "Ada Lovelace & Bob Jones", song_label: "Ada Song" }),
+      ],
+    });
+    apiPatch.mockResolvedValue(reg({ scratched: true, hidden_submission_ids: ["s1"] }));
+    renderPage("/admin/registrations");
+
+    await user.click(await screen.findByRole("radio", { name: /^All/ }));
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByLabelText(/^Scratched/));
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(apiPatch).toHaveBeenCalledWith("/v1/admin/event-registrations/r1", {
+        linked_label: null,
+        handled: false,
+        note: null,
+        scratched: true,
+        hide_submission_ids: ["s1"],
+      })
+    );
+  });
+
+  it("shows a scratched entry apart, and warns when a song is still listed", async () => {
+    routeGets({
+      "/v1/events": [OPEN],
+      "/v1/divisions": divisions,
+      "/v1/admin/events/open/registrations": [reg({ scratched: true, hidden_submission_ids: [] })],
+      "/v1/admin/event-song-submissions": [
+        fx.adminEventSongSubmission({ id: "s1", event_id: "open", division: "Classic", partnership_label: "Ada Lovelace & Bob Jones", song_label: "Ada Song" }),
+      ],
+    });
+    renderPage("/admin/registrations");
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("radio", { name: /^Scratched \(1\)/ }));
+    expect(screen.getByText("Scratched")).toBeInTheDocument();
+    expect(screen.getByText(/still listed on the event page/)).toBeInTheDocument();
   });
 });
