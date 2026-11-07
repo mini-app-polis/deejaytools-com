@@ -48,6 +48,7 @@ import { toast } from "sonner";
 import { fx } from "@/test/fixtures";
 import { expectFieldError } from "@/test/fieldErrors";
 import { renderWithQueryClient } from "@/test/render";
+import { TEST_DIVISIONS } from "@/test/divisions";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1981,6 +1982,181 @@ describe("AdminPage — dismissing dialogs", () => {
         "/v1/admin/checkins",
         expect.objectContaining({ leaderFirstName: "Ada" })
       )
+    );
+  });
+});
+
+describe("AdminPage — Registrations section", () => {
+  beforeEach(resetAll);
+
+  const OPEN = fx.event({ id: "open", name: "The Open 2026", status: "upcoming", start_date: "2026-11-26", end_date: "2026-11-29" });
+  const reg = (over: Record<string, unknown>) => ({
+    id: "r1", event_id: "open", position: 0, division: "Classic (NASDE)", dancer_1: "Ada Lovelace",
+    dancer_2: "Bob Jones", linked_label: null, handled: false, note: null, created_at: 1, updated_at: 1,
+    ...over,
+  });
+  const divisions = { groups: [TEST_DIVISIONS], divisions: TEST_DIVISIONS };
+
+  it("shows who is missing, hides who has submitted, and lists submissions not on the list", async () => {
+    routeGets({
+      "/v1/events": [EV_DONE, OPEN],
+      "/v1/divisions": divisions,
+      "/v1/admin/events/open/registrations": [
+        reg({ id: "r1" }),
+        reg({ id: "r2", position: 1, dancer_1: "Cy Dee", dancer_2: "Eve Eff" }),
+      ],
+      "/v1/admin/event-song-submissions": [
+        fx.adminEventSongSubmission({ id: "s1", event_id: "open", division: "Classic", partnership_label: "Ada Lovelace & Bob Jones", song_label: "Ada Lovelace & Bob Jones Classic" }),
+        fx.adminEventSongSubmission({ id: "s2", event_id: "open", division: "Showcase", partnership_label: "Gee Aitch", song_label: "Gee Aitch Showcase" }),
+      ],
+    });
+    renderPage("/admin/registrations");
+
+    expect(await screen.findByText("Cy Dee & Eve Eff")).toBeInTheDocument();
+    expect(screen.queryByText("Ada Lovelace & Bob Jones")).not.toBeInTheDocument();
+    expect(screen.getByText("Gee Aitch")).toBeInTheDocument();
+    expect(
+      screen.getByText((_, el) => el?.tagName === "P" && /^1 of 2 entries need attention/.test(el.textContent ?? ""))
+    ).toBeInTheDocument();
+    expect(apiGet.mock.calls.map(([p]) => p)).toContain("/v1/admin/event-song-submissions?event_id=open");
+  });
+
+  it("imports a pasted list for the event", async () => {
+    const user = userEvent.setup();
+    routeGets({ "/v1/events": [OPEN], "/v1/divisions": divisions, "/v1/admin/events/open/registrations": [] });
+    apiPut.mockResolvedValue([reg({})]);
+    renderPage("/admin/registrations");
+
+    await user.click(await screen.findByRole("button", { name: "Import list" }));
+    const paste = ["\tDivision\tDancer 1\t\t\tDancer 2", "CLASSIC", "1\tClassic (NASDE)\tAda Lovelace\tP\tX\tBob Jones\tP\tY"].join("\n");
+    fireEvent.change(screen.getByLabelText("Registration rows"), { target: { value: paste } });
+    await user.click(screen.getByRole("button", { name: "Import 1" }));
+
+    await waitFor(() =>
+      expect(apiPut).toHaveBeenCalledWith("/v1/admin/events/open/registrations", {
+        entries: [{ division: "Classic (NASDE)", dancer_1: "Ada Lovelace", dancer_2: "Bob Jones" }],
+      })
+    );
+  });
+
+  it("filters by status, shows matches and look-alikes, copies and refreshes", async () => {
+    const user = userEvent.setup();
+    routeGets({
+      "/v1/events": [OPEN],
+      "/v1/divisions": divisions,
+      "/v1/admin/events/open/registrations": [
+        reg({ id: "r1" }),
+        reg({ id: "r2", position: 1, dancer_1: "Cy Dee", dancer_2: "Eve Eff" }),
+      ],
+      "/v1/admin/event-song-submissions": [
+        fx.adminEventSongSubmission({ id: "s1", event_id: "open", division: "Classic", partnership_label: "Ada Lovelace & Bob Jones", song_label: "Ada Song", round: "prelims_only" }),
+        fx.adminEventSongSubmission({ id: "s2", event_id: "open", division: "Classic", partnership_label: "Cy Dee", song_label: "Cy Song" }),
+      ],
+    });
+    renderPage("/admin/registrations");
+
+    // Ada has only prelims at The Open; Cy alone looks like Cy & Eve.
+    expect(await screen.findByText("Missing finals")).toBeInTheDocument();
+    expect(screen.getByText("Ada Song (Prelims only)")).toBeInTheDocument();
+    expect(screen.getByText("Looks like: Cy Dee (Classic)")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: /^Submitted \(0\)/ }));
+    expect(screen.getByText("Nothing to show for this filter.")).toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: /^Possible match \(1\)/ }));
+    expect(screen.getByText("Cy Dee & Eve Eff")).toBeInTheDocument();
+    expect(screen.queryByText("Ada Lovelace & Bob Jones")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Copy shown" }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Copied 1 entry"));
+    await expect(navigator.clipboard.readText()).resolves.toBe("Classic (NASDE): Cy Dee & Eve Eff");
+
+    const before = apiGet.mock.calls.length;
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(apiGet.mock.calls.length).toBeGreaterThan(before));
+  });
+
+  it("links an entry to a submission with a note, look-alikes listed first", async () => {
+    const user = userEvent.setup();
+    const past = fx.event({ id: "old", name: "Old Jam", status: "completed", start_date: "2025-03-01", end_date: "2025-03-02" });
+    routeGets({
+      "/v1/events": [past],
+      "/v1/divisions": divisions,
+      "/v1/admin/events/old/registrations": [reg({ event_id: "old", dancer_1: "Cy Dee", dancer_2: "Eve Eff" })],
+      "/v1/admin/event-song-submissions": [
+        fx.adminEventSongSubmission({ id: "s1", event_id: "old", division: "Showcase", partnership_label: "Aaa Zed" }),
+        fx.adminEventSongSubmission({ id: "s2", event_id: "old", division: "Classic", partnership_label: "Cy Dee" }),
+      ],
+    });
+    apiPatch.mockResolvedValue(reg({ linked_label: "Cy Dee", note: "solo upload" }));
+    renderPage("/admin/registrations");
+
+    await screen.findByText("Cy Dee & Eve Eff");
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("combobox", { name: "Linked submission" }));
+    const options = (await screen.findAllByRole("option")).map((o) => o.textContent);
+    expect(options).toEqual(["None: match by name", "Cy Dee · Classic", "Aaa Zed · Showcase"]);
+    await user.click(screen.getByRole("option", { name: "Cy Dee · Classic" }));
+    await user.type(within(dialog).getByLabelText("Note"), "solo upload");
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(apiPatch).toHaveBeenCalledWith("/v1/admin/event-registrations/r1", {
+        linked_label: "Cy Dee",
+        handled: false,
+        note: "solo upload",
+      })
+    );
+  });
+
+  it("offers a retry when the list fails to load, and reports a failed import", async () => {
+    const user = userEvent.setup();
+    let fail = true;
+    routeGets({
+      "/v1/events": [OPEN],
+      "/v1/divisions": divisions,
+      "/v1/admin/events/open/registrations": () => {
+        if (fail) throw new Error("boom");
+        return [];
+      },
+    });
+    apiPut.mockRejectedValue(new Error("Import refused"));
+    renderPage("/admin/registrations");
+
+    const retry = await screen.findByRole("button", { name: /try again|retry/i });
+    fail = false;
+    await user.click(retry);
+    await user.click(await screen.findByRole("button", { name: "Import list" }));
+    fireEvent.change(screen.getByLabelText("Registration rows"), { target: { value: "1\tShowcase\tA B\t\t\tC D" } });
+    await user.click(screen.getByRole("button", { name: "Import 1" }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Import refused"));
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("marks an entry handled elsewhere", async () => {
+    const user = userEvent.setup();
+    routeGets({
+      "/v1/events": [OPEN],
+      "/v1/divisions": divisions,
+      "/v1/admin/events/open/registrations": [reg({})],
+      "/v1/admin/event-song-submissions": [],
+    });
+    apiPatch.mockResolvedValue(reg({ handled: true }));
+    renderPage("/admin/registrations");
+
+    await screen.findByText("Ada Lovelace & Bob Jones");
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByLabelText(/handled elsewhere/i));
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(apiPatch).toHaveBeenCalledWith("/v1/admin/event-registrations/r1", {
+        linked_label: null,
+        handled: true,
+        note: null,
+      })
     );
   });
 });

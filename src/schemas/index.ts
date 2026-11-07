@@ -629,6 +629,48 @@ export const ApiAdminEventSongSubmissionSchema = z.object({
 export type ApiAdminEventSongSubmission = z.infer<typeof ApiAdminEventSongSubmissionSchema>;
 
 /**
+ * One entry on an event's registration list, as an admin imported it from the
+ * event's own registration export (GET /v1/admin/events/:id/registrations).
+ * `division` is the registration's own name for it, not one of /v1/divisions.
+ */
+export const ApiEventRegistrationSchema = z.object({
+  id: z.string(),
+  event_id: z.string(),
+  position: z.number(),
+  division: z.string(),
+  dancer_1: z.string(),
+  dancer_2: z.string().nullable(),
+  /** A submission's partnership label the admin linked this entry to by hand. */
+  linked_label: z.string().nullable(),
+  /** Marked as needing no submission here (handled elsewhere). */
+  handled: z.boolean(),
+  note: z.string().nullable(),
+  created_at: z.number(),
+  updated_at: z.number(),
+});
+export type ApiEventRegistration = z.infer<typeof ApiEventRegistrationSchema>;
+
+/** PUT /v1/admin/events/:id/registrations: the whole list, in order. */
+export const putEventRegistrationsBodySchema = z.object({
+  entries: z
+    .array(
+      z.object({
+        division: z.string().trim().min(1).max(200),
+        dancer_1: z.string().trim().min(1).max(200),
+        dancer_2: z.string().trim().max(200).optional(),
+      })
+    )
+    .max(2000),
+});
+
+/** PATCH /v1/admin/event-registrations/:id: the admin's marks; unsent fields stay. */
+export const patchEventRegistrationBodySchema = z.object({
+  linked_label: z.string().trim().max(200).nullable().optional(),
+  handled: z.boolean().optional(),
+  note: z.string().trim().max(1000).nullable().optional(),
+});
+
+/**
  * One competing entity entered in one division of an event.
  *
  * Deliberately carries no song identity — no title, filename, routine name or

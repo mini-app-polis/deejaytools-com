@@ -1,5 +1,6 @@
 import { useParams } from "react-router-dom";
 import AdminEventsSection from "@/components/admin/AdminEventsSection";
+import AdminRegistrationsSection from "@/components/admin/AdminRegistrationsSection";
 import AdminRunsSection from "@/components/admin/AdminRunsSection";
 import AdminSessionsSection from "@/components/admin/AdminSessionsSection";
 import AdminSongsSection from "@/components/admin/AdminSongsSection";
@@ -39,6 +40,7 @@ export default function AdminPage() {
         <AdminSessionsSection open={section === "sessions"} />
         <AdminRunsSection open={section === "runs"} />
         <AdminSongsSection open={section === "songs"} />
+        <AdminRegistrationsSection open={section === "registrations"} />
         <AdminTestCheckinSection open={section === "test-checkin"} />
         <AdminUsersSection open={section === "users"} />
       </Tabs>

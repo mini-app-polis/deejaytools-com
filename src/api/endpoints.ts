@@ -10,6 +10,7 @@ import {
   ApiEventDivisionEntitiesSchema,
   ApiEventDriveFolderSchema,
   ApiEventPersonSchema,
+  ApiEventRegistrationSchema,
   ApiEventSchema,
   ApiEventSongSubmissionSchema,
   ApiListedEventSongSubmissionSchema,
@@ -36,6 +37,8 @@ import {
   createEventSongSubmissionBodySchema,
   createManagedPartnershipBodySchema,
   createTeamBodySchema,
+  patchEventRegistrationBodySchema,
+  putEventRegistrationsBodySchema,
   type EventStaffRole,
   type SessionStatusSchema,
 } from "@/schemas";
@@ -448,6 +451,31 @@ export const endpoints = {
       id: "admin.eventSongSubmissions", method: "GET", access: "admin",
       path: (p) => `/v1/admin/event-song-submissions?event_id=${encodeURIComponent(p.eventId)}`,
       response: z.array(ApiAdminEventSongSubmissionSchema),
+    }),
+    eventRegistrations: endpoint<{ eventId: string }, void, z.infer<typeof ApiEventRegistrationSchema>[]>({
+      id: "admin.eventRegistrations", method: "GET", access: "admin",
+      path: (p) => `/v1/admin/events/${encodeURIComponent(p.eventId)}/registrations`,
+      response: z.array(ApiEventRegistrationSchema),
+    }),
+    importEventRegistrations: endpoint<
+      { eventId: string },
+      z.input<typeof putEventRegistrationsBodySchema>,
+      z.infer<typeof ApiEventRegistrationSchema>[]
+    >({
+      id: "admin.importEventRegistrations", method: "PUT", access: "admin",
+      path: (p) => `/v1/admin/events/${encodeURIComponent(p.eventId)}/registrations`,
+      request: putEventRegistrationsBodySchema,
+      response: z.array(ApiEventRegistrationSchema),
+    }),
+    updateEventRegistration: endpoint<
+      { id: string },
+      z.input<typeof patchEventRegistrationBodySchema>,
+      z.infer<typeof ApiEventRegistrationSchema>
+    >({
+      id: "admin.updateEventRegistration", method: "PATCH", access: "admin",
+      path: (p) => `/v1/admin/event-registrations/${id(p)}`,
+      request: patchEventRegistrationBodySchema,
+      response: ApiEventRegistrationSchema,
     }),
     injectCheckin: endpoint<void, Body, z.infer<typeof ApiTestInjectionCreatedSchema>>({
       id: "admin.injectCheckin", method: "POST", access: "admin",

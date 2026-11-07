@@ -99,7 +99,7 @@ One default-export component per route. Pages orchestrate fetching, local state,
 | `QueryError.tsx` | What a page shows, with a retry, where a query's data would be when it fails (§3) |
 | `MaintenancePage.tsx` | Replaces the whole app when the build has `VITE_MAINTENANCE=1` |
 | `EventRoleGuard.tsx` | Requires a staff role, or a richer one, on the event in `:eventId` |
-| `admin/` | Admin dashboard sections that `AdminPage` renders, each owning its state, forms and queries (`AdminEventsSection` with its `AdminEventManagersDialog`, `AdminSessionsSection` with its `AdminSessionDialog`, `AdminRunsSection`, `AdminSongsSection`, `AdminTestCheckinSection`, `AdminUsersSection`), and `adminShared.tsx` for the status badges and time formatting the sections share |
+| `admin/` | Admin dashboard sections that `AdminPage` renders, each owning its state, forms and queries (`AdminEventsSection` with its `AdminEventManagersDialog`, `AdminSessionsSection` with its `AdminSessionDialog`, `AdminRunsSection`, `AdminSongsSection`, `AdminRegistrationsSection`, `AdminTestCheckinSection`, `AdminUsersSection`), and `adminShared.tsx` for the status badges and time formatting the sections share |
 | `staff/` | Per-event staff portals: `StaffPortal` (shell + section tabs), `portalSections.tsx` (which sections each portal has) and one component per section |
 | `SongUploadForm.tsx` | Chunked upload form (self + managed variants) |
 | `SpecialUploadForm.tsx` | Portal-specific upload (Teams/Cabaret/etc.) |
@@ -320,7 +320,7 @@ Sections are **URL-driven**, not hidden client-side tab state.
 
 ```ts
 export const ADMIN_SECTIONS = [
-  "events", "sessions", "runs", "songs", "test-checkin", "users",
+  "events", "sessions", "songs", "registrations", "users", "runs", "test-checkin",
 ] as const;
 ```
 
@@ -335,6 +335,8 @@ export const MANAGER_SECTIONS = [
 `ManagerPage` is a shell: each section is a component in `components/manager/` (`ManagerActiveSessionsSection`, `ManagerEventSongsSection`, `ManagerUploadForSection`, `ManagerCheckinForSection`) that renders its own `<TabsContent>` and stays mounted, so its state holds across a section switch. The page keeps the active-sessions session id itself, because the live queue inside unmounts on a switch. `active-sessions` renders the staff `LiveQueueSection` over today's sessions across all events, and check-in-for and upload-for pick the person with `PersonPicker` searching every user (admins only reach this page). `guide` renders `ManagerGuideSection` (floor-trial ops reference). NavBar lists **Guide** last in `MANAGER_ITEMS` (`/manager/guide`); the bare `/manager` redirect lands on `active-sessions`.
 
 Each page reads `:section` from `useParams`, validates against its `*_SECTIONS` array, and falls back to a default (`events` / `active-sessions`) when the slug is missing or unknown — so `/admin/foo` shows the default section instead of a blank screen.
+
+**Registrations** (`/admin/registrations`): an event's registration list, pasted in from the event's own export (`PUT /v1/admin/events/:id/registrations`), against the event's submissions, so an admin sees who is still missing music. Optional per event. `lib/eventRegistrations.ts` parses the paste, maps the registration's division names onto deejaytools' divisions, and matches entries to submissions by name (forgiving case, accents, a typo, a shortened first name); unsure matches show as **Possible match**, and Classic at The Open is checked for both rounds. An entry can be linked to a submission's partnership by hand or marked handled elsewhere, with a note (`PATCH /v1/admin/event-registrations/:id`); those marks survive a re-import. Submissions no entry accounts for are listed as **Submitted but not on the list**.
 
 **Run History** (`/admin/runs`): event and session card-button grids (defaults to **All events** / **All sessions**), **Show future events** toggle (off by default), division and partnership summary chips (client-side AND filters), and a flat newest-first run list grouped by `entity_key` on the backend.
 
