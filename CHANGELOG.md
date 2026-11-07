@@ -1,3 +1,10 @@
+# [2.28.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.27.2...v2.28.0) (2026-11-07)
+
+
+### Features
+
+* **admin:** scratch registrations that are no longer competing ([33ab462](https://github.com/mini-app-polis/deejaytools-com/commit/33ab462d9146f0777cd4f72b37c3aceda31a44e1))
+
 ## [2.27.2](https://github.com/mini-app-polis/deejaytools-com/compare/v2.27.1...v2.27.2) (2026-11-07)
 
 
