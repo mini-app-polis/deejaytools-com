@@ -5106,7 +5106,7 @@
           "admin-event-registrations"
         ],
         "summary": "Replace an event's registrations",
-        "description": "Replaces the event's list with entries, in order. An entry whose division and dancers match one already there (case, accents and spacing ignored) keeps its id and its marks; the rest are new, and entries no longer sent are removed. Requires deejaytools.registrations.write.",
+        "description": "Replaces the event's list with entries, in order. An entry whose division and dancers match one already there (case, accents and spacing ignored) keeps its id and its marks; the rest are new, and entries not sent are removed. Requires deejaytools.registrations.write.",
         "operationId": "put_registrations_v1_admin_events__id__registrations_put",
         "parameters": [
           {
@@ -9592,7 +9592,7 @@
           "scratched": {
             "type": "boolean",
             "title": "Scratched",
-            "description": "Signed up but no longer competing."
+            "description": "Signed up, then withdrew from competing."
           },
           "hidden_submission_ids": {
             "items": {
@@ -12628,7 +12628,7 @@
               }
             ],
             "default": null,
-            "description": "Signed up but no longer competing. Unscratching unhides every submission it hid.",
+            "description": "Signed up, then withdrew from competing. Unscratching unhides every submission it hid.",
             "title": "Scratched"
           },
           "hide_submission_ids": {

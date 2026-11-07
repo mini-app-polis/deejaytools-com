@@ -256,7 +256,7 @@ export type RegistrationStatus =
   | "missing"
   /** The admin marked it as needing no submission here. */
   | "handled"
-  /** Signed up but no longer competing; any songs stay submitted, off the event page. */
+  /** Signed up, then withdrew from competing; any songs stay submitted, off the event page. */
   | "scratched";
 
 export type ReconciledRegistration = {

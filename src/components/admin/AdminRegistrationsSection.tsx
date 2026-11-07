@@ -86,7 +86,7 @@ function submissionLine(s: ApiAdminEventSongSubmission, roundsSplit: boolean): s
  * from the event's own export, against the songs submitted to it, so the
  * admin sees who is still missing music. Optional per event. Matching is by
  * name; an entry the match misses can be linked to a submission by hand or
- * marked as handled elsewhere or scratched (no longer competing: their songs
+ * marked as handled elsewhere or scratched (withdrawn from competing: their songs
  * stay submitted, hidden from the event page), and those marks survive a
  * re-import. It
  * renders its own TabsContent so it stays mounted while another admin
@@ -483,7 +483,7 @@ function EditDialog({
               <SelectContent>
                 <SelectItem value={NO_LINK}>None: match by name</SelectItem>
                 {staleLink && row.entry.linked_label && (
-                  <SelectItem value={row.entry.linked_label}>{row.entry.linked_label} (no longer submitted)</SelectItem>
+                  <SelectItem value={row.entry.linked_label}>{row.entry.linked_label} (not submitted)</SelectItem>
                 )}
                 {labels.map((l) => (
                   <SelectItem key={l.label} value={l.label}>
@@ -508,7 +508,7 @@ function EditDialog({
                 checked={scratched}
                 onChange={(e) => setScratched(e.target.checked)}
               />
-              Scratched: signed up but no longer competing
+              Scratched: signed up, then withdrew from competing
             </label>
             <p className="text-xs text-muted-foreground">
               Their songs stay submitted to the event, but are hidden from its public event page.

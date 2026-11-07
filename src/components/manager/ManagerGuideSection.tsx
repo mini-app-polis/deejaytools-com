@@ -277,7 +277,7 @@ export default function ManagerGuideSection() {
             list to see who has not submitted music. <strong>Possible match</strong> means a name
             looks close but not certain: use <strong>Edit</strong> to link it to the right
             submission, or mark it handled elsewhere. <strong>Scratched</strong> is for people who
-            signed up but are no longer competing: their songs stay submitted but leave the event
+            signed up, then withdrew from competing: their songs stay submitted but leave the event
             page. Re-importing keeps those marks.
           </li>
           <li>
