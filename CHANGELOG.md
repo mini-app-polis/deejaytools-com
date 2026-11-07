@@ -1,3 +1,10 @@
+## [2.27.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.27.0...v2.27.1) (2026-11-07)
+
+
+### Bug Fixes
+
+* **admin:** count one shared name as a possible registration match only in the entry's own division ([9e8ad8c](https://github.com/mini-app-polis/deejaytools-com/commit/9e8ad8ccd15b48ddbb69ebaee185afe415ad4d59))
+
 # [2.27.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.26.0...v2.27.0) (2026-11-07)
 
 
