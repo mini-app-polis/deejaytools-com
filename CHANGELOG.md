@@ -1,3 +1,10 @@
+# [2.27.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.26.0...v2.27.0) (2026-11-07)
+
+
+### Features
+
+* **admin:** registrations page showing who has not submitted music ([e493cd8](https://github.com/mini-app-polis/deejaytools-com/commit/e493cd878d6ab44bdff30b5b66b84bd207608415))
+
 # [2.26.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.25.0...v2.26.0) (2026-11-06)
 
 
