@@ -2039,6 +2039,101 @@ describe("AdminPage — Registrations section", () => {
     );
   });
 
+  it("filters by status, shows matches and look-alikes, copies and refreshes", async () => {
+    const user = userEvent.setup();
+    routeGets({
+      "/v1/events": [OPEN],
+      "/v1/divisions": divisions,
+      "/v1/admin/events/open/registrations": [
+        reg({ id: "r1" }),
+        reg({ id: "r2", position: 1, dancer_1: "Cy Dee", dancer_2: "Eve Eff" }),
+      ],
+      "/v1/admin/event-song-submissions": [
+        fx.adminEventSongSubmission({ id: "s1", event_id: "open", division: "Classic", partnership_label: "Ada Lovelace & Bob Jones", song_label: "Ada Song", round: "prelims_only" }),
+        fx.adminEventSongSubmission({ id: "s2", event_id: "open", division: "Classic", partnership_label: "Cy Dee", song_label: "Cy Song" }),
+      ],
+    });
+    renderPage("/admin/registrations");
+
+    // Ada has only prelims at The Open; Cy alone looks like Cy & Eve.
+    expect(await screen.findByText("Missing finals")).toBeInTheDocument();
+    expect(screen.getByText("Ada Song (Prelims only)")).toBeInTheDocument();
+    expect(screen.getByText("Looks like: Cy Dee (Classic)")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: /^Submitted \(0\)/ }));
+    expect(screen.getByText("Nothing to show for this filter.")).toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: /^Possible match \(1\)/ }));
+    expect(screen.getByText("Cy Dee & Eve Eff")).toBeInTheDocument();
+    expect(screen.queryByText("Ada Lovelace & Bob Jones")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Copy shown" }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Copied 1 entry"));
+    await expect(navigator.clipboard.readText()).resolves.toBe("Classic (NASDE): Cy Dee & Eve Eff");
+
+    const before = apiGet.mock.calls.length;
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(apiGet.mock.calls.length).toBeGreaterThan(before));
+  });
+
+  it("links an entry to a submission with a note, look-alikes listed first", async () => {
+    const user = userEvent.setup();
+    const past = fx.event({ id: "old", name: "Old Jam", status: "completed", start_date: "2025-03-01", end_date: "2025-03-02" });
+    routeGets({
+      "/v1/events": [past],
+      "/v1/divisions": divisions,
+      "/v1/admin/events/old/registrations": [reg({ event_id: "old", dancer_1: "Cy Dee", dancer_2: "Eve Eff" })],
+      "/v1/admin/event-song-submissions": [
+        fx.adminEventSongSubmission({ id: "s1", event_id: "old", division: "Showcase", partnership_label: "Aaa Zed" }),
+        fx.adminEventSongSubmission({ id: "s2", event_id: "old", division: "Classic", partnership_label: "Cy Dee" }),
+      ],
+    });
+    apiPatch.mockResolvedValue(reg({ linked_label: "Cy Dee", note: "solo upload" }));
+    renderPage("/admin/registrations");
+
+    await screen.findByText("Cy Dee & Eve Eff");
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("combobox", { name: "Linked submission" }));
+    const options = (await screen.findAllByRole("option")).map((o) => o.textContent);
+    expect(options).toEqual(["None: match by name", "Cy Dee · Classic", "Aaa Zed · Showcase"]);
+    await user.click(screen.getByRole("option", { name: "Cy Dee · Classic" }));
+    await user.type(within(dialog).getByLabelText("Note"), "solo upload");
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(apiPatch).toHaveBeenCalledWith("/v1/admin/event-registrations/r1", {
+        linked_label: "Cy Dee",
+        handled: false,
+        note: "solo upload",
+      })
+    );
+  });
+
+  it("offers a retry when the list fails to load, and reports a failed import", async () => {
+    const user = userEvent.setup();
+    let fail = true;
+    routeGets({
+      "/v1/events": [OPEN],
+      "/v1/divisions": divisions,
+      "/v1/admin/events/open/registrations": () => {
+        if (fail) throw new Error("boom");
+        return [];
+      },
+    });
+    apiPut.mockRejectedValue(new Error("Import refused"));
+    renderPage("/admin/registrations");
+
+    const retry = await screen.findByRole("button", { name: /try again|retry/i });
+    fail = false;
+    await user.click(retry);
+    await user.click(await screen.findByRole("button", { name: "Import list" }));
+    fireEvent.change(screen.getByLabelText("Registration rows"), { target: { value: "1\tShowcase\tA B\t\t\tC D" } });
+    await user.click(screen.getByRole("button", { name: "Import 1" }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Import refused"));
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
   it("marks an entry handled elsewhere", async () => {
     const user = userEvent.setup();
     routeGets({
