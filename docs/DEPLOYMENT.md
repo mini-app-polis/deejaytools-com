@@ -67,8 +67,8 @@ The nav bar's version text comes from `NavBar.tsx` importing `package.json` dire
 | File | Runs on | What it does |
 |------|---------|--------------|
 | `ci.yml` | Pushes to `main`/`dev`, pull requests into them | `test`, `security`; on a push to `main` also `release` and `evaluate` |
-| `site.yml` | Pushes to `dev`/`main` | Waits for the Cloudflare Pages deploy, smoke-tests it; on `dev`, then runs the e2e suite |
-| `contract.yml` | Pushes to `dev`, `dev-api-deployed` dispatch, manual | Live contract suite against the development API |
+| `site.yml` | Pushes to `dev`/`main` | Waits for the Cloudflare Pages deploy, smoke-tests it |
+| `contract.yml` | Pushes to `dev`, `dev-api-deployed` dispatch, manual | Live contract suite against the development API, then the e2e suite against the dev site |
 | `promote.yml` | Pushes to `dev` | Keeps a `dev` → `main` pull request open while `dev` has something to release |
 | `automerge.yml` | A finished `CI` run on another branch | Merges a pull request into `dev` once every check on it has passed |
 | `agent.yml` | Manual dispatch (from task-manager-cog) | Implements one board task and opens a draft pull request into `dev` |
@@ -94,13 +94,15 @@ The nav bar's version text comes from `NavBar.tsx` importing `package.json` dire
 
 ### `site.yml`
 
-**`smoke` job:** waits (up to 15 minutes) for the "Cloudflare Pages" check on the commit, following the branch to a newer commit that contains it if Pages skipped this one, then tests the deploy's own preview URL. It checks that the site and a deep link (`/events`) load, that the bundle carries the right Clerk key for the environment (`pk_test_` on `dev`, `pk_live_` on `main`, never the other) and the right API URL, and that the API answers `/health`. All read-only, so it is safe against production.
-
-**`e2e` job** (`dev` only): runs `pnpm test:e2e` (Playwright, Chromium) against the dev site (`SITE_URL_DEVELOPMENT`), signed in as the contract test users, and uploads the Playwright report on failure. It shares the `contract-dev-api` concurrency group with `contract.yml`: both write to the dev API and never run at once.
+**`smoke` job:** waits (up to 15 minutes, `scripts/wait-for-pages-deploy.sh`) for the "Cloudflare Pages" check on the commit, following the branch to a newer commit that contains it if Pages skipped this one, then tests the deploy's own preview URL. It checks that the site and a deep link (`/events`) load, that the bundle carries the right Clerk key for the environment (`pk_test_` on `dev`, `pk_live_` on `main`, never the other) and the right API URL, and that the API answers `/health`. All read-only, so it is safe against production.
 
 ### `contract.yml`
 
-Runs `pnpm test:contract` against the development API whenever either side of the contract changes: a push to `dev` here, or the `dev-api-deployed` dispatch api-deejaytools sends after a successful dev deploy (that run checks out `dev`). Fails when its configuration is missing. Configuration: secret `CONTRACT_CLERK_SECRET_KEY` (`sk_test_…`), variables `CONTRACT_API_URL`, `CONTRACT_USER_ID` (the admin test user), `CONTRACT_DANCER_USER_ID` and `CONTRACT_STAFF_USER_ID` (two plain test users); the e2e job uses the same five. See [ADR-0002](decisions/ADR-0002-api-contract.md).
+Runs `pnpm test:contract` against the development API whenever either side of the contract changes: a push to `dev` here, or the `dev-api-deployed` dispatch api-deejaytools sends after a successful dev deploy (that run checks out `dev`). Fails when its configuration is missing. Configuration: secret `CONTRACT_CLERK_SECRET_KEY` (`sk_test_…`), variables `CONTRACT_API_URL`, `CONTRACT_USER_ID` (the admin test user), `CONTRACT_DANCER_USER_ID` and `CONTRACT_STAFF_USER_ID` (two plain test users). See [ADR-0002](decisions/ADR-0002-api-contract.md).
+
+**`e2e` job** runs after the `contract` job, whether or not it passed: it waits for Cloudflare Pages to deploy the commit under test (`scripts/wait-for-pages-deploy.sh`), reads the Clerk publishable key from that deploy's bundle, runs `pnpm test:e2e` (Playwright, Chromium) against the dev site (`SITE_URL_DEVELOPMENT`) signed in as the same test users, and uploads the Playwright report on failure. It uses the same five settings plus `SITE_URL_DEVELOPMENT`.
+
+Both suites write to the dev API, so the whole workflow runs in the `contract-dev-api` concurrency group without cancelling a run in progress. GitHub keeps one run waiting per group and replaces it with any newer one; since every run carries both suites, the run that survives a burst of pushes and API deploys tests the latest of each.
 
 #### Linked partner for the test suites
 

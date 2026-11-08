@@ -4,8 +4,9 @@ name: site
 # main — the dev site against the dev API and Clerk's development instance,
 # production against the production API and Clerk's production instance.
 # Pages builds on its own, outside Actions, and reports through the
-# "Cloudflare Pages" check on the commit; this waits for that check and
-# tests the deploy's own preview URL (<hash>.deejaytools-com.pages.dev) —
+# "Cloudflare Pages" check on the commit; this waits for that check
+# (scripts/wait-for-pages-deploy.sh) and tests the deploy's own preview
+# URL (<hash>.deejaytools-com.pages.dev) —
 # exactly this commit's build, so a cache can't pass a stale one, and
 # outside deejaytools.com's bot protection, which turns GitHub's runners
 # away from dev.deejaytools.com with a 403. It makes sure the build:
@@ -27,12 +28,8 @@ name: site
 # needs no site URL: it tests the deploy's own preview URL, which the
 # Cloudflare Pages check reports.
 #
-# On dev only, the end-to-end suite (e2e/, Playwright) then runs a real
-# browser against
-# the dev site's branch URL (SITE_URL_DEVELOPMENT), signed in as the
-# contract test user through Clerk's development instance. It shares the
-# contract suite's configuration and concurrency group: both write to the
-# dev API, and must never run at once.
+# The end-to-end suite runs in contract.yml, after the contract suite: both
+# write to the dev API and share its concurrency group.
 #
 # It runs on pushes. Not on the promotion pull request to main: its head is
 # dev's latest commit, already tested by the push run, whose result the pull
@@ -64,54 +61,18 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    outputs:
-      publishable-key: ${{ steps.smoke.outputs.publishable-key }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SHA }}
+          sparse-checkout: scripts
       - name: Wait for Cloudflare Pages to deploy this commit
         id: deploy
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          commit=$SHA
-          check() {
-            gh api "repos/$GITHUB_REPOSITORY/commits/$commit/check-runs?check_name=Cloudflare%20Pages" --jq "$1"
-          }
-          # True when the branch has moved past $commit to a newer commit
-          # that contains it, left in $head.
-          moved_on() {
-            head=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_REF_NAME" --jq .sha)
-            [ "$head" != "$commit" ] \
-              && [ "$(gh api "repos/$GITHUB_REPOSITORY/compare/$commit...$head" --jq .status)" = ahead ]
-          }
-          for _ in $(seq 1 60); do
-            read -r status conclusion <<<"$(check '.check_runs[0] // {} | "\(.status // "missing") \(.conclusion // "")"')"
-            if [ "$status" = completed ] && [ "$conclusion" = success ]; then
-              # The check's summary lists the deploy's own preview URL
-              # first, before the branch alias.
-              url=$(check '.check_runs[0].output.summary' | grep -oE 'https://[a-z0-9]+\.deejaytools-com\.pages\.dev' | head -n 1 || true)
-              if [ -z "$url" ]; then echo "::error::The Cloudflare Pages check did not report a preview URL."; exit 1; fi
-              echo "Deployed at $url."
-              echo "site=$url" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            # Pages may never finish this commit's build once a newer commit
-            # lands on the branch; that commit's deploy contains this one.
-            if moved_on; then
-              echo "$GITHUB_REF_NAME moved on to $head, which contains $commit; following its deploy."
-              commit=$head
-              continue
-            fi
-            if [ "$status" = completed ]; then
-              echo "::error::The Cloudflare Pages deploy of $commit concluded '$conclusion'."
-              exit 1
-            fi
-            sleep 15
-          done
-          echo "::error::No finished Cloudflare Pages deploy for $commit after 15 minutes."
-          exit 1
+        run: bash scripts/wait-for-pages-deploy.sh "$GITHUB_REF_NAME" "$SHA"
 
       - name: Smoke-test the site
-        id: smoke
         env:
           SITE: ${{ steps.deploy.outputs.site }}
           API_URL_DEVELOPMENT: ${{ vars.API_URL_DEVELOPMENT }}
@@ -138,55 +99,8 @@ jobs:
           [ -n "$keys" ] || fail "No Clerk publishable key found in the site bundle."
           if grep -q "^$WRONG_CLERK_KEY" <<<"$keys"; then fail "The site is built with a $WRONG_CLERK_KEY Clerk key; this environment needs $CLERK_KEY."; fi
           grep -q "^$CLERK_KEY" <<<"$keys" || fail "The site is not built with a $CLERK_KEY Clerk key."
-          # A publishable key is public by design; the e2e job needs it.
-          echo "publishable-key=$(head -n 1 <<<"$keys")" >> "$GITHUB_OUTPUT"
           grep -qF "$API" <<<"$js" || fail "The site is not built to call $API."
 
           curl -fsS -o /dev/null --retry 3 "$SITE/events" || fail "A deep link ($SITE/events) did not load."
           curl -fsS -o /dev/null --retry 3 "$API/health" || fail "$API/health did not answer."
           echo "Site OK: $asset (calls $API)"
-
-  e2e:
-    needs: smoke
-    # Writes to the API it runs against, so dev only.
-    if: github.ref == 'refs/heads/dev'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    # Shared with the contract suite (contract.yml): both write to the dev API.
-    concurrency:
-      group: contract-dev-api
-      cancel-in-progress: false
-    env:
-      E2E_BASE_URL: ${{ vars.SITE_URL_DEVELOPMENT }}
-      CLERK_PUBLISHABLE_KEY: ${{ needs.smoke.outputs.publishable-key }}
-      CLERK_SECRET_KEY: ${{ secrets.CONTRACT_CLERK_SECRET_KEY }}
-      CONTRACT_API_URL: ${{ vars.CONTRACT_API_URL }}
-      CONTRACT_USER_ID: ${{ vars.CONTRACT_USER_ID }}
-      CONTRACT_DANCER_USER_ID: ${{ vars.CONTRACT_DANCER_USER_ID }}
-      CONTRACT_STAFF_USER_ID: ${{ vars.CONTRACT_STAFF_USER_ID }}
-    steps:
-      - name: Resolve the dev site URL
-        run: |
-          [ -n "$E2E_BASE_URL" ] \
-            || { echo "::error::SITE_URL_DEVELOPMENT is unset: it is synced from Doppler by mini-app-polis/infra."; exit 1; }
-          case "$E2E_BASE_URL" in http://*|https://*) ;; *) E2E_BASE_URL="https://$E2E_BASE_URL" ;; esac
-          echo "E2E_BASE_URL=${E2E_BASE_URL%/}" >> "$GITHUB_ENV"
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ env.SHA }}
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: "22"
-          cache: "pnpm"
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm test:e2e
-      - uses: actions/upload-artifact@v7
-        if: failure()
-        with:
-          name: playwright-report
-          path: |
-            playwright-report/
-            test-results/
-          retention-days: 7
