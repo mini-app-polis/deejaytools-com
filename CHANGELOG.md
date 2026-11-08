@@ -1,3 +1,11 @@
+## [2.28.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.28.0...v2.28.1) (2026-11-08)
+
+
+### Bug Fixes
+
+* **deps:** bump @hookform/resolvers ([9524b95](https://github.com/mini-app-polis/deejaytools-com/commit/9524b9513f7ee4e68e282bcfe9e0d47448edd819))
+* **deps:** bump the minor-and-patch group with 6 updates ([9630aaf](https://github.com/mini-app-polis/deejaytools-com/commit/9630aaf0fcc3a345de0d23081c012ef81558aa59))
+
 # [2.28.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.27.2...v2.28.0) (2026-11-07)
 
 
