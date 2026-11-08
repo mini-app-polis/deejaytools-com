@@ -1,3 +1,10 @@
+## [2.28.2](https://github.com/mini-app-polis/deejaytools-com/compare/v2.28.1...v2.28.2) (2026-11-08)
+
+
+### Bug Fixes
+
+* **admin:** show submissions not on the registration list above the division groups ([3f97054](https://github.com/mini-app-polis/deejaytools-com/commit/3f97054980bdb7e198b2193773f6d4885439e132))
+
 ## [2.28.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.28.0...v2.28.1) (2026-11-08)
 
 
