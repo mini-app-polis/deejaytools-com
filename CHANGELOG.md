@@ -1,3 +1,10 @@
+## [2.28.3](https://github.com/mini-app-polis/deejaytools-com/compare/v2.28.2...v2.28.3) (2026-11-08)
+
+
+### Bug Fixes
+
+* **ci:** run the e2e suite in every contract run so newer pushes and API deploys no longer cancel it ([1190628](https://github.com/mini-app-polis/deejaytools-com/commit/11906287b107bbdd342ebd17e13d5869d7d8a4bd))
+
 ## [2.28.2](https://github.com/mini-app-polis/deejaytools-com/compare/v2.28.1...v2.28.2) (2026-11-08)
 
 
