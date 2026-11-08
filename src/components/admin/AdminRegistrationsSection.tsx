@@ -258,6 +258,26 @@ export default function AdminRegistrationsSection({ open }: { open: boolean }) {
             </Button>
           </div>
 
+          {(filter === "attention" || filter === "all") && reconciled.unregistered.length > 0 && (
+            <section className="space-y-2">
+              <h3 className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
+                Submitted but not on the list{" "}
+                <span className="text-xs font-normal normal-case">{reconciled.unregistered.length}</span>
+              </h3>
+              {reconciled.unregistered.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1 sm:gap-4 rounded-lg bg-white/[0.06] px-4 py-3 text-sm"
+                >
+                  <span className="font-medium min-w-0 truncate">{s.partnership_label}</span>
+                  <span className="text-muted-foreground sm:text-right break-all">
+                    {s.division ?? "No division"} · {submissionLine(s, roundsSplit)}
+                  </span>
+                </div>
+              ))}
+            </section>
+          )}
+
           {groups.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nothing to show for this filter.</p>
           ) : (
@@ -313,26 +333,6 @@ export default function AdminRegistrationsSection({ open }: { open: boolean }) {
                 ))}
               </section>
             ))
-          )}
-
-          {(filter === "attention" || filter === "all") && reconciled.unregistered.length > 0 && (
-            <section className="space-y-2">
-              <h3 className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
-                Submitted but not on the list{" "}
-                <span className="text-xs font-normal normal-case">{reconciled.unregistered.length}</span>
-              </h3>
-              {reconciled.unregistered.map((s) => (
-                <div
-                  key={s.id}
-                  className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1 sm:gap-4 rounded-lg bg-white/[0.06] px-4 py-3 text-sm"
-                >
-                  <span className="font-medium min-w-0 truncate">{s.partnership_label}</span>
-                  <span className="text-muted-foreground sm:text-right break-all">
-                    {s.division ?? "No division"} · {submissionLine(s, roundsSplit)}
-                  </span>
-                </div>
-              ))}
-            </section>
           )}
         </>
       )}
