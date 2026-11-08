@@ -30,6 +30,20 @@ name: Contract
 # shows.
 # A repository_dispatch always runs this file from main, so that run checks
 # out dev explicitly: it is dev's suite that should meet dev's API.
+#
+# After the contract suite, the end-to-end suite (e2e/, Playwright) runs a
+# real browser against the dev site (SITE_URL_DEVELOPMENT), signed in as the
+# same test users through Clerk's development instance. It first waits for
+# Cloudflare Pages to deploy dev's commit (scripts/wait-for-pages-deploy.sh),
+# so the site it tests includes that commit, and reads the site's Clerk
+# publishable key from that deploy's bundle. It runs whether or not the
+# contract suite passed.
+#
+# Both suites run in every run, one after the other, under one concurrency
+# group: they write to the dev API and must never run at once. GitHub keeps
+# one run waiting per group and replaces it with any newer one, so a burst
+# of pushes and API deploys runs both suites once more, against the latest
+# of each side. A run in progress is never cancelled.
 
 on:
   push:
@@ -44,6 +58,7 @@ concurrency:
 
 permissions:
   contents: read
+  checks: read
 
 jobs:
   contract:
@@ -78,3 +93,63 @@ jobs:
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:contract
+
+  e2e:
+    needs: contract
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      E2E_BASE_URL: ${{ vars.SITE_URL_DEVELOPMENT }}
+      CLERK_SECRET_KEY: ${{ secrets.CONTRACT_CLERK_SECRET_KEY }}
+      CONTRACT_API_URL: ${{ vars.CONTRACT_API_URL }}
+      CONTRACT_USER_ID: ${{ vars.CONTRACT_USER_ID }}
+      CONTRACT_DANCER_USER_ID: ${{ vars.CONTRACT_DANCER_USER_ID }}
+      CONTRACT_STAFF_USER_ID: ${{ vars.CONTRACT_STAFF_USER_ID }}
+    steps:
+      - name: Resolve the dev site URL
+        run: |
+          [ -n "$E2E_BASE_URL" ] \
+            || { echo "::error::SITE_URL_DEVELOPMENT is unset: it is synced from Doppler by mini-app-polis/infra."; exit 1; }
+          case "$E2E_BASE_URL" in http://*|https://*) ;; *) E2E_BASE_URL="https://$E2E_BASE_URL" ;; esac
+          echo "E2E_BASE_URL=${E2E_BASE_URL%/}" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'repository_dispatch' && 'dev' || '' }}
+      - name: Wait for Cloudflare Pages to deploy this commit
+        id: deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/wait-for-pages-deploy.sh dev "$(git rev-parse HEAD)"
+      - name: Read the site's Clerk publishable key
+        env:
+          SITE: ${{ steps.deploy.outputs.site }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          html=$(curl -fsSL --retry 3 "$SITE/") || fail "$SITE/ did not load."
+          asset=$(grep -oE '/assets/index-[A-Za-z0-9_-]+\.js' <<<"$html" | head -n 1 || true)
+          [ -n "$asset" ] || fail "$SITE/ did not reference an app bundle."
+          js=$(curl -fsSL --retry 3 "$SITE$asset") || fail "$SITE$asset did not load."
+          # A publishable key is public by design. Match a real key (prefix
+          # plus the encoded instance), not the bare prefix Clerk's own code
+          # carries.
+          key=$(grep -oE 'pk_test_[A-Za-z0-9]{20,}' <<<"$js" | head -n 1 || true)
+          [ -n "$key" ] || fail "No development Clerk publishable key (pk_test_) found in the dev site bundle."
+          echo "CLERK_PUBLISHABLE_KEY=$key" >> "$GITHUB_ENV"
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
