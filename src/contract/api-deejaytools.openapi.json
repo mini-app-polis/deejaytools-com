@@ -922,6 +922,107 @@
         }
       }
     },
+    "/v1/events/{id}/drive-folder/divisions": {
+      "get": {
+        "tags": [
+          "event-staff"
+        ],
+        "summary": "The division folders in an event's Drive folder",
+        "description": "The folders directly inside the event's shared Drive folder, one per division, by name, each with its Drive URL; empty until a share has recorded the folder. Read from Drive on each call. Requires deejaytools.queue.read on the event: its DJs, event managers and admins.",
+        "operationId": "list_drive_divisions_v1_events__id__drive_folder_divisions_get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Event id.",
+              "title": "Id"
+            },
+            "description": "Event id."
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriveDivisionListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Lacks the scope on this event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Google Drive did not answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is refused (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/events/{id}/staff/{user_id}/{role}": {
       "put": {
         "tags": [
@@ -1797,6 +1898,107 @@
           },
           "400": {
             "description": "The request is refused (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/events/{id}/people/by-email": {
+      "get": {
+        "tags": [
+          "event-people"
+        ],
+        "summary": "Find a person by their exact email, to add to an event's staff",
+        "description": "The one person whose deejaytools account has exactly this email (case and surrounding spaces ignored), whether or not they are connected to the event, with the email masked. Nothing is listed or partly matched. Requires deejaytools.staff.write on the event.",
+        "operationId": "find_person_by_email_v1_events__id__people_by_email_get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Event id.",
+              "title": "Id"
+            },
+            "description": "Event id."
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "title": "Email",
+              "type": "string"
+            },
+            "description": "The person's whole email address, case-insensitive."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventPersonResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid email.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Lacks the scope on this event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such event, or no account with that email.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8517,6 +8719,56 @@
         "title": "DivisionsResponse",
         "description": "The division list."
       },
+      "DriveDivisionData": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "The folder's name: the division."
+          },
+          "folder_id": {
+            "type": "string",
+            "title": "Folder Id",
+            "description": "Drive folder id."
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "The folder in Google Drive."
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "folder_id",
+          "url"
+        ],
+        "title": "DriveDivisionData",
+        "description": "One division folder inside the event's Drive folder."
+      },
+      "DriveDivisionListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/DriveDivisionData"
+            },
+            "type": "array",
+            "title": "Data",
+            "description": "The division folders."
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta",
+            "description": "Semantic value for meta."
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "DriveDivisionListResponse",
+        "description": "The event folder's division folders, by name."
+      },
       "DriveFolderData": {
         "properties": {
           "folder_id": {
@@ -8975,6 +9227,25 @@
         ],
         "title": "EventPersonData",
         "description": "A person connected to the event, as the picker shows them."
+      },
+      "EventPersonResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/EventPersonData",
+            "description": "The person."
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta",
+            "description": "Semantic value for meta."
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "EventPersonResponse",
+        "description": "One person."
       },
       "EventResponse": {
         "properties": {
