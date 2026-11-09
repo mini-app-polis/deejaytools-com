@@ -30,6 +30,10 @@ name: Contract
 # shows.
 # A repository_dispatch always runs this file from main, so that run checks
 # out dev explicitly: it is dev's suite that should meet dev's API.
+# Before the suite, every run waits for the dev API to serve api-deejaytools'
+# latest dev commit (scripts/wait-for-api-deploy.sh), so a push here made
+# while an API deploy is still rolling out tests the new API, not the one
+# it is replacing.
 #
 # After the contract suite, the end-to-end suite (e2e/, Playwright) runs a
 # real browser against the dev site (SITE_URL_DEVELOPMENT), signed in as the
@@ -63,7 +67,8 @@ permissions:
 jobs:
   contract:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Up to 15 minutes waiting for the API deploy, then the suite.
+    timeout-minutes: 30
     env:
       CONTRACT_API_URL: ${{ vars.CONTRACT_API_URL }}
       CONTRACT_USER_ID: ${{ vars.CONTRACT_USER_ID }}
@@ -91,6 +96,10 @@ jobs:
         with:
           node-version: "22"
           cache: "pnpm"
+      - name: Wait for the dev API to serve api-deejaytools' dev
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/wait-for-api-deploy.sh "$CONTRACT_API_URL"
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:contract
 
