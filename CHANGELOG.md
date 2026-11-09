@@ -1,3 +1,10 @@
+# [2.32.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.31.0...v2.32.0) (2026-11-09)
+
+
+### Features
+
+* **nav:** admin-only view-as moves to its own row under the Admin bar, and the Admin bar wraps ([9071e39](https://github.com/mini-app-polis/deejaytools-com/commit/9071e39102bc1e006cac907a32b88597e2f7e1ba))
+
 # [2.31.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.30.0...v2.31.0) (2026-11-09)
 
 
