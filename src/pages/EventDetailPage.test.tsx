@@ -37,6 +37,16 @@ vi.mock("@clerk/clerk-react", () => ({
   ),
 }));
 
+// Who the caller is decides whether the missing-music counts load: admins
+// and this event's staff only.
+let authMe: { isAdmin: boolean; eventRoles: { event_id: string; role: string }[] } = {
+  isAdmin: false,
+  eventRoles: [],
+};
+vi.mock("@/hooks/useAuthMe", () => ({
+  useAuthMe: () => authMe,
+}));
+
 import EventDetailPage from "./EventDetailPage";
 import { toast } from "sonner";
 import type { EventStatus, SessionStatus } from "@/schemas";
@@ -118,6 +128,7 @@ beforeEach(() => {
   vi.mocked(toast.success).mockClear();
   apiGet.mockReset();
   signedIn = true;
+  authMe = { isAdmin: false, eventRoles: [] };
 });
 
 // ---------------------------------------------------------------------------
@@ -615,5 +626,97 @@ describe("EventDetailPage — entered entities", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Couldn't load who's entered: Entities unavailable"
     );
+  });
+});
+
+describe("EventDetailPage — missing music counts", () => {
+  function registration(division: string, dancer_1: string, dancer_2: string) {
+    return {
+      id: `${division}:${dancer_1}`,
+      event_id: "ev-1",
+      position: 0,
+      division,
+      dancer_1,
+      dancer_2,
+      linked_label: null,
+      handled: false,
+      note: null,
+      scratched: false,
+      hidden_submission_ids: [],
+      created_at: 0,
+      updated_at: 0,
+    };
+  }
+
+  function submission(id: string, partnership_label: string, division: string) {
+    return {
+      id,
+      event_id: "ev-1",
+      event_name: "Test Event",
+      division,
+      round: "prelims_and_finals",
+      song_id: `song-${id}`,
+      owner_user_id: "u1",
+      song_label: partnership_label,
+      partnership_label,
+      submitter_email: "a***@example.com",
+      created_at: 1,
+    };
+  }
+
+  function mockRegistrationApi() {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (path === "/v1/events/ev-1/entities") {
+        return Promise.resolve([
+          makeDivision("Classic", [makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz" })]),
+        ]);
+      }
+      if (path === "/v1/events/ev-1/registrations") {
+        return Promise.resolve([
+          registration("Classic", "Alex Kim", "Jo Ruiz"),
+          registration("Classic", "Pat Long", "Sam Short"),
+          registration("Masters", "Gina White", "Hank Green"),
+        ]);
+      }
+      if (path === "/v1/events/ev-1/song-submissions") {
+        return Promise.resolve([submission("s1", "Alex Kim & Jo Ruiz", "Classic")]);
+      }
+      return Promise.resolve([]);
+    });
+  }
+
+  it("shows the event's staff missing counts per division, without names", async () => {
+    authMe = { isAdmin: false, eventRoles: [{ event_id: "ev-1", role: "coordinator" }] };
+    mockRegistrationApi();
+    renderPage();
+
+    await waitFor(() => expect(screen.getAllByText(/1 missing/).length).toBeGreaterThan(0));
+    // A division nobody has submitted to is still listed, so its missing
+    // entries show.
+    expect(screen.getByText("Masters")).toBeInTheDocument();
+    expect(screen.getByText("Nothing submitted yet.")).toBeInTheDocument();
+    expect(screen.getByText(/2 missing/)).toBeInTheDocument();
+    expect(screen.queryByText(/Pat Long|Gina White/)).toBeNull();
+  });
+
+  it("shows admins the counts", async () => {
+    authMe = { isAdmin: true, eventRoles: [] };
+    mockRegistrationApi();
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText(/2 missing/)).toBeInTheDocument());
+  });
+
+  it("does not load the registration list for anyone else", async () => {
+    authMe = { isAdmin: false, eventRoles: [{ event_id: "other-event", role: "event-manager" }] };
+    mockRegistrationApi();
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Alex Kim & Jo Ruiz")).toBeInTheDocument());
+    expect(apiGet).not.toHaveBeenCalledWith("/v1/events/ev-1/registrations");
+    expect(apiGet).not.toHaveBeenCalledWith("/v1/events/ev-1/song-submissions");
+    expect(screen.queryByText(/missing/)).toBeNull();
+    expect(screen.queryByText("Masters")).toBeNull();
   });
 });

@@ -1,5 +1,5 @@
 import { SignedIn, SignedOut, SignInButton, useAuth } from "@clerk/clerk-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointQuery } from "@/api/queries";
@@ -10,11 +10,16 @@ import { Button } from "@/components/ui/button";
 
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuthMe } from "@/hooks/useAuthMe";
+import { useDivisions } from "@/hooks/useDivisions";
 import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
+import { richestEventRole } from "@/lib/eventRoles";
+import { missingByDivision, reconcileRegistrations, type MissingCount } from "@/lib/eventRegistrations";
 import { countFloorTrials, floorTrialBucket, formatFloorTrials } from "@/lib/floorTrials";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareSessionChrono } from "@/lib/chronoSort";
 import { cn } from "@/lib/utils";
+import { isOpenEvent } from "@/schemas";
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -152,7 +157,7 @@ export default function EventDetailPage() {
         </div>
       </div>
 
-      <EnteredEntities eventId={id} isSignedIn={Boolean(isSignedIn)} />
+      <EnteredEntities eventId={id} eventName={event.name} isSignedIn={Boolean(isSignedIn)} />
     </div>
   );
 }
@@ -168,6 +173,47 @@ function countsLabel(entryCount: number, songCount: number): string {
   return `${entries} · ${songs}`;
 }
 
+const NO_MISSING: ReadonlyMap<string | null, MissingCount> = new Map();
+
+/**
+ * Admins and this event's staff only: how many registered entries per
+ * division have no music in yet, from the event's registration list
+ * (imported on the admin Registrations page) against its submissions.
+ * Counts, never names. Empty for everyone else, and for an event with no
+ * registration list.
+ */
+function useMissingCounts(eventId: string, eventName: string, enabled: boolean) {
+  const { isAdmin, eventRoles } = useAuthMe();
+  const ready = enabled && (isAdmin || richestEventRole(eventRoles, eventId) !== null);
+  const registrationsQuery = useEndpointQuery(endpoints.events.registrations, {
+    params: { id: eventId },
+    enabled: ready,
+  });
+  const submissionsQuery = useEndpointQuery(endpoints.events.songSubmissions, {
+    params: { id: eventId },
+    enabled: ready,
+  });
+  const { divisions } = useDivisions();
+  const registrations = ready ? registrationsQuery.data : undefined;
+  const submissions = ready ? submissionsQuery.data : undefined;
+  const roundsSplit = isOpenEvent(eventName);
+  return useMemo(() => {
+    if (!registrations || !submissions || registrations.length === 0) return NO_MISSING;
+    return missingByDivision(reconcileRegistrations(registrations, submissions, divisions, roundsSplit).rows);
+  }, [registrations, submissions, divisions, roundsSplit]);
+}
+
+/** " · 2 missing · 1 possible", or nothing when nothing is outstanding. */
+function MissingLabel({ count }: { count: MissingCount | undefined }) {
+  if (!count) return null;
+  return (
+    <>
+      {count.missing > 0 && <span className="text-destructive"> · {count.missing} missing</span>}
+      {count.possible > 0 && <span className="text-amber-500 dark:text-amber-300"> · {count.possible} possible</span>}
+    </>
+  );
+}
+
 /**
  * Who has music in for this event, grouped by division.
  *
@@ -176,14 +222,45 @@ function countsLabel(entryCount: number, songCount: number): string {
  * only a count. Multiple songs from the same entity in the same division are
  * one row: enough to see the field, never enough to learn a routine.
  */
-function EnteredEntities({ eventId, isSignedIn }: { eventId: string; isSignedIn: boolean }) {
+function EnteredEntities({
+  eventId,
+  eventName,
+  isSignedIn,
+}: {
+  eventId: string;
+  eventName: string;
+  isSignedIn: boolean;
+}) {
   // The endpoint is requireAuth — signed out there is nothing to fetch.
   const entitiesQuery = useEndpointQuery(endpoints.events.entities, {
     params: { id: eventId },
     enabled: isSignedIn,
   });
-  const divisions = isSignedIn ? (entitiesQuery.data ?? null) : null;
+  const entered = isSignedIn ? (entitiesQuery.data ?? null) : null;
   const loading = entitiesQuery.isFetching;
+  const missing = useMissingCounts(eventId, eventName, isSignedIn);
+  const { divisions: divisionOrder } = useDivisions();
+
+  // Divisions with registered entries still to submit are listed even when
+  // nobody in them has submitted yet, in the divisions' display order.
+  const divisions = useMemo(() => {
+    if (entered === null) return null;
+    const known = new Set(entered.map((d) => d.division));
+    const extra = [...missing.keys()]
+      .filter((d): d is string => d !== null && !known.has(d))
+      .map((division) => ({ division, entities: [] as (typeof entered)[number]["entities"] }));
+    if (extra.length === 0) return entered;
+    const rank = (d: string) => {
+      const i = divisionOrder.indexOf(d);
+      return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+    };
+    return [...entered, ...extra].sort((a, b) => rank(a.division) - rank(b.division));
+  }, [entered, missing, divisionOrder]);
+  const unrecognised = missing.get(null);
+  const missingTotal = [...missing.values()].reduce(
+    (t, c) => ({ missing: t.missing + c.missing, possible: t.possible + c.possible }),
+    { missing: 0, possible: 0 }
+  );
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const toggleDivision = (division: string) =>
@@ -215,6 +292,7 @@ function EnteredEntities({ eventId, isSignedIn }: { eventId: string; isSignedIn:
         {totals !== null && (
           <span className="ml-2 text-sm font-normal text-muted-foreground">
             {countsLabel(totals.entries, totals.songs)}
+            <MissingLabel count={missingTotal} />
           </span>
         )}
       </h2>
@@ -246,11 +324,13 @@ function EnteredEntities({ eventId, isSignedIn }: { eventId: string; isSignedIn:
           <p className="text-sm text-muted-foreground">No music submitted for this event yet.</p>
         )}
         {divisions && divisions.length > 0 && (
-          <div className={cn("space-y-6", loading && "opacity-60")}>
+          // Two columns from md up. CSS columns rather than a grid so a long
+          // division does not leave a gap beside a short one.
+          <div className={cn("md:columns-2 md:gap-6", loading && "opacity-60")}>
             {divisions.map(({ division, entities }) => {
               const isCollapsed = collapsed.has(division);
               return (
-                <section key={division} className="space-y-2">
+                <section key={division} className="mb-6 space-y-2 break-inside-avoid">
                   <button
                     type="button"
                     onClick={() => toggleDivision(division)}
@@ -273,9 +353,13 @@ function EnteredEntities({ eventId, isSignedIn }: { eventId: string; isSignedIn:
                         entities.length,
                         entities.reduce((n, e) => n + e.song_count, 0)
                       )}
+                      <MissingLabel count={missing.get(division)} />
                     </span>
                   </button>
-                  {!isCollapsed && (
+                  {!isCollapsed && entities.length === 0 && (
+                    <p className="px-4 text-sm text-muted-foreground">Nothing submitted yet.</p>
+                  )}
+                  {!isCollapsed && entities.length > 0 && (
                     <div className="space-y-2">
                       {entities.map((entity) => (
                         <div
@@ -293,6 +377,12 @@ function EnteredEntities({ eventId, isSignedIn }: { eventId: string; isSignedIn:
                 </section>
               );
             })}
+            {unrecognised && (
+              <p className="mb-6 break-inside-avoid text-xs text-muted-foreground">
+                Registrations in divisions not recognised
+                <MissingLabel count={unrecognised} />
+              </p>
+            )}
           </div>
         )}
       </SignedIn>
