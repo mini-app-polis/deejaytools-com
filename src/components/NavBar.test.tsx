@@ -211,6 +211,39 @@ describe("NavBar — admin view as", () => {
     expect(within(strip).getByRole("link", { name: "DJ" })).toHaveAttribute("href", "/events/dcsx/dj/queue");
   });
 
+  it("on an event's page, offers that event as each staff role", () => {
+    signedIn = true;
+    isAdmin = true;
+    renderNav("/events/open");
+    const row = screen.getByRole("navigation", { name: "View as" });
+    expect(within(row).getByText("View this event as")).toBeInTheDocument();
+    expect(within(row).queryByRole("combobox")).toBeNull();
+    expect(within(row).getByRole("link", { name: "Coordinator" })).toHaveAttribute("href", "/events/open/coordinator");
+    expect(within(row).getByRole("link", { name: "Event manager" })).toHaveAttribute("href", "/events/open/manage");
+  });
+
+  it("in a portal, marks the role being viewed and keeps the same section where the role has it", () => {
+    signedIn = true;
+    isAdmin = true;
+    renderNav("/events/open/dj/registrations");
+    const row = screen.getByRole("navigation", { name: "View as" });
+    expect(within(row).getByText(/Viewing as DJ/)).toBeInTheDocument();
+    expect(within(row).getByRole("link", { name: "DJ" })).toHaveAttribute("aria-current", "page");
+    expect(within(row).getByRole("link", { name: "Coordinator" })).toHaveAttribute(
+      "href",
+      "/events/open/coordinator/registrations"
+    );
+  });
+
+  it("from a section another role lacks, opens that role's portal", () => {
+    signedIn = true;
+    isAdmin = true;
+    renderNav("/events/open/manage/queue");
+    const row = screen.getByRole("navigation", { name: "View as" });
+    expect(within(row).getByRole("link", { name: "Coordinator" })).toHaveAttribute("href", "/events/open/coordinator");
+    expect(within(row).getByRole("link", { name: "DJ" })).toHaveAttribute("href", "/events/open/dj/queue");
+  });
+
   it("shows nothing on an admin page with no staff version, or to anyone but an admin", () => {
     signedIn = true;
     isAdmin = true;

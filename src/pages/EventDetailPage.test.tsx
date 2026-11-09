@@ -744,15 +744,14 @@ describe("EventDetailPage — staff portal links", () => {
     });
   }
 
-  it("lets an admin view the event as each staff role", async () => {
+  it("keeps an admin's view-as links off the page: they are in the Admin rows", async () => {
     authMe = { isAdmin: true, eventRoles: [] };
     mockEvent();
     renderPage();
 
     await screen.findByRole("heading", { name: /spring swing/i });
-    expect(screen.getByRole("link", { name: "Coordinator" })).toHaveAttribute("href", "/events/ev-1/coordinator");
-    expect(screen.getByRole("link", { name: "DJ" })).toHaveAttribute("href", "/events/ev-1/dj");
-    expect(screen.getByRole("link", { name: "Event manager" })).toHaveAttribute("href", "/events/ev-1/manage");
+    expect(screen.queryByRole("link", { name: "Coordinator" })).toBeNull();
+    expect(screen.queryByText(/view as/i)).toBeNull();
   });
 
   it("links the event's staff to their own portal", async () => {
