@@ -1,3 +1,10 @@
+# [2.31.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.30.0...v2.31.0) (2026-11-09)
+
+
+### Features
+
+* **staff:** Drive division links, add staff by exact email, and division lists collapsed by default ([53d3a42](https://github.com/mini-app-polis/deejaytools-com/commit/53d3a424283d22ed475c41dfee1ff291b6b65822))
+
 # [2.30.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.29.0...v2.30.0) (2026-11-09)
 
 
