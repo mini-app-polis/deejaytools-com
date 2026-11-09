@@ -163,6 +163,10 @@ describe("ManagerPage — Event Songs section", () => {
     expect(await screen.findByRole("button", { name: /classic\s+1/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /strictly\s+1/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /unspecified\s+1/i })).toBeInTheDocument();
+    // Divisions start collapsed: open each to see its songs.
+    for (const name of [/classic\s+1/i, /strictly\s+1/i, /unspecified\s+1/i]) {
+      await user.click(screen.getByRole("button", { name }));
+    }
     expect(screen.getByText(/alice & bob/i)).toBeInTheDocument();
     expect(screen.getByText(/sky high/i)).toBeInTheDocument();
     expect(screen.getByText(/carol & dan/i)).toBeInTheDocument();
@@ -594,7 +598,7 @@ describe("ManagerPage — Event Songs filters", () => {
     expect(await screen.findByText("No events to show.")).toBeInTheDocument();
   });
 
-  it("collapses a division and deselects the event on a second click", async () => {
+  it("starts a division collapsed, opens and closes it, and deselects the event on a second click", async () => {
     routeGets({
       "/v1/events": [CURRENT],
       "/v1/admin/event-song-submissions": [
@@ -606,6 +610,10 @@ describe("ManagerPage — Event Songs filters", () => {
 
     await user.click(await screen.findByRole("button", { name: /current fest/i }));
     const header = await screen.findByRole("button", { name: /classic\s+1/i });
+    expect(header).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Ann & Bo")).not.toBeInTheDocument();
+
+    await user.click(header);
     expect(header).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("Ann & Bo")).toBeInTheDocument();
 
@@ -1062,7 +1070,8 @@ describe("ManagerPage — retrying failed loads in the other sections", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load submitted songs: subs down");
     subs.recover();
     await user.click(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByText("Ann & Bo")).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: /classic\s+1/i }));
+    expect(screen.getByText("Ann & Bo")).toBeInTheDocument();
   });
 
   it.each([

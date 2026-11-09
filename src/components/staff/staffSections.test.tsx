@@ -717,7 +717,7 @@ describe("EventStaffSection", () => {
     inRouter(<EventStaffSection event={event} />);
     expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load the staff: staff down");
     expect(screen.queryByText(/No one is on this event.s staff yet/)).not.toBeInTheDocument();
-    expect(screen.getByText(/Only people connected to this event appear here\. To add someone new to the event, ask an admin\./)).toBeInTheDocument();
+    expect(screen.getByText(/Someone new\? Find them by email below\./)).toBeInTheDocument();
 
     apiGet.mockImplementation((p: string) =>
       Promise.resolve(p.startsWith("/v1/events/ev-1/people?") ? [fx.eventPerson({ user_id: "user_x", display_name: "Xavier" })] : [])
@@ -729,6 +729,40 @@ describe("EventStaffSection", () => {
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("User not found"));
     expect(apiPut).toHaveBeenCalledWith("/v1/events/ev-1/staff/user_x/coordinator", undefined);
     expect(allPaths().some((p) => p.startsWith("/v1/admin"))).toBe(false);
+  });
+
+  it("finds someone new to the event by their exact email, then grants them a role", async () => {
+    apiGet.mockImplementation((p: string) =>
+      p.startsWith("/v1/events/ev-1/people/by-email?")
+        ? Promise.resolve(fx.eventPerson({ user_id: "user_new", display_name: "Nina New", email_masked: "n•••@example.com" }))
+        : Promise.resolve([])
+    );
+    apiPut.mockResolvedValue(fx.eventStaff({ user_id: "user_new", role: "dj", email: "n•••@example.com" }));
+    inRouter(<EventStaffSection event={event} />);
+    const email = await screen.findByLabelText("Or find someone new by email");
+    fireEvent.change(email, { target: { value: " Nina@Example.com " } });
+    fireEvent.click(screen.getByRole("button", { name: "Find" }));
+    expect(await screen.findByText(/Nina New/)).toBeInTheDocument();
+    expect(apiGet).toHaveBeenCalledWith("/v1/events/ev-1/people/by-email?email=Nina%40Example.com");
+    // Once someone is picked, the email lookup steps aside.
+    expect(screen.queryByLabelText("Or find someone new by email")).toBeNull();
+    fireEvent.click(screen.getByRole("radio", { name: "DJ" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to staff" }));
+    await waitFor(() => expect(apiPut).toHaveBeenCalledWith("/v1/events/ev-1/staff/user_new/dj", undefined));
+  });
+
+  it("says so when no account has the email", async () => {
+    apiGet.mockImplementation((p: string) =>
+      p.startsWith("/v1/events/ev-1/people/by-email?")
+        ? Promise.reject(Object.assign(new Error("No account with that email"), { status: 404 }))
+        : Promise.resolve([])
+    );
+    inRouter(<EventStaffSection event={event} />);
+    const email = await screen.findByLabelText("Or find someone new by email");
+    expect(screen.getByRole("button", { name: "Find" })).toBeDisabled();
+    fireEvent.change(email, { target: { value: "nobody@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Find" }));
+    expect(await screen.findByText(/No deejaytools account has that email/)).toBeInTheDocument();
   });
 
   it("says at the person picker when no one is picked", async () => {

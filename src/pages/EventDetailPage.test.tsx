@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -117,6 +117,12 @@ function renderPage(id = "ev-1") {
       </Routes>
     </MemoryRouter>
   );
+}
+
+/** Divisions start collapsed: wait for `division`'s header, then open every division. */
+async function expandDivisions(division: string) {
+  await screen.findByText(division);
+  for (const header of screen.getAllByRole("button", { expanded: false })) fireEvent.click(header);
 }
 
 // ---------------------------------------------------------------------------
@@ -472,6 +478,7 @@ describe("EventDetailPage — entered entities", () => {
 
     await waitFor(() => expect(screen.getByText("Classic")).toBeInTheDocument());
     expect(screen.getByText("Teams")).toBeInTheDocument();
+    await expandDivisions("Teams");
     expect(screen.getByText("Alex Kim & Jo Ruiz")).toBeInTheDocument();
     expect(screen.getByText("Sam Lee")).toBeInTheDocument();
     expect(screen.getByText("team2026")).toBeInTheDocument();
@@ -492,6 +499,7 @@ describe("EventDetailPage — entered entities", () => {
     });
     renderPage();
 
+    await expandDivisions("Classic");
     await waitFor(() => expect(screen.getByText("2 songs")).toBeInTheDocument());
     // Singular for one, so the row never reads "1 songs".
     expect(screen.getByText("1 song")).toBeInTheDocument();
@@ -547,7 +555,7 @@ describe("EventDetailPage — entered entities", () => {
     expect(screen.getByText("2 entries · 2 songs")).toBeInTheDocument();
   });
 
-  it("hides a division's rows when its header is collapsed", async () => {
+  it("starts each division collapsed, opening and closing it from its header", async () => {
     const user = userEvent.setup();
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
@@ -560,7 +568,11 @@ describe("EventDetailPage — entered entities", () => {
     });
     renderPage();
 
-    await waitFor(() => expect(screen.getByText("Alex Kim & Jo Ruiz")).toBeInTheDocument());
+    // Collapsed to start: the header's counts are the overview.
+    await screen.findByText("Classic");
+    expect(screen.queryByText("Alex Kim & Jo Ruiz")).toBeNull();
+    await user.click(screen.getByRole("button", { expanded: false }));
+    expect(screen.getByText("Alex Kim & Jo Ruiz")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { expanded: true }));
     expect(screen.queryByText("Alex Kim & Jo Ruiz")).toBeNull();
     // The header itself stays, so the section can be reopened.
@@ -581,6 +593,7 @@ describe("EventDetailPage — entered entities", () => {
     });
     renderPage();
 
+    await expandDivisions("Classic");
     await waitFor(() => expect(screen.getByText("Alex Kim & Jo Ruiz")).toBeInTheDocument());
     // The roster deliberately carries no song fields — nothing on the page
     // should look like a title, routine name, filename or version suffix.
@@ -695,6 +708,7 @@ describe("EventDetailPage — missing music counts", () => {
     // A division nobody has submitted to is still listed, so its missing
     // entries show.
     expect(screen.getByText("Masters")).toBeInTheDocument();
+    await expandDivisions("Masters");
     expect(screen.getByText("Nothing submitted yet.")).toBeInTheDocument();
     expect(screen.getByText(/2 missing/)).toBeInTheDocument();
     expect(screen.queryByText(/Pat Long|Gina White/)).toBeNull();
@@ -713,6 +727,7 @@ describe("EventDetailPage — missing music counts", () => {
     mockRegistrationApi();
     renderPage();
 
+    await expandDivisions("Classic");
     await waitFor(() => expect(screen.getByText("Alex Kim & Jo Ruiz")).toBeInTheDocument());
     expect(apiGet).not.toHaveBeenCalledWith("/v1/events/ev-1/registrations");
     expect(apiGet).not.toHaveBeenCalledWith("/v1/events/ev-1/song-submissions");

@@ -10,6 +10,7 @@ import {
   ApiEventDivisionEntitiesSchema,
   ApiEventDriveFolderSchema,
   ApiEventPersonSchema,
+  ApiEventDriveDivisionSchema,
   ApiEventRegistrationSchema,
   ApiEventSchema,
   ApiEventSongSubmissionSchema,
@@ -248,6 +249,18 @@ export const endpoints = {
     driveFolder: endpoint<{ id: string }, void, z.infer<typeof ApiEventDriveFolderSchema>>({
       id: "events.driveFolder", method: "GET", access: "event-staff",
       path: (p) => `/v1/events/${id(p)}/drive-folder`, response: ApiEventDriveFolderSchema,
+    }),
+    /** The division folders in the event's Drive folder, read from Drive. */
+    driveDivisions: endpoint<{ id: string }, void, z.infer<typeof ApiEventDriveDivisionSchema>[]>({
+      id: "events.driveDivisions", method: "GET", access: "event-staff",
+      path: (p) => `/v1/events/${id(p)}/drive-folder/divisions`,
+      response: z.array(ApiEventDriveDivisionSchema),
+    }),
+    /** One person by their exact email, for whoever may grant the event's staff roles. */
+    personByEmail: endpoint<{ id: string; email: string }, void, z.infer<typeof ApiEventPersonSchema>>({
+      id: "events.personByEmail", method: "GET", access: "event-staff",
+      path: (p) => `/v1/events/${id(p)}/people/by-email?email=${encodeURIComponent(p.email)}`,
+      response: ApiEventPersonSchema,
     }),
   },
 

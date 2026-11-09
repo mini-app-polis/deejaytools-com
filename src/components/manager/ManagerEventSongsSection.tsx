@@ -22,10 +22,10 @@ const NO_ROWS: readonly never[] = [];
 export default function ManagerEventSongsSection({ open }: { open: boolean }) {
   const [esEventId, setEsEventId] = useState("");
   const [esShowPast, setEsShowPast] = useState(false);
-  const [esCollapsedDivisions, setEsCollapsedDivisions] = useState<Set<string>>(new Set());
+  const [esExpandedDivisions, setEsExpandedDivisions] = useState<Set<string>>(new Set());
 
   const toggleDivision = (division: string) =>
-    setEsCollapsedDivisions((prev) => {
+    setEsExpandedDivisions((prev) => {
       const next = new Set(prev);
       if (next.has(division)) next.delete(division);
       else next.add(division);
@@ -44,7 +44,7 @@ export default function ManagerEventSongsSection({ open }: { open: boolean }) {
   const esSubmissionsLoading = esSubmissionsQuery.isFetching;
 
   useEffect(() => {
-    setEsCollapsedDivisions(new Set());
+    setEsExpandedDivisions(new Set());
   }, [esEventId]);
 
   const esVisibleEvents = useMemo(
@@ -157,7 +157,8 @@ export default function ManagerEventSongsSection({ open }: { open: boolean }) {
                   </p>
                 ) : (
                   esSubmissionsByDivision.map(({ division, rows }) => {
-                    const collapsed = esCollapsedDivisions.has(division);
+                    // Divisions start collapsed; a division opens to its songs.
+                    const collapsed = !esExpandedDivisions.has(division);
                     return (
                       <section key={division} className="space-y-2">
                         <button
