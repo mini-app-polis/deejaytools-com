@@ -3,6 +3,7 @@ import type { ApiAdminEventSongSubmission, ApiEventRegistration } from "@/schema
 import { TEST_DIVISIONS } from "@/test/divisions";
 import {
   divisionForRegistration,
+  missingByDivision,
   parseRegistrationPaste,
   reconcileRegistrations,
   registrationLines,
@@ -217,5 +218,25 @@ describe("registrationLines", () => {
       false
     ).rows;
     expect(registrationLines(rows)).toBe("Teams: Future. WOW.\nClassic: A B & C D");
+  });
+});
+
+describe("missingByDivision", () => {
+  it("counts missing and possible entries per division, leaving the rest out", () => {
+    const entries = [
+      entry({ division: "Classic", dancer_1: "Ada Lovelace", dancer_2: "Bob Jones" }),
+      entry({ division: "Classic", dancer_1: "Cara Smith", dancer_2: "Dan Brown" }),
+      entry({ division: "Classic", dancer_1: "Eve Adams", dancer_2: "Fred Black" }),
+      entry({ division: "Masters", dancer_1: "Gina White", dancer_2: "Hank Green" }),
+      entry({ division: "Masters", dancer_1: "Ivy Gray", dancer_2: "Jon Blue", handled: true }),
+      entry({ division: "Mystery Division", dancer_1: "Kim Red", dancer_2: "Lou Pink" }),
+    ];
+    const subs = [sub("Ada Lovelace & Bob Jones", "Classic"), sub("Kara Smith & Dan Brown", "Classic")];
+    const { rows } = reconcileRegistrations(entries, subs, TEST_DIVISIONS, false);
+    const counts = missingByDivision(rows);
+    expect(counts.get("Classic")).toEqual({ missing: 1, possible: 1 });
+    expect(counts.get("Masters")).toEqual({ missing: 1, possible: 0 });
+    expect(counts.get(null)).toEqual({ missing: 1, possible: 0 });
+    expect(counts.size).toBe(3);
   });
 });

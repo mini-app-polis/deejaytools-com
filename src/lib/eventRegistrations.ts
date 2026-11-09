@@ -363,3 +363,28 @@ export function registrationLines(rows: readonly ReconciledRegistration[]): stri
 export function registrationName(entry: Pick<ApiEventRegistration, "dancer_1" | "dancer_2">): string {
   return entryNames(entry).join(" & ");
 }
+
+/** How many of a division's registered entries still have music to come. */
+export type MissingCount = {
+  /** Nothing submitted, or (Classic at The Open) a round still to come. */
+  missing: number;
+  /** Not matched, but a submission looks like it: may be in already. */
+  possible: number;
+};
+
+/**
+ * Missing and possible counts per deejaytools division, for the event page
+ * staff view. Entries whose registration division is not recognised are
+ * counted under `null`. Divisions with nothing outstanding are left out.
+ */
+export function missingByDivision(rows: readonly ReconciledRegistration[]): Map<string | null, MissingCount> {
+  const counts = new Map<string | null, MissingCount>();
+  for (const r of rows) {
+    const key = r.status === "possible" ? "possible" : r.status === "missing" || r.status === "missing-round" ? "missing" : null;
+    if (!key) continue;
+    const c = counts.get(r.division) ?? { missing: 0, possible: 0 };
+    c[key]++;
+    counts.set(r.division, c);
+  }
+  return counts;
+}

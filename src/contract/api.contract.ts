@@ -719,6 +719,7 @@ describe("contract", () => {
     await expectForbidden(call(as, endpoints.admin.users));
     await expectForbidden(call(as, endpoints.admin.songs));
     await expectForbidden(call(as, endpoints.events.songSubmissions, { params: { id: state.eventId! } }));
+    await expectForbidden(call(as, endpoints.events.registrations, { params: { id: state.eventId! } }));
     await expectForbidden(call(as, endpoints.events.staff, { params: { id: state.eventId! } }));
   });
 
@@ -775,6 +776,10 @@ describe("contract", () => {
     expect(scratched).toMatchObject({ scratched: true, hidden_submission_ids: [] });
     await ledger.hit(endpoints.admin.updateEventRegistration, { params: { id: imported[0].id }, body: { scratched: false } });
     expect(await ledger.hit(endpoints.admin.eventRegistrations, { params: { eventId } })).toHaveLength(1);
+    // The staff route answers the same list; an admin still sees the note.
+    const forStaff = await ledger.hit(endpoints.events.registrations, { params: { id: eventId } });
+    expect(forStaff).toHaveLength(1);
+    expect(forStaff[0]).toMatchObject({ id: imported[0].id, note: "contract suite" });
     await ledger.hit(endpoints.admin.importEventRegistrations, { params: { eventId }, body: { entries: [] } });
     expect(await ledger.hit(endpoints.admin.eventRegistrations, { params: { eventId } })).toEqual([]);
   });
@@ -831,9 +836,12 @@ describe("contract", () => {
     expect((await call(as, endpoints.auth.me)).event_roles).toContainEqual({ event_id: eventId, role: "coordinator" });
     await call(as, endpoints.events.people, { params: { id: eventId, q: "co" } });
     await call(as, endpoints.events.songSubmissions, { params: { id: eventId } });
+    // A coordinator reads the registration list without the admin's notes.
+    expect((await call(as, endpoints.events.registrations, { params: { id: eventId } })).every((r) => r.note === null)).toBe(true);
     await expectForbidden(call(as, endpoints.events.staff, { params: { id: eventId } }));
     await expectForbidden(call(as, endpoints.events.people, { params: { id: other.id, q: "co" } }));
     await expectForbidden(call(as, endpoints.events.songSubmissions, { params: { id: other.id } }));
+    await expectForbidden(call(as, endpoints.events.registrations, { params: { id: other.id } }));
     await expectForbidden(call(as, endpoints.admin.users));
 
     await ledger.hit(endpoints.events.grantStaff, role("event-manager"));

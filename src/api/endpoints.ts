@@ -164,6 +164,12 @@ export const endpoints = {
       path: (p) => `/v1/events/${id(p)}/song-submissions`,
       response: z.array(ApiAdminEventSongSubmissionSchema),
     }),
+    /** The event's imported registration list, for its staff (note is admin-only). */
+    registrations: endpoint<{ id: string }, void, z.infer<typeof ApiEventRegistrationSchema>[]>({
+      id: "events.registrations", method: "GET", access: "event-staff",
+      path: (p) => `/v1/events/${id(p)}/registrations`,
+      response: z.array(ApiEventRegistrationSchema),
+    }),
     staff: endpoint<{ id: string }, void, z.infer<typeof ApiEventStaffSchema>[]>({
       id: "events.staff", method: "GET", access: "event-staff",
       path: (p) => `/v1/events/${id(p)}/staff`, response: z.array(ApiEventStaffSchema),
