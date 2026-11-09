@@ -52,7 +52,16 @@ vi.mock("@/hooks/useStaffEvents", () => ({
 afterEach(() => {
   eventRoles = [];
   staffEvents = [];
+  eventsList = [];
 });
+
+// The events list, which the admin view-as strip picks from.
+let eventsList: { id: string; name: string; status: string; start_date: string }[] = [];
+vi.mock("@/api/queries", () => ({
+  useEndpointQuery: (_endpoint: unknown, opts?: { enabled?: boolean }) => ({
+    data: opts?.enabled === false ? undefined : eventsList,
+  }),
+}));
 
 // The API version label; each test sets what GET /version reports.
 let apiVersion: { version: string; commit: string | null } | null = null;
@@ -103,67 +112,116 @@ describe("NavBar — signed in (regular user)", () => {
     expect(screen.getAllByRole("link", { name: /^my profile$/i }).length).toBeGreaterThan(0);
     expect(screen.getByTestId("user-button")).toBeInTheDocument();
 
-    expect(screen.queryByText("Superuser")).toBeNull();
-    expect(screen.queryByText("Manager")).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Admin" })).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Event staff" })).toBeNull();
     expect(screen.queryByTestId("sign-in-button")).toBeNull();
   });
 });
 
 describe("NavBar — signed in (admin)", () => {
-  it("shows Superuser and Manager sub-bars with their section links", () => {
+  it("shows one Admin bar with every admin and manager page", () => {
     signedIn = true;
     isAdmin = true;
     renderNav();
 
     expect(screen.getAllByRole("link", { name: /floor trials/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /^my content$/i }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("link", { name: /^my profile$/i }).length).toBeGreaterThan(0);
     expect(screen.getByTestId("user-button")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^admin$/i })).toBeNull();
-    // The closed mobile menu repeats these headings, out of the accessibility tree.
-    expect(within(screen.getByRole("navigation", { name: "Admin" })).getByText("Superuser")).toBeInTheDocument();
-    expect(within(screen.getByRole("navigation", { name: "Manager" })).getByText("Manager")).toBeInTheDocument();
-    // Both an "Events" link exist for an admin — the public listing and the
-    // Superuser section — so assert by href rather than by accessible name.
-    const adminEventsLinks = screen.getAllByRole("link", { name: /^events$/i });
-    expect(adminEventsLinks.some((link) => link.getAttribute("href") === "/admin/events")).toBe(
-      true
+    const bar = screen.getByRole("navigation", { name: "Admin" });
+    // The closed mobile menu repeats the heading, out of the accessibility tree.
+    expect(within(bar).getByText("Admin")).toBeInTheDocument();
+    expect(within(bar).getByRole("link", { name: "Events" })).toHaveAttribute("href", "/admin/events");
+    for (const name of ["Test Checkin", "Users", "Active Sessions", "CheckIn For", "Guide"]) {
+      expect(within(bar).getByRole("link", { name })).toBeInTheDocument();
+    }
+    expect(screen.queryByRole("navigation", { name: "Manager" })).toBeNull();
+    expect(screen.queryByText("Superuser")).toBeNull();
+    // The public Events listing stays in the main bar.
+    expect(within(screen.getByRole("navigation", { name: "Main" })).getByRole("link", { name: "Events" })).toHaveAttribute(
+      "href",
+      "/events"
     );
-    expect(adminEventsLinks.some((link) => link.getAttribute("href") === "/events")).toBe(true);
-    expect(screen.getByRole("link", { name: /^test checkin$/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /^active sessions$/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /^checkin for$/i })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /^live queue$/i })).toBeNull();
-    expect(screen.queryByRole("link", { name: /^test inject$/i })).toBeNull();
   });
 });
 
-describe("NavBar — landmarks", () => {
-  it("labels the main nav and the admin, manager and event staff sub-bars as nav landmarks", () => {
+describe("NavBar — landmarks and order", () => {
+  it("puts the main bar first, then Event staff, then Admin", () => {
     signedIn = true;
     isAdmin = true;
     eventRoles = [{ event_id: "ev-2", role: "dj" }];
     staffEvents = [{ eventId: "ev-2", role: "dj", event: { name: "Fall Fling" } }];
     renderNav();
 
-    expect(screen.getByRole("navigation", { name: "Main" })).toBeInTheDocument();
-    for (const [name, link] of [["Admin", "Users"], ["Manager", "Guide"], ["Event staff", "Fall Fling · DJ"]]) {
-      const bar = screen.getByRole("navigation", { name });
-      expect(within(bar).getByRole("link", { name: link })).toBeInTheDocument();
-    }
+    const bars = screen.getAllByRole("navigation").map((n) => n.getAttribute("aria-label"));
+    expect(bars.filter((b) => ["Main", "Event staff", "Admin"].includes(b ?? ""))).toEqual(["Main", "Event staff", "Admin"]);
+    expect(within(screen.getByRole("navigation", { name: "Admin" })).getByRole("link", { name: "Users" })).toBeInTheDocument();
+    expect(within(screen.getByRole("navigation", { name: "Event staff" })).getByRole("link", { name: "Live queue" })).toBeInTheDocument();
   });
 });
 
 describe("NavBar — signed in (not an admin)", () => {
-  it("shows neither the Manager sub-bar nor Superuser", () => {
+  it("shows no Admin bar or admin links", () => {
     signedIn = true;
     isAdmin = false;
     renderNav();
 
-    expect(screen.queryByText("Manager")).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Admin" })).toBeNull();
     expect(screen.queryByRole("link", { name: /^active sessions$/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /^upload for$/i })).toBeNull();
-    expect(screen.queryByText("Superuser")).toBeNull();
+  });
+});
+
+describe("NavBar — admin view as", () => {
+  const events = [
+    { id: "old", name: "Old Jam", status: "completed", start_date: "2025-03-01" },
+    { id: "open", name: "The Open", status: "upcoming", start_date: "2026-11-26" },
+    { id: "dcsx", name: "DCSX", status: "upcoming", start_date: "2026-11-19" },
+  ];
+
+  it("offers each staff role's version of an admin page, on the soonest event to start", async () => {
+    signedIn = true;
+    isAdmin = true;
+    eventsList = events;
+    const user = userEvent.setup();
+    renderNav("/admin/registrations");
+
+    const strip = screen.getByRole("navigation", { name: "View as" });
+    expect(within(strip).getByRole("combobox", { name: "Event to view" })).toHaveValue("dcsx");
+    expect(within(strip).getByRole("link", { name: "Coordinator" })).toHaveAttribute(
+      "href",
+      "/events/dcsx/coordinator/registrations"
+    );
+    expect(within(strip).getByRole("link", { name: "DJ" })).toHaveAttribute("href", "/events/dcsx/dj/registrations");
+    expect(within(strip).getByRole("link", { name: "Event manager" })).toHaveAttribute(
+      "href",
+      "/events/dcsx/manage/registrations"
+    );
+
+    await user.selectOptions(within(strip).getByRole("combobox", { name: "Event to view" }), "open");
+    expect(within(strip).getByRole("link", { name: "DJ" })).toHaveAttribute("href", "/events/open/dj/registrations");
+  });
+
+  it("offers only the roles that have the page", () => {
+    signedIn = true;
+    isAdmin = true;
+    eventsList = events;
+    renderNav("/manager/active-sessions");
+    const strip = screen.getByRole("navigation", { name: "View as" });
+    expect(within(strip).queryByRole("link", { name: "Coordinator" })).toBeNull();
+    expect(within(strip).getByRole("link", { name: "DJ" })).toHaveAttribute("href", "/events/dcsx/dj/queue");
+  });
+
+  it("shows nothing on an admin page with no staff version, or to anyone but an admin", () => {
+    signedIn = true;
+    isAdmin = true;
+    eventsList = events;
+    const { unmount } = renderNav("/admin/users");
+    expect(screen.queryByRole("navigation", { name: "View as" })).toBeNull();
+    unmount();
+
+    isAdmin = false;
+    renderNav("/admin/registrations");
+    expect(screen.queryByRole("navigation", { name: "View as" })).toBeNull();
   });
 });
 
@@ -181,7 +239,7 @@ describe("NavBar — mobile menu", () => {
     expect(helpLinks.some((link) => link.getAttribute("href") === "/how-it-works")).toBe(true);
   });
 
-  it("lists the Manager and Superuser sections for an admin, and closes when a link is followed", async () => {
+  it("lists the Admin sections for an admin, and closes when a link is followed", async () => {
     signedIn = true;
     isAdmin = true;
     const user = userEvent.setup();
@@ -253,7 +311,7 @@ describe("NavBar — mobile menu", () => {
     ["My events", "/my-events"],
     ["Help", "/how-it-works"],
     ["Contact", "/feedback"],
-    ["Fall Fling · DJ", "/events/ev-2/dj"],
+    ["Live queue", "/events/ev-2/dj/queue"],
     ["Guide", "/manager/guide"],
     ["Users", "/admin/users"],
   ])("closes after following the mobile %s link", async (name, href) => {
@@ -397,53 +455,77 @@ describe("NavBar — event staff", () => {
     signInAsStaff([], []);
     renderNav();
     expect(screen.queryByRole("link", { name: /^my events$/i })).toBeNull();
-    expect(screen.queryByText("Event staff")).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Event staff" })).toBeNull();
   });
 
-  it("shows a coordinator My events and a coordinator entry for their event, and no admin links", () => {
+  it("shows a coordinator their role, event and portal sections, and no admin links", () => {
     signInAsStaff(
       [{ event_id: "ev-1", role: "coordinator" }],
       [{ eventId: "ev-1", role: "coordinator", event: { name: "Spring Swing" } }]
     );
     renderNav();
-    expect(screen.getByRole("link", { name: /^my events$/i })).toHaveAttribute("href", "/my-events");
-    expect(within(screen.getByRole("navigation", { name: "Event staff" })).getByText("Event staff")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Spring Swing · Coordinator" })).toHaveAttribute(
+    const bar = screen.getByRole("navigation", { name: "Event staff" });
+    expect(within(bar).getByRole("link", { name: "My events" })).toHaveAttribute("href", "/my-events");
+    expect(within(bar).getByText("Coordinator")).toBeInTheDocument();
+    expect(within(bar).getByText("Spring Swing")).toBeInTheDocument();
+    expect(within(bar).getByRole("link", { name: "Registrations" })).toHaveAttribute(
       "href",
-      "/events/ev-1/coordinator"
+      "/events/ev-1/coordinator/registrations"
     );
-    expect(screen.queryByText("Superuser")).toBeNull();
-    expect(screen.queryByText("Manager")).toBeNull();
+    expect(within(bar).getByRole("link", { name: "Submissions" })).toHaveAttribute(
+      "href",
+      "/events/ev-1/coordinator/submissions"
+    );
+    expect(within(bar).queryByRole("link", { name: "Live queue" })).toBeNull();
+    // My events lives in the staff bar, not the main one.
+    expect(within(screen.getByRole("navigation", { name: "Main" })).queryByRole("link", { name: "My events" })).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Admin" })).toBeNull();
     const hrefs = screen.getAllByRole("link").map((l) => l.getAttribute("href") ?? "");
-    expect(hrefs.some((h) => h.startsWith("/admin"))).toBe(false);
+    expect(hrefs.some((h) => h.startsWith("/admin") || h.startsWith("/manager"))).toBe(false);
   });
 
-  it("shows a DJ entry linking to the DJ portal", () => {
+  it("shows a DJ the DJ portal's sections", () => {
     signInAsStaff(
       [{ event_id: "ev-2", role: "dj" }],
       [{ eventId: "ev-2", role: "dj", event: { name: "Fall Fling" } }]
     );
     renderNav();
-    expect(screen.getByRole("link", { name: "Fall Fling · DJ" })).toHaveAttribute("href", "/events/ev-2/dj");
-    const hrefs = screen.getAllByRole("link").map((l) => l.getAttribute("href") ?? "");
-    expect(hrefs.some((h) => h.startsWith("/admin"))).toBe(false);
+    const bar = screen.getByRole("navigation", { name: "Event staff" });
+    expect(within(bar).getByText("DJ")).toBeInTheDocument();
+    expect(within(bar).getByRole("link", { name: "Live queue" })).toHaveAttribute("href", "/events/ev-2/dj/queue");
+    expect(within(bar).queryByRole("link", { name: "Staff" })).toBeNull();
   });
 
-  it("shows an event-manager entry linking to the manage portal", () => {
+  it("shows an event manager the manage portal's sections", () => {
     signInAsStaff(
       [{ event_id: "ev-3", role: "event-manager" }],
       [{ eventId: "ev-3", role: "event-manager", event: { name: "Winter Ball" } }]
     );
     renderNav();
-    expect(screen.getByRole("link", { name: "Winter Ball · Event manager" })).toHaveAttribute(
-      "href",
-      "/events/ev-3/manage"
-    );
-    const hrefs = screen.getAllByRole("link").map((l) => l.getAttribute("href") ?? "");
-    expect(hrefs.some((h) => h.startsWith("/admin"))).toBe(false);
+    const bar = screen.getByRole("navigation", { name: "Event staff" });
+    expect(within(bar).getByText("Event manager")).toBeInTheDocument();
+    expect(within(bar).getByRole("link", { name: "Staff" })).toHaveAttribute("href", "/events/ev-3/manage/staff");
   });
 
-  it("lists My events and the staff entries in the mobile menu", async () => {
+  it("groups each event with its own role", () => {
+    signInAsStaff(
+      [
+        { event_id: "ev-1", role: "coordinator" },
+        { event_id: "ev-2", role: "dj" },
+      ],
+      [
+        { eventId: "ev-1", role: "coordinator", event: { name: "Spring Swing" } },
+        { eventId: "ev-2", role: "dj", event: { name: "Fall Fling" } },
+      ]
+    );
+    renderNav();
+    const bar = screen.getByRole("navigation", { name: "Event staff" });
+    const hrefs = within(bar).getAllByRole("link").map((l) => l.getAttribute("href"));
+    expect(hrefs).toContain("/events/ev-1/coordinator/registrations");
+    expect(hrefs).toContain("/events/ev-2/dj/queue");
+  });
+
+  it("lists My events and the staff sections in the mobile menu", async () => {
     signInAsStaff(
       [{ event_id: "ev-2", role: "dj" }],
       [{ eventId: "ev-2", role: "dj", event: { name: "Fall Fling" } }]
@@ -452,7 +534,7 @@ describe("NavBar — event staff", () => {
     renderNav();
     await user.click(screen.getByRole("button", { name: /toggle menu/i }));
     expect(screen.getAllByRole("link", { name: /^my events$/i })).toHaveLength(2);
-    expect(screen.getAllByRole("link", { name: "Fall Fling · DJ" })).toHaveLength(2);
+    expect(screen.getAllByRole("link", { name: "Live queue" })).toHaveLength(2);
   });
 });
 
@@ -486,16 +568,18 @@ describe("NavBar — active route", () => {
 });
 
 describe("NavBar — staff event without a loaded event", () => {
-  it("labels the entry 'Event' until the events list has the event", () => {
+  it("names the event 'Event' until the events list has it", () => {
     signedIn = true;
     isAdmin = false;
     eventRoles = [{ event_id: "ev-9", role: "coordinator" }];
     staffEvents = [{ eventId: "ev-9", role: "coordinator", event: null }];
     renderNav();
 
-    expect(screen.getByRole("link", { name: "Event · Coordinator" })).toHaveAttribute(
+    const bar = screen.getByRole("navigation", { name: "Event staff" });
+    expect(within(bar).getByText("Event")).toBeInTheDocument();
+    expect(within(bar).getByRole("link", { name: "Registrations" })).toHaveAttribute(
       "href",
-      "/events/ev-9/coordinator"
+      "/events/ev-9/coordinator/registrations"
     );
   });
 });

@@ -7,17 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TabsContent } from "@/components/ui/tabs";
+import { defaultEventId } from "@/lib/eventDates";
 import type { ApiEvent } from "@/schemas";
 
 const NO_EVENTS: readonly ApiEvent[] = [];
-
-/** The event to open on: the soonest one not yet over, else the latest. */
-function defaultEventId(events: readonly ApiEvent[]): string {
-  const live = events.filter((e) => e.status !== "completed").sort((a, b) => a.start_date.localeCompare(b.start_date));
-  if (live.length > 0) return live[0].id;
-  const past = [...events].sort((a, b) => b.start_date.localeCompare(a.start_date));
-  return past[0]?.id ?? "";
-}
 
 /**
  * The admin Registrations section: pick an event, then its registration list

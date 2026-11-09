@@ -1,3 +1,5 @@
+import type { ApiEvent } from "@/schemas";
+
 /**
  * Formatting for an event's calendar dates.
  *
@@ -59,4 +61,12 @@ export function formatEventDateRange(startDate: string, endDate: string): string
       ? end.toLocaleDateString(undefined, DAY_ONLY)
       : end.toLocaleDateString(undefined, MONTH_DAY);
   return `${start.toLocaleDateString(undefined, MONTH_DAY)} – ${endPart}, ${start.getFullYear()}`;
+}
+
+/** The event to open on: the soonest one not yet over, else the latest; "" when there are none. */
+export function defaultEventId(events: readonly ApiEvent[]): string {
+  const live = events.filter((e) => e.status !== "completed").sort((a, b) => a.start_date.localeCompare(b.start_date));
+  if (live.length > 0) return live[0].id;
+  const past = [...events].sort((a, b) => b.start_date.localeCompare(a.start_date));
+  return past[0]?.id ?? "";
 }

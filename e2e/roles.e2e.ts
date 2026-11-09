@@ -252,7 +252,8 @@ test("a staff member finds their event on My events and opens each portal it all
     await expect(page.getByRole("heading", { level: 1, name: "My events" })).toBeVisible();
     await expect(card()).toContainText("Coordinator portal");
     await card().click();
-    await expect(page).toHaveURL(new RegExp(`${base}/coordinator$`));
+    // The bare portal URL lands on its first section.
+    await expect(page).toHaveURL(new RegExp(`${base}/coordinator/registrations$`));
     await expect(portalHeading()).toBeVisible();
     await page.goto(`${base}/dj`);
     await expectSentHome(page);
