@@ -1,3 +1,10 @@
+# [2.33.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.32.0...v2.33.0) (2026-11-09)
+
+
+### Features
+
+* **nav:** admins view the whole site as a staff role or a dancer, menus included, until they exit ([5445c9f](https://github.com/mini-app-polis/deejaytools-com/commit/5445c9ff4fac6c1d7a1cf03a596e85968f8788ef))
+
 # [2.32.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.31.0...v2.32.0) (2026-11-09)
 
 
