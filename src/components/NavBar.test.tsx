@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
@@ -28,8 +28,10 @@ vi.mock("@clerk/clerk-react", () => ({
   UserButton: () => <div data-testid="user-button" />,
 }));
 
-// Drive useAuthMe via mutable flags.
+// Drive useAuthMe via mutable flags. `viewing` is an admin's view-as: then
+// isAdmin is false and eventRoles are the viewed role's, as useAuthMe makes them.
 let isAdmin = false;
+let viewing: { role: "coordinator" | "dj" | "event-manager" | "dancer"; eventId: string } | null = null;
 let eventRoles: { event_id: string; role: "coordinator" | "dj" | "event-manager" }[] = [];
 vi.mock("@/hooks/useAuthMe", () => ({
   useAuthMe: () => ({
@@ -38,8 +40,10 @@ vi.mock("@/hooks/useAuthMe", () => ({
       : null,
     loading: false,
     reload: vi.fn(),
-    isAdmin,
+    isAdmin: isAdmin && !viewing,
     eventRoles: signedIn ? eventRoles : [],
+    realIsAdmin: isAdmin,
+    viewAs: isAdmin ? viewing : null,
   }),
 }));
 
@@ -53,6 +57,12 @@ afterEach(() => {
   eventRoles = [];
   staffEvents = [];
   eventsList = [];
+  viewing = null;
+  try {
+    sessionStorage.clear();
+  } catch {
+    // jsdom always has it.
+  }
 });
 
 // The events list, which the admin view-as strip picks from.
@@ -71,10 +81,16 @@ vi.mock("@/hooks/useApiVersion", () => ({
 
 import NavBar from "./NavBar";
 
+// Prints where the router is, so a test can see where a view-as landed.
+function Where() {
+  return <output data-testid="where">{useLocation().pathname}</output>;
+}
+
 function renderNav(path = "/") {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <NavBar />
+      <Where />
     </MemoryRouter>
   );
 }
@@ -177,84 +193,79 @@ describe("NavBar — admin view as", () => {
     { id: "open", name: "The Open", status: "upcoming", start_date: "2026-11-26" },
     { id: "dcsx", name: "DCSX", status: "upcoming", start_date: "2026-11-19" },
   ];
+  const stored = () => JSON.parse(sessionStorage.getItem("deejaytools.viewAs") ?? "null") as unknown;
 
-  it("offers each staff role's version of an admin page, on the soonest event to start", async () => {
+  it("offers every role, and dancer, on the soonest event from a page about none", () => {
+    signedIn = true;
+    isAdmin = true;
+    eventsList = events;
+    renderNav("/my-content");
+    const row = screen.getByRole("navigation", { name: "View as" });
+    expect(within(row).getByRole("combobox", { name: "Event to view" })).toHaveValue("dcsx");
+    for (const name of ["Coordinator", "DJ", "Event manager", "Dancer"]) {
+      expect(within(row).getByRole("button", { name })).toBeInTheDocument();
+    }
+  });
+
+  it("starts a view from an admin page on that page's staff version, for the chosen event", async () => {
     signedIn = true;
     isAdmin = true;
     eventsList = events;
     const user = userEvent.setup();
     renderNav("/admin/registrations");
-
-    const strip = screen.getByRole("navigation", { name: "View as" });
-    expect(within(strip).getByRole("combobox", { name: "Event to view" })).toHaveValue("dcsx");
-    expect(within(strip).getByRole("link", { name: "Coordinator" })).toHaveAttribute(
-      "href",
-      "/events/dcsx/coordinator/registrations"
-    );
-    expect(within(strip).getByRole("link", { name: "DJ" })).toHaveAttribute("href", "/events/dcsx/dj/registrations");
-    expect(within(strip).getByRole("link", { name: "Event manager" })).toHaveAttribute(
-      "href",
-      "/events/dcsx/manage/registrations"
-    );
-
-    await user.selectOptions(within(strip).getByRole("combobox", { name: "Event to view" }), "open");
-    expect(within(strip).getByRole("link", { name: "DJ" })).toHaveAttribute("href", "/events/open/dj/registrations");
+    const row = screen.getByRole("navigation", { name: "View as" });
+    await user.selectOptions(within(row).getByRole("combobox", { name: "Event to view" }), "open");
+    await user.click(within(row).getByRole("button", { name: "DJ" }));
+    expect(stored()).toEqual({ role: "dj", eventId: "open" });
+    expect(screen.getByTestId("where")).toHaveTextContent("/events/open/dj/registrations");
   });
 
-  it("offers only the roles that have the page", () => {
+  it("uses the event a page is about, and keeps a portal's section where the role has it", async () => {
     signedIn = true;
     isAdmin = true;
     eventsList = events;
-    renderNav("/manager/active-sessions");
-    const strip = screen.getByRole("navigation", { name: "View as" });
-    expect(within(strip).queryByRole("link", { name: "Coordinator" })).toBeNull();
-    expect(within(strip).getByRole("link", { name: "DJ" })).toHaveAttribute("href", "/events/dcsx/dj/queue");
-  });
-
-  it("on an event's page, offers that event as each staff role", () => {
-    signedIn = true;
-    isAdmin = true;
-    renderNav("/events/open");
+    const user = userEvent.setup();
+    renderNav("/events/open/manage/registrations");
     const row = screen.getByRole("navigation", { name: "View as" });
-    expect(within(row).getByText("View this event as")).toBeInTheDocument();
-    expect(within(row).queryByRole("combobox")).toBeNull();
-    expect(within(row).getByRole("link", { name: "Coordinator" })).toHaveAttribute("href", "/events/open/coordinator");
-    expect(within(row).getByRole("link", { name: "Event manager" })).toHaveAttribute("href", "/events/open/manage");
+    expect(within(row).getByRole("combobox", { name: "Event to view" })).toHaveValue("open");
+    await user.click(within(row).getByRole("button", { name: "Coordinator" }));
+    expect(stored()).toEqual({ role: "coordinator", eventId: "open" });
+    expect(screen.getByTestId("where")).toHaveTextContent("/events/open/coordinator/registrations");
   });
 
-  it("in a portal, marks the role being viewed and keeps the same section where the role has it", () => {
+  it("while viewing, shows the banner instead of the Admin bar, switches role, and exits", async () => {
     signedIn = true;
     isAdmin = true;
-    renderNav("/events/open/dj/registrations");
-    const row = screen.getByRole("navigation", { name: "View as" });
-    expect(within(row).getByText(/Viewing as DJ/)).toBeInTheDocument();
-    expect(within(row).getByRole("link", { name: "DJ" })).toHaveAttribute("aria-current", "page");
-    expect(within(row).getByRole("link", { name: "Coordinator" })).toHaveAttribute(
-      "href",
-      "/events/open/coordinator/registrations"
-    );
-  });
-
-  it("from a section another role lacks, opens that role's portal", () => {
-    signedIn = true;
-    isAdmin = true;
-    renderNav("/events/open/manage/queue");
-    const row = screen.getByRole("navigation", { name: "View as" });
-    expect(within(row).getByRole("link", { name: "Coordinator" })).toHaveAttribute("href", "/events/open/coordinator");
-    expect(within(row).getByRole("link", { name: "DJ" })).toHaveAttribute("href", "/events/open/dj/queue");
-  });
-
-  it("shows nothing on an admin page with no staff version, or to anyone but an admin", () => {
-    signedIn = true;
-    isAdmin = true;
+    viewing = { role: "dj", eventId: "open" };
+    eventRoles = [{ event_id: "open", role: "dj" }];
+    staffEvents = [{ eventId: "open", role: "dj", event: { name: "The Open" } }];
     eventsList = events;
-    const { unmount } = renderNav("/admin/users");
+    const user = userEvent.setup();
+    renderNav("/events/open/dj/queue");
+
+    const banner = screen.getByRole("region", { name: "Viewing as" });
+    expect(within(banner).getByText("Viewing as DJ · The Open")).toBeInTheDocument();
+    // The menus are the DJ's: their staff bar, and no Admin bar or picker.
+    expect(screen.queryByRole("navigation", { name: "Admin" })).toBeNull();
     expect(screen.queryByRole("navigation", { name: "View as" })).toBeNull();
-    unmount();
+    expect(within(screen.getByRole("navigation", { name: "Event staff" })).getByRole("link", { name: "Live queue" })).toBeInTheDocument();
 
+    // The queue is not a coordinator section: that role opens its portal.
+    await user.click(within(banner).getByRole("button", { name: "Coordinator" }));
+    expect(stored()).toEqual({ role: "coordinator", eventId: "open" });
+    expect(screen.getByTestId("where")).toHaveTextContent("/events/open/coordinator");
+
+    await user.click(within(banner).getByRole("button", { name: "Exit view" }));
+    expect(stored()).toBeNull();
+  });
+
+  it("shows neither picker nor banner to anyone but an admin", () => {
+    signedIn = true;
     isAdmin = false;
-    renderNav("/admin/registrations");
+    eventsList = events;
+    renderNav("/events/open");
     expect(screen.queryByRole("navigation", { name: "View as" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Viewing as" })).toBeNull();
   });
 });
 

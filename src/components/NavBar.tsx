@@ -1,6 +1,6 @@
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/clerk-react";
 import { useEffect, useRef, useState } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointQuery } from "@/api/queries";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,8 @@ import { useApiVersion } from "@/hooks/useApiVersion";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import { useStaffEvents } from "@/hooks/useStaffEvents";
 import { EVENT_ROLE_LABELS, eventPortalPath } from "@/lib/eventRoles";
-import { eventViewAs, hasStaffVersion, viewAsLinks } from "@/lib/adminViewAs";
+import { eventOfPath, viewAsDestination } from "@/lib/adminViewAs";
+import { setViewAs, VIEW_AS_ROLES, type ViewAs, type ViewAsRole } from "@/lib/viewAs";
 import { defaultEventId } from "@/lib/eventDates";
 import { PORTAL_SECTION_LINKS } from "@/lib/portalSectionLinks";
 import pkg from "../../package.json";
@@ -46,7 +47,7 @@ type StaffGroup = { key: string; role: string; event: string; links: NavItem[] }
 const buildSha = import.meta.env.VITE_COMMIT_SHA ?? "";
 
 export default function NavBar() {
-  const { isAdmin, eventRoles } = useAuthMe();
+  const { isAdmin, eventRoles, realIsAdmin, viewAs } = useAuthMe();
   // One entry per event the caller is on the staff of, opening the portal
   // of their richest role there.
   const { items: staffEvents } = useStaffEvents(eventRoles);
@@ -110,6 +111,7 @@ export default function NavBar() {
 
   return (
     <header className="border-b border-white/[0.07] bg-black/50 backdrop-blur-md sticky top-0 z-40">
+      <SignedIn>{realIsAdmin && viewAs && <ViewAsBanner view={viewAs} />}</SignedIn>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
         <a href="/" className="flex items-center gap-2 shrink-0 group">
           <picture>
@@ -257,7 +259,7 @@ export default function NavBar() {
             </div>
           </nav>
         )}
-        {isAdmin && <AdminViewAs />}
+        {isAdmin && <ViewAsPicker />}
       </SignedIn>
 
       {/* Mobile menu — in the DOM while closed too, so the toggle's aria-controls always points at it */}
@@ -323,61 +325,49 @@ export default function NavBar() {
   );
 }
 
-/**
- * Under the Admin bar, the admin-only view-as row. On an event's page or in
- * one of its portals: that event as each staff role sees it. On an admin page
- * that has a staff version: the same page as each staff role that has it sees
- * it, on an event picked here (the soonest not yet over, to start). Nothing
- * on other pages.
- */
-function AdminViewAs() {
+const VIEW_AS_LABELS: Record<ViewAsRole, string> = { ...EVENT_ROLE_LABELS, dancer: "Dancer" };
+
+/** Start or switch a view-as, landing on the page that role would see in place of this one. */
+function useStartViewAs() {
   const { pathname } = useLocation();
-  const onEvent = eventViewAs(pathname);
-  if (onEvent) return <EventViewAsRow view={onEvent} />;
-  return <AdminPageViewAs pathname={pathname} />;
+  const navigate = useNavigate();
+  return (view: ViewAs) => {
+    setViewAs(view);
+    const to = viewAsDestination(pathname, view);
+    if (to !== pathname) navigate(to);
+  };
 }
 
-const VIEW_AS_LINK_CLASS = ({ isActive }: { isActive: boolean }) =>
-  cn(
-    "rounded-full px-3 py-1 whitespace-nowrap transition-colors",
-    isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
-  );
+/**
+ * Admins only, under the Admin bar: view the whole site (menus, bars, pages)
+ * as one of an event's staff roles, or as a dancer. The event is the one this
+ * page is about, else the soonest not yet over, and can be changed here.
+ */
+function ViewAsPicker() {
+  const { pathname } = useLocation();
+  const start = useStartViewAs();
+  const eventsQuery = useEndpointQuery(endpoints.events.list);
+  const events = eventsQuery.data ?? [];
+  const [picked, setPicked] = useState("");
+  const fromPath = eventOfPath(pathname);
+  const eventId = [picked, fromPath].find((id) => id && events.some((e) => e.id === id)) ?? defaultEventId(events);
+  if (!eventId) return null;
 
-function EventViewAsRow({ view }: { view: NonNullable<ReturnType<typeof eventViewAs>> }) {
   return (
     <nav aria-label="View as" className="hidden sm:block border-t border-white/[0.07] bg-black/10">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 min-h-10 py-1 flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-muted-foreground whitespace-nowrap">
-          {view.current ? `Viewing as ${EVENT_ROLE_LABELS[view.current]} · view this event as` : "View this event as"}
-        </span>
-        {view.links.map((l) => (
-          <NavLink
-            key={l.role}
-            to={l.to}
-            aria-current={l.role === view.current ? "page" : undefined}
-            className={() => VIEW_AS_LINK_CLASS({ isActive: l.role === view.current })}
+        <span className="text-muted-foreground whitespace-nowrap">View the site as</span>
+        {VIEW_AS_ROLES.map((role) => (
+          <button
+            key={role}
+            type="button"
+            className="rounded-full px-3 py-1 whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground"
+            onClick={() => start({ role, eventId })}
           >
-            {EVENT_ROLE_LABELS[l.role]}
-          </NavLink>
+            {VIEW_AS_LABELS[role]}
+          </button>
         ))}
-      </div>
-    </nav>
-  );
-}
-
-function AdminPageViewAs({ pathname }: { pathname: string }) {
-  const applies = hasStaffVersion(pathname);
-  const eventsQuery = useEndpointQuery(endpoints.events.list, { enabled: applies });
-  const events = eventsQuery.data ?? [];
-  const [picked, setPicked] = useState("");
-  const eventId = events.some((e) => e.id === picked) ? picked : defaultEventId(events);
-  if (!applies || !eventId) return null;
-  const links = viewAsLinks(pathname, eventId);
-
-  return (
-    <nav aria-label="View as" className="hidden sm:block border-t border-white/[0.07] bg-black/10">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-10 flex items-center gap-2 overflow-x-auto text-sm">
-        <span className="text-muted-foreground whitespace-nowrap">View this page as</span>
+        <span className="text-muted-foreground whitespace-nowrap">at</span>
         <select
           aria-label="Event to view"
           className="rounded-md border border-white/10 bg-background px-2 py-1 text-sm"
@@ -392,12 +382,42 @@ function AdminPageViewAs({ pathname }: { pathname: string }) {
               </option>
             ))}
         </select>
-        {links.map((l) => (
-          <NavLink key={l.role} to={l.to} className={() => VIEW_AS_LINK_CLASS({ isActive: false })}>
-            {EVENT_ROLE_LABELS[l.role]}
-          </NavLink>
-        ))}
       </div>
     </nav>
+  );
+}
+
+/**
+ * Admins only, while viewing as someone else: always on top, on every page
+ * and on phones too, so the way back is never hidden. Switches role in place
+ * or exits.
+ */
+function ViewAsBanner({ view }: { view: ViewAs }) {
+  const start = useStartViewAs();
+  const eventsQuery = useEndpointQuery(endpoints.events.list);
+  const eventName = eventsQuery.data?.find((e) => e.id === view.eventId)?.name ?? "Event";
+
+  return (
+    <div role="region" aria-label="Viewing as" className="border-b border-amber-500/30 bg-amber-500/15">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 min-h-9 py-1 flex flex-wrap items-center gap-2 text-sm">
+        <span className="font-medium text-amber-200">
+          Viewing as {VIEW_AS_LABELS[view.role]} · {eventName}
+        </span>
+        <span className="text-amber-200/70">switch to</span>
+        {VIEW_AS_ROLES.filter((r) => r !== view.role).map((role) => (
+          <button
+            key={role}
+            type="button"
+            className="rounded-full px-2 py-0.5 text-amber-100/80 hover:text-amber-50"
+            onClick={() => start({ role, eventId: view.eventId })}
+          >
+            {VIEW_AS_LABELS[role]}
+          </button>
+        ))}
+        <Button size="sm" variant="outline" className="ml-auto h-7 border-amber-400/50 text-amber-100" onClick={() => setViewAs(null)}>
+          Exit view
+        </Button>
+      </div>
+    </div>
   );
 }
