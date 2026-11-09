@@ -1,3 +1,10 @@
+# [2.30.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.29.0...v2.30.0) (2026-11-09)
+
+
+### Features
+
+* **nav:** main, event staff and admin bars, with view-as from admin pages to each staff role's version ([747f0a2](https://github.com/mini-app-polis/deejaytools-com/commit/747f0a2dd2195d18ab30ac6cb4129a45526daded))
+
 # [2.29.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.28.3...v2.29.0) (2026-11-09)
 
 
