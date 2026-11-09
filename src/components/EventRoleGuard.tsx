@@ -8,8 +8,9 @@ import type { EventStaffRole } from "@/schemas";
 /**
  * Gate around a per-event staff portal. Renders the route only when the
  * caller holds `role`, or a richer one, on the event in the `:eventId`
- * path segment; anyone else is sent to the landing page, as AdminGuard
- * does. The global admin role does not count: admins have the admin pages.
+ * path segment, or is an admin, who may open any event's portals to see
+ * them as that role would; anyone else is sent to the landing page, as
+ * AdminGuard does.
  *
  * This only decides what the app shows. The API authorizes every call the
  * portal makes on its own, against the same event.
@@ -22,7 +23,7 @@ export default function EventRoleGuard({
   children: React.ReactNode;
 }) {
   const { eventId } = useParams<{ eventId: string }>();
-  const { me, loading, eventRoles, error, reload } = useAuthMe();
+  const { me, loading, isAdmin, eventRoles, error, reload } = useAuthMe();
 
   if (loading) {
     return (
@@ -37,7 +38,7 @@ export default function EventRoleGuard({
     return <AuthMeError message={error} onRetry={() => void reload()} />;
   }
 
-  if (!me || !eventId || !holdsEventRole(eventRoles, eventId, role)) {
+  if (!me || !eventId || !(isAdmin || holdsEventRole(eventRoles, eventId, role))) {
     return <Navigate to="/" replace />;
   }
 

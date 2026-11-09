@@ -4,13 +4,23 @@ import EventDetailsSection from "@/components/staff/EventDetailsSection";
 import EventSessionsSection from "@/components/staff/EventSessionsSection";
 import EventStaffSection from "@/components/staff/EventStaffSection";
 import EventSubmissionsSection from "@/components/staff/EventSubmissionsSection";
+import RegistrationsPanel from "@/components/registrations/RegistrationsPanel";
 import LiveQueueSection from "@/components/staff/LiveQueueSection";
 import RunHistorySection from "@/components/staff/RunHistorySection";
 import UploadForSection from "@/components/staff/UploadForSection";
 import type { PortalSection } from "@/components/staff/StaffPortal";
 
-/** The coordinator portal: the event's entries, read-only. */
+/**
+ * The coordinator portal: the event's entries, read-only, and its
+ * registration list, which the coordinator keeps (the admin's notes on it
+ * stay with the admin).
+ */
 export const COORDINATOR_SECTIONS: PortalSection[] = [
+  {
+    slug: "registrations",
+    label: "Registrations",
+    render: (event) => <RegistrationsPanel event={event} showNotes={false} />,
+  },
   { slug: "submissions", label: "Submissions", render: (event) => <EventSubmissionsSection event={event} /> },
 ];
 

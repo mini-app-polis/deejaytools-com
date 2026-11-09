@@ -2002,11 +2002,11 @@ describe("AdminPage — Registrations section", () => {
     routeGets({
       "/v1/events": [EV_DONE, OPEN],
       "/v1/divisions": divisions,
-      "/v1/admin/events/open/registrations": [
+      "/v1/events/open/registrations": [
         reg({ id: "r1" }),
         reg({ id: "r2", position: 1, dancer_1: "Cy Dee", dancer_2: "Eve Eff" }),
       ],
-      "/v1/admin/event-song-submissions": [
+      "/v1/events/open/song-submissions": [
         fx.adminEventSongSubmission({ id: "s1", event_id: "open", division: "Classic", partnership_label: "Ada Lovelace & Bob Jones", song_label: "Ada Lovelace & Bob Jones Classic" }),
         fx.adminEventSongSubmission({ id: "s2", event_id: "open", division: "Showcase", partnership_label: "Gee Aitch", song_label: "Gee Aitch Showcase" }),
       ],
@@ -2019,12 +2019,12 @@ describe("AdminPage — Registrations section", () => {
     expect(
       screen.getByText((_, el) => el?.tagName === "P" && /^1 of 2 entries need attention/.test(el.textContent ?? ""))
     ).toBeInTheDocument();
-    expect(apiGet.mock.calls.map(([p]) => p)).toContain("/v1/admin/event-song-submissions?event_id=open");
+    expect(apiGet.mock.calls.map(([p]) => p)).toContain("/v1/events/open/song-submissions");
   });
 
   it("imports a pasted list for the event", async () => {
     const user = userEvent.setup();
-    routeGets({ "/v1/events": [OPEN], "/v1/divisions": divisions, "/v1/admin/events/open/registrations": [] });
+    routeGets({ "/v1/events": [OPEN], "/v1/divisions": divisions, "/v1/events/open/registrations": [] });
     apiPut.mockResolvedValue([reg({})]);
     renderPage("/admin/registrations");
 
@@ -2034,7 +2034,7 @@ describe("AdminPage — Registrations section", () => {
     await user.click(screen.getByRole("button", { name: "Import 1" }));
 
     await waitFor(() =>
-      expect(apiPut).toHaveBeenCalledWith("/v1/admin/events/open/registrations", {
+      expect(apiPut).toHaveBeenCalledWith("/v1/events/open/registrations", {
         entries: [{ division: "Classic (NASDE)", dancer_1: "Ada Lovelace", dancer_2: "Bob Jones" }],
       })
     );
@@ -2045,11 +2045,11 @@ describe("AdminPage — Registrations section", () => {
     routeGets({
       "/v1/events": [OPEN],
       "/v1/divisions": divisions,
-      "/v1/admin/events/open/registrations": [
+      "/v1/events/open/registrations": [
         reg({ id: "r1" }),
         reg({ id: "r2", position: 1, dancer_1: "Cy Dee", dancer_2: "Eve Eff" }),
       ],
-      "/v1/admin/event-song-submissions": [
+      "/v1/events/open/song-submissions": [
         fx.adminEventSongSubmission({ id: "s1", event_id: "open", division: "Classic", partnership_label: "Ada Lovelace & Bob Jones", song_label: "Ada Song", round: "prelims_only" }),
         fx.adminEventSongSubmission({ id: "s2", event_id: "open", division: "Showcase", partnership_label: "Cy Dee & Eve Eff", song_label: "Cy Song" }),
       ],
@@ -2082,8 +2082,8 @@ describe("AdminPage — Registrations section", () => {
     routeGets({
       "/v1/events": [past],
       "/v1/divisions": divisions,
-      "/v1/admin/events/old/registrations": [reg({ event_id: "old", dancer_1: "Cy Dee", dancer_2: "Eve Eff" })],
-      "/v1/admin/event-song-submissions": [
+      "/v1/events/old/registrations": [reg({ event_id: "old", dancer_1: "Cy Dee", dancer_2: "Eve Eff" })],
+      "/v1/events/old/song-submissions": [
         fx.adminEventSongSubmission({ id: "s1", event_id: "old", division: "Showcase", partnership_label: "Aaa Zed" }),
         fx.adminEventSongSubmission({ id: "s2", event_id: "old", division: "Showcase", partnership_label: "Cy Dee & Eve Eff" }),
       ],
@@ -2101,7 +2101,7 @@ describe("AdminPage — Registrations section", () => {
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
-      expect(apiPatch).toHaveBeenCalledWith("/v1/admin/event-registrations/r1", {
+      expect(apiPatch).toHaveBeenCalledWith("/v1/events/old/registrations/r1", {
         linked_label: "Cy Dee & Eve Eff",
         handled: false,
         note: "solo upload",
@@ -2116,7 +2116,7 @@ describe("AdminPage — Registrations section", () => {
     routeGets({
       "/v1/events": [OPEN],
       "/v1/divisions": divisions,
-      "/v1/admin/events/open/registrations": () => {
+      "/v1/events/open/registrations": () => {
         if (fail) throw new Error("boom");
         return [];
       },
@@ -2140,8 +2140,8 @@ describe("AdminPage — Registrations section", () => {
     routeGets({
       "/v1/events": [OPEN],
       "/v1/divisions": divisions,
-      "/v1/admin/events/open/registrations": [reg({})],
-      "/v1/admin/event-song-submissions": [],
+      "/v1/events/open/registrations": [reg({})],
+      "/v1/events/open/song-submissions": [],
     });
     apiPatch.mockResolvedValue(reg({ handled: true }));
     renderPage("/admin/registrations");
@@ -2153,7 +2153,7 @@ describe("AdminPage — Registrations section", () => {
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
-      expect(apiPatch).toHaveBeenCalledWith("/v1/admin/event-registrations/r1", {
+      expect(apiPatch).toHaveBeenCalledWith("/v1/events/open/registrations/r1", {
         linked_label: null,
         handled: true,
         note: null,
@@ -2166,8 +2166,8 @@ describe("AdminPage — Registrations section", () => {
     routeGets({
       "/v1/events": [OPEN],
       "/v1/divisions": divisions,
-      "/v1/admin/events/open/registrations": [reg({})],
-      "/v1/admin/event-song-submissions": [
+      "/v1/events/open/registrations": [reg({})],
+      "/v1/events/open/song-submissions": [
         fx.adminEventSongSubmission({ id: "s1", event_id: "open", division: "Classic", partnership_label: "Ada Lovelace & Bob Jones", song_label: "Ada Song" }),
       ],
     });
@@ -2181,7 +2181,7 @@ describe("AdminPage — Registrations section", () => {
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
-      expect(apiPatch).toHaveBeenCalledWith("/v1/admin/event-registrations/r1", {
+      expect(apiPatch).toHaveBeenCalledWith("/v1/events/open/registrations/r1", {
         linked_label: null,
         handled: false,
         note: null,
@@ -2195,8 +2195,8 @@ describe("AdminPage — Registrations section", () => {
     routeGets({
       "/v1/events": [OPEN],
       "/v1/divisions": divisions,
-      "/v1/admin/events/open/registrations": [reg({ scratched: true, hidden_submission_ids: [] })],
-      "/v1/admin/event-song-submissions": [
+      "/v1/events/open/registrations": [reg({ scratched: true, hidden_submission_ids: [] })],
+      "/v1/events/open/song-submissions": [
         fx.adminEventSongSubmission({ id: "s1", event_id: "open", division: "Classic", partnership_label: "Ada Lovelace & Bob Jones", song_label: "Ada Song" }),
       ],
     });

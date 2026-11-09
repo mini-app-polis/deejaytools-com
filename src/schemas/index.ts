@@ -667,6 +667,13 @@ export const putEventRegistrationsBodySchema = z.object({
     .max(2000),
 });
 
+/** POST /v1/events/:id/registrations: one entry added at the end of the list. */
+export const addEventRegistrationBodySchema = z.object({
+  division: z.string().trim().min(1).max(200),
+  dancer_1: z.string().trim().min(1).max(200),
+  dancer_2: z.string().trim().max(200).optional(),
+});
+
 /** PATCH /v1/admin/event-registrations/:id: the admin's marks; unsent fields stay. */
 export const patchEventRegistrationBodySchema = z.object({
   linked_label: z.string().trim().max(200).nullable().optional(),

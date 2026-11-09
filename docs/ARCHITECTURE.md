@@ -82,7 +82,7 @@ One default-export component per route. Pages orchestrate fetching, local state,
 | `AdminPage.tsx` | `/admin/:section` |
 | `ManagerPage.tsx` | `/manager/:section` |
 | `MyEventsPage.tsx` | `/my-events` — the events the caller is on the staff of |
-| `CoordinatorPortalPage.tsx` | `/events/:eventId/coordinator` |
+| `CoordinatorPortalPage.tsx` | `/events/:eventId/coordinator/:section` |
 | `DjPortalPage.tsx` | `/events/:eventId/dj/:section` |
 | `EventManagerPortalPage.tsx` | `/events/:eventId/manage/:section` |
 
@@ -100,7 +100,8 @@ One default-export component per route. Pages orchestrate fetching, local state,
 | `MaintenancePage.tsx` | Replaces the whole app when the build has `VITE_MAINTENANCE=1` |
 | `EventRoleGuard.tsx` | Requires a staff role, or a richer one, on the event in `:eventId` |
 | `admin/` | Admin dashboard sections that `AdminPage` renders, each owning its state, forms and queries (`AdminEventsSection` with its `AdminEventManagersDialog`, `AdminSessionsSection` with its `AdminSessionDialog`, `AdminRunsSection`, `AdminSongsSection`, `AdminRegistrationsSection`, `AdminTestCheckinSection`, `AdminUsersSection`), and `adminShared.tsx` for the status badges and time formatting the sections share |
-| `staff/` | Per-event staff portals: `StaffPortal` (shell + section tabs), `portalSections.tsx` (which sections each portal has) and one component per section |
+| `staff/` | Per-event staff portals: `StaffPortal` (shell + section tabs, and admins' "View as" switcher), `portalSections.tsx` (which sections each portal has) and one component per section |
+| `registrations/` | `RegistrationsPanel`: one event's registration list against its submissions (import, add, remove, link, handled, scratched), for the admin Registrations section and every staff portal's Registrations tab |
 | `SongUploadForm.tsx` | Chunked upload form (self + managed variants) |
 | `SpecialUploadForm.tsx` | Portal-specific upload (Teams/Cabaret/etc.) |
 | `SessionInfoHeader.tsx` | Session title + metadata block |
@@ -292,7 +293,7 @@ Defined in `pages/App.tsx`. Pattern: public landing **outside** `Layout`; everyt
 | `/manager` | — | `<Navigate to="/manager/active-sessions">` | |
 | `/manager/:section` | `AdminGuard` | `ManagerPage` | |
 | `/my-events` | `RequireAuth` | `MyEventsPage` | The caller's staff events, each linking to its portal |
-| `/events/:eventId/coordinator` | `EventRoleGuard` (coordinator) | `CoordinatorPortalPage` | |
+| `/events/:eventId/coordinator`, `/events/:eventId/coordinator/:section` | `EventRoleGuard` (coordinator) | `CoordinatorPortalPage` | Bare path lands on the first section |
 | `/events/:eventId/dj`, `/events/:eventId/dj/:section` | `EventRoleGuard` (dj) | `DjPortalPage` | Bare path lands on the first section |
 | `/events/:eventId/manage`, `/events/:eventId/manage/:section` | `EventRoleGuard` (event-manager) | `EventManagerPortalPage` | Bare path lands on the first section |
 
@@ -300,7 +301,7 @@ Defined in `pages/App.tsx`. Pattern: public landing **outside** `Layout`; everyt
 
 - **`RequireAuth`** — `<SignedOut>` → redirect `/`. No role check.
 - **`AdminGuard`** — waits for `useAuthMe().loading`, then requires `isAdmin && me`; else redirect `/`. Shows skeleton while loading, and `AuthMeError` (with a retry) when the record failed to load. It guards the manager area too, which is admin-only: the API's global roles are `user` and `admin`, and staff roles are per event.
-- **`EventRoleGuard`** — same loading and error pattern; requires the role it names, or a richer one (event manager, then DJ, then coordinator), in `eventRoles` for the `:eventId` in the URL. The global admin role does not count. The API checks every portal call again against the same event.
+- **`EventRoleGuard`** — same loading and error pattern; requires the role it names, or a richer one (event manager, then DJ, then coordinator), in `eventRoles` for the `:eventId` in the URL. An admin passes every portal guard, to view any event as each role would: the portal header shows admins a "View as" switcher between the three portals, and the event page links to them. The API still answers an admin as an admin, so the screens hide admin-only fields (a registration's note) by the portal's role, not the caller's. The API checks every portal call again against the same event.
 
 ### Per-event staff portals
 

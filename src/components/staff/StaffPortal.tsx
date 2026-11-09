@@ -7,7 +7,9 @@ import { queryKey } from "@/api/queryKeys";
 import QueryError from "@/components/QueryError";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuthMe } from "@/hooks/useAuthMe";
 import { formatEventDateRange } from "@/lib/eventDates";
+import { EVENT_ROLE_LABELS, eventPortalPath, EVENT_STAFF_ROLES } from "@/lib/eventRoles";
 import { cn } from "@/lib/utils";
 import type { ApiEvent } from "@/schemas";
 
@@ -36,6 +38,7 @@ export default function StaffPortal({
   sections: PortalSection[];
 }) {
   const queryClient = useQueryClient();
+  const { isAdmin } = useAuthMe();
   const { eventId = "", section: rawSection } = useParams<{ eventId: string; section: string }>();
   const eventQuery = useEndpointQuery(endpoints.events.get, { params: { id: eventId } });
   const event = eventQuery.data ?? null;
@@ -65,6 +68,7 @@ export default function StaffPortal({
             {formatEventDateRange(event.start_date, event.end_date)}
           </p>
         )}
+        {isAdmin && <ViewAs eventId={eventId} current={portalSegment} />}
       </div>
 
       {sections.length > 1 && (
@@ -94,5 +98,35 @@ export default function StaffPortal({
         <Skeleton className="h-40 w-full" />
       )}
     </div>
+  );
+}
+
+/**
+ * Admins only: switch between the event's portals, to see each as that role
+ * would. The API still answers as the admin, so the data is the admin's
+ * where a field is admin-only; the screens hide those fields as the role's do.
+ */
+function ViewAs({ eventId, current }: { eventId: string; current: string }) {
+  return (
+    <nav aria-label="View as" className="flex flex-wrap items-center gap-1 pt-1 text-sm">
+      <span className="text-muted-foreground mr-1">Viewing as admin · view as</span>
+      {EVENT_STAFF_ROLES.map((role) => {
+        const to = eventPortalPath(eventId, role);
+        const active = to.endsWith(`/${current}`);
+        return (
+          <NavLink
+            key={role}
+            to={to}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "rounded-full px-3 py-1 transition-colors",
+              active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {EVENT_ROLE_LABELS[role]}
+          </NavLink>
+        );
+      })}
+    </nav>
   );
 }
