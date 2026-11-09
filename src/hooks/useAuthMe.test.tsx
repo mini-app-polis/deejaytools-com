@@ -34,6 +34,7 @@ vi.mock("sonner", () => ({
 }));
 
 import { useAuthMe, useAuthMeQuery } from "./useAuthMe";
+import { setViewAs } from "@/lib/viewAs";
 import {
   markAuthSyncPending,
   markAuthSyncSettled,
@@ -168,6 +169,38 @@ describe("useAuthMe", () => {
     await waitFor(() => {
       expect(result.current.isAdmin).toBe(true);
     });
+  });
+
+  it("applies an admin's view-as: that role's event roles, not an admin, until it ends", async () => {
+    useAuthMock.mockReturnValue({ isLoaded: true, isSignedIn: true });
+    apiGet.mockResolvedValue(meRow({ role: "admin", event_roles: [{ event_id: "mine", role: "dj" }] }));
+    const { result } = renderHook(() => useAuthMe());
+    await waitFor(() => expect(result.current.isAdmin).toBe(true));
+
+    act(() => setViewAs({ role: "coordinator", eventId: "open" }));
+    expect(result.current.isAdmin).toBe(false);
+    expect(result.current.realIsAdmin).toBe(true);
+    expect(result.current.eventRoles).toEqual([{ event_id: "open", role: "coordinator" }]);
+    expect(result.current.viewAs).toEqual({ role: "coordinator", eventId: "open" });
+
+    act(() => setViewAs({ role: "dancer", eventId: "open" }));
+    expect(result.current.eventRoles).toEqual([]);
+
+    act(() => setViewAs(null));
+    expect(result.current.isAdmin).toBe(true);
+    expect(result.current.eventRoles).toEqual([{ event_id: "mine", role: "dj" }]);
+  });
+
+  it("ignores a view-as for anyone but an admin", async () => {
+    useAuthMock.mockReturnValue({ isLoaded: true, isSignedIn: true });
+    apiGet.mockResolvedValue(meRow({ event_roles: [] }));
+    act(() => setViewAs({ role: "event-manager", eventId: "open" }));
+    const { result } = renderHook(() => useAuthMe());
+    await waitFor(() => expect(result.current.me).not.toBeNull());
+    expect(result.current.isAdmin).toBe(false);
+    expect(result.current.eventRoles).toEqual([]);
+    expect(result.current.viewAs).toBeNull();
+    act(() => setViewAs(null));
   });
 
   it("ends loading with an error when /v1/auth/me fails, and reload() recovers", async () => {

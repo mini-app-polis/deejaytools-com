@@ -1,12 +1,13 @@
 import { useAuth } from "@clerk/clerk-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import type { ApiAuthMe, ApiEventRole } from "@/schemas";
 import { useApiClient } from "@/api/client";
 import { call, endpoints } from "@/api/endpoints";
 import { queryKey } from "@/api/queryKeys";
 import { waitForAuthSync } from "@/lib/authSyncStatus";
+import { useViewAs, type ViewAs } from "@/lib/viewAs";
 
 /** Re-exported alias so callers can import `AuthMe` from this module. */
 export type AuthMe = ApiAuthMe;
@@ -79,6 +80,10 @@ export function useAuthMeQuery({ enabled = true }: { enabled?: boolean } = {}) {
  * offer `reload()` instead of waiting forever. A mutation that changes the
  * caller's record lists `endpoints.auth.me` in its `invalidates`; `reload()`
  * does the same by hand, and every caller updates.
+ *
+ * An admin viewing the site as a staff role or a dancer (lib/viewAs) gets
+ * that person's `isAdmin` and `eventRoles` here, so every bar, guard and page
+ * shows what they would; `realIsAdmin` and `viewAs` say what is going on.
  */
 export function useAuthMe() {
   const client = useQueryClient();
@@ -89,6 +94,14 @@ export function useAuthMe() {
   }, [client, owner]);
 
   const me = owner !== null ? (data ?? null) : null;
+  const realIsAdmin = me?.role === "admin";
+  const requested = useViewAs();
+  const viewAs: ViewAs | null = realIsAdmin ? requested : null;
+  const realRoles = me?.event_roles ?? NO_EVENT_ROLES;
+  const eventRoles = useMemo<ApiEventRole[]>(() => {
+    if (!viewAs) return realRoles;
+    return viewAs.role === "dancer" ? NO_EVENT_ROLES : [{ event_id: viewAs.eventId, role: viewAs.role }];
+  }, [viewAs, realRoles]);
 
   return {
     me,
@@ -96,8 +109,13 @@ export function useAuthMe() {
     // A retry in flight is not yet a failure.
     error: owner !== null && error && !isFetching ? error.message : null,
     reload,
-    isAdmin: me?.role === "admin",
-    /** The caller's per-event staff roles; empty when none or signed out. */
-    eventRoles: me?.event_roles ?? NO_EVENT_ROLES,
+    /** An admin, and not viewing the site as someone else. */
+    isAdmin: realIsAdmin && viewAs === null,
+    /** The caller's per-event staff roles (or the viewed role); empty when none or signed out. */
+    eventRoles,
+    /** An admin, whatever they are viewing as. */
+    realIsAdmin,
+    /** What an admin is viewing the site as, or null. */
+    viewAs,
   };
 }
