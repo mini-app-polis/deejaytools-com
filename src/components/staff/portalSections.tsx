@@ -10,38 +10,34 @@ import RunHistorySection from "@/components/staff/RunHistorySection";
 import UploadForSection from "@/components/staff/UploadForSection";
 import type { PortalSection } from "@/components/staff/StaffPortal";
 
-/**
- * The coordinator portal: the event's entries, read-only, and its
- * registration list, which the coordinator keeps (the admin's notes on it
- * stay with the admin).
- */
-export const COORDINATOR_SECTIONS: PortalSection[] = [
-  {
-    slug: "registrations",
-    label: "Registrations",
-    render: (event) => <RegistrationsPanel event={event} showNotes={false} />,
-  },
-  { slug: "submissions", label: "Submissions", render: (event) => <EventSubmissionsSection event={event} /> },
-];
+import { PORTAL_SECTION_LINKS } from "@/lib/portalSectionLinks";
+import type { ApiEvent } from "@/schemas";
 
-/** The DJ portal: running the event's floor trials and its music. */
-export const DJ_SECTIONS: PortalSection[] = [
-  { slug: "queue", label: "Live queue", render: (event) => <LiveQueueSection event={event} /> },
-  { slug: "sessions", label: "Sessions", render: (event) => <EventSessionsSection event={event} /> },
-  { slug: "runs", label: "Run history", render: (event) => <RunHistorySection event={event} /> },
-  { slug: "checkin-for", label: "Check in for", render: (event) => <CheckinForSection event={event} /> },
-  { slug: "upload-for", label: "Upload for", render: (event) => <UploadForSection event={event} /> },
-  ...COORDINATOR_SECTIONS,
-  { slug: "drive", label: "Drive folder", render: (event) => <DriveFolderSection event={event} /> },
-];
+/** What each portal section renders, by slug. */
+const RENDER: Record<string, PortalSection["render"]> = {
+  // The registration list, which every staff role keeps; the admin's notes
+  // on it stay with the admin.
+  registrations: (event) => <RegistrationsPanel event={event} showNotes={false} />,
+  submissions: (event) => <EventSubmissionsSection event={event} />,
+  queue: (event) => <LiveQueueSection event={event} />,
+  sessions: (event) => <EventSessionsSection event={event} />,
+  runs: (event) => <RunHistorySection event={event} />,
+  "checkin-for": (event) => <CheckinForSection event={event} />,
+  "upload-for": (event) => <UploadForSection event={event} />,
+  drive: (event) => <DriveFolderSection event={event} />,
+  event: (event: ApiEvent, setEvent) => <EventDetailsSection event={event} onUpdated={setEvent} />,
+  staff: (event) => <EventStaffSection event={event} />,
+};
+
+function sections(role: keyof typeof PORTAL_SECTION_LINKS): PortalSection[] {
+  return PORTAL_SECTION_LINKS[role].map(({ slug, label }) => ({ slug, label, render: RENDER[slug] }));
+}
+
+/** The coordinator portal: the event's registration list, and its entries, read-only. */
+export const COORDINATOR_SECTIONS: PortalSection[] = sections("coordinator");
+
+/** The DJ portal: running the event's floor trials and its music, plus the coordinator's sections. */
+export const DJ_SECTIONS: PortalSection[] = sections("dj");
 
 /** The event-manager portal: everything the DJ has, plus the event itself and its staff. */
-export const EVENT_MANAGER_SECTIONS: PortalSection[] = [
-  ...DJ_SECTIONS,
-  {
-    slug: "event",
-    label: "Event",
-    render: (event, setEvent) => <EventDetailsSection event={event} onUpdated={setEvent} />,
-  },
-  { slug: "staff", label: "Staff", render: (event) => <EventStaffSection event={event} /> },
-];
+export const EVENT_MANAGER_SECTIONS: PortalSection[] = sections("event-manager");

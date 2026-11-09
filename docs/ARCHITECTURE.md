@@ -305,7 +305,9 @@ Defined in `pages/App.tsx`. Pattern: public landing **outside** `Layout`; everyt
 
 ### Per-event staff portals
 
-A person granted a staff role on an event (`event_roles` on `GET /v1/auth/me`) sees **My events** in the nav and an **Event staff** sub-bar, one entry per event, opening the portal of their richest role there. Each portal shows only its event and calls only event-scoped routes, never `/v1/admin/*`:
+The header has up to three bars, plus a strip: the **Main** bar, the same for everyone; the **Event staff** bar, for anyone with a staff role (**My events**, then per event a badge naming the richest role held there, the event's name, and that portal's sections, from `lib/portalSectionLinks.ts`); and the **Admin** bar, admins only, with every `/admin/*` and `/manager/*` page. On an admin page that has a staff version (`lib/adminViewAs.ts`), a **View as** strip under the Admin bar opens that page as each staff role that has it sees it, on an event picked there.
+
+A person granted a staff role on an event (`event_roles` on `GET /v1/auth/me`) reaches its portal of their richest role there from that bar or My events. Each portal shows only its event and calls only event-scoped routes, never `/v1/admin/*`:
 
 - **Coordinator** — the event's submissions (`GET /v1/events/:id/song-submissions`), filterable by division. Read-only.
 - **DJ** — live queue, sessions (create, edit, status, divisions, delete; a status change takes an explicit Apply and cancelling asks first, through `SessionStatusControl`, which the admin Sessions section shares), run history (always filtered to the event), check in and upload for a dancer (uploads send `event_id`), submissions, and where to find the event's Drive folder.

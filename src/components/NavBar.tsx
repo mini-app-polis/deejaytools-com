@@ -1,6 +1,8 @@
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/clerk-react";
 import { useEffect, useRef, useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
+import { endpoints } from "@/api/endpoints";
+import { useEndpointQuery } from "@/api/queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ADMIN_SECTION_LABELS, ADMIN_SECTIONS } from "@/lib/adminSections";
@@ -11,6 +13,9 @@ import { useApiVersion } from "@/hooks/useApiVersion";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import { useStaffEvents } from "@/hooks/useStaffEvents";
 import { EVENT_ROLE_LABELS, eventPortalPath } from "@/lib/eventRoles";
+import { hasStaffVersion, viewAsLinks } from "@/lib/adminViewAs";
+import { defaultEventId } from "@/lib/eventDates";
+import { PORTAL_SECTION_LINKS } from "@/lib/portalSectionLinks";
 import pkg from "../../package.json";
 
 type NavItem = { to: string; label: string };
@@ -25,20 +30,16 @@ const SIGNED_IN_ITEMS: NavItem[] = [
   { to: "/my-profile", label: "My Profile" },
 ];
 
-// The admin sections, shown in the Superuser bar to admins only.
-const SUPERUSER_ITEMS: NavItem[] = ADMIN_SECTIONS.map((s) => ({
-  to: `/admin/${s}`,
-  label: ADMIN_SECTION_LABELS[s],
-}));
+// Every admin page, admin then manager sections, in the Admin bar: admins only.
+const ADMIN_ITEMS: NavItem[] = [
+  ...ADMIN_SECTIONS.map((s) => ({ to: `/admin/${s}`, label: ADMIN_SECTION_LABELS[s] })),
+  ...MANAGER_SECTIONS.map((s) => ({ to: `/manager/${s}`, label: MANAGER_SECTION_LABELS[s] })),
+];
 
-// The manager sections, shown in the Manager bar. Currently admin-only (showManagerBar).
-const MANAGER_ITEMS: NavItem[] = MANAGER_SECTIONS.map((s) => ({
-  to: `/manager/${s}`,
-  label: MANAGER_SECTION_LABELS[s],
-}));
-
-// Shown only to people on the staff of at least one event.
+// First in the Event staff bar: every event the caller is on the staff of.
 const MY_EVENTS_ITEM: NavItem = { to: "/my-events", label: "My events" };
+
+type StaffGroup = { key: string; role: string; event: string; links: NavItem[] };
 
 // Stamped at build time by vite.config.ts. Empty when the sha could not be
 // resolved (no git, no CF_PAGES_COMMIT_SHA), in which case we show the version.
@@ -49,11 +50,16 @@ export default function NavBar() {
   // One entry per event the caller is on the staff of, opening the portal
   // of their richest role there.
   const { items: staffEvents } = useStaffEvents(eventRoles);
-  const isEventStaff = eventRoles.length > 0;
-  const staffEventItems: NavItem[] = staffEvents.map((s) => ({
-    to: eventPortalPath(s.eventId, s.role),
-    label: `${s.event?.name ?? "Event"} · ${EVENT_ROLE_LABELS[s.role]}`,
-  }));
+  // The Event staff bar: per event, the role held there and its portal's sections.
+  const staffGroups: StaffGroup[] = staffEvents.map((s) => {
+    const base = eventPortalPath(s.eventId, s.role);
+    return {
+      key: s.eventId,
+      role: EVENT_ROLE_LABELS[s.role],
+      event: s.event?.name ?? "Event",
+      links: PORTAL_SECTION_LINKS[s.role].map((sec) => ({ to: `${base}/${sec.slug}`, label: sec.label })),
+    };
+  });
   // Dev and preview hosts show the commit instead of the semver version: the
   // version only moves on release, so it cannot identify a dev build.
   const showSha = !isProdHost() && buildSha !== "";
@@ -69,7 +75,6 @@ export default function NavBar() {
     : null;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuToggleRef = useRef<HTMLButtonElement>(null);
-  const showManagerBar = isAdmin;
 
   // Escape closes the open mobile menu and puts focus back on its toggle.
   useEffect(() => {
@@ -165,11 +170,6 @@ export default function NavBar() {
                 {item.label}
               </NavLink>
             ))}
-            {isEventStaff && (
-              <NavLink to={MY_EVENTS_ITEM.to} className={desktopLinkClass}>
-                {MY_EVENTS_ITEM.label}
-              </NavLink>
-            )}
           </SignedIn>
         </nav>
 
@@ -214,33 +214,41 @@ export default function NavBar() {
         </div>
       </div>
 
-      {/* Superuser sub-bar — desktop, admins only */}
+      {/* Event staff bar — desktop: what the caller holds on each event, and its portal's sections */}
+      <SignedIn>
+        {staffGroups.length > 0 && (
+          <nav aria-label="Event staff" className="hidden sm:block border-t border-white/[0.07] bg-black/30">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 h-11 flex items-center gap-1 overflow-x-auto">
+              <NavLink to={MY_EVENTS_ITEM.to} end className={subBarLinkClass}>
+                {MY_EVENTS_ITEM.label}
+              </NavLink>
+              {staffGroups.map((g) => (
+                <div key={g.key} className="flex items-center gap-1 shrink-0 border-l border-white/[0.07] pl-3 ml-2">
+                  <Badge variant="outline" className="shrink-0 border-primary/40 text-primary">
+                    {g.role}
+                  </Badge>
+                  <span className="text-sm text-foreground whitespace-nowrap mx-1">{g.event}</span>
+                  {g.links.map((item) => (
+                    <NavLink key={item.to} to={item.to} className={subBarLinkClass}>
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </nav>
+        )}
+      </SignedIn>
+
+      {/* Admin bar — desktop, admins only: every admin page */}
       <SignedIn>
         {isAdmin && (
-          <nav aria-label="Admin" className="hidden sm:block border-t border-white/[0.07] bg-black/30">
-            <div className="max-w-6xl mx-auto px-4 sm:px-6 h-11 flex items-center gap-1 overflow-x-auto">
-              <Badge variant="outline" className="mr-2 shrink-0 border-primary/40 text-primary">
-                Superuser
-              </Badge>
-              {SUPERUSER_ITEMS.map((item) => (
-                <NavLink key={item.to} to={item.to} className={subBarLinkClass}>
-                  {item.label}
-                </NavLink>
-              ))}
-            </div>
-          </nav>
-        )}
-      </SignedIn>
-
-      {/* Manager sub-bar — desktop, admins */}
-      <SignedIn>
-        {showManagerBar && (
-          <nav aria-label="Manager" className="hidden sm:block border-t border-white/[0.07] bg-black/20">
+          <nav aria-label="Admin" className="hidden sm:block border-t border-white/[0.07] bg-black/20">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 h-11 flex items-center gap-1 overflow-x-auto">
               <Badge variant="secondary" className="mr-2 shrink-0">
-                Manager
+                Admin
               </Badge>
-              {MANAGER_ITEMS.map((item) => (
+              {ADMIN_ITEMS.map((item) => (
                 <NavLink key={item.to} to={item.to} className={subBarLinkClass}>
                   {item.label}
                 </NavLink>
@@ -248,24 +256,7 @@ export default function NavBar() {
             </div>
           </nav>
         )}
-      </SignedIn>
-
-      {/* Event staff sub-bar — desktop, people on the staff of an event */}
-      <SignedIn>
-        {staffEventItems.length > 0 && (
-          <nav aria-label="Event staff" className="hidden sm:block border-t border-white/[0.07] bg-black/20">
-            <div className="max-w-6xl mx-auto px-4 sm:px-6 h-11 flex items-center gap-1 overflow-x-auto">
-              <Badge variant="secondary" className="mr-2 shrink-0">
-                Event staff
-              </Badge>
-              {staffEventItems.map((item) => (
-                <NavLink key={item.to} to={item.to} className={subBarLinkClass}>
-                  {item.label}
-                </NavLink>
-              ))}
-            </div>
-          </nav>
-        )}
+        {isAdmin && <AdminViewAs />}
       </SignedIn>
 
       {/* Mobile menu — in the DOM while closed too, so the toggle's aria-controls always points at it */}
@@ -282,11 +273,6 @@ export default function NavBar() {
                 {item.label}
               </NavLink>
             ))}
-            {isEventStaff && (
-              <NavLink to={MY_EVENTS_ITEM.to} onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
-                {MY_EVENTS_ITEM.label}
-              </NavLink>
-            )}
           </SignedIn>
           <NavLink to="/how-it-works" onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
             Help
@@ -295,36 +281,34 @@ export default function NavBar() {
             Contact
           </NavLink>
           <SignedIn>
-            {staffEventItems.length > 0 && (
+            {staffGroups.length > 0 && (
               <>
                 <div className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                   Event staff
                 </div>
-                {staffEventItems.map((item) => (
-                  <NavLink key={item.to} to={item.to} onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
-                    {item.label}
-                  </NavLink>
-                ))}
-              </>
-            )}
-            {showManagerBar && (
-              <>
-                <div className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Manager
-                </div>
-                {MANAGER_ITEMS.map((item) => (
-                  <NavLink key={item.to} to={item.to} onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
-                    {item.label}
-                  </NavLink>
+                <NavLink to={MY_EVENTS_ITEM.to} end onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
+                  {MY_EVENTS_ITEM.label}
+                </NavLink>
+                {staffGroups.map((g) => (
+                  <div key={g.key} className="flex flex-col gap-1">
+                    <div className="px-4 pt-2 text-xs text-muted-foreground">
+                      {g.role} · {g.event}
+                    </div>
+                    {g.links.map((item) => (
+                      <NavLink key={item.to} to={item.to} onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
+                        {item.label}
+                      </NavLink>
+                    ))}
+                  </div>
                 ))}
               </>
             )}
             {isAdmin && (
               <>
                 <div className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Superuser
+                  Admin
                 </div>
-                {SUPERUSER_ITEMS.map((item) => (
+                {ADMIN_ITEMS.map((item) => (
                   <NavLink key={item.to} to={item.to} onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
                     {item.label}
                   </NavLink>
@@ -335,5 +319,52 @@ export default function NavBar() {
         </div>
       </nav>
     </header>
+  );
+}
+
+/**
+ * Under the Admin bar, on an admin page that has a staff version: the same
+ * page as each staff role that has it sees it, on an event picked here (the
+ * soonest not yet over, to start). Nothing on other pages.
+ */
+function AdminViewAs() {
+  const { pathname } = useLocation();
+  const applies = hasStaffVersion(pathname);
+  const eventsQuery = useEndpointQuery(endpoints.events.list, { enabled: applies });
+  const events = eventsQuery.data ?? [];
+  const [picked, setPicked] = useState("");
+  const eventId = events.some((e) => e.id === picked) ? picked : defaultEventId(events);
+  if (!applies || !eventId) return null;
+  const links = viewAsLinks(pathname, eventId);
+
+  return (
+    <nav aria-label="View as" className="hidden sm:block border-t border-white/[0.07] bg-black/10">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-10 flex items-center gap-2 overflow-x-auto text-sm">
+        <span className="text-muted-foreground whitespace-nowrap">View this page as</span>
+        <select
+          aria-label="Event to view"
+          className="rounded-md border border-white/10 bg-background px-2 py-1 text-sm"
+          value={eventId}
+          onChange={(e) => setPicked(e.target.value)}
+        >
+          {[...events]
+            .sort((a, b) => b.start_date.localeCompare(a.start_date))
+            .map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.name}
+              </option>
+            ))}
+        </select>
+        {links.map((l) => (
+          <NavLink
+            key={l.role}
+            to={l.to}
+            className="rounded-full px-3 py-1 whitespace-nowrap text-muted-foreground hover:text-foreground"
+          >
+            {EVENT_ROLE_LABELS[l.role]}
+          </NavLink>
+        ))}
+      </div>
+    </nav>
   );
 }
