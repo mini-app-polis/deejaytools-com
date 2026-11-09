@@ -1,3 +1,11 @@
+# [2.29.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.28.3...v2.29.0) (2026-11-09)
+
+
+### Features
+
+* **events:** show missing-music counts per division to event staff and lay divisions out in two columns ([ab1888f](https://github.com/mini-app-polis/deejaytools-com/commit/ab1888ffce14aa028ad136903b37896eedef1a26))
+* **staff:** registrations tab in every staff portal and admin view-as for event portals ([bc3ebd4](https://github.com/mini-app-polis/deejaytools-com/commit/bc3ebd402c141fd4daf4c9da6551c248db3c9933))
+
 ## [2.28.3](https://github.com/mini-app-polis/deejaytools-com/compare/v2.28.2...v2.28.3) (2026-11-08)
 
 
