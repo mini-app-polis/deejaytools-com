@@ -115,6 +115,7 @@ describe("App routes", () => {
 
   it.each([
     ["/events/e1/coordinator", "coordinator", "CoordinatorPortalPage"],
+    ["/events/e1/coordinator/registrations", "coordinator", "CoordinatorPortalPage"],
     ["/events/e1/dj", "dj", "DjPortalPage"],
     ["/events/e1/dj/queue", "dj", "DjPortalPage"],
     ["/events/e1/manage", "event-manager", "EventManagerPortalPage"],

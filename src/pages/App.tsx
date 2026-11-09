@@ -167,6 +167,16 @@ export default function App() {
             }
           />
           <Route
+            path="events/:eventId/coordinator/:section"
+            element={
+              <EventRoleGuard role="coordinator">
+                <Lazy>
+                  <CoordinatorPortalPage />
+                </Lazy>
+              </EventRoleGuard>
+            }
+          />
+          <Route
             path="events/:eventId/dj"
             element={
               <EventRoleGuard role="dj">

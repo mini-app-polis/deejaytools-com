@@ -780,6 +780,24 @@ describe("contract", () => {
     const forStaff = await ledger.hit(endpoints.events.registrations, { params: { id: eventId } });
     expect(forStaff).toHaveLength(1);
     expect(forStaff[0]).toMatchObject({ id: imported[0].id, note: "contract suite" });
+    // The event-scoped writes, as an admin: import keeps the marks, then one
+    // entry is added, marked and removed.
+    const reimported = await ledger.hit(endpoints.events.importRegistrations, {
+      params: { id: eventId },
+      body: { entries: [entries[0]] },
+    });
+    expect(reimported[0]).toMatchObject({ id: imported[0].id, note: "contract suite" });
+    const added = await ledger.hit(endpoints.events.addRegistration, {
+      params: { id: eventId },
+      body: { division: "Masters", dancer_1: "Contract Late", dancer_2: "Contract Signup" },
+    });
+    expect(added).toMatchObject({ position: 1, dancer_1: "Contract Late", handled: false });
+    const handled = await ledger.hit(endpoints.events.updateRegistration, {
+      params: { id: eventId, entryId: added.id },
+      body: { handled: true },
+    });
+    expect(handled.handled).toBe(true);
+    await ledger.hit(endpoints.events.removeRegistration, { params: { id: eventId, entryId: added.id } });
     await ledger.hit(endpoints.admin.importEventRegistrations, { params: { eventId }, body: { entries: [] } });
     expect(await ledger.hit(endpoints.admin.eventRegistrations, { params: { eventId } })).toEqual([]);
   });
@@ -836,8 +854,18 @@ describe("contract", () => {
     expect((await call(as, endpoints.auth.me)).event_roles).toContainEqual({ event_id: eventId, role: "coordinator" });
     await call(as, endpoints.events.people, { params: { id: eventId, q: "co" } });
     await call(as, endpoints.events.songSubmissions, { params: { id: eventId } });
-    // A coordinator reads the registration list without the admin's notes.
+    // A coordinator keeps the registration list, without the admin's notes.
     expect((await call(as, endpoints.events.registrations, { params: { id: eventId } })).every((r) => r.note === null)).toBe(true);
+    const added = await call(as, endpoints.events.addRegistration, {
+      params: { id: eventId },
+      body: { division: "Classic", dancer_1: "Contract Coordinator Entry" },
+    });
+    expect(added.note).toBeNull();
+    await call(as, endpoints.events.updateRegistration, { params: { id: eventId, entryId: added.id }, body: { handled: true } });
+    await call(as, endpoints.events.removeRegistration, { params: { id: eventId, entryId: added.id } });
+    await expectForbidden(
+      call(as, endpoints.events.addRegistration, { params: { id: other.id }, body: { division: "Classic", dancer_1: "X" } })
+    );
     await expectForbidden(call(as, endpoints.events.staff, { params: { id: eventId } }));
     await expectForbidden(call(as, endpoints.events.people, { params: { id: other.id, q: "co" } }));
     await expectForbidden(call(as, endpoints.events.songSubmissions, { params: { id: other.id } }));

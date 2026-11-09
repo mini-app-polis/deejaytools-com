@@ -11,6 +11,9 @@ const ROLE_RANK: Record<EventStaffRole, number> = {
   "event-manager": 3,
 };
 
+/** Every staff role, least to richest. */
+export const EVENT_STAFF_ROLES: readonly EventStaffRole[] = ["coordinator", "dj", "event-manager"];
+
 export const EVENT_ROLE_LABELS: Record<EventStaffRole, string> = {
   coordinator: "Coordinator",
   dj: "DJ",

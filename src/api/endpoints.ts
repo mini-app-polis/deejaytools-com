@@ -37,6 +37,7 @@ import {
   createEventSongSubmissionBodySchema,
   createManagedPartnershipBodySchema,
   createTeamBodySchema,
+  addEventRegistrationBodySchema,
   patchEventRegistrationBodySchema,
   putEventRegistrationsBodySchema,
   type EventStaffRole,
@@ -169,6 +170,45 @@ export const endpoints = {
       id: "events.registrations", method: "GET", access: "event-staff",
       path: (p) => `/v1/events/${id(p)}/registrations`,
       response: z.array(ApiEventRegistrationSchema),
+    }),
+    /** Replace the event's registration list (its staff, or an admin). */
+    importRegistrations: endpoint<
+      { id: string },
+      z.input<typeof putEventRegistrationsBodySchema>,
+      z.infer<typeof ApiEventRegistrationSchema>[]
+    >({
+      id: "events.importRegistrations", method: "PUT", access: "event-staff",
+      path: (p) => `/v1/events/${id(p)}/registrations`,
+      request: putEventRegistrationsBodySchema,
+      response: z.array(ApiEventRegistrationSchema),
+    }),
+    /** Add one entry at the end of the event's registration list. */
+    addRegistration: endpoint<
+      { id: string },
+      z.input<typeof addEventRegistrationBodySchema>,
+      z.infer<typeof ApiEventRegistrationSchema>
+    >({
+      id: "events.addRegistration", method: "POST", access: "event-staff",
+      path: (p) => `/v1/events/${id(p)}/registrations`,
+      request: addEventRegistrationBodySchema,
+      response: ApiEventRegistrationSchema,
+    }),
+    /** Mark one entry; only an admin may send `note`. */
+    updateRegistration: endpoint<
+      { id: string; entryId: string },
+      z.input<typeof patchEventRegistrationBodySchema>,
+      z.infer<typeof ApiEventRegistrationSchema>
+    >({
+      id: "events.updateRegistration", method: "PATCH", access: "event-staff",
+      path: (p) => `/v1/events/${id(p)}/registrations/${encodeURIComponent(p.entryId)}`,
+      request: patchEventRegistrationBodySchema,
+      response: ApiEventRegistrationSchema,
+    }),
+    /** Remove one entry from the event's registration list. */
+    removeRegistration: endpoint<{ id: string; entryId: string }, void, { deleted: true }>({
+      id: "events.removeRegistration", method: "DELETE", access: "event-staff",
+      path: (p) => `/v1/events/${id(p)}/registrations/${encodeURIComponent(p.entryId)}`,
+      response: ack("deleted"),
     }),
     staff: endpoint<{ id: string }, void, z.infer<typeof ApiEventStaffSchema>[]>({
       id: "events.staff", method: "GET", access: "event-staff",

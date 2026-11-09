@@ -720,3 +720,42 @@ describe("EventDetailPage — missing music counts", () => {
     expect(screen.queryByText("Masters")).toBeNull();
   });
 });
+
+describe("EventDetailPage — staff portal links", () => {
+  function mockEvent() {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({ name: "Spring Swing" }));
+      return Promise.resolve([]);
+    });
+  }
+
+  it("lets an admin view the event as each staff role", async () => {
+    authMe = { isAdmin: true, eventRoles: [] };
+    mockEvent();
+    renderPage();
+
+    await screen.findByRole("heading", { name: /spring swing/i });
+    expect(screen.getByRole("link", { name: "Coordinator" })).toHaveAttribute("href", "/events/ev-1/coordinator");
+    expect(screen.getByRole("link", { name: "DJ" })).toHaveAttribute("href", "/events/ev-1/dj");
+    expect(screen.getByRole("link", { name: "Event manager" })).toHaveAttribute("href", "/events/ev-1/manage");
+  });
+
+  it("links the event's staff to their own portal", async () => {
+    authMe = { isAdmin: false, eventRoles: [{ event_id: "ev-1", role: "coordinator" }] };
+    mockEvent();
+    renderPage();
+
+    expect(await screen.findByRole("link", { name: /open your coordinator portal/i })).toHaveAttribute(
+      "href",
+      "/events/ev-1/coordinator"
+    );
+  });
+
+  it("shows no portal links to anyone else", async () => {
+    mockEvent();
+    renderPage();
+
+    await screen.findByRole("heading", { name: /spring swing/i });
+    expect(screen.queryByRole("link", { name: /portal|coordinator/i })).toBeNull();
+  });
+});

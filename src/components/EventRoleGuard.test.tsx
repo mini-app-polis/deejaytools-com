@@ -112,10 +112,10 @@ describe("EventRoleGuard", () => {
       expect(screen.getByText("landing page")).toBeInTheDocument();
     });
 
-    it("redirects an admin with no role on the event: admins have the admin pages", () => {
+    it("lets an admin with no role on the event in, to view it as the role", () => {
       signedIn([], "admin");
       renderAt("/events/ev-1/coordinator");
-      expect(screen.getByText("landing page")).toBeInTheDocument();
+      expect(screen.getByText("coordinator portal")).toBeInTheDocument();
     });
   });
 
