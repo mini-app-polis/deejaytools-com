@@ -533,6 +533,13 @@ export const ApiEventDriveFolderSchema = z.object({
 });
 export type ApiEventDriveFolder = z.infer<typeof ApiEventDriveFolderSchema>;
 
+/** One division folder inside the event's Drive folder (GET /v1/events/:id/drive-folder/divisions). */
+export const ApiEventDriveDivisionSchema = z.object({
+  name: z.string(),
+  folder_id: z.string(),
+  url: z.string(),
+});
+
 export const ApiTeamSchema = z.object({
   id: z.string(),
   user_id: z.string(),

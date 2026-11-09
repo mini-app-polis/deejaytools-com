@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -159,13 +159,19 @@ export default function EventStaffSection({ event }: { event: ApiEvent }) {
                         label="Person"
                         value={field.value}
                         onChange={field.onChange}
-                        hint="To add someone new to the event, ask an admin."
+                        hint="Searches people already connected to this event. Someone new? Find them by email below."
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+              {!person && (
+                <EmailLookup
+                  eventId={event.id}
+                  onFound={(found) => form.setValue("person", found, { shouldValidate: true })}
+                />
+              )}
               <FormField
                 control={form.control}
                 name="role"
@@ -192,6 +198,65 @@ export default function EventStaffSection({ event }: { event: ApiEvent }) {
           </Form>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+/**
+ * Someone new to the event, whom the name search cannot find: their account
+ * by its whole email (GET /v1/events/:id/people/by-email). One account or
+ * none; nothing is listed or partly matched.
+ */
+function EmailLookup({ eventId, onFound }: { eventId: string; onFound: (person: ApiEventPerson) => void }) {
+  const [text, setText] = useState("");
+  const [submitted, setSubmitted] = useState("");
+  const lookup = useEndpointQuery(endpoints.events.personByEmail, {
+    params: { id: eventId, email: submitted },
+    enabled: submitted !== "",
+    retry: false,
+  });
+  const found = lookup.data ?? null;
+  useEffect(() => {
+    if (found) onFound(found);
+  }, [found, onFound]);
+  const notFound = (lookup.error as { status?: number } | null)?.status === 404;
+  const valid = /^[^\s@]+@[^\s@]+$/.test(text.trim());
+
+  return (
+    <div className="space-y-1">
+      <label htmlFor="staff-grant-email" className="block text-sm font-medium">
+        Or find someone new by email
+      </label>
+      <div className="flex gap-2">
+        <input
+          id="staff-grant-email"
+          type="email"
+          className="flex-1 rounded-md border border-white/10 bg-background px-3 py-2 text-sm"
+          value={text}
+          placeholder="their.email@example.com"
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              if (valid) setSubmitted(text.trim());
+            }
+          }}
+        />
+        <Button type="button" variant="outline" disabled={!valid || lookup.isFetching} onClick={() => setSubmitted(text.trim())}>
+          {lookup.isFetching ? "Finding…" : "Find"}
+        </Button>
+      </div>
+      {notFound && submitted === text.trim() ? (
+        <p role="status" className="text-xs text-muted-foreground">
+          No deejaytools account has that email. They need to sign in to deejaytools once first.
+        </p>
+      ) : lookup.error && !notFound ? (
+        <p role="alert" className="text-xs text-destructive">
+          {lookup.error.message}
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground">Their whole email, as they sign in to deejaytools.</p>
+      )}
     </div>
   );
 }

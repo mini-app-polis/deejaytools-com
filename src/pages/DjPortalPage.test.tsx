@@ -214,6 +214,39 @@ describe("DjPortalPage", () => {
     expect(screen.queryByText(/season/i)).toBeNull();
   });
 
+  it("lists each division's folder, to open and download in Drive", async () => {
+    const url = "https://drive.google.com/drive/folders/folder_1";
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1/drive-folder") return Promise.resolve({ folder_id: "folder_1", url });
+      if (path === "/v1/events/ev-1/drive-folder/divisions") {
+        return Promise.resolve([
+          { name: "Classic", folder_id: "f_c", url: "https://drive.google.com/drive/folders/f_c" },
+          { name: "Masters", folder_id: "f_m", url: "https://drive.google.com/drive/folders/f_m" },
+        ]);
+      }
+      return routeGet(path);
+    });
+    renderAt("drive");
+    expect(await screen.findByRole("link", { name: /Classic/ })).toHaveAttribute(
+      "href",
+      "https://drive.google.com/drive/folders/f_c"
+    );
+    expect(screen.getByRole("link", { name: /Masters/ })).toHaveAttribute("href", "https://drive.google.com/drive/folders/f_m");
+    expect(screen.getByText(/choose Download from the folder.s menu/)).toBeInTheDocument();
+  });
+
+  it("keeps the event folder link when the division folders cannot be listed", async () => {
+    const url = "https://drive.google.com/drive/folders/folder_1";
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1/drive-folder") return Promise.resolve({ folder_id: "folder_1", url });
+      if (path === "/v1/events/ev-1/drive-folder/divisions") return Promise.reject(new Error("Google Drive did not answer"));
+      return routeGet(path);
+    });
+    renderAt("drive");
+    expect(await screen.findByText(/Couldn.t list the division folders just now/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Open the event's folder/ })).toHaveAttribute("href", url);
+  });
+
   it("points to Shared with me while the folder is not shared yet", async () => {
     apiGet.mockImplementation((path: string) =>
       path === "/v1/events/ev-1/drive-folder" ? Promise.resolve({ folder_id: null, url: null }) : routeGet(path)

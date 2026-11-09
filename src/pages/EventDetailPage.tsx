@@ -295,10 +295,12 @@ function EnteredEntities({
     (t, c) => ({ missing: t.missing + c.missing, possible: t.possible + c.possible }),
     { missing: 0, possible: 0 }
   );
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Divisions start collapsed: the headers' counts are the overview, and a
+  // division opens to its rows.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const toggleDivision = (division: string) =>
-    setCollapsed((prev) => {
+    setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(division)) next.delete(division);
       else next.add(division);
@@ -362,7 +364,7 @@ function EnteredEntities({
           // division does not leave a gap beside a short one.
           <div className={cn("md:columns-2 md:gap-6", loading && "opacity-60")}>
             {divisions.map(({ division, entities }) => {
-              const isCollapsed = collapsed.has(division);
+              const isCollapsed = !expanded.has(division);
               return (
                 <section key={division} className="mb-6 space-y-2 break-inside-avoid">
                   <button

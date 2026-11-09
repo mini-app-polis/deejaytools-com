@@ -815,6 +815,12 @@ describe("contract", () => {
     // Null until a share has recorded the folder; a URL to it after.
     const folder = await ledger.hit(endpoints.events.driveFolder, { params: { id: eventId } });
     expect(folder.url === null || folder.url === `https://drive.google.com/drive/folders/${folder.folder_id}`).toBe(true);
+    // Empty until a share has recorded the folder; its division folders after.
+    const divisions = await ledger.hit(endpoints.events.driveDivisions, { params: { id: eventId } });
+    expect(divisions.every((d) => d.url === `https://drive.google.com/drive/folders/${d.folder_id}`)).toBe(true);
+    // Anyone with an account, by their whole email, for whoever grants staff.
+    const byEmail = await ledger.hit(endpoints.events.personByEmail, { params: { id: eventId, email: me.email ?? "" } });
+    expect(byEmail.user_id).toBe(me.id);
     const granted = await ledger.hit(endpoints.events.grantStaff, { params: { id: eventId, userId: me.id, role: "coordinator" } });
     expect(granted).toMatchObject({ event_id: eventId, user_id: me.id, role: "coordinator" });
     const staff = await ledger.hit(endpoints.events.staff, { params: { id: eventId } });
@@ -867,6 +873,8 @@ describe("contract", () => {
       call(as, endpoints.events.addRegistration, { params: { id: other.id }, body: { division: "Classic", dancer_1: "X" } })
     );
     await expectForbidden(call(as, endpoints.events.staff, { params: { id: eventId } }));
+    await expectForbidden(call(as, endpoints.events.personByEmail, { params: { id: eventId, email: "x@example.com" } }));
+    await expectForbidden(call(as, endpoints.events.driveDivisions, { params: { id: eventId } }));
     await expectForbidden(call(as, endpoints.events.people, { params: { id: other.id, q: "co" } }));
     await expectForbidden(call(as, endpoints.events.songSubmissions, { params: { id: other.id } }));
     await expectForbidden(call(as, endpoints.events.registrations, { params: { id: other.id } }));
