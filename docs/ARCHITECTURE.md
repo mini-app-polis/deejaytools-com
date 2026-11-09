@@ -305,7 +305,7 @@ Defined in `pages/App.tsx`. Pattern: public landing **outside** `Layout`; everyt
 
 ### Per-event staff portals
 
-The header has up to three bars, plus a strip: the **Main** bar, the same for everyone; the **Event staff** bar, for anyone with a staff role (**My events**, then per event a badge naming the richest role held there, the event's name, and that portal's sections, from `lib/portalSectionLinks.ts`); and the **Admin** bar, admins only, with every `/admin/*` and `/manager/*` page. On an admin page that has a staff version (`lib/adminViewAs.ts`), a **View as** strip under the Admin bar opens that page as each staff role that has it sees it, on an event picked there.
+The header has up to three bars, plus a strip: the **Main** bar, the same for everyone; the **Event staff** bar, for anyone with a staff role (**My events**, then per event a badge naming the richest role held there, the event's name, and that portal's sections, from `lib/portalSectionLinks.ts`); and the **Admin** bar, admins only, with every `/admin/*` and `/manager/*` page. Admin-only controls live in the admin rows, never in a page's own content: under the Admin bar (which wraps rather than hiding pages off the edge), a **View as** row (`lib/adminViewAs.ts`) opens, on an event's page or in its portals, that event as each staff role sees it (in a portal, the same section where the role has it), and on an admin page that has a staff version, that page as each staff role that has it sees it, on an event picked there.
 
 A person granted a staff role on an event (`event_roles` on `GET /v1/auth/me`) reaches its portal of their richest role there from that bar or My events. Each portal shows only its event and calls only event-scoped routes, never `/v1/admin/*`:
 

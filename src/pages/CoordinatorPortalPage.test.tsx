@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fx } from "@/test/fixtures";
@@ -146,14 +146,11 @@ describe("CoordinatorPortalPage", () => {
     await waitFor(() => expect(apiDel).toHaveBeenCalledWith("/v1/events/ev-1/registrations/r2"));
   });
 
-  it("offers an admin the other roles' views", async () => {
+  it("keeps the view-as switcher out of the portal itself, for admins too", async () => {
     auth.isAdmin = true;
     renderPortal();
     await screen.findByText("Ada & Bob");
-    const viewAs = screen.getByRole("navigation", { name: "View as" });
-    expect(within(viewAs).getByRole("link", { name: "DJ" })).toHaveAttribute("href", "/events/ev-1/dj");
-    expect(within(viewAs).getByRole("link", { name: "Event manager" })).toHaveAttribute("href", "/events/ev-1/manage");
-    expect(within(viewAs).getByRole("link", { name: "Coordinator" })).toHaveAttribute("aria-current", "page");
+    expect(screen.queryByRole("navigation", { name: "View as" })).toBeNull();
   });
 
   it("shows no view-as switcher to the event's own staff", async () => {

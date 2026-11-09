@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import { useDivisions } from "@/hooks/useDivisions";
 import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
-import { EVENT_ROLE_LABELS, EVENT_STAFF_ROLES, eventPortalPath, richestEventRole } from "@/lib/eventRoles";
+import { EVENT_ROLE_LABELS, eventPortalPath, richestEventRole } from "@/lib/eventRoles";
 import { missingByDivision, reconcileRegistrations, type MissingCount } from "@/lib/eventRegistrations";
 import { countFloorTrials, floorTrialBucket, formatFloorTrials } from "@/lib/floorTrials";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
@@ -175,32 +175,16 @@ function countsLabel(entryCount: number, songCount: number): string {
 }
 
 /**
- * Into the event's staff portals: an admin can open each, to see it as that
- * role would; the event's staff get their own. Nothing for anyone else.
+ * The event's staff get a link to their own portal here. An admin opens any
+ * portal from the view-as row under the Admin bar instead.
  */
 function PortalLinks({ eventId }: { eventId: string }) {
-  const { isAdmin, eventRoles } = useAuthMe();
+  const { eventRoles } = useAuthMe();
   const own = richestEventRole(eventRoles, eventId);
-  const linkClass = "text-primary hover:underline";
-  if (isAdmin) {
-    return (
-      <p className="mt-1 text-sm text-muted-foreground">
-        View as{" "}
-        {EVENT_STAFF_ROLES.map((role, i) => (
-          <span key={role}>
-            {i > 0 && " · "}
-            <Link to={eventPortalPath(eventId, role)} className={linkClass}>
-              {EVENT_ROLE_LABELS[role]}
-            </Link>
-          </span>
-        ))}
-      </p>
-    );
-  }
   if (!own) return null;
   return (
     <p className="mt-1 text-sm">
-      <Link to={eventPortalPath(eventId, own)} className={linkClass}>
+      <Link to={eventPortalPath(eventId, own)} className="text-primary hover:underline">
         Open your {EVENT_ROLE_LABELS[own]} portal →
       </Link>
     </p>

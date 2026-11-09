@@ -38,3 +38,42 @@ export function viewAsLinks(pathname: string, eventId: string): ViewAsLink[] {
 export function hasStaffVersion(pathname: string): boolean {
   return pathname.replace(/\/+$/, "") in STAFF_VERSION;
 }
+
+/** The portal path segment of each staff role, and back. */
+const SEGMENT_ROLE: Record<string, EventStaffRole> = {
+  coordinator: "coordinator",
+  dj: "dj",
+  manage: "event-manager",
+};
+
+export type EventViewAs = {
+  eventId: string;
+  /** The role whose portal is open, when on one. */
+  current: EventStaffRole | null;
+  links: ViewAsLink[];
+};
+
+/**
+ * For an admin on an event's page (`/events/:id`) or in one of its portals
+ * (`/events/:id/<portal>[/<section>]`): that event as each staff role sees
+ * it. From a portal section, a role that has the same section opens it;
+ * one that does not opens its portal. Null on any other page.
+ */
+export function eventViewAs(pathname: string): EventViewAs | null {
+  const path = pathname.replace(/\/+$/, "");
+  const page = /^\/events\/([^/]+)$/.exec(path);
+  const portal = /^\/events\/([^/]+)\/(coordinator|dj|manage)(?:\/([^/]+))?$/.exec(path);
+  if (!page && !portal) return null;
+  const eventId = decodeURIComponent((page ?? portal)![1]);
+  const current = portal ? SEGMENT_ROLE[portal[2]] : null;
+  const section = portal?.[3];
+  return {
+    eventId,
+    current,
+    links: EVENT_STAFF_ROLES.map((role) => {
+      const base = eventPortalPath(eventId, role);
+      const has = section && PORTAL_SECTION_LINKS[role].some((s) => s.slug === section);
+      return { role, to: has ? `${base}/${section}` : base };
+    }),
+  };
+}
