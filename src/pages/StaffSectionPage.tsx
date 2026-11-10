@@ -5,7 +5,7 @@ import { useEndpointQuery } from "@/api/queries";
 import { queryKey } from "@/api/queryKeys";
 import AuthMeError from "@/components/AuthMeError";
 import QueryError from "@/components/QueryError";
-import { SECTION_RENDER } from "@/components/staff/portalSections";
+import { EVENT_MANAGER_SECTIONS } from "@/components/staff/portalSections";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import { defaultEventId, formatEventDateRange } from "@/lib/eventDates";
 import { EVENT_ROLE_LABELS, richestEventRole } from "@/lib/eventRoles";
-import { ALL_STAFF_PAGES, eventsForStaffPage } from "@/lib/staffPages";
+import { eventsForStaffPage } from "@/lib/staffPages";
 import type { ApiEvent } from "@/schemas";
 
 const NO_EVENTS: readonly ApiEvent[] = [];
@@ -36,7 +36,8 @@ export default function StaffSectionPage() {
   const eventsQuery = useEndpointQuery(endpoints.events.list);
   const allEvents = eventsQuery.data ?? NO_EVENTS;
 
-  const page = ALL_STAFF_PAGES.find((p) => p.slug === section);
+  // Found by slug among the known sections, never looked up by a name from the URL.
+  const page = EVENT_MANAGER_SECTIONS.find((p) => p.slug === section);
   const allowed = isAdmin ? allEvents.map((e) => e.id) : eventsForStaffPage(eventRoles, section);
   const events = allEvents.filter((e) => allowed.includes(e.id));
   const asked = search.get("event") ?? "";
@@ -98,7 +99,7 @@ export default function StaffSectionPage() {
         eventsQuery.isLoading ? <Skeleton className="h-40 w-full" /> : <p className="text-sm text-muted-foreground">No events yet.</p>
       ) : (
         // Keyed by event, so a filter or open dialog never carries over to another event.
-        <div key={`${section}:${event.id}`}>{SECTION_RENDER[section](event, setEvent)}</div>
+        <div key={`${section}:${event.id}`}>{page.render(event, setEvent)}</div>
       )}
     </div>
   );

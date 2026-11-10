@@ -13,8 +13,8 @@ import type { PortalSection } from "@/components/staff/StaffPortal";
 import { PORTAL_SECTION_LINKS } from "@/lib/portalSectionLinks";
 import type { ApiEvent } from "@/schemas";
 
-/** What each portal section renders, by slug; the staff pages render the same. */
-export const SECTION_RENDER: Record<string, PortalSection["render"]> = {
+/** What each portal section renders, by slug. */
+const RENDER: Record<string, PortalSection["render"]> = {
   // The registration list, which every staff role keeps; the admin's notes
   // on it stay with the admin.
   registrations: (event) => <RegistrationsPanel event={event} showNotes={false} />,
@@ -30,7 +30,7 @@ export const SECTION_RENDER: Record<string, PortalSection["render"]> = {
 };
 
 function sections(role: keyof typeof PORTAL_SECTION_LINKS): PortalSection[] {
-  return PORTAL_SECTION_LINKS[role].map(({ slug, label }) => ({ slug, label, render: SECTION_RENDER[slug] }));
+  return PORTAL_SECTION_LINKS[role].map(({ slug, label }) => ({ slug, label, render: RENDER[slug] }));
 }
 
 /** The coordinator portal: the event's registration list, and its entries, read-only. */
@@ -39,5 +39,8 @@ export const COORDINATOR_SECTIONS: PortalSection[] = sections("coordinator");
 /** The DJ portal: running the event's floor trials and its music, plus the coordinator's sections. */
 export const DJ_SECTIONS: PortalSection[] = sections("dj");
 
-/** The event-manager portal: everything the DJ has, plus the event itself and its staff. */
+/**
+ * The event-manager portal: everything the DJ has, plus the event itself and
+ * its staff. Every section there is, so the staff pages render from it too.
+ */
 export const EVENT_MANAGER_SECTIONS: PortalSection[] = sections("event-manager");
