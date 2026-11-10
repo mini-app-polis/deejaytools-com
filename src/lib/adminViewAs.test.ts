@@ -13,9 +13,10 @@ describe("viewAsDestination", () => {
     // A portal keeps its section where the role has it.
     ["/events/ev/manage/registrations", "coordinator", "/events/ev/coordinator/registrations"],
     ["/events/ev/manage/staff", "dj", "/events/ev/dj"],
-    // The event's page stays; another event's page moves to this one.
+    // An event's page or portal keeps its own event.
     ["/events/ev", "dj", "/events/ev"],
-    ["/events/other", "coordinator", "/events/ev"],
+    ["/events/other", "coordinator", "/events/other"],
+    ["/events/other/dj/queue", "event-manager", "/events/other/manage/queue"],
     // Pages everyone sees stay.
     ["/my-content", "event-manager", "/my-content"],
     // A dancer: admin pages and portals go to the event's page.
@@ -23,7 +24,7 @@ describe("viewAsDestination", () => {
     ["/events/ev/dj/queue", "dancer", "/events/ev"],
     ["/floor-trials", "dancer", "/floor-trials"],
   ] as const)("from %s as %s lands on %s", (from, role, to) => {
-    expect(viewAsDestination(from, { role, eventId: "ev" })).toBe(to);
+    expect(viewAsDestination(from, { role }, "ev")).toBe(to);
   });
 });
 

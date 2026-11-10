@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import type { ApiAuthMe, ApiEventRole } from "@/schemas";
 import { useApiClient } from "@/api/client";
 import { call, endpoints } from "@/api/endpoints";
+import { useEndpointQuery } from "@/api/queries";
 import { queryKey } from "@/api/queryKeys";
 import { waitForAuthSync } from "@/lib/authSyncStatus";
 import { useViewAs, type ViewAs } from "@/lib/viewAs";
@@ -82,7 +83,8 @@ export function useAuthMeQuery({ enabled = true }: { enabled?: boolean } = {}) {
  * does the same by hand, and every caller updates.
  *
  * An admin viewing the site as a staff role or a dancer (lib/viewAs) gets
- * that person's `isAdmin` and `eventRoles` here, so every bar, guard and page
+ * that person's `isAdmin` and `eventRoles` here (a staff role held on every
+ * event, a dancer none), so every bar, guard and page
  * shows what they would; `realIsAdmin` and `viewAs` say what is going on.
  */
 export function useAuthMe() {
@@ -98,10 +100,15 @@ export function useAuthMe() {
   const requested = useViewAs();
   const viewAs: ViewAs | null = realIsAdmin ? requested : null;
   const realRoles = me?.event_roles ?? NO_EVENT_ROLES;
+  // A viewed staff role is held on every event, so no event has to be picked.
+  const viewedRole = viewAs && viewAs.role !== "dancer" ? viewAs.role : null;
+  const eventsQuery = useEndpointQuery(endpoints.events.list, { enabled: viewedRole !== null });
+  const events = eventsQuery.data;
   const eventRoles = useMemo<ApiEventRole[]>(() => {
     if (!viewAs) return realRoles;
-    return viewAs.role === "dancer" ? NO_EVENT_ROLES : [{ event_id: viewAs.eventId, role: viewAs.role }];
-  }, [viewAs, realRoles]);
+    if (!viewedRole) return NO_EVENT_ROLES;
+    return (events ?? []).map((e) => ({ event_id: e.id, role: viewedRole }));
+  }, [viewAs, viewedRole, events, realRoles]);
 
   return {
     me,
@@ -111,7 +118,7 @@ export function useAuthMe() {
     reload,
     /** An admin, and not viewing the site as someone else. */
     isAdmin: realIsAdmin && viewAs === null,
-    /** The caller's per-event staff roles (or the viewed role); empty when none or signed out. */
+    /** The caller's per-event staff roles (or the viewed role, on every event); empty when none or signed out. */
     eventRoles,
     /** An admin, whatever they are viewing as. */
     realIsAdmin,

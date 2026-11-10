@@ -2,8 +2,10 @@ import { useSyncExternalStore } from "react";
 import type { EventStaffRole } from "@/schemas";
 
 /**
- * An admin's "view as": the site shown as someone holding only `role` on
- * `eventId` would see it ("dancer": a signed-in user with no staff role).
+ * An admin's "view as": the site shown as someone holding `role` would see it
+ * ("dancer": a signed-in user with no staff role). No event is picked: a
+ * staff role applies to every event (see useAuthMe), so any event can be
+ * opened and seen as that role would see it.
  *
  * Only what the app shows changes (menus, bars, guards, pages; see
  * useAuthMe). The API still answers the caller as the admin they are.
@@ -13,7 +15,7 @@ import type { EventStaffRole } from "@/schemas";
  * that fails (a private window, blocked site data) leaves it in memory only.
  */
 export type ViewAsRole = EventStaffRole | "dancer";
-export type ViewAs = { role: ViewAsRole; eventId: string };
+export type ViewAs = { role: ViewAsRole };
 
 export const VIEW_AS_ROLES: readonly ViewAsRole[] = ["coordinator", "dj", "event-manager", "dancer"];
 
@@ -24,9 +26,8 @@ function read(): ViewAs | null {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<ViewAs>;
-    if (typeof parsed.eventId === "string" && parsed.eventId && VIEW_AS_ROLES.includes(parsed.role as ViewAsRole)) {
-      return { role: parsed.role as ViewAsRole, eventId: parsed.eventId };
-    }
+    // A view stored with an event (before views were role-only) keeps its role.
+    if (VIEW_AS_ROLES.includes(parsed.role as ViewAsRole)) return { role: parsed.role as ViewAsRole };
   } catch {
     // Unreadable storage: not viewing as anyone.
   }

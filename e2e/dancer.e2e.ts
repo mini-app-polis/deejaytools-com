@@ -161,7 +161,7 @@ test("a dancer uploads a song, enters it, checks in, sees their place, withdraws
 
   await test.step("enter the song in the event", async () => {
     await page.goto("/event-submissions");
-    // Exact: an admin's header also has the view-as "Event to view" picker.
+    // Exact: only the Event field itself.
     await page.getByRole("combobox", { name: "Event", exact: true }).click();
     // Anchored: option names match on substrings, and the test Open event's
     // name ("The Open E2E Dancer …") contains this one.

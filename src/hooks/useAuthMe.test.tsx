@@ -40,6 +40,7 @@ import {
   markAuthSyncSettled,
   resetAuthSyncStatus,
 } from "@/lib/authSyncStatus";
+import { fx } from "@/test/fixtures";
 import { createTestQueryClient } from "@/test/render";
 
 // Every hook in one test shares one client, as every caller in the app does.
@@ -171,19 +172,30 @@ describe("useAuthMe", () => {
     });
   });
 
-  it("applies an admin's view-as: that role's event roles, not an admin, until it ends", async () => {
+  it("applies an admin's view-as: that role on every event, not an admin, until it ends", async () => {
     useAuthMock.mockReturnValue({ isLoaded: true, isSignedIn: true });
-    apiGet.mockResolvedValue(meRow({ role: "admin", event_roles: [{ event_id: "mine", role: "dj" }] }));
+    apiGet.mockImplementation((path: string) =>
+      Promise.resolve(
+        path === "/v1/auth/me"
+          ? meRow({ role: "admin", event_roles: [{ event_id: "mine", role: "dj" }] })
+          : [fx.event({ id: "open" }), fx.event({ id: "dcsx" })]
+      )
+    );
     const { result } = renderHook(() => useAuthMe());
     await waitFor(() => expect(result.current.isAdmin).toBe(true));
 
-    act(() => setViewAs({ role: "coordinator", eventId: "open" }));
+    act(() => setViewAs({ role: "coordinator" }));
     expect(result.current.isAdmin).toBe(false);
     expect(result.current.realIsAdmin).toBe(true);
-    expect(result.current.eventRoles).toEqual([{ event_id: "open", role: "coordinator" }]);
-    expect(result.current.viewAs).toEqual({ role: "coordinator", eventId: "open" });
+    expect(result.current.viewAs).toEqual({ role: "coordinator" });
+    await waitFor(() =>
+      expect(result.current.eventRoles).toEqual([
+        { event_id: "open", role: "coordinator" },
+        { event_id: "dcsx", role: "coordinator" },
+      ])
+    );
 
-    act(() => setViewAs({ role: "dancer", eventId: "open" }));
+    act(() => setViewAs({ role: "dancer" }));
     expect(result.current.eventRoles).toEqual([]);
 
     act(() => setViewAs(null));
@@ -194,7 +206,7 @@ describe("useAuthMe", () => {
   it("ignores a view-as for anyone but an admin", async () => {
     useAuthMock.mockReturnValue({ isLoaded: true, isSignedIn: true });
     apiGet.mockResolvedValue(meRow({ event_roles: [] }));
-    act(() => setViewAs({ role: "event-manager", eventId: "open" }));
+    act(() => setViewAs({ role: "event-manager" }));
     const { result } = renderHook(() => useAuthMe());
     await waitFor(() => expect(result.current.me).not.toBeNull());
     expect(result.current.isAdmin).toBe(false);
