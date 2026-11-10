@@ -96,6 +96,7 @@ export default function NavBar() {
 
   return (
     <header className="border-b border-white/[0.07] bg-black/50 backdrop-blur-md sticky top-0 z-40">
+      <SignedIn>{realIsAdmin && <ViewAsRow view={viewAs} />}</SignedIn>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
         <a href="/" className="flex items-center gap-2 shrink-0 group">
           <picture>
@@ -238,7 +239,6 @@ export default function NavBar() {
             </div>
           </nav>
         )}
-        {realIsAdmin && <ViewAsRow view={viewAs} />}
       </SignedIn>
 
       {/* Mobile menu — in the DOM while closed too, so the toggle's aria-controls always points at it */}
@@ -312,7 +312,7 @@ function useStartViewAs() {
 }
 
 /**
- * Admins only, always at the foot of the header, on every page and on phones
+ * Admins only, always at the top of the header, on every page and on phones
  * too, in the same place whether or not a view is on: view the whole site
  * (menus, bars, pages) as one of the staff roles, held on every event, or as
  * a dancer, or go back to the admin's own view. No event is picked here: each
@@ -330,7 +330,7 @@ function ViewAsRow({ view }: { view: ViewAs | null }) {
     <nav
       aria-label="View as"
       className={cn(
-        "border-t",
+        "border-b",
         view ? "border-amber-500/30 bg-amber-500/15" : "border-white/[0.07] bg-black/10"
       )}
     >
