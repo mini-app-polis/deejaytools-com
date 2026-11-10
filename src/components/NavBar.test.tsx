@@ -172,15 +172,16 @@ describe("NavBar — signed in (not an admin)", () => {
 
 describe("NavBar — admin view as", () => {
   const stored = () => JSON.parse(sessionStorage.getItem("deejaytools.viewAs") ?? "null") as unknown;
+  const row = () => screen.getByRole("navigation", { name: "View as" });
 
-  it("offers every role, and dancer, with no event to pick", () => {
+  it("offers the admin's own view, every role and dancer, with no event to pick", () => {
     signedIn = true;
     isAdmin = true;
     renderNav("/my-content");
-    const row = screen.getByRole("navigation", { name: "View as" });
-    expect(within(row).queryByRole("combobox")).toBeNull();
+    expect(within(row()).queryByRole("combobox")).toBeNull();
+    expect(within(row()).getByRole("button", { name: "Admin (normal)" })).toHaveAttribute("aria-pressed", "true");
     for (const name of ["Coordinator", "DJ", "Event manager", "Dancer"]) {
-      expect(within(row).getByRole("button", { name })).toBeInTheDocument();
+      expect(within(row()).getByRole("button", { name })).toHaveAttribute("aria-pressed", "false");
     }
   });
 
@@ -189,12 +190,12 @@ describe("NavBar — admin view as", () => {
     isAdmin = true;
     const user = userEvent.setup();
     renderNav("/admin/registrations");
-    await user.click(within(screen.getByRole("navigation", { name: "View as" })).getByRole("button", { name: "DJ" }));
+    await user.click(within(row()).getByRole("button", { name: "DJ" }));
     expect(stored()).toEqual({ role: "dj" });
     expect(screen.getByTestId("where")).toHaveTextContent("/staff/registrations");
   });
 
-  it("while viewing, shows the banner and the role's menus instead of the Admin bar, switches role, and exits", async () => {
+  it("while viewing, stays in the same row with the role's menus instead of the Admin bar, switches role, and goes back", async () => {
     signedIn = true;
     isAdmin = true;
     viewing = { role: "dj" };
@@ -205,30 +206,38 @@ describe("NavBar — admin view as", () => {
     const user = userEvent.setup();
     renderNav("/staff/queue");
 
-    const banner = screen.getByRole("region", { name: "Viewing as" });
-    expect(within(banner).getByText("Viewing as DJ")).toBeInTheDocument();
-    // The menus are the DJ's: their staff bar, and no Admin bar or picker.
+    expect(within(row()).getByText("Viewing as")).toBeInTheDocument();
+    expect(within(row()).getByRole("button", { name: "DJ" })).toHaveAttribute("aria-pressed", "true");
+    // The menus are the DJ's: their staff bar, and no Admin bar.
     expect(screen.queryByRole("navigation", { name: "Admin" })).toBeNull();
-    expect(screen.queryByRole("navigation", { name: "View as" })).toBeNull();
     const bar = screen.getByRole("navigation", { name: "Event staff" });
     expect(within(bar).getByText("DJ")).toBeInTheDocument();
     expect(within(bar).getByRole("link", { name: "Live queue" })).toHaveAttribute("href", "/staff/queue");
+    // The row is the last bar, where it is when not viewing.
+    const bars = screen.getAllByRole("navigation").map((n) => n.getAttribute("aria-label"));
+    expect(bars.filter((b) => ["Main", "Event staff", "View as"].includes(b ?? ""))).toEqual(["Main", "Event staff", "View as"]);
 
     // The queue is not a coordinator page: that role opens its first.
-    await user.click(within(banner).getByRole("button", { name: "Coordinator" }));
+    await user.click(within(row()).getByRole("button", { name: "Coordinator" }));
     expect(stored()).toEqual({ role: "coordinator" });
     expect(screen.getByTestId("where")).toHaveTextContent("/staff/registrations");
 
-    await user.click(within(banner).getByRole("button", { name: "Exit view" }));
+    await user.click(within(row()).getByRole("button", { name: "Admin (normal)" }));
     expect(stored()).toBeNull();
   });
 
-  it("shows neither picker nor banner to anyone but an admin", () => {
+  it("shows the row to an admin on phones too: it is not hidden below the desktop breakpoint", () => {
+    signedIn = true;
+    isAdmin = true;
+    renderNav("/");
+    expect(row().className).not.toContain("hidden");
+  });
+
+  it("shows no view-as row to anyone but an admin", () => {
     signedIn = true;
     isAdmin = false;
     renderNav("/events/open");
     expect(screen.queryByRole("navigation", { name: "View as" })).toBeNull();
-    expect(screen.queryByRole("region", { name: "Viewing as" })).toBeNull();
   });
 });
 

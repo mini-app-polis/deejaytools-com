@@ -96,7 +96,6 @@ export default function NavBar() {
 
   return (
     <header className="border-b border-white/[0.07] bg-black/50 backdrop-blur-md sticky top-0 z-40">
-      <SignedIn>{realIsAdmin && viewAs && <ViewAsBanner view={viewAs} />}</SignedIn>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
         <a href="/" className="flex items-center gap-2 shrink-0 group">
           <picture>
@@ -239,7 +238,7 @@ export default function NavBar() {
             </div>
           </nav>
         )}
-        {isAdmin && <ViewAsPicker />}
+        {realIsAdmin && <ViewAsRow view={viewAs} />}
       </SignedIn>
 
       {/* Mobile menu — in the DOM while closed too, so the toggle's aria-controls always points at it */}
@@ -300,72 +299,71 @@ export default function NavBar() {
 
 const VIEW_AS_LABELS: Record<ViewAsRole, string> = { ...EVENT_ROLE_LABELS, dancer: "Dancer" };
 
-/** Start or switch a view-as, landing on the page that role would see in place of this one. */
+/** Start, switch or end a view-as, landing on the page that role would see in place of this one. */
 function useStartViewAs() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  return (view: ViewAs) => {
+  return (view: ViewAs | null) => {
     setViewAs(view);
+    if (!view) return;
     const to = viewAsDestination(pathname, view);
     if (to !== pathname) navigate(to);
   };
 }
 
 /**
- * Admins only, under the Admin bar: view the whole site (menus, bars, pages)
- * as one of the staff roles, held on every event, or as a dancer. No event is
- * picked here: each staff page picks its event, as the admin pages do.
+ * Admins only, always at the foot of the header, on every page and on phones
+ * too, in the same place whether or not a view is on: view the whole site
+ * (menus, bars, pages) as one of the staff roles, held on every event, or as
+ * a dancer, or go back to the admin's own view. No event is picked here: each
+ * staff page picks its event, as the admin pages do. Shown in amber while a
+ * view is on, so it is never mistaken for the admin's own.
  */
-function ViewAsPicker() {
+function ViewAsRow({ view }: { view: ViewAs | null }) {
   const start = useStartViewAs();
+  const current = view?.role ?? null;
+  const choices: { key: string; label: string; view: ViewAs | null }[] = [
+    { key: "admin", label: "Admin (normal)", view: null },
+    ...VIEW_AS_ROLES.map((role) => ({ key: role, label: VIEW_AS_LABELS[role], view: { role } })),
+  ];
   return (
-    <nav aria-label="View as" className="hidden sm:block border-t border-white/[0.07] bg-black/10">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 min-h-10 py-1 flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-muted-foreground whitespace-nowrap">View the site as</span>
-        {VIEW_AS_ROLES.map((role) => (
-          <button
-            key={role}
-            type="button"
-            className="rounded-full px-3 py-1 whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground"
-            onClick={() => start({ role })}
-          >
-            {VIEW_AS_LABELS[role]}
-          </button>
-        ))}
+    <nav
+      aria-label="View as"
+      className={cn(
+        "border-t",
+        view ? "border-amber-500/30 bg-amber-500/15" : "border-white/[0.07] bg-black/10"
+      )}
+    >
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 min-h-10 py-1 flex flex-wrap items-center gap-1 text-sm">
+        <span className={cn("mr-1 whitespace-nowrap", view ? "font-medium text-amber-200" : "text-muted-foreground")}>
+          {view ? "Viewing as" : "View the site as"}
+        </span>
+        {choices.map((c) => {
+          const active = (c.view?.role ?? null) === current;
+          return (
+            <button
+              key={c.key}
+              type="button"
+              aria-pressed={active}
+              className={cn(
+                "rounded-full px-3 py-1 whitespace-nowrap transition-colors",
+                active
+                  ? view
+                    ? "bg-amber-400/20 text-amber-50"
+                    : "bg-primary/10 text-primary"
+                  : view
+                    ? "text-amber-100/80 hover:text-amber-50"
+                    : "text-muted-foreground hover:text-foreground"
+              )}
+              onClick={() => {
+                if (!active) start(c.view);
+              }}
+            >
+              {c.label}
+            </button>
+          );
+        })}
       </div>
     </nav>
-  );
-}
-
-/**
- * Admins only, while viewing as someone else: always on top, on every page
- * and on phones too, so the way back is never hidden. Switches role in place
- * or exits.
- */
-function ViewAsBanner({ view }: { view: ViewAs }) {
-  const start = useStartViewAs();
-
-  return (
-    <div role="region" aria-label="Viewing as" className="border-b border-amber-500/30 bg-amber-500/15">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 min-h-9 py-1 flex flex-wrap items-center gap-2 text-sm">
-        <span className="font-medium text-amber-200">
-          Viewing as {VIEW_AS_LABELS[view.role]}
-        </span>
-        <span className="text-amber-200/70">switch to</span>
-        {VIEW_AS_ROLES.filter((r) => r !== view.role).map((role) => (
-          <button
-            key={role}
-            type="button"
-            className="rounded-full px-2 py-0.5 text-amber-100/80 hover:text-amber-50"
-            onClick={() => start({ role })}
-          >
-            {VIEW_AS_LABELS[role]}
-          </button>
-        ))}
-        <Button size="sm" variant="outline" className="ml-auto h-7 border-amber-400/50 text-amber-100" onClick={() => setViewAs(null)}>
-          Exit view
-        </Button>
-      </div>
-    </div>
   );
 }
