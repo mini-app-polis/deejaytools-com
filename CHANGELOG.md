@@ -1,3 +1,10 @@
+# [2.38.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.37.0...v2.38.0) (2026-11-10)
+
+
+### Features
+
+* **nav:** the view-as row sits at the top of the header ([ff62b42](https://github.com/mini-app-polis/deejaytools-com/commit/ff62b42597f67a9391d77021e5dbdbc1ed3eb61e))
+
 # [2.37.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.36.0...v2.37.0) (2026-11-10)
 
 
