@@ -1,3 +1,10 @@
+# [2.35.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.34.0...v2.35.0) (2026-11-10)
+
+
+### Features
+
+* **nav:** view-as keeps an event picker for where to land, and the banner links the viewed role's pages for a picked event ([f6a69a5](https://github.com/mini-app-polis/deejaytools-com/commit/f6a69a523f11abb29723899f3aa2be788435344b))
+
 # [2.34.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.33.0...v2.34.0) (2026-11-10)
 
 
