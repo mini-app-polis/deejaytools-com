@@ -13,10 +13,10 @@ describe("viewAsDestination", () => {
     // A portal keeps its section where the role has it.
     ["/events/ev/manage/registrations", "coordinator", "/events/ev/coordinator/registrations"],
     ["/events/ev/manage/staff", "dj", "/events/ev/dj"],
-    // An event's page or portal keeps its own event.
+    // An event's page or portal opens the picked event's.
     ["/events/ev", "dj", "/events/ev"],
-    ["/events/other", "coordinator", "/events/other"],
-    ["/events/other/dj/queue", "event-manager", "/events/other/manage/queue"],
+    ["/events/other", "coordinator", "/events/ev"],
+    ["/events/other/dj/queue", "event-manager", "/events/ev/manage/queue"],
     // Pages everyone sees stay.
     ["/my-content", "event-manager", "/my-content"],
     // A dancer: admin pages and portals go to the event's page.
