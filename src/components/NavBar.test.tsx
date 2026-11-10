@@ -213,9 +213,9 @@ describe("NavBar — admin view as", () => {
     const bar = screen.getByRole("navigation", { name: "Event staff" });
     expect(within(bar).getByText("DJ")).toBeInTheDocument();
     expect(within(bar).getByRole("link", { name: "Live queue" })).toHaveAttribute("href", "/staff/queue");
-    // The row is the last bar, where it is when not viewing.
+    // The row is the first bar, where it is when not viewing.
     const bars = screen.getAllByRole("navigation").map((n) => n.getAttribute("aria-label"));
-    expect(bars.filter((b) => ["Main", "Event staff", "View as"].includes(b ?? ""))).toEqual(["Main", "Event staff", "View as"]);
+    expect(bars.filter((b) => ["Main", "Event staff", "View as"].includes(b ?? ""))).toEqual(["View as", "Main", "Event staff"]);
 
     // The queue is not a coordinator page: that role opens its first.
     await user.click(within(row()).getByRole("button", { name: "Coordinator" }));
@@ -226,10 +226,12 @@ describe("NavBar — admin view as", () => {
     expect(stored()).toBeNull();
   });
 
-  it("shows the row to an admin on phones too: it is not hidden below the desktop breakpoint", () => {
+  it("puts the row first, above the main bar, on phones too", () => {
     signedIn = true;
     isAdmin = true;
     renderNav("/");
+    const bars = screen.getAllByRole("navigation").map((n) => n.getAttribute("aria-label"));
+    expect(bars[0]).toBe("View as");
     expect(row().className).not.toContain("hidden");
   });
 
