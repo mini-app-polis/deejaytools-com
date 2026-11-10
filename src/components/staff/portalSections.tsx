@@ -13,8 +13,8 @@ import type { PortalSection } from "@/components/staff/StaffPortal";
 import { PORTAL_SECTION_LINKS } from "@/lib/portalSectionLinks";
 import type { ApiEvent } from "@/schemas";
 
-/** What each portal section renders, by slug. */
-const RENDER: Record<string, PortalSection["render"]> = {
+/** What each portal section renders, by slug; the staff pages render the same. */
+export const SECTION_RENDER: Record<string, PortalSection["render"]> = {
   // The registration list, which every staff role keeps; the admin's notes
   // on it stay with the admin.
   registrations: (event) => <RegistrationsPanel event={event} showNotes={false} />,
@@ -30,7 +30,7 @@ const RENDER: Record<string, PortalSection["render"]> = {
 };
 
 function sections(role: keyof typeof PORTAL_SECTION_LINKS): PortalSection[] {
-  return PORTAL_SECTION_LINKS[role].map(({ slug, label }) => ({ slug, label, render: RENDER[slug] }));
+  return PORTAL_SECTION_LINKS[role].map(({ slug, label }) => ({ slug, label, render: SECTION_RENDER[slug] }));
 }
 
 /** The coordinator portal: the event's registration list, and its entries, read-only. */

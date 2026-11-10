@@ -1,8 +1,9 @@
 import { eventPortalPath } from "@/lib/eventRoles";
 import { PORTAL_SECTION_LINKS } from "@/lib/portalSectionLinks";
+import { roleHasSection, staffPagePath } from "@/lib/staffPages";
 import type { ViewAs } from "@/lib/viewAs";
 
-/** The staff portal section that is each admin page's lesser-permission version. */
+/** The staff page that is each admin page's lesser-permission version. */
 const STAFF_VERSION: Record<string, string> = {
   "/admin/registrations": "registrations",
   "/manager/event-songs": "submissions",
@@ -15,49 +16,41 @@ const STAFF_VERSION: Record<string, string> = {
 };
 
 const PORTAL = /^\/events\/([^/]+)\/(coordinator|dj|manage)(?:\/([^/]+))?$/;
-const EVENT_PAGE = /^\/events\/([^/]+)$/;
-
-/** The event the current page is about, if it is an event's page or portal. */
-export function eventOfPath(pathname: string): string | null {
-  const path = pathname.replace(/\/+$/, "");
-  const m = EVENT_PAGE.exec(path) ?? PORTAL.exec(path);
-  return m ? decodeURIComponent(m[1]) : null;
-}
+const STAFF_PAGE = /^\/staff\/([^/]+)$/;
 
 /**
  * Where an admin lands on starting (or switching) a view-as: the page that
- * role would see in place of the current one, on `eventId` (the event picked
- * in the view-as row).
+ * role would see in place of the current one. No event is involved: the
+ * staff pages pick their own.
  *
- * - An admin page with a staff version opens that section of the role's
- *   portal for the event (Registrations → its Registrations tab).
- * - A portal keeps its section where the role has it, else opens the role's
- *   portal; an event's page opens the picked event's page.
- * - Any other admin page, which the role cannot open, goes to the role's
- *   portal (a dancer: the event's page).
+ * - An admin page with a staff version opens that staff page, where the role
+ *   has it (Registrations → the Registrations staff page).
+ * - A staff page stays where the role has it; a portal keeps its event, and
+ *   its section where the role has it.
+ * - Anything else the role cannot open goes to the role's first staff page,
+ *   or its portal on the same event.
+ * - A dancer goes from any admin or staff page to the events list.
  * - Pages everyone sees stay as they are.
  */
-export function viewAsDestination(pathname: string, view: ViewAs, eventId: string): string {
+export function viewAsDestination(pathname: string, view: ViewAs): string {
   const path = pathname.replace(/\/+$/, "") || "/";
-  const eventPage = `/events/${encodeURIComponent(eventId)}`;
   const isAdminPage = path.startsWith("/admin") || path.startsWith("/manager");
   const portal = PORTAL.exec(path);
-  const onEventPage = EVENT_PAGE.exec(path);
+  const staffPage = STAFF_PAGE.exec(path);
 
-  if (view.role === "dancer") {
-    if (isAdminPage || portal) return eventPage;
-    if (onEventPage) return eventPage;
-    return path;
-  }
+  if (view.role === "dancer") return isAdminPage || portal || staffPage ? "/events" : path;
 
   const role = view.role;
-  const base = eventPortalPath(eventId, role);
-  const has = (slug: string | undefined) => !!slug && PORTAL_SECTION_LINKS[role].some((s) => s.slug === slug);
+  const first = staffPagePath(PORTAL_SECTION_LINKS[role][0].slug);
+  const has = (slug: string | undefined) => !!slug && roleHasSection(role, slug);
   if (isAdminPage) {
     const slug = STAFF_VERSION[path];
-    return has(slug) ? `${base}/${slug}` : base;
+    return has(slug) ? staffPagePath(slug) : first;
   }
-  if (portal) return has(portal[3]) ? `${base}/${portal[3]}` : base;
-  if (onEventPage) return eventPage;
+  if (staffPage) return has(decodeURIComponent(staffPage[1])) ? path : first;
+  if (portal) {
+    const base = eventPortalPath(decodeURIComponent(portal[1]), role);
+    return has(portal[3]) ? `${base}/${portal[3]}` : base;
+  }
   return path;
 }
