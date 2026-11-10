@@ -195,43 +195,45 @@ describe("NavBar — admin view as", () => {
   ];
   const stored = () => JSON.parse(sessionStorage.getItem("deejaytools.viewAs") ?? "null") as unknown;
 
-  it("offers every role, and dancer, with no event to pick", () => {
+  it("offers every role, and dancer, at the soonest event from a page about none", () => {
     signedIn = true;
     isAdmin = true;
     eventsList = events;
     renderNav("/my-content");
     const row = screen.getByRole("navigation", { name: "View as" });
-    expect(within(row).queryByRole("combobox")).toBeNull();
+    expect(within(row).getByRole("combobox", { name: "Event to view" })).toHaveValue("dcsx");
     for (const name of ["Coordinator", "DJ", "Event manager", "Dancer"]) {
       expect(within(row).getByRole("button", { name })).toBeInTheDocument();
     }
   });
 
-  it("starts a view from an admin page on that page's staff version, at the soonest event", async () => {
+  it("starts a view from an admin page on that page's staff version, at the picked event; the view is the role only", async () => {
     signedIn = true;
     isAdmin = true;
     eventsList = events;
     const user = userEvent.setup();
     renderNav("/admin/registrations");
     const row = screen.getByRole("navigation", { name: "View as" });
+    await user.selectOptions(within(row).getByRole("combobox", { name: "Event to view" }), "open");
     await user.click(within(row).getByRole("button", { name: "DJ" }));
     expect(stored()).toEqual({ role: "dj" });
-    expect(screen.getByTestId("where")).toHaveTextContent("/events/dcsx/dj/registrations");
+    expect(screen.getByTestId("where")).toHaveTextContent("/events/open/dj/registrations");
   });
 
-  it("keeps the event a page is about, and a portal's section where the role has it", async () => {
+  it("picks the event a page is about, and keeps a portal's section where the role has it", async () => {
     signedIn = true;
     isAdmin = true;
     eventsList = events;
     const user = userEvent.setup();
     renderNav("/events/open/manage/registrations");
     const row = screen.getByRole("navigation", { name: "View as" });
+    expect(within(row).getByRole("combobox", { name: "Event to view" })).toHaveValue("open");
     await user.click(within(row).getByRole("button", { name: "Coordinator" }));
     expect(stored()).toEqual({ role: "coordinator" });
     expect(screen.getByTestId("where")).toHaveTextContent("/events/open/coordinator/registrations");
   });
 
-  it("while viewing, shows the banner instead of the Admin bar, switches role, and exits", async () => {
+  it("while viewing, shows the banner instead of the Admin bar, links the role's pages for the picked event, switches role, and exits", async () => {
     signedIn = true;
     isAdmin = true;
     viewing = { role: "dj" };
@@ -248,13 +250,31 @@ describe("NavBar — admin view as", () => {
     expect(screen.queryByRole("navigation", { name: "View as" })).toBeNull();
     expect(within(screen.getByRole("navigation", { name: "Event staff" })).getByRole("link", { name: "Live queue" })).toBeInTheDocument();
 
+    // The DJ's pages, for the event this page is about, then another picked.
+    const pages = within(banner).getByRole("navigation", { name: "Viewed role's pages" });
+    expect(within(pages).getByRole("combobox", { name: "Event to view" })).toHaveValue("open");
+    expect(within(pages).getByRole("link", { name: "Live queue" })).toHaveAttribute("href", "/events/open/dj/queue");
+    await user.selectOptions(within(pages).getByRole("combobox", { name: "Event to view" }), "dcsx");
+    expect(within(pages).getByRole("link", { name: "Drive folder" })).toHaveAttribute("href", "/events/dcsx/dj/drive");
+    expect(within(pages).getByRole("link", { name: "Event page" })).toHaveAttribute("href", "/events/dcsx");
+
     // The queue is not a coordinator section: that role opens its portal.
     await user.click(within(banner).getByRole("button", { name: "Coordinator" }));
     expect(stored()).toEqual({ role: "coordinator" });
-    expect(screen.getByTestId("where")).toHaveTextContent("/events/open/coordinator");
+    expect(screen.getByTestId("where")).toHaveTextContent("/events/dcsx/coordinator");
 
     await user.click(within(banner).getByRole("button", { name: "Exit view" }));
     expect(stored()).toBeNull();
+  });
+
+  it("links only the event page while viewing as a dancer", () => {
+    signedIn = true;
+    isAdmin = true;
+    viewing = { role: "dancer" };
+    eventsList = events;
+    renderNav("/my-content");
+    const pages = within(screen.getByRole("region", { name: "Viewing as" })).getByRole("navigation", { name: "Viewed role's pages" });
+    expect(within(pages).getAllByRole("link").map((l) => l.getAttribute("href"))).toEqual(["/events/dcsx"]);
   });
 
   it("shows neither picker nor banner to anyone but an admin", () => {

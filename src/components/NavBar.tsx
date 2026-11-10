@@ -17,6 +17,7 @@ import { eventOfPath, viewAsDestination } from "@/lib/adminViewAs";
 import { setViewAs, VIEW_AS_ROLES, type ViewAs, type ViewAsRole } from "@/lib/viewAs";
 import { defaultEventId } from "@/lib/eventDates";
 import { PORTAL_SECTION_LINKS } from "@/lib/portalSectionLinks";
+import type { ApiEvent } from "@/schemas";
 import pkg from "../../package.json";
 
 type NavItem = { to: string; label: string };
@@ -328,28 +329,68 @@ export default function NavBar() {
 const VIEW_AS_LABELS: Record<ViewAsRole, string> = { ...EVENT_ROLE_LABELS, dancer: "Dancer" };
 
 /**
- * Start or switch a view-as, landing on the page that role would see in place
- * of this one: on the event this page is about, else the soonest.
+ * The event the view-as controls point at: the one picked, else the one this
+ * page is about, else the soonest not yet over. Empty while there are none.
  */
+function useViewAsEvent() {
+  const { pathname } = useLocation();
+  const eventsQuery = useEndpointQuery(endpoints.events.list);
+  const events = eventsQuery.data ?? [];
+  const [picked, setPicked] = useState("");
+  const fromPath = eventOfPath(pathname);
+  const eventId = [picked, fromPath].find((id) => id && events.some((e) => e.id === id)) ?? defaultEventId(events);
+  return { events, eventId, setEventId: setPicked };
+}
+
+/** Choose the event the view-as controls point at, newest first. */
+function ViewAsEventSelect({
+  events,
+  eventId,
+  onChange,
+  className,
+}: {
+  events: readonly ApiEvent[];
+  eventId: string;
+  onChange: (id: string) => void;
+  className?: string;
+}) {
+  return (
+    <select
+      aria-label="Event to view"
+      className={cn("rounded-md border border-white/10 bg-background px-2 py-1 text-sm", className)}
+      value={eventId}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      {[...events]
+        .sort((a, b) => b.start_date.localeCompare(a.start_date))
+        .map((e) => (
+          <option key={e.id} value={e.id}>
+            {e.name}
+          </option>
+        ))}
+    </select>
+  );
+}
+
+/** Start or switch a view-as, landing on the page that role would see in place of this one, at `eventId`. */
 function useStartViewAs() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const eventsQuery = useEndpointQuery(endpoints.events.list);
-  const fallbackEvent = defaultEventId(eventsQuery.data ?? []);
-  return (view: ViewAs) => {
+  return (view: ViewAs, eventId: string) => {
     setViewAs(view);
-    const to = fallbackEvent || eventOfPath(pathname) ? viewAsDestination(pathname, view, fallbackEvent) : pathname;
+    const to = eventId ? viewAsDestination(pathname, view, eventId) : pathname;
     if (to !== pathname) navigate(to);
   };
 }
 
 /**
  * Admins only, under the Admin bar: view the whole site (menus, bars, pages)
- * as one of the staff roles, held on every event, or as a dancer. No event is
- * picked: every event shows as that role would see it.
+ * as one of the staff roles, held on every event, or as a dancer. The picked
+ * event (this page's, else the soonest) is only where the view starts.
  */
 function ViewAsPicker() {
   const start = useStartViewAs();
+  const { events, eventId, setEventId } = useViewAsEvent();
   return (
     <nav aria-label="View as" className="hidden sm:block border-t border-white/[0.07] bg-black/10">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 min-h-10 py-1 flex flex-wrap items-center gap-2 text-sm">
@@ -359,37 +400,52 @@ function ViewAsPicker() {
             key={role}
             type="button"
             className="rounded-full px-3 py-1 whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground"
-            onClick={() => start({ role })}
+            onClick={() => start({ role }, eventId)}
           >
             {VIEW_AS_LABELS[role]}
           </button>
         ))}
+        {eventId && (
+          <>
+            <span className="text-muted-foreground whitespace-nowrap">at</span>
+            <ViewAsEventSelect events={events} eventId={eventId} onChange={setEventId} />
+          </>
+        )}
       </div>
     </nav>
   );
 }
 
+/** The pages `role` opens on `eventId`: its portal's sections, or a dancer's event page. */
+function viewAsPageLinks(role: ViewAsRole, eventId: string): NavItem[] {
+  const eventPage = { to: `/events/${encodeURIComponent(eventId)}`, label: "Event page" };
+  if (role === "dancer") return [eventPage];
+  const base = eventPortalPath(eventId, role);
+  return [eventPage, ...PORTAL_SECTION_LINKS[role].map((sec) => ({ to: `${base}/${sec.slug}`, label: sec.label }))];
+}
+
 /**
  * Admins only, while viewing as someone else: always on top, on every page
- * and on phones too, so the way back is never hidden. Switches role in place
- * or exits.
+ * and on phones too, so the way back is never hidden. Switches role in place,
+ * links the role's pages for the picked event, or exits.
  */
 function ViewAsBanner({ view }: { view: ViewAs }) {
   const start = useStartViewAs();
+  const { events, eventId, setEventId } = useViewAsEvent();
+  const linkClass = ({ isActive }: { isActive: boolean }) =>
+    cn("rounded-full px-2 py-0.5 whitespace-nowrap", isActive ? "text-amber-50 underline" : "text-amber-100/80 hover:text-amber-50");
 
   return (
     <div role="region" aria-label="Viewing as" className="border-b border-amber-500/30 bg-amber-500/15">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 min-h-9 py-1 flex flex-wrap items-center gap-2 text-sm">
-        <span className="font-medium text-amber-200">
-          Viewing as {VIEW_AS_LABELS[view.role]}
-        </span>
+        <span className="font-medium text-amber-200">Viewing as {VIEW_AS_LABELS[view.role]}</span>
         <span className="text-amber-200/70">switch to</span>
         {VIEW_AS_ROLES.filter((r) => r !== view.role).map((role) => (
           <button
             key={role}
             type="button"
             className="rounded-full px-2 py-0.5 text-amber-100/80 hover:text-amber-50"
-            onClick={() => start({ role })}
+            onClick={() => start({ role }, eventId)}
           >
             {VIEW_AS_LABELS[role]}
           </button>
@@ -398,6 +454,16 @@ function ViewAsBanner({ view }: { view: ViewAs }) {
           Exit view
         </Button>
       </div>
+      {eventId && (
+        <nav aria-label="Viewed role's pages" className="max-w-6xl mx-auto px-4 sm:px-6 pb-1 flex flex-wrap items-center gap-1 text-sm">
+          <ViewAsEventSelect events={events} eventId={eventId} onChange={setEventId} className="mr-1 border-amber-400/30" />
+          {viewAsPageLinks(view.role, eventId).map((item) => (
+            <NavLink key={item.to} to={item.to} end className={linkClass}>
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
+      )}
     </div>
   );
 }
