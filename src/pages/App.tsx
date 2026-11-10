@@ -36,6 +36,7 @@ const ManagerPage = lazy(() => import("./ManagerPage"));
 const CoordinatorPortalPage = lazy(() => import("./CoordinatorPortalPage"));
 const DjPortalPage = lazy(() => import("./DjPortalPage"));
 const EventManagerPortalPage = lazy(() => import("./EventManagerPortalPage"));
+const StaffSectionPage = lazy(() => import("./StaffSectionPage"));
 
 function Lazy({ children }: { children: ReactNode }) {
   return <Suspense fallback={<RouteFallback />}>{children}</Suspense>;
@@ -153,6 +154,20 @@ export default function App() {
             element={
               <RequireAuth>
                 <MyEventsPage />
+              </RequireAuth>
+            }
+          />
+          {/* The staff pages: one per portal section, where the caller
+              picks one of their events, as an admin does on an admin page.
+              The Event staff bar links these. */}
+          <Route path="staff" element={<Navigate to="/my-events" replace />} />
+          <Route
+            path="staff/:section"
+            element={
+              <RequireAuth>
+                <Lazy>
+                  <StaffSectionPage />
+                </Lazy>
               </RequireAuth>
             }
           />

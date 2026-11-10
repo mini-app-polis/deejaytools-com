@@ -39,5 +39,8 @@ export const COORDINATOR_SECTIONS: PortalSection[] = sections("coordinator");
 /** The DJ portal: running the event's floor trials and its music, plus the coordinator's sections. */
 export const DJ_SECTIONS: PortalSection[] = sections("dj");
 
-/** The event-manager portal: everything the DJ has, plus the event itself and its staff. */
+/**
+ * The event-manager portal: everything the DJ has, plus the event itself and
+ * its staff. Every section there is, so the staff pages render from it too.
+ */
 export const EVENT_MANAGER_SECTIONS: PortalSection[] = sections("event-manager");
