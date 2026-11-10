@@ -64,12 +64,15 @@ jobs:
     # VER-006: semantic-release and its plugins from the fleet's shared lockfile.
     uses: mini-app-polis/.github/.github/workflows/release.yml@v3
 
-  # CD-031. A release requests its own conformance evaluation through the
-  # fleet's shared workflow, so this repo's findings move with its code
-  # rather than waiting for the next standards or evaluator release.
+  # Conformance is graded on every change once CI passes, before it is
+  # released (CD-031), so a docs or chore commit that cuts no release is
+  # graded too. Nothing waits for the answer: the job reports whether the
+  # request landed, never what was found.
   evaluate:
-    needs: release
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [test, security]
+    if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
     uses: mini-app-polis/.github/.github/workflows/evaluate.yml@v3
+    with:
+      ref: dev
     secrets:
       api-key: ${{ secrets.CI_VALIDATOR_API_KEY }}
