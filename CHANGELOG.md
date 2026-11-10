@@ -1,3 +1,10 @@
+# [2.34.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.33.0...v2.34.0) (2026-11-10)
+
+
+### Features
+
+* **nav:** admin view-as picks a role only; a staff role applies to every event, with no event to select ([ca0b855](https://github.com/mini-app-polis/deejaytools-com/commit/ca0b855e97240ab5e7bef7ad2e00fdc1fab0d8f2))
+
 # [2.33.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.32.0...v2.33.0) (2026-11-09)
 
 
