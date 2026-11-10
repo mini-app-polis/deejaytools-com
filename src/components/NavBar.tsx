@@ -327,32 +327,29 @@ export default function NavBar() {
 
 const VIEW_AS_LABELS: Record<ViewAsRole, string> = { ...EVENT_ROLE_LABELS, dancer: "Dancer" };
 
-/** Start or switch a view-as, landing on the page that role would see in place of this one. */
+/**
+ * Start or switch a view-as, landing on the page that role would see in place
+ * of this one: on the event this page is about, else the soonest.
+ */
 function useStartViewAs() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const eventsQuery = useEndpointQuery(endpoints.events.list);
+  const fallbackEvent = defaultEventId(eventsQuery.data ?? []);
   return (view: ViewAs) => {
     setViewAs(view);
-    const to = viewAsDestination(pathname, view);
+    const to = fallbackEvent || eventOfPath(pathname) ? viewAsDestination(pathname, view, fallbackEvent) : pathname;
     if (to !== pathname) navigate(to);
   };
 }
 
 /**
  * Admins only, under the Admin bar: view the whole site (menus, bars, pages)
- * as one of an event's staff roles, or as a dancer. The event is the one this
- * page is about, else the soonest not yet over, and can be changed here.
+ * as one of the staff roles, held on every event, or as a dancer. No event is
+ * picked: every event shows as that role would see it.
  */
 function ViewAsPicker() {
-  const { pathname } = useLocation();
   const start = useStartViewAs();
-  const eventsQuery = useEndpointQuery(endpoints.events.list);
-  const events = eventsQuery.data ?? [];
-  const [picked, setPicked] = useState("");
-  const fromPath = eventOfPath(pathname);
-  const eventId = [picked, fromPath].find((id) => id && events.some((e) => e.id === id)) ?? defaultEventId(events);
-  if (!eventId) return null;
-
   return (
     <nav aria-label="View as" className="hidden sm:block border-t border-white/[0.07] bg-black/10">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 min-h-10 py-1 flex flex-wrap items-center gap-2 text-sm">
@@ -362,26 +359,11 @@ function ViewAsPicker() {
             key={role}
             type="button"
             className="rounded-full px-3 py-1 whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground"
-            onClick={() => start({ role, eventId })}
+            onClick={() => start({ role })}
           >
             {VIEW_AS_LABELS[role]}
           </button>
         ))}
-        <span className="text-muted-foreground whitespace-nowrap">at</span>
-        <select
-          aria-label="Event to view"
-          className="rounded-md border border-white/10 bg-background px-2 py-1 text-sm"
-          value={eventId}
-          onChange={(e) => setPicked(e.target.value)}
-        >
-          {[...events]
-            .sort((a, b) => b.start_date.localeCompare(a.start_date))
-            .map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.name}
-              </option>
-            ))}
-        </select>
       </div>
     </nav>
   );
@@ -394,14 +376,12 @@ function ViewAsPicker() {
  */
 function ViewAsBanner({ view }: { view: ViewAs }) {
   const start = useStartViewAs();
-  const eventsQuery = useEndpointQuery(endpoints.events.list);
-  const eventName = eventsQuery.data?.find((e) => e.id === view.eventId)?.name ?? "Event";
 
   return (
     <div role="region" aria-label="Viewing as" className="border-b border-amber-500/30 bg-amber-500/15">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 min-h-9 py-1 flex flex-wrap items-center gap-2 text-sm">
         <span className="font-medium text-amber-200">
-          Viewing as {VIEW_AS_LABELS[view.role]} · {eventName}
+          Viewing as {VIEW_AS_LABELS[view.role]}
         </span>
         <span className="text-amber-200/70">switch to</span>
         {VIEW_AS_ROLES.filter((r) => r !== view.role).map((role) => (
@@ -409,7 +389,7 @@ function ViewAsBanner({ view }: { view: ViewAs }) {
             key={role}
             type="button"
             className="rounded-full px-2 py-0.5 text-amber-100/80 hover:text-amber-50"
-            onClick={() => start({ role, eventId: view.eventId })}
+            onClick={() => start({ role })}
           >
             {VIEW_AS_LABELS[role]}
           </button>

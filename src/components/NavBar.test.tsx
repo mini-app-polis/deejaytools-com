@@ -31,7 +31,7 @@ vi.mock("@clerk/clerk-react", () => ({
 // Drive useAuthMe via mutable flags. `viewing` is an admin's view-as: then
 // isAdmin is false and eventRoles are the viewed role's, as useAuthMe makes them.
 let isAdmin = false;
-let viewing: { role: "coordinator" | "dj" | "event-manager" | "dancer"; eventId: string } | null = null;
+let viewing: { role: "coordinator" | "dj" | "event-manager" | "dancer" } | null = null;
 let eventRoles: { event_id: string; role: "coordinator" | "dj" | "event-manager" }[] = [];
 vi.mock("@/hooks/useAuthMe", () => ({
   useAuthMe: () => ({
@@ -65,7 +65,7 @@ afterEach(() => {
   }
 });
 
-// The events list, which the admin view-as strip picks from.
+// The events list, whose soonest event a view-as lands on from a page about none.
 let eventsList: { id: string; name: string; status: string; start_date: string }[] = [];
 vi.mock("@/api/queries", () => ({
   useEndpointQuery: (_endpoint: unknown, opts?: { enabled?: boolean }) => ({
@@ -195,48 +195,46 @@ describe("NavBar — admin view as", () => {
   ];
   const stored = () => JSON.parse(sessionStorage.getItem("deejaytools.viewAs") ?? "null") as unknown;
 
-  it("offers every role, and dancer, on the soonest event from a page about none", () => {
+  it("offers every role, and dancer, with no event to pick", () => {
     signedIn = true;
     isAdmin = true;
     eventsList = events;
     renderNav("/my-content");
     const row = screen.getByRole("navigation", { name: "View as" });
-    expect(within(row).getByRole("combobox", { name: "Event to view" })).toHaveValue("dcsx");
+    expect(within(row).queryByRole("combobox")).toBeNull();
     for (const name of ["Coordinator", "DJ", "Event manager", "Dancer"]) {
       expect(within(row).getByRole("button", { name })).toBeInTheDocument();
     }
   });
 
-  it("starts a view from an admin page on that page's staff version, for the chosen event", async () => {
+  it("starts a view from an admin page on that page's staff version, at the soonest event", async () => {
     signedIn = true;
     isAdmin = true;
     eventsList = events;
     const user = userEvent.setup();
     renderNav("/admin/registrations");
     const row = screen.getByRole("navigation", { name: "View as" });
-    await user.selectOptions(within(row).getByRole("combobox", { name: "Event to view" }), "open");
     await user.click(within(row).getByRole("button", { name: "DJ" }));
-    expect(stored()).toEqual({ role: "dj", eventId: "open" });
-    expect(screen.getByTestId("where")).toHaveTextContent("/events/open/dj/registrations");
+    expect(stored()).toEqual({ role: "dj" });
+    expect(screen.getByTestId("where")).toHaveTextContent("/events/dcsx/dj/registrations");
   });
 
-  it("uses the event a page is about, and keeps a portal's section where the role has it", async () => {
+  it("keeps the event a page is about, and a portal's section where the role has it", async () => {
     signedIn = true;
     isAdmin = true;
     eventsList = events;
     const user = userEvent.setup();
     renderNav("/events/open/manage/registrations");
     const row = screen.getByRole("navigation", { name: "View as" });
-    expect(within(row).getByRole("combobox", { name: "Event to view" })).toHaveValue("open");
     await user.click(within(row).getByRole("button", { name: "Coordinator" }));
-    expect(stored()).toEqual({ role: "coordinator", eventId: "open" });
+    expect(stored()).toEqual({ role: "coordinator" });
     expect(screen.getByTestId("where")).toHaveTextContent("/events/open/coordinator/registrations");
   });
 
   it("while viewing, shows the banner instead of the Admin bar, switches role, and exits", async () => {
     signedIn = true;
     isAdmin = true;
-    viewing = { role: "dj", eventId: "open" };
+    viewing = { role: "dj" };
     eventRoles = [{ event_id: "open", role: "dj" }];
     staffEvents = [{ eventId: "open", role: "dj", event: { name: "The Open" } }];
     eventsList = events;
@@ -244,7 +242,7 @@ describe("NavBar — admin view as", () => {
     renderNav("/events/open/dj/queue");
 
     const banner = screen.getByRole("region", { name: "Viewing as" });
-    expect(within(banner).getByText("Viewing as DJ · The Open")).toBeInTheDocument();
+    expect(within(banner).getByText("Viewing as DJ")).toBeInTheDocument();
     // The menus are the DJ's: their staff bar, and no Admin bar or picker.
     expect(screen.queryByRole("navigation", { name: "Admin" })).toBeNull();
     expect(screen.queryByRole("navigation", { name: "View as" })).toBeNull();
@@ -252,7 +250,7 @@ describe("NavBar — admin view as", () => {
 
     // The queue is not a coordinator section: that role opens its portal.
     await user.click(within(banner).getByRole("button", { name: "Coordinator" }));
-    expect(stored()).toEqual({ role: "coordinator", eventId: "open" });
+    expect(stored()).toEqual({ role: "coordinator" });
     expect(screen.getByTestId("where")).toHaveTextContent("/events/open/coordinator");
 
     await user.click(within(banner).getByRole("button", { name: "Exit view" }));
