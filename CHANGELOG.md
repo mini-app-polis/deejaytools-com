@@ -1,3 +1,10 @@
+# [2.37.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.36.0...v2.37.0) (2026-11-10)
+
+
+### Features
+
+* **nav:** one view-as row that stays at the foot of the header, switching between the admin's own view and each role ([07496c2](https://github.com/mini-app-polis/deejaytools-com/commit/07496c2675d087fdca1ab0101116e7ebc5a57043))
+
 # [2.36.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.35.0...v2.36.0) (2026-11-10)
 
 
