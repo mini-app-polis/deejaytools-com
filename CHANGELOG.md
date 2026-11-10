@@ -1,3 +1,15 @@
+# [2.36.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.35.0...v2.36.0) (2026-11-10)
+
+
+### Bug Fixes
+
+* **staff:** render a staff page from its known section, not a lookup by the URL's name ([cfe5fbc](https://github.com/mini-app-polis/deejaytools-com/commit/cfe5fbcc6b26e5a1b501c8444086030443e826c2))
+
+
+### Features
+
+* **staff:** staff pages pick their event like admin pages; the staff bar links them and view-as is a role only ([4d32dd5](https://github.com/mini-app-polis/deejaytools-com/commit/4d32dd505d6bf3802b19c8f01ecfbc22052c2971))
+
 # [2.35.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.34.0...v2.35.0) (2026-11-10)
 
 
