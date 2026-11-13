@@ -716,10 +716,10 @@ describe("EventDetailPage — missing music counts", () => {
     renderPage();
 
     // Classic: 1 of 2 in. Masters: 0 of 1. The event: 1 of 3.
-    await waitFor(() => expect(screen.getByText(/50% complete/)).toBeInTheDocument());
-    expect(screen.getByText(/ 0% complete/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/2 total · 50% complete/)).toBeInTheDocument());
+    expect(screen.getByText(/1 total · 0% complete/)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /^entered/i }).textContent).toMatch(
-      /1 entry · 33% complete · 2 missing$/
+      /1 entry · 3 total · 33% complete · 2 missing$/
     );
   });
 
@@ -750,7 +750,7 @@ describe("EventDetailPage — missing music counts", () => {
     // Submitted + handled = 2, of 4 less 1 scratched = 3.
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: /^entered/i }).textContent).toMatch(
-        /1 entry · 67% complete · 1 missing$/
+        /1 entry · 3 total · 67% complete · 1 missing$/
       )
     );
   });
