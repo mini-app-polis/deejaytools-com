@@ -1,3 +1,11 @@
+# [2.39.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.38.1...v2.39.0) (2026-11-13)
+
+
+### Features
+
+* **event:** show staff the percent complete, and count entries only ([02f0d90](https://github.com/mini-app-polis/deejaytools-com/commit/02f0d9057cf405d1d1ca2245e27cab3c4a8deccd))
+* **registrations:** add pasted entries to the list without replacing it ([2a5a06a](https://github.com/mini-app-polis/deejaytools-com/commit/2a5a06a8b04442fe1543a35465cf314f1a7006ff))
+
 ## [2.38.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.38.0...v2.38.1) (2026-11-13)
 
 
