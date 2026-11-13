@@ -11,11 +11,22 @@
  * events. The `enabled` flag mirrors the API-side pattern.
  */
 import * as Sentry from "@sentry/react";
+import { sentryEnvironment, tracePropagationTargets } from "./sentryOptions";
+
+const propagationTargets = tracePropagationTargets(import.meta.env.VITE_API_URL);
 
 Sentry.init({
   dsn: import.meta.env.VITE_SENTRY_DSN,
-  environment: import.meta.env.MODE,
+  // From the branch Pages built (vite.config.ts), not import.meta.env.MODE,
+  // which is "production" for every build, the dev site's included.
+  environment: sentryEnvironment(import.meta.env.VITE_SENTRY_ENVIRONMENT),
   enabled: Boolean(import.meta.env.VITE_SENTRY_DSN),
+  // Requests to the API carry sentry-trace and baggage, so an API error shares
+  // a trace id with the page that made the request. tracesSampleRate is left
+  // unset on purpose: the browser sends no performance spans (no quota spent)
+  // and leaves the sampling decision to the API.
+  integrations: [Sentry.browserTracingIntegration()],
+  ...(propagationTargets ? { tracePropagationTargets: propagationTargets } : {}),
   // v11 removed `sendDefaultPii`, and an unset `dataCollection` now collects
   // everything. This is Sentry's documented equivalent of the old
   // `sendDefaultPii: false`, so no user data starts flowing on the upgrade.

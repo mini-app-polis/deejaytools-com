@@ -80,6 +80,20 @@ separate iteration.
   that is caught by a test error on the deployed site landing in the
   right project.
 
+**Environment and traces:**
+- Events are tagged with the environment the API uses for the same
+  deploy: `production` for builds of `main`, `development` for every
+  other Pages build, `local` otherwise. `vite.config.ts` decides it
+  from the branch; Vite's mode cannot, being `production` for every
+  build.
+- Requests to the site's API carry `sentry-trace` and `baggage`
+  (`browserTracingIntegration`, with `tracePropagationTargets` set to
+  the API origin only, since other hosts would refuse the headers in
+  their CORS preflight). The API allows both headers. An API error then
+  shares a trace id with the page that caused it.
+- `tracesSampleRate` is unset, so the browser sends no performance
+  spans and spends no quota; the API makes the sampling decision.
+
 **Harder:**
 - When `common-typescript-utils` ships a browser-compatible logger,
   this wrapper has to be deleted and call sites have to switch.
