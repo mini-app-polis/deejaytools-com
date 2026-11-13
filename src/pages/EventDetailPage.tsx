@@ -229,11 +229,15 @@ function useMissingCounts(eventId: string, eventName: string, enabled: boolean) 
   }, [registrations, submissions, divisions, roundsSplit]);
 }
 
-/** " · 75% complete", or nothing when it is not shown or has nothing to count. */
-function PercentLabel({ progress }: { progress: Progress | undefined }) {
+/**
+ * " · 21 total · 75% complete": the entries still competing on the
+ * registration list, and the share of them with music in. Nothing when it is
+ * not shown or has nothing to count.
+ */
+function ProgressLabel({ progress }: { progress: Progress | undefined }) {
   const percent = percentComplete(progress);
-  if (percent === null) return null;
-  return <>{` · ${percent}% complete`}</>;
+  if (!progress || percent === null) return null;
+  return <>{` · ${progress.total} total · ${percent}% complete`}</>;
 }
 
 /** " · 2 missing · 1 possible", or nothing when nothing is outstanding. */
@@ -330,7 +334,7 @@ function EnteredEntities({
         {totalEntries !== null && (
           <span className="ml-2 text-sm font-normal text-muted-foreground">
             {entriesLabel(totalEntries)}
-            <PercentLabel progress={progressTotal} />
+            <ProgressLabel progress={progressTotal} />
             <MissingLabel count={missingTotal} />
           </span>
         )}
@@ -389,7 +393,7 @@ function EnteredEntities({
                     </span>
                     <span className="text-xs font-normal text-muted-foreground">
                       {entriesLabel(entities.length)}
-                      <PercentLabel progress={progress?.get(division)} />
+                      <ProgressLabel progress={progress?.get(division)} />
                       <MissingLabel count={missing.get(division)} />
                     </span>
                   </button>
@@ -414,7 +418,7 @@ function EnteredEntities({
             {unrecognised && (
               <p className="mb-6 break-inside-avoid text-xs text-muted-foreground">
                 Registrations in divisions not recognised
-                <PercentLabel progress={progress?.get(null)} />
+                <ProgressLabel progress={progress?.get(null)} />
                 <MissingLabel count={unrecognised} />
               </p>
             )}
