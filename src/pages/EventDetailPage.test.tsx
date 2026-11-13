@@ -484,7 +484,7 @@ describe("EventDetailPage — entered entities", () => {
     expect(screen.getByText("team2026")).toBeInTheDocument();
   });
 
-  it("collapses an entity's songs into a count instead of listing them", async () => {
+  it("lists each entity once, with no song count", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
       if (path === "/v1/events/ev-1/entities") {
@@ -500,17 +500,17 @@ describe("EventDetailPage — entered entities", () => {
     renderPage();
 
     await expandDivisions("Classic");
-    await waitFor(() => expect(screen.getByText("2 songs")).toBeInTheDocument());
-    // Singular for one, so the row never reads "1 songs".
-    expect(screen.getByText("1 song")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Alex Kim & Jo Ruiz")).toBeInTheDocument());
+    expect(screen.getByText("Sam Lee")).toBeInTheDocument();
+    // Couples are what the event page counts; their songs are not shown.
+    expect(screen.queryByText(/\bsongs?\b/)).toBeNull();
   });
 
-  it("counts distinct entities in the heading but sums their songs", async () => {
+  it("counts distinct entities in the heading", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
       if (path === "/v1/events/ev-1/entities") {
-        // The same couple entered in two divisions is two rows but one entry —
-        // and their songs from both divisions still both count as songs.
+        // The same couple entered in two divisions is two rows but one entry.
         return Promise.resolve([
           makeDivision("Classic", [
             makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz", songs: 2 }),
@@ -526,12 +526,12 @@ describe("EventDetailPage — entered entities", () => {
 
     await waitFor(() =>
       expect(
-        screen.getByRole("heading", { name: /entered\s+1 entry · 3 songs/i })
+        screen.getByRole("heading", { name: /^entered\s+1 entry$/i })
       ).toBeInTheDocument()
     );
   });
 
-  it("shows entry and song counts on each division header", async () => {
+  it("shows the entry count on each division header", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
       if (path === "/v1/events/ev-1/entities") {
@@ -549,10 +549,8 @@ describe("EventDetailPage — entered entities", () => {
     });
     renderPage();
 
-    // One couple with two Classic songs: the counts differ, which is the whole
-    // reason both are printed.
-    await waitFor(() => expect(screen.getByText("1 entry · 2 songs")).toBeInTheDocument());
-    expect(screen.getByText("2 entries · 2 songs")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("1 entry")).toBeInTheDocument());
+    expect(screen.getByText("2 entries")).toBeInTheDocument();
   });
 
   it("starts each division collapsed, opening and closing it from its header", async () => {
@@ -597,9 +595,7 @@ describe("EventDetailPage — entered entities", () => {
     await waitFor(() => expect(screen.getByText("Alex Kim & Jo Ruiz")).toBeInTheDocument());
     // The roster deliberately carries no song fields — nothing on the page
     // should look like a title, routine name, filename or version suffix.
-    // "3 songs" is the count, which is the whole point, so it is not a leak.
     expect(screen.queryByText(/\.mp3|\.wav|\.m4a|routine|\bv\d{2}\b/i)).toBeNull();
-    expect(screen.getByText("3 songs")).toBeInTheDocument();
   });
 
   it("shows an empty state when nothing has been submitted", async () => {
@@ -714,6 +710,51 @@ describe("EventDetailPage — missing music counts", () => {
     expect(screen.queryByText(/Pat Long|Gina White/)).toBeNull();
   });
 
+  it("shows the event's staff the percent complete per division and in total", async () => {
+    authMe = { isAdmin: false, eventRoles: [{ event_id: "ev-1", role: "coordinator" }] };
+    mockRegistrationApi();
+    renderPage();
+
+    // Classic: 1 of 2 in. Masters: 0 of 1. The event: 1 of 3.
+    await waitFor(() => expect(screen.getByText(/50% complete/)).toBeInTheDocument());
+    expect(screen.getByText(/ 0% complete/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^entered/i }).textContent).toMatch(
+      /1 entry · 33% complete · 2 missing$/
+    );
+  });
+
+  it("counts a handled entry as complete and leaves a scratched one out", async () => {
+    authMe = { isAdmin: true, eventRoles: [] };
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (path === "/v1/events/ev-1/entities") {
+        return Promise.resolve([
+          makeDivision("Classic", [makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz" })]),
+        ]);
+      }
+      if (path === "/v1/events/ev-1/registrations") {
+        return Promise.resolve([
+          registration("Classic", "Alex Kim", "Jo Ruiz"),
+          { ...registration("Classic", "Pat Long", "Sam Short"), handled: true },
+          { ...registration("Classic", "Lee Park", "Kai Moss"), scratched: true },
+          registration("Classic", "Ana Bell", "Tom Hart"),
+        ]);
+      }
+      if (path === "/v1/events/ev-1/song-submissions") {
+        return Promise.resolve([submission("s1", "Alex Kim & Jo Ruiz", "Classic")]);
+      }
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    // Submitted + handled = 2, of 4 less 1 scratched = 3.
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: /^entered/i }).textContent).toMatch(
+        /1 entry · 67% complete · 1 missing$/
+      )
+    );
+  });
+
   it("shows admins the counts", async () => {
     authMe = { isAdmin: true, eventRoles: [] };
     mockRegistrationApi();
@@ -731,7 +772,7 @@ describe("EventDetailPage — missing music counts", () => {
     await waitFor(() => expect(screen.getByText("Alex Kim & Jo Ruiz")).toBeInTheDocument());
     expect(apiGet).not.toHaveBeenCalledWith("/v1/events/ev-1/registrations");
     expect(apiGet).not.toHaveBeenCalledWith("/v1/events/ev-1/song-submissions");
-    expect(screen.queryByText(/missing/)).toBeNull();
+    expect(screen.queryByText(/missing|% complete/)).toBeNull();
     expect(screen.queryByText("Masters")).toBeNull();
   });
 });

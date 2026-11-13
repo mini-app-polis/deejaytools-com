@@ -5,6 +5,8 @@ import {
   divisionForRegistration,
   missingByDivision,
   parseRegistrationPaste,
+  percentComplete,
+  progressByDivision,
   reconcileRegistrations,
   registrationLines,
   nameCloseness,
@@ -238,5 +240,36 @@ describe("missingByDivision", () => {
     expect(counts.get("Masters")).toEqual({ missing: 1, possible: 0 });
     expect(counts.get(null)).toEqual({ missing: 1, possible: 0 });
     expect(counts.size).toBe(3);
+  });
+});
+
+describe("progressByDivision", () => {
+  it("counts submitted and handled as complete, and leaves scratched entries out", () => {
+    const entries = [
+      entry({ division: "Classic", dancer_1: "Ada Lovelace", dancer_2: "Bob Jones" }),
+      entry({ division: "Classic", dancer_1: "Cara Smith", dancer_2: "Dan Brown" }),
+      entry({ division: "Classic", dancer_1: "Eve Adams", dancer_2: "Fred Black", handled: true }),
+      entry({ division: "Classic", dancer_1: "Gil Hay", dancer_2: "Ida Joy", scratched: true }),
+      entry({ division: "Masters", dancer_1: "Gina White", dancer_2: "Hank Green", scratched: true }),
+      entry({ division: "Mystery Division", dancer_1: "Kim Red", dancer_2: "Lou Pink" }),
+    ];
+    // Cara's "Kara" makes hers a possible match: not complete.
+    const subs = [sub("Ada Lovelace & Bob Jones", "Classic"), sub("Kara Smith & Dan Brown", "Classic")];
+    const { rows } = reconcileRegistrations(entries, subs, TEST_DIVISIONS, false);
+    const progress = progressByDivision(rows);
+    expect(progress.get("Classic")).toEqual({ complete: 2, total: 3 });
+    expect(progress.get(null)).toEqual({ complete: 0, total: 1 });
+    // All scratched: nothing to count.
+    expect(progress.has("Masters")).toBe(false);
+  });
+});
+
+describe("percentComplete", () => {
+  it("rounds to a whole percent, and has none with nothing to count", () => {
+    expect(percentComplete({ complete: 2, total: 3 })).toBe(67);
+    expect(percentComplete({ complete: 1, total: 3 })).toBe(33);
+    expect(percentComplete({ complete: 3, total: 3 })).toBe(100);
+    expect(percentComplete({ complete: 0, total: 0 })).toBeNull();
+    expect(percentComplete(undefined)).toBeNull();
   });
 });
