@@ -29,6 +29,12 @@ export const TIMEOUT_FLOOR_BYTES_PER_SECOND = 25 * 1024;
 export const TIMEOUT_BASE_MS = 15_000;
 export const FINAL_CHUNK_EXTRA_MS = 30_000;
 
+/**
+ * How long one chunk may take before it is abandoned and retried: a base for
+ * the round trip, plus the chunk's time at the slowest rate still treated as
+ * working, plus extra on the final chunk, whose response waits for the song
+ * to be assembled.
+ */
 export function chunkTimeoutMs(chunkBytes: number, isLast: boolean): number {
   return (
     TIMEOUT_BASE_MS +
