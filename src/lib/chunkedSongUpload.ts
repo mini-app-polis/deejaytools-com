@@ -93,11 +93,14 @@ export class UploadRefused extends Error {
  * chunks are already deleted, so a retry would only earn a misleading
  * CHUNK_MISSING), a file over the size limit, an expired session, a taken
  * slot. TOO_MANY_UPLOADS is a 429 that lasts until the caller's other uploads
- * finish, so it is not retried either.
+ * finish, so it is not retried either. UPLOAD_IN_PROGRESS is a 409 for a
+ * resent final chunk that arrived while an earlier copy was still assembling
+ * the song; sent again, it gets that song back.
  */
 export function isRetryableRefusal(status: number, code: string | undefined): boolean {
   if (status >= 500 || status === 408 || status === 499) return true;
   if (status === 429) return code !== "TOO_MANY_UPLOADS";
+  if (status === 409) return code === "UPLOAD_IN_PROGRESS";
   return false;
 }
 

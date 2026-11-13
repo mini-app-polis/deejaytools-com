@@ -406,6 +406,7 @@ describe("isRetryableRefusal", () => {
     [404, "NOT_FOUND", false],
     [409, "ENTITY_SLOT_TAKEN", false],
     [409, "CHUNK_MISSING", false],
+    [409, "UPLOAD_IN_PROGRESS", true],
     [413, undefined, false],
   ])("status %i code %s → %s", (status, code, expected) => {
     expect(isRetryableRefusal(status, code)).toBe(expected);
