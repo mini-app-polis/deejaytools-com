@@ -1,3 +1,12 @@
+## [2.38.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.38.0...v2.38.1) (2026-11-13)
+
+
+### Bug Fixes
+
+* **sentry:** tag the dev site as development and link site and API errors by trace ([96fa8fd](https://github.com/mini-app-polis/deejaytools-com/commit/96fa8fdf2c217e7244379e206f9e312b13ae80f4))
+* **upload:** retry a final chunk the API is still assembling ([01530bc](https://github.com/mini-app-polis/deejaytools-com/commit/01530bc00d4f16be987d19852bda3362255adae6))
+* **upload:** survive slow mobile connections with small chunks, timeouts and resume ([56befcb](https://github.com/mini-app-polis/deejaytools-com/commit/56befcb52710b93f203f054919a809fbfbad5808))
+
 # [2.38.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.37.0...v2.38.0) (2026-11-10)
 
 
