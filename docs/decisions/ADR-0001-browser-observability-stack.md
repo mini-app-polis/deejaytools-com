@@ -63,6 +63,23 @@ separate iteration.
   a Node module into the browser bundle.
 - Local development is silent — DSN unset, Sentry no-ops.
 
+**How the DSN reaches each build:**
+- The DSN lives in Doppler as `SENTRY_DSN_DEEJAYTOOLS`, named for its
+  Sentry project (CD-002), and is set in the Cloudflare Pages build
+  environment under the same name, for production and preview builds.
+  Pages builds the site itself, so the DSN is read at build time only.
+- `vite.config.ts` maps that one variable, by name, into the bundle as
+  `import.meta.env.VITE_SENTRY_DSN`; `envPrefix` is not widened, which
+  would bundle every `SENTRY_DSN_*` in the build environment.
+- A build without it still succeeds and Sentry silently no-ops, so a
+  missing DSN would otherwise go unnoticed. The `site` workflow
+  (`.github/workflows/site.yml`) fails a deployed build whose app bundle
+  carries no DSN, alongside its check of the Clerk key. It checks the
+  DSN's shape only (`https://<key>@o<org>.ingest….sentry.io/<project>`),
+  never printing it, so it cannot tell a DSN for the wrong project:
+  that is caught by a test error on the deployed site landing in the
+  right project.
+
 **Harder:**
 - When `common-typescript-utils` ships a browser-compatible logger,
   this wrapper has to be deleted and call sites have to switch.
