@@ -18,11 +18,9 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ApiTeam } from "@/schemas";
 import { toastFirstError } from "@/lib/formErrors";
-import {
-  MAX_FILE_BYTES,
-  uploadSongInChunks,
-  type UploadStage,
-} from "@/lib/chunkedSongUpload";
+import { MAX_FILE_BYTES, type UploadInterrupted } from "@/lib/chunkedSongUpload";
+import { useChunkedUpload } from "@/hooks/useChunkedUpload";
+import UploadProgress from "@/components/UploadProgress";
 
 // A stable empty list while the teams have not loaded, so the effect over it holds.
 const NO_TEAMS: readonly ApiTeam[] = [];
@@ -63,10 +61,6 @@ const EMPTY_FORM: SpecialUploadValues = {
   descriptor: "",
 };
 
-function formatMB(bytes: number): string {
-  return (bytes / (1024 * 1024)).toFixed(1);
-}
-
 function isIOS(): boolean {
   if (typeof navigator === "undefined") return false;
   const ua = navigator.userAgent;
@@ -102,28 +96,27 @@ export default function SpecialUploadForm() {
   const selectedTeamId = watch("selectedTeamId");
   const [fileInputKey, setFileInputKey] = useState(0);
   const [formKey, setFormKey] = useState(0);
-  const [uploadStage, setUploadStage] = useState<UploadStage>("idle");
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadBytesSent, setUploadBytesSent] = useState(0);
+  const { progress: uploadState, interrupted, upload, clearInterrupted } = useChunkedUpload();
+
+  // An upload that stopped is offered for resuming only with its own file.
+  useEffect(() => {
+    if (interrupted && interrupted.resume.file !== file) clearInterrupted();
+  }, [interrupted, file, clearInterrupted]);
 
   // Preselect the first team once the teams load.
   useEffect(() => {
     if (teams.length > 0 && getValues("selectedTeamId") === "") setValue("selectedTeamId", teams[0].id);
   }, [teams, getValues, setValue]);
 
-  const handleUpload = async ({
-    file,
-    division,
-    entityName,
-    selectedTeamId,
-    routineName,
-    descriptor,
-  }: SpecialUploadValues) => {
+  const handleUpload = async (
+    { file, division, entityName, selectedTeamId, routineName, descriptor }: SpecialUploadValues,
+    resume: UploadInterrupted | null = null
+  ) => {
     // The schema has refused a submit without a file.
     if (!file) return;
     const isTeams = division === "Teams";
     try {
-      await uploadSongInChunks({
+      await upload({
         file,
         getToken,
         buildFormFields: () => {
@@ -140,26 +133,16 @@ export default function SpecialUploadForm() {
           }
           return fields;
         },
-        onProgress: ({ stage, progress, bytesSent }) => {
-          setUploadStage(stage);
-          setUploadProgress(progress);
-          setUploadBytesSent(bytesSent);
-        },
-      });
+      }, resume);
 
       toast.success("Song uploaded successfully.");
       // The upload goes through its own fetch loop, so the song list is refreshed here.
       void queryClient.invalidateQueries({ queryKey: queryKey(endpoints.songs.list) });
       reset({ ...EMPTY_FORM, selectedTeamId: teams.length > 0 ? teams[0].id : "" });
-      setUploadBytesSent(0);
       setFileInputKey((k) => k + 1);
       setFormKey((k) => k + 1);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed.");
-    } finally {
-      setUploadStage("idle");
-      setUploadProgress(0);
-      setUploadBytesSent(0);
     }
   };
 
@@ -179,7 +162,7 @@ export default function SpecialUploadForm() {
 
   return (
     <Form {...form}>
-      <form noValidate onSubmit={(e) => void handleSubmit(handleUpload, toastFirstError)(e)} className="space-y-4">
+      <form noValidate onSubmit={(e) => void handleSubmit((values) => handleUpload(values), toastFirstError)(e)} className="space-y-4">
         <FormField
           control={form.control}
           name="division"
@@ -299,26 +282,13 @@ export default function SpecialUploadForm() {
           </Button>
         </div>
 
-        {uploadStage !== "idle" && (
-          <div className="mt-3 space-y-1">
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>
-                {uploadStage === "uploading" && file
-                  ? `Uploading… ${formatMB(uploadBytesSent)} of ${formatMB(file.size)} MB`
-                  : uploadStage === "processing"
-                    ? "Processing your file… this may take a moment"
-                    : "Saving…"}
-              </span>
-              <span>{uploadProgress}%</span>
-            </div>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full bg-primary transition-all duration-300"
-                style={{ width: `${uploadProgress}%` }}
-              />
-            </div>
-          </div>
-        )}
+        <UploadProgress
+          progress={uploadState}
+          fileSize={file?.size ?? null}
+          interrupted={interrupted}
+          onResume={() => void handleSubmit((values) => handleUpload(values, interrupted), toastFirstError)()}
+          resumeDisabled={isSubmitting}
+        />
       </form>
     </Form>
   );

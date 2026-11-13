@@ -114,22 +114,23 @@ Related refusals from the same route: `Chunk exceeds 10 MB limit` (one chunk; th
 **Fix:**
 
 1. Sign in again.
-2. Re-upload the file from the beginning (each attempt gets a new `upload_id`).
+2. Re-upload the file from the beginning (each new upload gets a new `upload_id`; only **Retry upload** after an interrupted upload reuses one).
 3. Note: an API **401** on a chunk also aborts immediately without retry. The message shown is then the server's `error.message` (e.g. `Authentication required`), or `Upload failed (401)` if the body is not parseable, not the session-expired string above.
 
 ---
 
-## `Upload failed (<ErrorName>: <message>) — the connection may have dropped. Retrying…`
+## `Upload failed (<ErrorName>: <message>) — the connection may have dropped.` / `… took longer than <n> s to send …`
 
-**Symptom:** During chunked upload, the client shows this pattern (from `chunkedSongUpload.ts`); after 3 attempts on one chunk the upload fails with it.
+**Symptom:** During chunked upload, the form shows one of these with `Trying again in <n> s (attempt <n> of 4)…` (from `chunkedSongUpload.ts`). After 4 attempts on one chunk the upload stops with `The upload stopped at <x> of <y> MB after 4 tries. …` and a **Retry upload** button.
 
-**Cause:** No HTTP response came back for a chunk while the file itself was still readable: the client went offline, the API was unreachable, or the browser blocked the response (CORS: see "Problems fixed on the API side" above).
+**Cause:** No HTTP response came back for a chunk while the file itself was still readable — the client went offline, the API was unreachable, or the browser blocked the response (CORS: see "Problems fixed on the API side" above) — or the chunk overran its per-chunk timeout (`chunkTimeoutMs`, sized for an uplink half as fast as Slow 4G) and was aborted.
 
 **Fix:**
 
-1. Check the API is up (`GET /health`) and that the app's API URL is right (`DEEJAYTOOLS_API` / `DEEJAYTOOLS_API_DEV`).
-2. Check the browser console for a CORS error.
-3. Retry on a stable network.
+1. **Retry upload** continues from the chunk that failed, under the same `upload_id`, within the API's two-hour window for staged chunks; after that, the final chunk is refused with `CHUNK_MISSING` (below) and the file has to be uploaded again.
+2. Check the API is up (`GET /health`) and that the app's API URL is right (`DEEJAYTOOLS_API` / `DEEJAYTOOLS_API_DEV`).
+3. Check the browser console for a CORS error.
+4. Retry on a stable network.
 
 ---
 
@@ -147,7 +148,7 @@ Related refusals from the same route: `Chunk exceeds 10 MB limit` (one chunk; th
 
 **Symptom:** API **413** with code `payload_too_large`.
 
-**Cause:** A single request body over the API's 11 MiB limit (`BodyLimitMiddleware` in api-deejaytools `middleware.py`). Chunks are 5 MiB client-side, so this usually means a client sending the whole file in one request or an oversized non-upload POST.
+**Cause:** A single request body over the API's 11 MiB limit (`BodyLimitMiddleware` in api-deejaytools `middleware.py`). Chunks are at most ~3.3 MiB client-side (`chunkSizeFor`), so this usually means a client sending the whole file in one request or an oversized non-upload POST.
 
 **Fix:** Use the chunked upload endpoint; reduce payload size.
 

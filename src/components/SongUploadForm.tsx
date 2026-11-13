@@ -27,12 +27,9 @@ import {
 } from "@/schemas";
 import { roundDisplayLabel } from "@/lib/submissionRounds";
 import { toastFirstError } from "@/lib/formErrors";
-import {
-  MAX_FILE_BYTES,
-  UploadRefused,
-  uploadSongInChunks,
-  type UploadStage,
-} from "@/lib/chunkedSongUpload";
+import { MAX_FILE_BYTES, UploadRefused, type UploadInterrupted } from "@/lib/chunkedSongUpload";
+import { useChunkedUpload } from "@/hooks/useChunkedUpload";
+import UploadProgress from "@/components/UploadProgress";
 
 // Divisions handled only by the (future) solo/teams portal — hidden from the standard upload picker.
 const PORTAL_ONLY_DIVISIONS = new Set<string>(["Teams", "Cabaret", "My Division Is Not Listed"]);
@@ -48,7 +45,6 @@ type Partner = Pick<ApiPartner, "id" | "first_name" | "last_name" | "partner_rol
 // A stable empty list while a query has no data, so effects over it hold.
 const NO_ROWS: readonly never[] = [];
 
-function formatMB(bytes: number): string { return (bytes / (1024 * 1024)).toFixed(1); }
 function isIOS(): boolean {
   if (typeof navigator === "undefined") return false;
   const ua = navigator.userAgent;
@@ -128,9 +124,7 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
 
   const [fileInputKey, setFileInputKey] = useState(0);
   const [formKey, setFormKey] = useState(0);
-  const [uploadStage, setUploadStage] = useState<UploadStage>("idle");
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadBytesSent, setUploadBytesSent] = useState(0);
+  const { progress: uploadState, interrupted, upload, clearInterrupted } = useChunkedUpload();
   const staffOnBehalf = Boolean(onBehalf?.eventId);
   const form = useForm<SongUploadValues>({
     resolver: zodResolver(songUploadSchema(variant, staffOnBehalf)),
@@ -198,13 +192,18 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
     }
   }, [managedPartnerships, getValues, setValue]);
 
-  const handleUpload = async (values: SongUploadValues) => {
+  // An upload that stopped is offered for resuming only with its own file.
+  useEffect(() => {
+    if (interrupted && interrupted.resume.file !== file) clearInterrupted();
+  }, [interrupted, file, clearInterrupted]);
+
+  const handleUpload = async (values: SongUploadValues, resume: UploadInterrupted | null = null) => {
     const { file, division, routineName, descriptor, selectedPartnerId, selectedManagedPartnershipId, round } =
       values;
     // The schema has refused a submit without a file.
     if (!file) return;
     try {
-      await uploadSongInChunks({
+      await upload({
         file,
         getToken,
         buildFormFields: () => {
@@ -226,12 +225,7 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
           }
           return fields;
         },
-        onProgress: ({ stage, progress, bytesSent }) => {
-          setUploadStage(stage);
-          setUploadProgress(progress);
-          setUploadBytesSent(bytesSent);
-        },
-      });
+      }, resume);
 
       toast.success(
         staffOnBehalf
@@ -259,7 +253,6 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
         selectedPartnerId: partners.length > 0 ? partners[0].id : "",
         round: "prelims_and_finals",
       });
-      setUploadBytesSent(0);
       setFileInputKey((k) => k + 1);
       setFormKey((k) => k + 1);
       onUploaded?.();
@@ -273,10 +266,6 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
         return;
       }
       toast.error(err instanceof Error ? err.message : "Upload failed.");
-    } finally {
-      setUploadStage("idle");
-      setUploadProgress(0);
-      setUploadBytesSent(0);
     }
   };
 
@@ -310,7 +299,7 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
 
   return (
     <Form {...form}>
-      <form onSubmit={(e) => void handleSubmit(handleUpload, toastFirstError)(e)} className="space-y-4">
+      <form onSubmit={(e) => void handleSubmit((values) => handleUpload(values), toastFirstError)(e)} className="space-y-4">
         {/* Who this upload is for */}
         {onBehalf ? (
           <p className="text-sm text-muted-foreground">
@@ -508,21 +497,13 @@ export default function SongUploadForm({ variant, onBehalf, onUploaded }: SongUp
             {isSubmitting ? "Uploading…" : "Upload song"}
           </Button>
         </div>
-        {uploadStage !== "idle" && (
-          <div className="mt-3 space-y-1">
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>
-                {uploadStage === "uploading" && file
-                  ? `Uploading… ${formatMB(uploadBytesSent)} of ${formatMB(file.size)} MB`
-                  : uploadStage === "processing" ? "Processing your file… this may take a moment" : "Saving…"}
-              </span>
-              <span>{uploadProgress}%</span>
-            </div>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-              <div className="h-full bg-primary transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
-            </div>
-          </div>
-        )}
+        <UploadProgress
+          progress={uploadState}
+          fileSize={file?.size ?? null}
+          interrupted={interrupted}
+          onResume={() => void handleSubmit((values) => handleUpload(values, interrupted), toastFirstError)()}
+          resumeDisabled={isSubmitting}
+        />
       </form>
     </Form>
   );
