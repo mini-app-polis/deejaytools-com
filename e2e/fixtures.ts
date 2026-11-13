@@ -127,13 +127,13 @@ export function dateIn(timezone: string, offsetDays: number): string {
 }
 
 /**
- * A tenth of a second of silence as a WAV file (8 kHz, mono, 8-bit), built
- * here so the tests need no fixture on disk. The API recognises WAV by its
+ * Silence as a WAV file (8 kHz, mono, 8-bit, one byte a sample), a tenth of
+ * a second unless `samples` says otherwise, built here so the tests need no
+ * fixture on disk. The API recognises WAV by its
  * RIFF/WAVE header and tags it before the Drive upload, so the header has to
  * be a real one; the contract suite's upload already covers MP3.
  */
-export function silentWav(): Buffer {
-  const samples = 800;
+export function silentWav(samples = 800): Buffer {
   const wav = Buffer.alloc(44 + samples, 0x80); // 0x80 is silence at 8 bits
   wav.write("RIFF", 0, "ascii");
   wav.writeUInt32LE(36 + samples, 4);
