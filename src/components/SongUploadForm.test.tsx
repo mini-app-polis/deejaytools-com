@@ -375,4 +375,57 @@ describe("SongUploadForm — uploading", () => {
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Upload session expired"));
     expect(screen.getByRole("button", { name: "Upload song" })).toBeEnabled();
   });
+
+  it("shows a notice while a chunk is retried", async () => {
+    mockLoadedSelfForm();
+    let finish!: () => void;
+    uploadSongInChunks.mockImplementation(({ onProgress }) => {
+      onProgress({
+        stage: "uploading",
+        progress: 40,
+        bytesSent: 256 * 1024,
+        retry: { attempt: 2, maxAttempts: 4, delayMs: 2000, reason: "The connection dropped." },
+      });
+      return new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+    });
+    renderForm();
+    await screen.findByLabelText(/audio file/i);
+    chooseFile(audioFile());
+    chooseDivision("Classic");
+    submit();
+
+    expect(
+      await screen.findByText("The connection dropped. Trying again in 2 s (attempt 2 of 4)…")
+    ).toBeInTheDocument();
+    finish();
+    await waitFor(() => expect(screen.queryByText(/Trying again/)).not.toBeInTheDocument());
+  });
+
+  it("offers to resume an interrupted upload from where it stopped", async () => {
+    mockLoadedSelfForm();
+    const { UploadInterrupted } = await import("@/lib/chunkedSongUpload");
+    const file = audioFile();
+    const stopped = new UploadInterrupted(
+      "The upload stopped at 0.5 of 1.0 MB after 4 tries.",
+      { file, uploadId: "11111111-1111-4111-8111-111111111111", chunkSize: 1024 * 1024, nextChunk: 1 },
+      512 * 1024
+    );
+    uploadSongInChunks.mockRejectedValueOnce(stopped).mockResolvedValueOnce(undefined);
+    renderForm();
+    await screen.findByLabelText(/audio file/i);
+    chooseFile(file);
+    chooseDivision("Classic");
+    submit();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("The upload stopped at 0.5 of 1.0 MB");
+    fireEvent.click(screen.getByRole("button", { name: "Retry upload" }));
+
+    await waitFor(() => expect(uploadSongInChunks).toHaveBeenCalledTimes(2));
+    expect(uploadSongInChunks.mock.calls[0]![0].resume).toBeNull();
+    expect(uploadSongInChunks.mock.calls[1]![0].resume).toBe(stopped.resume);
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(screen.queryByRole("button", { name: "Retry upload" })).not.toBeInTheDocument();
+  });
 });

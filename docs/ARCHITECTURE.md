@@ -132,7 +132,7 @@ One default-export component per route. Pages orchestrate fetching, local state,
 |--------|------------------|
 | `authSyncStatus.ts` | Whether this tab's `POST /v1/auth/sync` has settled; `useAuthMe` waits on it after `USER_NOT_SYNCED` |
 | `chronoSort.ts` | Bucketed chronological sort for sessions/events (active → upcoming → past) |
-| `chunkedSongUpload.ts` | 5 MB chunked POST to `/v1/songs/upload/chunk` with retries |
+| `chunkedSongUpload.ts` | Chunked POST to `/v1/songs/upload/chunk` with per-chunk timeouts, retries and resume |
 | `clickable.ts` | Shared Tailwind class strings for clickable cards, table rows and the link in a clickable row |
 | `env.ts` | `isProdHost()` — true on `deejaytools.com` / `www.deejaytools.com` |
 | `eventDates.ts` | Parses and formats an event's calendar dates as local dates |
@@ -393,15 +393,18 @@ The API owns the division list; the app keeps no copy. `useDivisions()` returns 
 
 ## 6. Chunked song upload (`lib/chunkedSongUpload.ts`)
 
-Used by `SongUploadForm` (and manager “upload for” flows). Bypasses the API client — see §3.
+Used by `SongUploadForm` and `SpecialUploadForm` (and manager “upload for” flows), through `hooks/useChunkedUpload.ts`, with `components/UploadProgress.tsx` showing progress, retries and the resume button. Bypasses the API client — see §3.
+
+Built for slow mobile uplinks. DevTools' Slow 4G is about 400 kbps up (~50 KB/s), where a 1 MiB chunk takes ~21 s.
 
 ### Constants
 
 | Constant | Value |
 |----------|-------|
-| `CHUNK_SIZE` | 5 MB |
+| `chunkSizeFor(size)` | 1 MiB (`MIN_CHUNK_BYTES`), or `size / 30` when larger — the API takes at most 30 chunks and 10 MB per chunk, so 100 MB goes as 30 chunks of ~3.3 MiB |
+| `chunkTimeoutMs(bytes, isLast)` | 15 s + the time at 25 KiB/s (half Slow 4G) — 56 s for 1 MiB — plus 30 s on the last chunk for the API's processing |
 | `MAX_FILE_BYTES` | 100 MB |
-| `MAX_RETRIES` | 3 per chunk |
+| `MAX_ATTEMPTS` | 4 per chunk, the first included |
 
 ### Flow
 
@@ -409,9 +412,12 @@ Used by `SongUploadForm` (and manager “upload for” flows). Bypasses the API 
 2. Generate `uploadId` (`crypto.randomUUID()`).
 3. Slice file into chunks; POST each to `/v1/songs/upload/chunk` as `FormData` (`chunk`, `upload_id`, `chunk_index`, `total_chunks`, `original_filename`, `mime_type`, plus caller fields from `buildFormFields()`).
 4. **Fresh Clerk token** on every attempt (`getToken()` passed in from the form).
-5. **Retryable refusals** — 5xx, 408, and 429 other than `TOO_MANY_UPLOADS` (`isRetryableRefusal`) — retry with **linear backoff** (`1000 * attempt` ms between attempts). Every other refusal, 401 included, throws at once with the server's `error.message` (or `Upload failed (<status>)`).
-6. Network errors → re-check the file (an unreadable file throws at once), otherwise retry with a message built from the underlying error.
-7. Each accepted chunk's response is checked against the catalog (`checkEndpoint`).
+5. Each chunk runs under an `AbortController` with its `chunkTimeoutMs`; a timed-out chunk is retried.
+6. **Retryable refusals** — 5xx, 408, 499, and 429 other than `TOO_MANY_UPLOADS` (`isRetryableRefusal`) — retry with **exponential backoff and jitter** (`retryDelay`: 1, 2, 4 s, each scaled by a random 50–100%). Every other refusal, 401 included, throws `UploadRefused` at once with the server's `error.message` (or `Upload failed (<status>)`).
+7. Network errors → re-check the file (an unreadable file throws at once), otherwise retry with a message built from the underlying error.
+8. While a chunk waits to be retried, `onProgress` carries `retry` (attempt, delay, reason) for the form's notice.
+9. A chunk that fails `MAX_ATTEMPTS` times for a transient reason throws `UploadInterrupted`, whose `resume` (file, `upload_id`, chunk size, next chunk) continues the same upload from that chunk. The API keeps staged chunks for two hours. A resume for another file starts over.
+10. Each accepted chunk's response is checked against the catalog (`checkEndpoint`).
 
 ### Progress stages (`UploadStage`)
 
@@ -432,7 +438,9 @@ Used by `SongUploadForm` (and manager “upload for” flows). Bypasses the API 
 | Empty file | `"<name>" is empty (0 bytes).` |
 | File cannot be read (e.g. a cloud placeholder) | `"<name>" couldn't be read from disk. …` (names iCloud Drive, Google Drive, Dropbox) |
 | No token from Clerk | `Your session expired. Please sign in again and retry the upload.` |
-| Network failure | `Upload failed (<ErrorName>: <message>) — the connection may have dropped. Retrying…` |
+| Network failure (while retrying) | `Upload failed (<ErrorName>: <message>) — the connection may have dropped.` then `Trying again in <n> s (attempt <n> of 4)…` |
+| Chunk timed out (while retrying) | `This part of the file took longer than <n> s to send — the connection is too slow or has dropped.` then the same retry notice |
+| Every attempt failed (`UploadInterrupted`) | `The upload stopped at <x> of <y> MB after 4 tries. <last reason> Retry to continue from where it stopped.` with a **Retry upload** button |
 | HTTP error with JSON body | Server's `error.message` |
 | Non-retryable refusal (e.g. **401**) | Same as above — server's `error.message` (aborts immediately, no retry) |
 | HTTP error without parseable body | `Upload failed (<status>)` |

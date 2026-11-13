@@ -52,7 +52,12 @@ export default defineConfig(({ mode }) => {
   // Without a trailing slash: callers append "/v1/…", and a doubled slash
   // ("//v1/…") is refused by the API's edge rules.
   const apiUrl = (onProductionBranch ? apiEnv.DEEJAYTOOLS_API : apiEnv.DEEJAYTOOLS_API_DEV)?.replace(/\/+$/, "");
-  const proxyTarget = apiEnv.DEEJAYTOOLS_API_DEV || "http://localhost:3001";
+  // The Sentry environment, named as the API names its own: production for the
+  // production branch, development for every other Pages build (CF_PAGES is
+  // set on all of them), local otherwise. Vite's mode is "production" for any
+  // build, so it cannot tell the dev site from the real one.
+  const sentryEnvironment = onProductionBranch ? "production" : process.env.CF_PAGES ? "development" : "local";
+  const proxyTarget =apiEnv.DEEJAYTOOLS_API_DEV || "http://localhost:3001";
 
   // Like the Sentry DSN, the Clerk publishable key keeps its Doppler name,
   // DEEJAYTOOLS_CLERK_PUBLISHABLE_KEY, and is mapped in by name. Widening
@@ -72,6 +77,7 @@ export default defineConfig(({ mode }) => {
       "import.meta.env.VITE_APP_VERSION": JSON.stringify(rootPkg.version),
       "import.meta.env.VITE_COMMIT_SHA": JSON.stringify(commitSha()),
       "import.meta.env.VITE_SENTRY_DSN": JSON.stringify(sentryDsn),
+      "import.meta.env.VITE_SENTRY_ENVIRONMENT": JSON.stringify(sentryEnvironment),
       "import.meta.env.VITE_CLERK_PUBLISHABLE_KEY": JSON.stringify(clerkPublishableKey),
       "import.meta.env.VITE_API_URL": JSON.stringify(apiUrl ?? ""),
     },

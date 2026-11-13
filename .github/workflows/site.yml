@@ -13,6 +13,9 @@ name: site
 #   - it serves the app, including a deep link (SPA fallback);
 #   - the bundle is built with the right Clerk key for its environment:
 #     pk_test_ on dev, pk_live_ in production — never the other;
+#   - the bundle carries a Sentry DSN (SENTRY_DSN_DEEJAYTOOLS), without
+#     which the browser reports no errors; checked by its shape, never
+#     printed;
 #   - the bundle points at that environment's API, and the API answers
 #     /health.
 # All of it is read-only, so it is safe against production.
@@ -100,6 +103,10 @@ jobs:
           if grep -q "^$WRONG_CLERK_KEY" <<<"$keys"; then fail "The site is built with a $WRONG_CLERK_KEY Clerk key; this environment needs $CLERK_KEY."; fi
           grep -q "^$CLERK_KEY" <<<"$keys" || fail "The site is not built with a $CLERK_KEY Clerk key."
           grep -qF "$API" <<<"$js" || fail "The site is not built to call $API."
+          # The DSN by its shape only (grep -q prints nothing), so its value
+          # never reaches the log.
+          grep -qE 'https://[0-9a-f]{32}@o[0-9]+\.ingest(\.[a-z]+)?\.sentry\.io/[0-9]+' <<<"$js" \
+            || fail "No Sentry DSN found in the site bundle: set SENTRY_DSN_DEEJAYTOOLS in the Cloudflare Pages build environment (from Doppler)."
 
           curl -fsS -o /dev/null --retry 3 "$SITE/events" || fail "A deep link ($SITE/events) did not load."
           curl -fsS -o /dev/null --retry 3 "$API/health" || fail "$API/health did not answer."

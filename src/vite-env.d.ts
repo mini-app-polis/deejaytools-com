@@ -9,6 +9,8 @@ interface ImportMetaEnv {
   readonly VITE_CLERK_PUBLISHABLE_KEY: string;
   /** Injected by vite.config.ts from SENTRY_DSN_DEEJAYTOOLS; "" when unset. */
   readonly VITE_SENTRY_DSN?: string;
+  /** Injected by vite.config.ts: "production" (main), "development" (other Pages builds) or "local". */
+  readonly VITE_SENTRY_ENVIRONMENT?: string;
   readonly VITE_MAINTENANCE?: string;
 }
 
