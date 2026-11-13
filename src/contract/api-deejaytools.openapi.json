@@ -1677,6 +1677,117 @@
         }
       }
     },
+    "/v1/events/{id}/registrations/append": {
+      "post": {
+        "tags": [
+          "event-entries"
+        ],
+        "summary": "Add the entries not yet on an event's registration list",
+        "description": "An add-only import: of entries, appends those whose division and dancers match none already on the list (case, accents and spacing ignored), in the order sent, after the entries already there. Entries already there, their marks and their order are left as they are; a repeat within entries counts once. Answers how many were added and skipped. Requires deejaytools.registrations.write on the event.",
+        "operationId": "append_event_registrations_v1_events__id__registrations_append_post",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Event id.",
+              "title": "Id"
+            },
+            "description": "Event id."
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppendedResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Lacks the scope on this event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The write failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutRegistrationsBody"
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/events/{id}/registrations/{entry_id}": {
       "patch": {
         "tags": [
@@ -8366,6 +8477,46 @@
         ],
         "title": "AdminUserResponse",
         "description": "One user."
+      },
+      "AppendedData": {
+        "properties": {
+          "added": {
+            "type": "integer",
+            "title": "Added",
+            "description": "Entries appended to the list."
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped",
+            "description": "Entries sent but not added: already on the list, or repeating one earlier in the request."
+          }
+        },
+        "type": "object",
+        "required": [
+          "added",
+          "skipped"
+        ],
+        "title": "AppendedData",
+        "description": "What an add-only import did."
+      },
+      "AppendedResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/AppendedData",
+            "description": "The counts."
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta",
+            "description": "Semantic value for meta."
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "AppendedResponse",
+        "description": "An add-only import's counts."
       },
       "AssociationsData": {
         "properties": {

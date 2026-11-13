@@ -36,6 +36,8 @@ import { isOpenEvent, type ApiAdminEventSongSubmission, type ApiEvent } from "@/
 const NO_LINK = "__none__";
 
 type Filter = "attention" | "all" | RegistrationStatus;
+/** Whether an import adds to the list or replaces it. */
+type ImportMode = "add" | "replace";
 
 const STATUS_LABELS: Record<RegistrationStatus, string> = {
   missing: "Missing",
@@ -78,7 +80,8 @@ function submissionLine(s: ApiAdminEventSongSubmission, roundsSplit: boolean): s
  * by name; an entry the match misses can be linked to a submission by hand,
  * marked handled elsewhere, or scratched (withdrawn from competing: their
  * songs stay submitted, hidden from the event page), and those marks survive
- * a re-import. Entries can be added one at a time and removed.
+ * a re-import. Entries can be added from a paste, without touching the
+ * rest of the list, and removed one at a time.
  *
  * Reads and writes the event-scoped /v1/events/:id/registrations routes,
  * which an admin may call on any event and the event's staff on theirs. An
@@ -102,7 +105,6 @@ export default function RegistrationsPanel({ event, showNotes }: { event: ApiEve
 
   const [filter, setFilter] = useState<Filter>("attention");
   const [importing, setImporting] = useState(false);
-  const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<ReconciledRegistration | null>(null);
 
   const counts = useMemo(() => {
@@ -161,10 +163,7 @@ export default function RegistrationsPanel({ event, showNotes }: { event: ApiEve
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" onClick={() => setImporting(true)}>
-          {registrations && registrations.length > 0 ? "Re-import list" : "Import list"}
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
-          Add entry
+          {registrations && registrations.length > 0 ? "Import entries" : "Import list"}
         </Button>
         <Button
           variant="outline"
@@ -306,7 +305,6 @@ export default function RegistrationsPanel({ event, showNotes }: { event: ApiEve
           onClose={() => setImporting(false)}
         />
       )}
-      {adding && <AddDialog event={event} onClose={() => setAdding(false)} />}
       {editing && submissions && (
         <EditDialog
           eventId={event.id}
@@ -332,16 +330,33 @@ function ImportDialog({
   onClose: () => void;
 }) {
   const [text, setText] = useState("");
+  // With a list in place, adding is the default: replacing deletes the
+  // entries the paste leaves out, and their marks with them.
+  const [mode, setMode] = useState<ImportMode>(hasList ? "add" : "replace");
   const parsed = useMemo(() => parseRegistrationPaste(text), [text]);
   const divisionCount = useMemo(() => new Set(parsed.entries.map((e) => e.division)).size, [parsed]);
   const importList = useEndpointMutation(endpoints.events.importRegistrations, {
     invalidates: [endpoints.events.registrations],
   });
+  const appendList = useEndpointMutation(endpoints.events.appendRegistrations, {
+    invalidates: [endpoints.events.registrations],
+  });
+  const pending = importList.isPending || appendList.isPending;
+  const n = parsed.entries.length;
 
   const submit = async () => {
     try {
-      const rows = await importList.mutateAsync({ params: { id: event.id }, body: { entries: parsed.entries } });
-      toast.success(`Imported ${rows.length} entries for ${event.name}`);
+      const body = { entries: parsed.entries };
+      if (mode === "add") {
+        const { added, skipped } = await appendList.mutateAsync({ params: { id: event.id }, body });
+        toast.success(
+          `Added ${added} entr${added === 1 ? "y" : "ies"} to ${event.name}` +
+            (skipped > 0 ? ` · ${skipped} already on the list` : "")
+        );
+      } else {
+        const rows = await importList.mutateAsync({ params: { id: event.id }, body });
+        toast.success(`Imported ${rows.length} entries for ${event.name}`);
+      }
       onClose();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Import failed");
@@ -356,10 +371,26 @@ function ImportDialog({
           <DialogDescription>
             Copy the registration sheet&apos;s rows (with its header row, if it has one) and paste them here. Rows
             without a division and a first dancer are skipped; other columns are ignored.
-            {hasList &&
-              ` This replaces the current list; entries that are unchanged keep their links and their handled and scratched marks${showNotes ? ", and notes" : ""}.`}
           </DialogDescription>
         </DialogHeader>
+        {hasList && (
+          <div className="space-y-2">
+            <ChoiceGroup<ImportMode>
+              ariaLabel="Import as"
+              options={[
+                { value: "add", label: "Add to list" },
+                { value: "replace", label: "Replace list" },
+              ]}
+              value={mode}
+              onChange={setMode}
+            />
+            <p className="text-sm text-muted-foreground">
+              {mode === "add"
+                ? "Adds the entries not already on the list at its end, in the paste's order. Nothing on the list is removed or changed."
+                : `Replaces the current list: entries the paste leaves out are removed with their marks. Entries that are unchanged keep their links and their handled and scratched marks${showNotes ? ", and notes" : ""}.`}
+            </p>
+          </div>
+        )}
         <div className="space-y-2">
           <label htmlFor="registrations-paste" className={FIELD_LABEL_CLASS}>
             Registration rows
@@ -381,72 +412,8 @@ function ImportDialog({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button disabled={parsed.entries.length === 0 || importList.isPending} onClick={() => void submit()}>
-            {importList.isPending ? "Importing…" : `Import ${parsed.entries.length}`}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function AddDialog({ event, onClose }: { event: ApiEvent; onClose: () => void }) {
-  const [division, setDivision] = useState("");
-  const [dancer1, setDancer1] = useState("");
-  const [dancer2, setDancer2] = useState("");
-  const add = useEndpointMutation(endpoints.events.addRegistration, {
-    invalidates: [endpoints.events.registrations],
-  });
-  const ready = division.trim() !== "" && dancer1.trim() !== "";
-
-  const submit = async () => {
-    try {
-      const row = await add.mutateAsync({
-        params: { id: event.id },
-        body: {
-          division: division.trim(),
-          dancer_1: dancer1.trim(),
-          ...(dancer2.trim() ? { dancer_2: dancer2.trim() } : {}),
-        },
-      });
-      toast.success(`Added ${registrationName(row)}`);
-      onClose();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Add failed");
-    }
-  };
-
-  const field = (id: string, label: string, value: string, set: (v: string) => void, hint?: string) => (
-    <div className="space-y-1">
-      <label htmlFor={id} className={FIELD_LABEL_CLASS}>
-        {label}
-      </label>
-      <input id={id} className={FIELD_INPUT_CLASS} value={value} maxLength={200} onChange={(e) => set(e.target.value)} />
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
-    </div>
-  );
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Add an entry · {event.name}</DialogTitle>
-          <DialogDescription>
-            Someone who registered after the list was imported, or one the import missed. It is added at the end of
-            the list; a re-import without it removes it again.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          {field("registration-division", "Division", division, setDivision, "As the registration names it, e.g. Classic.")}
-          {field("registration-dancer-1", "Dancer 1", dancer1, setDancer1, "Or the team name.")}
-          {field("registration-dancer-2", "Dancer 2 (optional)", dancer2, setDancer2)}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button disabled={!ready || add.isPending} onClick={() => void submit()}>
-            {add.isPending ? "Adding…" : "Add"}
+          <Button disabled={n === 0 || pending} onClick={() => void submit()}>
+            {pending ? "Importing…" : mode === "add" ? `Add ${n}` : hasList ? `Replace with ${n}` : `Import ${n}`}
           </Button>
         </DialogFooter>
       </DialogContent>
