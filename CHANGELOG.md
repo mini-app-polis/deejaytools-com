@@ -1,3 +1,10 @@
+# [2.40.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.39.0...v2.40.0) (2026-11-13)
+
+
+### Features
+
+* **event:** show the registration total before the percent complete ([4b54cb7](https://github.com/mini-app-polis/deejaytools-com/commit/4b54cb7490f33a0cbeaeefe26d860c7f0d86718f))
+
 # [2.39.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.38.1...v2.39.0) (2026-11-13)
 
 
