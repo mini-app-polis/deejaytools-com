@@ -798,6 +798,16 @@ describe("contract", () => {
     });
     expect(handled.handled).toBe(true);
     await ledger.hit(endpoints.events.removeRegistration, { params: { id: eventId, entryId: added.id } });
+    // The add-only import: an entry already on the list is skipped, a new one
+    // goes at the end, and the existing entry keeps its marks.
+    const appended = await ledger.hit(endpoints.events.appendRegistrations, {
+      params: { id: eventId },
+      body: { entries: [entries[0], { division: "Masters", dancer_1: "Contract Appended" }] },
+    });
+    expect(appended).toEqual({ added: 1, skipped: 1 });
+    const afterAppend = await ledger.hit(endpoints.events.registrations, { params: { id: eventId } });
+    expect(afterAppend.map((r) => r.dancer_1)).toEqual([imported[0].dancer_1, "Contract Appended"]);
+    expect(afterAppend[0]).toMatchObject({ id: imported[0].id, note: "contract suite" });
     await ledger.hit(endpoints.admin.importEventRegistrations, { params: { eventId }, body: { entries: [] } });
     expect(await ledger.hit(endpoints.admin.eventRegistrations, { params: { eventId } })).toEqual([]);
   });

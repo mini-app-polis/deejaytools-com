@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  ApiAppendedRegistrationsSchema,
   ApiAdminEventSongSubmissionSchema,
   ApiAdminSongSchema,
   ApiAdminUserSchema,
@@ -182,6 +183,17 @@ export const endpoints = {
       path: (p) => `/v1/events/${id(p)}/registrations`,
       request: putEventRegistrationsBodySchema,
       response: z.array(ApiEventRegistrationSchema),
+    }),
+    /** Add the pasted entries not already on the event's registration list; nothing is removed or changed. */
+    appendRegistrations: endpoint<
+      { id: string },
+      z.input<typeof putEventRegistrationsBodySchema>,
+      z.infer<typeof ApiAppendedRegistrationsSchema>
+    >({
+      id: "events.appendRegistrations", method: "POST", access: "event-staff",
+      path: (p) => `/v1/events/${id(p)}/registrations/append`,
+      request: putEventRegistrationsBodySchema,
+      response: ApiAppendedRegistrationsSchema,
     }),
     /** Add one entry at the end of the event's registration list. */
     addRegistration: endpoint<

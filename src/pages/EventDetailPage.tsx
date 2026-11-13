@@ -14,7 +14,14 @@ import { useAuthMe } from "@/hooks/useAuthMe";
 import { useDivisions } from "@/hooks/useDivisions";
 import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
 import { EVENT_ROLE_LABELS, eventPortalPath, richestEventRole } from "@/lib/eventRoles";
-import { missingByDivision, reconcileRegistrations, type MissingCount } from "@/lib/eventRegistrations";
+import {
+  missingByDivision,
+  percentComplete,
+  progressByDivision,
+  reconcileRegistrations,
+  type MissingCount,
+  type Progress,
+} from "@/lib/eventRegistrations";
 import { countFloorTrials, floorTrialBucket, formatFloorTrials } from "@/lib/floorTrials";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareSessionChrono } from "@/lib/chronoSort";
@@ -163,15 +170,9 @@ export default function EventDetailPage() {
   );
 }
 
-/**
- * "1 entry · 2 songs" — both counts, always, because they diverge whenever a
- * competitor has more than one song in a division. A bare number next to a
- * division would read as either one depending on the reader.
- */
-function countsLabel(entryCount: number, songCount: number): string {
-  const entries = `${entryCount} ${entryCount === 1 ? "entry" : "entries"}`;
-  const songs = `${songCount} ${songCount === 1 ? "song" : "songs"}`;
-  return `${entries} · ${songs}`;
+/** "1 entry" or "3 entries": the page counts couples, not their songs. */
+function entriesLabel(entryCount: number): string {
+  return `${entryCount} ${entryCount === 1 ? "entry" : "entries"}`;
 }
 
 /**
@@ -191,14 +192,20 @@ function PortalLinks({ eventId }: { eventId: string }) {
   );
 }
 
-const NO_MISSING: ReadonlyMap<string | null, MissingCount> = new Map();
+type RegistrationCounts = {
+  missing: ReadonlyMap<string | null, MissingCount>;
+  /** Null when the counts are not shown: not staff, or no registration list. */
+  progress: ReadonlyMap<string | null, Progress> | null;
+};
+
+const NO_COUNTS: RegistrationCounts = { missing: new Map(), progress: null };
 
 /**
  * Admins and this event's staff only: how many registered entries per
- * division have no music in yet, from the event's registration list
- * (imported on the admin Registrations page) against its submissions.
- * Counts, never names. Empty for everyone else, and for an event with no
- * registration list.
+ * division have no music in yet, and how far each division is from all
+ * having it, from the event's registration list (imported on the admin
+ * Registrations page) against its submissions. Counts, never names. Empty
+ * for everyone else, and for an event with no registration list.
  */
 function useMissingCounts(eventId: string, eventName: string, enabled: boolean) {
   const { isAdmin, eventRoles } = useAuthMe();
@@ -216,9 +223,17 @@ function useMissingCounts(eventId: string, eventName: string, enabled: boolean) 
   const submissions = ready ? submissionsQuery.data : undefined;
   const roundsSplit = isOpenEvent(eventName);
   return useMemo(() => {
-    if (!registrations || !submissions || registrations.length === 0) return NO_MISSING;
-    return missingByDivision(reconcileRegistrations(registrations, submissions, divisions, roundsSplit).rows);
+    if (!registrations || !submissions || registrations.length === 0) return NO_COUNTS;
+    const { rows } = reconcileRegistrations(registrations, submissions, divisions, roundsSplit);
+    return { missing: missingByDivision(rows), progress: progressByDivision(rows) };
   }, [registrations, submissions, divisions, roundsSplit]);
+}
+
+/** " · 75% complete", or nothing when it is not shown or has nothing to count. */
+function PercentLabel({ progress }: { progress: Progress | undefined }) {
+  const percent = percentComplete(progress);
+  if (percent === null) return null;
+  return <>{` · ${percent}% complete`}</>;
 }
 
 /** " · 2 missing · 1 possible", or nothing when nothing is outstanding. */
@@ -236,9 +251,10 @@ function MissingLabel({ count }: { count: MissingCount | undefined }) {
  * Who has music in for this event, grouped by division.
  *
  * Laid out like the manager Event Songs view — collapsible division sections,
- * one row per competitor — but where that view names the song, this one shows
- * only a count. Multiple songs from the same entity in the same division are
- * one row: enough to see the field, never enough to learn a routine.
+ * one row per competitor — but where that view names the song, this one names
+ * only the competitor. Multiple songs from the same entity in the same
+ * division are one row: enough to see the field, never enough to learn a
+ * routine.
  */
 function EnteredEntities({
   eventId,
@@ -256,15 +272,16 @@ function EnteredEntities({
   });
   const entered = isSignedIn ? (entitiesQuery.data ?? null) : null;
   const loading = entitiesQuery.isFetching;
-  const missing = useMissingCounts(eventId, eventName, isSignedIn);
+  const { missing, progress } = useMissingCounts(eventId, eventName, isSignedIn);
   const { divisions: divisionOrder } = useDivisions();
 
-  // Divisions with registered entries still to submit are listed even when
-  // nobody in them has submitted yet, in the divisions' display order.
+  // Divisions on the registration list are listed even when nobody in them
+  // has submitted yet, in the divisions' display order.
   const divisions = useMemo(() => {
     if (entered === null) return null;
     const known = new Set(entered.map((d) => d.division));
-    const extra = [...missing.keys()]
+    const listed = new Set([...missing.keys(), ...(progress?.keys() ?? [])]);
+    const extra = [...listed]
       .filter((d): d is string => d !== null && !known.has(d))
       .map((division) => ({ division, entities: [] as (typeof entered)[number]["entities"] }));
     if (extra.length === 0) return entered;
@@ -273,7 +290,7 @@ function EnteredEntities({
       return i === -1 ? Number.MAX_SAFE_INTEGER : i;
     };
     return [...entered, ...extra].sort((a, b) => rank(a.division) - rank(b.division));
-  }, [entered, missing, divisionOrder]);
+  }, [entered, missing, progress, divisionOrder]);
   const unrecognised = missing.get(null);
   const missingTotal = [...missing.values()].reduce(
     (t, c) => ({ missing: t.missing + c.missing, possible: t.possible + c.possible }),
@@ -293,25 +310,27 @@ function EnteredEntities({
 
   // An entity entered in two divisions is two rows but one competitor, so the
   // heading counts distinct entities rather than summing the section counts.
-  // Songs do sum: the same couple's Classic and Masters songs are both songs.
-  const totals =
+  const totalEntries =
     divisions === null
       ? null
-      : {
-          entries: new Set(divisions.flatMap((d) => d.entities.map((e) => e.entity_key))).size,
-          songs: divisions.reduce(
-            (sum, d) => sum + d.entities.reduce((n, e) => n + e.song_count, 0),
-            0
-          ),
-        };
+      : new Set(divisions.flatMap((d) => d.entities.map((e) => e.entity_key))).size;
+  // Registrations are per division, so the event's progress sums them.
+  const progressTotal =
+    progress === null
+      ? undefined
+      : [...progress.values()].reduce(
+          (t, p) => ({ complete: t.complete + p.complete, total: t.total + p.total }),
+          { complete: 0, total: 0 }
+        );
 
   return (
     <div className="space-y-4">
       <h2 className="text-base font-semibold">
         Entered{" "}
-        {totals !== null && (
+        {totalEntries !== null && (
           <span className="ml-2 text-sm font-normal text-muted-foreground">
-            {countsLabel(totals.entries, totals.songs)}
+            {entriesLabel(totalEntries)}
+            <PercentLabel progress={progressTotal} />
             <MissingLabel count={missingTotal} />
           </span>
         )}
@@ -369,10 +388,8 @@ function EnteredEntities({
                       {division}
                     </span>
                     <span className="text-xs font-normal text-muted-foreground">
-                      {countsLabel(
-                        entities.length,
-                        entities.reduce((n, e) => n + e.song_count, 0)
-                      )}
+                      {entriesLabel(entities.length)}
+                      <PercentLabel progress={progress?.get(division)} />
                       <MissingLabel count={missing.get(division)} />
                     </span>
                   </button>
@@ -384,12 +401,9 @@ function EnteredEntities({
                       {entities.map((entity) => (
                         <div
                           key={entity.entity_key}
-                          className="flex items-baseline justify-between gap-4 rounded-lg bg-white/[0.06] px-4 py-3 text-sm"
+                          className="rounded-lg bg-white/[0.06] px-4 py-3 text-sm"
                         >
-                          <span className="font-medium min-w-0 truncate">{entity.label}</span>
-                          <span className="text-muted-foreground text-right shrink-0">
-                            {entity.song_count} {entity.song_count === 1 ? "song" : "songs"}
-                          </span>
+                          <span className="block font-medium min-w-0 truncate">{entity.label}</span>
                         </div>
                       ))}
                     </div>
@@ -400,6 +414,7 @@ function EnteredEntities({
             {unrecognised && (
               <p className="mb-6 break-inside-avoid text-xs text-muted-foreground">
                 Registrations in divisions not recognised
+                <PercentLabel progress={progress?.get(null)} />
                 <MissingLabel count={unrecognised} />
               </p>
             )}

@@ -388,3 +388,36 @@ export function missingByDivision(rows: readonly ReconciledRegistration[]): Map<
   }
   return counts;
 }
+
+/** How far a division's registered entries are from all having music in. */
+export type Progress = {
+  /** Entries submitted, or marked as needing no submission here. */
+  complete: number;
+  /** Entries still competing: the list less those scratched. */
+  total: number;
+};
+
+/**
+ * Complete and competing counts per deejaytools division, for the event
+ * page staff view: complete is submitted or handled; missing, possible and
+ * a Classic round still to come are not; scratched entries are left out.
+ * Entries whose registration division is not recognised are counted under
+ * `null`. A division whose entries are all scratched is left out.
+ */
+export function progressByDivision(rows: readonly ReconciledRegistration[]): Map<string | null, Progress> {
+  const counts = new Map<string | null, Progress>();
+  for (const r of rows) {
+    if (r.status === "scratched") continue;
+    const c = counts.get(r.division) ?? { complete: 0, total: 0 };
+    c.total++;
+    if (r.status === "submitted" || r.status === "handled") c.complete++;
+    counts.set(r.division, c);
+  }
+  return counts;
+}
+
+/** The share complete as a whole percent, or null with nothing to count. */
+export function percentComplete(progress: Progress | undefined): number | null {
+  if (!progress || progress.total === 0) return null;
+  return Math.round((progress.complete / progress.total) * 100);
+}

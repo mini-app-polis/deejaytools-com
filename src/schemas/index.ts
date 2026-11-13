@@ -675,6 +675,14 @@ export const putEventRegistrationsBodySchema = z.object({
 });
 
 /** POST /v1/events/:id/registrations: one entry added at the end of the list. */
+/** POST /v1/events/:id/registrations/append: how many pasted entries were new. */
+export const ApiAppendedRegistrationsSchema = z.object({
+  /** Entries added at the end of the list, in the paste's order. */
+  added: z.number().int(),
+  /** Entries already on the list, or repeated in the paste. */
+  skipped: z.number().int(),
+});
+
 export const addEventRegistrationBodySchema = z.object({
   division: z.string().trim().min(1).max(200),
   dancer_1: z.string().trim().min(1).max(200),

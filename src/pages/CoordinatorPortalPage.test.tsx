@@ -4,15 +4,17 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fx } from "@/test/fixtures";
 
-const { apiGet, apiPost, apiDel, apiClient, auth } = vi.hoisted(() => {
+const { apiGet, apiPost, apiPut, apiDel, apiClient, auth } = vi.hoisted(() => {
   const get = vi.fn();
   const post = vi.fn();
+  const put = vi.fn();
   const del = vi.fn();
   return {
     apiGet: get,
     apiPost: post,
+    apiPut: put,
     apiDel: del,
-    apiClient: { get, post, patch: vi.fn(), put: vi.fn(), del, postForm: vi.fn() },
+    apiClient: { get, post, patch: vi.fn(), put, del, postForm: vi.fn() },
     auth: { isAdmin: false },
   };
 });
@@ -46,6 +48,7 @@ const registration = (over: Record<string, unknown>) => ({
 beforeEach(() => {
   auth.isAdmin = false;
   apiPost.mockReset();
+  apiPut.mockReset();
   apiDel.mockReset();
   apiGet.mockReset();
   apiGet.mockImplementation((path: string) => {
@@ -117,22 +120,46 @@ describe("CoordinatorPortalPage", () => {
     expect(screen.queryByLabelText("Note")).toBeNull();
   });
 
-  it("adds one entry to the list", async () => {
-    apiPost.mockResolvedValue(registration({ id: "r3", position: 2, dancer_1: "Hal", dancer_2: "Ivy" }));
+  it("adds pasted entries to the list without replacing it", async () => {
+    apiPost.mockResolvedValue({ added: 1, skipped: 1 });
     renderPortal("/events/ev-1/coordinator/registrations");
     await screen.findByText("Fay & Gus");
-    fireEvent.click(screen.getByRole("button", { name: "Add entry" }));
-    fireEvent.change(await screen.findByLabelText("Division"), { target: { value: "Masters" } });
-    fireEvent.change(screen.getByLabelText("Dancer 1"), { target: { value: " Hal " } });
-    fireEvent.change(screen.getByLabelText("Dancer 2 (optional)"), { target: { value: "Ivy" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    // There is no one-at-a-time form: entries come in from a paste.
+    expect(screen.queryByRole("button", { name: "Add entry" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Import entries" }));
+    // With a list in place, adding is the default.
+    expect(await screen.findByRole("radio", { name: "Add to list" })).toHaveAttribute("aria-checked", "true");
+    fireEvent.change(screen.getByLabelText("Registration rows"), {
+      target: { value: "Division\tDancer 1\t\t\t\tDancer 2\nMasters\tHal\t\t\t\tIvy\nClassic\tFay\t\t\t\tGus" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add 2" }));
     await waitFor(() =>
-      expect(apiPost).toHaveBeenCalledWith("/v1/events/ev-1/registrations", {
-        division: "Masters",
-        dancer_1: "Hal",
-        dancer_2: "Ivy",
+      expect(apiPost).toHaveBeenCalledWith("/v1/events/ev-1/registrations/append", {
+        entries: [
+          { division: "Masters", dancer_1: "Hal", dancer_2: "Ivy" },
+          { division: "Classic", dancer_1: "Fay", dancer_2: "Gus" },
+        ],
       })
     );
+    expect(apiPut).not.toHaveBeenCalled();
+  });
+
+  it("replaces the list only when Replace list is chosen", async () => {
+    apiPut.mockResolvedValue([registration({ id: "r3", position: 0, dancer_1: "Hal", dancer_2: "Ivy" })]);
+    renderPortal("/events/ev-1/coordinator/registrations");
+    await screen.findByText("Fay & Gus");
+    fireEvent.click(screen.getByRole("button", { name: "Import entries" }));
+    fireEvent.click(await screen.findByRole("radio", { name: "Replace list" }));
+    fireEvent.change(screen.getByLabelText("Registration rows"), {
+      target: { value: "Division\tDancer 1\t\t\t\tDancer 2\nMasters\tHal\t\t\t\tIvy" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Replace with 1" }));
+    await waitFor(() =>
+      expect(apiPut).toHaveBeenCalledWith("/v1/events/ev-1/registrations", {
+        entries: [{ division: "Masters", dancer_1: "Hal", dancer_2: "Ivy" }],
+      })
+    );
+    expect(apiPost).not.toHaveBeenCalled();
   });
 
   it("removes an entry from the list, after a confirming click", async () => {
