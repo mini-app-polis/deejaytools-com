@@ -1,3 +1,10 @@
+## [2.40.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.40.0...v2.40.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* **events:** count unregistered entries in division totals and percent complete ([fab948a](https://github.com/mini-app-polis/deejaytools-com/commit/fab948a516bf4254dadbb84e1f01c8ad66db7cd4))
+
 # [2.40.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.39.0...v2.40.0) (2026-11-13)
 
 
