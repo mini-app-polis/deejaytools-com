@@ -1,3 +1,10 @@
+## [2.40.2](https://github.com/mini-app-polis/deejaytools-com/compare/v2.40.1...v2.40.2) (2026-11-14)
+
+
+### Bug Fixes
+
+* **registrations:** import late-added rows with a blank division under the division above ([256e259](https://github.com/mini-app-polis/deejaytools-com/commit/256e259e5ff0a1a6a80d5871ce6548c2c8cfeab1))
+
 ## [2.40.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.40.0...v2.40.1) (2026-11-14)
 
 
