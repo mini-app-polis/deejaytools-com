@@ -46,6 +46,31 @@ describe("parseRegistrationPaste", () => {
     expect(skipped).toBe(4);
   });
 
+  it("puts an entry with a blank division in the division of the entry above it", () => {
+    const text = [
+      row("", "Division", "Dancer 1", "", "", "Dancer 2"),
+      row("CLASSIC", "", "", "", "", ""),
+      row("14", "Classic (NASDE)", "Kyle FitzGerald", "P", "Toronto", "Mélodie Paletta"),
+      row("", "", "Leo Lorenzo", "", "", "Fernanda Dubiel"),
+      row("", "Countries", "", "", "", ""),
+      row("TEAMS", "", "", "", "", ""),
+      row("", "", "Jukin Juniors", "", "", "Autumn Jones"),
+      row("1", "Teams", "Boogie in Motion", "", "", "Garrett Humphries"),
+      row("", "", "TNT", "", "", "Jason & Jessica Taylor"),
+      row("16", "", "", "", "", ""),
+    ].join("\n");
+    const { entries, skipped } = parseRegistrationPaste(text);
+    expect(entries).toEqual([
+      { division: "Classic (NASDE)", dancer_1: "Kyle FitzGerald", dancer_2: "Mélodie Paletta" },
+      { division: "Classic (NASDE)", dancer_1: "Leo Lorenzo", dancer_2: "Fernanda Dubiel" },
+      // First in its section: the section heading's division.
+      { division: "TEAMS", dancer_1: "Jukin Juniors", dancer_2: "Autumn Jones" },
+      { division: "Teams", dancer_1: "Boogie in Motion", dancer_2: "Garrett Humphries" },
+      { division: "Teams", dancer_1: "TNT", dancer_2: "Jason & Jessica Taylor" },
+    ]);
+    expect(skipped).toBe(5);
+  });
+
   it("follows a header row's columns and leaves dancer_2 out when blank", () => {
     const text = [row("Dancer 1", "Dancer 2", "Division"), row("Solo Person", "", "Showcase")].join("\n");
     expect(parseRegistrationPaste(text).entries).toEqual([{ division: "Showcase", dancer_1: "Solo Person" }]);
