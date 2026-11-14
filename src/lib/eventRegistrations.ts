@@ -403,8 +403,17 @@ export type Progress = {
  * a Classic round still to come are not; scratched entries are left out.
  * Entries whose registration division is not recognised are counted under
  * `null`. A division whose entries are all scratched is left out.
+ *
+ * Music in from entries not on the list (`unregistered`, from
+ * reconcileRegistrations) adds to both counts, one per partnership per
+ * division, so the total is everyone competing as far as anyone knows. A
+ * submission that is a possible match for an entry is left out, since it may
+ * be that entry's; one with no division has nowhere to count.
  */
-export function progressByDivision(rows: readonly ReconciledRegistration[]): Map<string | null, Progress> {
+export function progressByDivision(
+  rows: readonly ReconciledRegistration[],
+  unregistered: readonly ApiAdminEventSongSubmission[] = []
+): Map<string | null, Progress> {
   const counts = new Map<string | null, Progress>();
   for (const r of rows) {
     if (r.status === "scratched") continue;
@@ -412,6 +421,19 @@ export function progressByDivision(rows: readonly ReconciledRegistration[]): Map
     c.total++;
     if (r.status === "submitted" || r.status === "handled") c.complete++;
     counts.set(r.division, c);
+  }
+  const possibly = new Set(rows.flatMap((r) => r.candidates.map((s) => s.id)));
+  const seen = new Set<string>();
+  for (const s of unregistered) {
+    const division = s.division?.trim();
+    if (!division || possibly.has(s.id)) continue;
+    const key = `${division}\u0000${plain(s.partnership_label)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const c = counts.get(division) ?? { complete: 0, total: 0 };
+    c.total++;
+    c.complete++;
+    counts.set(division, c);
   }
   return counts;
 }
