@@ -224,14 +224,15 @@ function useMissingCounts(eventId: string, eventName: string, enabled: boolean) 
   const roundsSplit = isOpenEvent(eventName);
   return useMemo(() => {
     if (!registrations || !submissions || registrations.length === 0) return NO_COUNTS;
-    const { rows } = reconcileRegistrations(registrations, submissions, divisions, roundsSplit);
-    return { missing: missingByDivision(rows), progress: progressByDivision(rows) };
+    const { rows, unregistered } = reconcileRegistrations(registrations, submissions, divisions, roundsSplit);
+    return { missing: missingByDivision(rows), progress: progressByDivision(rows, unregistered) };
   }, [registrations, submissions, divisions, roundsSplit]);
 }
 
 /**
  * " · 21 total · 75% complete": the entries still competing on the
- * registration list, and the share of them with music in. Nothing when it is
+ * registration list plus those with music in that are not on it, and the
+ * share of them with music in. Nothing when it is
  * not shown or has nothing to count.
  */
 function ProgressLabel({ progress }: { progress: Progress | undefined }) {

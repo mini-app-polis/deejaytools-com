@@ -262,6 +262,32 @@ describe("progressByDivision", () => {
     // All scratched: nothing to count.
     expect(progress.has("Masters")).toBe(false);
   });
+
+  it("adds music in from entries not on the list, once per partnership", () => {
+    const entries = [
+      entry({ division: "Classic", dancer_1: "Ada Lovelace", dancer_2: "Bob Jones" }),
+      entry({ division: "Classic", dancer_1: "Cara Smith", dancer_2: "Dan Brown" }),
+      entry({ division: "Masters", dancer_1: "Gina White", dancer_2: "Hank Green" }),
+    ];
+    const subs = [
+      sub("Ada Lovelace & Bob Jones", "Classic"),
+      // Not on the list: two songs, one partnership.
+      sub("Ivy Stone & Jack Frost", "Classic", "prelims_only"),
+      sub("Ivy Stone & Jack Frost", "Classic", "finals_only"),
+      // A possible match for Cara: may be hers, so not added.
+      sub("Kara Smith & Dan Brown", "Classic"),
+      // A division with no one on the list.
+      sub("Lena Hill & Max Wood", "Showcase"),
+      // No division: nowhere to count.
+      sub("Nia Bell & Oscar Lee", null),
+    ];
+    const { rows, unregistered } = reconcileRegistrations(entries, subs, TEST_DIVISIONS, false);
+    const progress = progressByDivision(rows, unregistered);
+    expect(progress.get("Classic")).toEqual({ complete: 2, total: 3 });
+    expect(progress.get("Masters")).toEqual({ complete: 0, total: 1 });
+    expect(progress.get("Showcase")).toEqual({ complete: 1, total: 1 });
+    expect(progress.has(null)).toBe(false);
+  });
 });
 
 describe("percentComplete", () => {
