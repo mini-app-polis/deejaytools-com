@@ -50,30 +50,49 @@ function headerColumns(cells: string[]): typeof DEFAULT_COLUMNS | null {
  * Entries from tab-separated text copied out of a spreadsheet. A header row
  * naming "Division", "Dancer 1" and "Dancer 2" sets the columns (else the
  * layout of The Open's export: #, Division, Dancer 1, …, Dancer 2 at index 5).
- * A line without both a division and a first dancer is skipped, so section
- * headings and "Countries" rows drop out. Other columns are ignored.
+ * A line with a first dancer but a blank division is in the division of the
+ * entry above it in the same section: late additions are inserted that way.
+ * A section heading starts a new section; a line without a first dancer is
+ * skipped, so section headings and "Countries" rows drop out. Other columns
+ * are ignored.
  */
 export function parseRegistrationPaste(text: string): ParseResult {
   let columns = DEFAULT_COLUMNS;
   const entries: ParsedRegistration[] = [];
   let skipped = 0;
+  // The division a blank division cell carries on: the entry above's, or a
+  // section heading's until the section has an entry.
+  let carried = "";
+  const clean = (cell: string | undefined) => (cell ?? "").trim().replace(/\s+/g, " ");
   for (const line of text.split(/\r?\n/)) {
     if (!line.trim()) continue;
     const cells = line.split("\t");
     const header = headerColumns(cells);
     if (header) {
       columns = header;
+      carried = "";
       skipped++;
       continue;
     }
-    const division = (cells[columns.division] ?? "").trim().replace(/\s+/g, " ");
-    const dancer1 = (cells[columns.dancer1] ?? "").trim().replace(/\s+/g, " ");
-    if (!division || !dancer1) {
+    const dancer1 = clean(cells[columns.dancer1]);
+    const ownDivision = clean(cells[columns.division]);
+    if (!dancer1) {
+      // A section heading: text only in a column that is neither the
+      // division nor a dancer. "Countries" rows are in the division column.
+      const heading = cells
+        .map((c, i) => (i === columns.division || i === columns.dancer2 ? "" : clean(c)))
+        .find((c) => /\p{L}/u.test(c));
+      if (!ownDivision && heading) carried = heading;
       skipped++;
       continue;
     }
-    const dancer2 =
-      columns.dancer2 >= 0 ? (cells[columns.dancer2] ?? "").trim().replace(/\s+/g, " ") : "";
+    const division = ownDivision || carried;
+    if (!division) {
+      skipped++;
+      continue;
+    }
+    if (ownDivision) carried = ownDivision;
+    const dancer2 = columns.dancer2 >= 0 ? clean(cells[columns.dancer2]) : "";
     entries.push(dancer2 ? { division, dancer_1: dancer1, dancer_2: dancer2 } : { division, dancer_1: dancer1 });
   }
   return { entries, skipped };
