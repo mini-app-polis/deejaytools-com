@@ -39,6 +39,7 @@ import {
   createEventSongSubmissionBodySchema,
   createManagedPartnershipBodySchema,
   createTeamBodySchema,
+  moveEventSongSubmissionBodySchema,
   addEventRegistrationBodySchema,
   patchEventRegistrationBodySchema,
   putEventRegistrationsBodySchema,
@@ -522,6 +523,17 @@ export const endpoints = {
       id: "admin.eventSongSubmissions", method: "GET", access: "admin",
       path: (p) => `/v1/admin/event-song-submissions?event_id=${encodeURIComponent(p.eventId)}`,
       response: z.array(ApiAdminEventSongSubmissionSchema),
+    }),
+    /** Move one entry to another division of its event; its Drive copy follows. */
+    moveEventSongSubmission: endpoint<
+      { id: string },
+      z.input<typeof moveEventSongSubmissionBodySchema>,
+      z.infer<typeof ApiAdminEventSongSubmissionSchema>
+    >({
+      id: "admin.moveEventSongSubmission", method: "PATCH", access: "admin",
+      path: (p) => `/v1/admin/event-song-submissions/${id(p)}`,
+      request: moveEventSongSubmissionBodySchema,
+      response: ApiAdminEventSongSubmissionSchema,
     }),
     eventRegistrations: endpoint<{ eventId: string }, void, z.infer<typeof ApiEventRegistrationSchema>[]>({
       id: "admin.eventRegistrations", method: "GET", access: "admin",

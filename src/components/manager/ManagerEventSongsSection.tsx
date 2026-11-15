@@ -3,6 +3,8 @@ import { isOpenEvent, type ApiAdminEventSongSubmission } from "@/schemas";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointQuery } from "@/api/queries";
 import QueryError from "@/components/QueryError";
+import MoveEntryDialog from "@/components/manager/MoveEntryDialog";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,7 +17,8 @@ const NO_ROWS: readonly never[] = [];
 
 /**
  * The manager Event Songs section: pick an event, see its submitted songs
- * grouped by division. It renders its own TabsContent so it stays mounted
+ * grouped by division, and move one to another division of the event
+ * (MoveEntryDialog). It renders its own TabsContent so it stays mounted
  * while another manager section is shown, keeping the chosen event; `open`
  * holds its queries back until the section is opened.
  */
@@ -23,6 +26,7 @@ export default function ManagerEventSongsSection({ open }: { open: boolean }) {
   const [esEventId, setEsEventId] = useState("");
   const [esShowPast, setEsShowPast] = useState(false);
   const [esExpandedDivisions, setEsExpandedDivisions] = useState<Set<string>>(new Set());
+  const [moving, setMoving] = useState<ApiAdminEventSongSubmission | null>(null);
 
   const toggleDivision = (division: string) =>
     setEsExpandedDivisions((prev) => {
@@ -192,13 +196,23 @@ export default function ManagerEventSongsSection({ open }: { open: boolean }) {
                                 <span className="font-medium min-w-0 truncate">
                                   {row.partnership_label}
                                 </span>
-                                <span className="text-muted-foreground text-right shrink-0">
-                                  {row.song_label}
-                                  {classicRoundLabel(row, esRoundsAllowed) && (
-                                    <span className="block text-xs font-medium text-foreground">
-                                      {classicRoundLabel(row, esRoundsAllowed)}
-                                    </span>
-                                  )}
+                                <span className="flex items-baseline gap-3 shrink-0">
+                                  <span className="text-muted-foreground text-right">
+                                    {row.song_label}
+                                    {classicRoundLabel(row, esRoundsAllowed) && (
+                                      <span className="block text-xs font-medium text-foreground">
+                                        {classicRoundLabel(row, esRoundsAllowed)}
+                                      </span>
+                                    )}
+                                  </span>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    aria-label={`Move ${row.partnership_label} to another division`}
+                                    onClick={() => setMoving(row)}
+                                  >
+                                    Move
+                                  </Button>
                                 </span>
                               </div>
                             ))}
@@ -213,6 +227,9 @@ export default function ManagerEventSongsSection({ open }: { open: boolean }) {
           )}
         </CardContent>
       </Card>
+      {moving && (
+        <MoveEntryDialog submission={moving} roundsAllowed={esRoundsAllowed} onClose={() => setMoving(null)} />
+      )}
     </TabsContent>
   );
 }
