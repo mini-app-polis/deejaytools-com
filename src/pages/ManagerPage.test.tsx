@@ -627,6 +627,114 @@ describe("ManagerPage — Event Songs filters", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Event Songs — moving an entry to another division
+// ---------------------------------------------------------------------------
+
+describe("ManagerPage — Event Songs move", () => {
+  beforeEach(resetAll);
+
+  const FEST = fx.event({ id: "cur", name: "Current Fest", status: "active", start_date: "2026-05-01" });
+  const OPEN = fx.event({ id: "open", name: "The Open 2026", status: "active", start_date: "2026-08-20" });
+  const JOE = fx.adminEventSongSubmission({
+    id: "sub_joe",
+    event_id: "cur",
+    division: "Sophisticated",
+    partnership_label: "Joe Carey & Stephanie Meyer",
+    song_label: "Joe Carey & Stephanie Meyer Sophisticated",
+  });
+
+  async function openMove(user: ReturnType<typeof userEvent.setup>, eventName: RegExp, division: RegExp) {
+    renderPage("/manager/event-songs");
+    await user.click(await screen.findByRole("button", { name: eventName }));
+    await user.click(await screen.findByRole("button", { name: division }));
+    await user.click(screen.getByRole("button", { name: /move joe carey & stephanie meyer/i }));
+    return screen.findByRole("dialog");
+  }
+
+  it("moves an entry to the division picked, and lists it there", async () => {
+    let rows = [JOE];
+    routeGets({ "/v1/events": [FEST], "/v1/admin/event-song-submissions": () => rows });
+    const moved = { ...JOE, division: "Masters" };
+    apiPatch.mockImplementation(() => {
+      rows = [moved];
+      return Promise.resolve(moved);
+    });
+    const user = userEvent.setup();
+    const dialog = await openMove(user, /current fest/i, /sophisticated\s+1/i);
+
+    expect(within(dialog).getByRole("button", { name: "Move" })).toBeDisabled();
+    await user.click(within(dialog).getByRole("combobox", { name: "New division" }));
+    const options = (await screen.findAllByRole("option")).map((o) => o.textContent);
+    // Its own division is not offered.
+    expect(options).not.toContain("Sophisticated");
+    expect(options).toContain("Masters");
+    await user.click(screen.getByRole("option", { name: "Masters" }));
+    expect(within(dialog).queryByRole("combobox", { name: "Rounds" })).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Move" }));
+
+    await waitFor(() =>
+      expect(apiPatch).toHaveBeenCalledWith("/v1/admin/event-song-submissions/sub_joe", { division: "Masters" })
+    );
+    expect(toast.success).toHaveBeenCalledWith("Moved Joe Carey & Stephanie Meyer to Masters");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    // The list is read again: the entry is under its new division.
+    expect(await screen.findByRole("button", { name: /masters\s+1/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /sophisticated\s+1/i })).not.toBeInTheDocument();
+  });
+
+  it("asks for the rounds when moving into Classic at The Open", async () => {
+    const atOpen = { ...JOE, event_id: "open", event_name: "The Open 2026" };
+    routeGets({ "/v1/events": [OPEN], "/v1/admin/event-song-submissions": [atOpen] });
+    apiPatch.mockResolvedValue({ ...atOpen, division: "Classic", round: "finals_only" });
+    const user = userEvent.setup();
+    const dialog = await openMove(user, /the open 2026/i, /sophisticated\s+1/i);
+
+    await user.click(within(dialog).getByRole("combobox", { name: "New division" }));
+    await user.click(await screen.findByRole("option", { name: "Classic" }));
+    await user.click(within(dialog).getByRole("combobox", { name: "Rounds" }));
+    await user.click(await screen.findByRole("option", { name: "Finals only" }));
+    await user.click(within(dialog).getByRole("button", { name: "Move" }));
+
+    await waitFor(() =>
+      expect(apiPatch).toHaveBeenCalledWith("/v1/admin/event-song-submissions/sub_joe", {
+        division: "Classic",
+        round: "finals_only",
+      })
+    );
+  });
+
+  it.each([
+    "This entry is checked in to a session in Sophisticated. Complete or withdraw the check-in before moving it.",
+    "This entity already has a song submitted for Masters. Remove it before adding another.",
+    "Admin access required",
+  ])("shows the API's refusal and keeps the dialog open: %s", async (message) => {
+    routeGets({ "/v1/events": [FEST], "/v1/admin/event-song-submissions": [JOE] });
+    apiPatch.mockRejectedValue(new Error(message));
+    const user = userEvent.setup();
+    const dialog = await openMove(user, /current fest/i, /sophisticated\s+1/i);
+
+    await user.click(within(dialog).getByRole("combobox", { name: "New division" }));
+    await user.click(await screen.findByRole("option", { name: "Masters" }));
+    await user.click(within(dialog).getByRole("button", { name: "Move" }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(message));
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Move" })).toBeEnabled();
+  });
+
+  it("closes without moving on Cancel", async () => {
+    routeGets({ "/v1/events": [FEST], "/v1/admin/event-song-submissions": [JOE] });
+    const user = userEvent.setup();
+    const dialog = await openMove(user, /current fest/i, /sophisticated\s+1/i);
+
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(apiPatch).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Upload For
 // ---------------------------------------------------------------------------
 

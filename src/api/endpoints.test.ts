@@ -81,6 +81,11 @@ describe("endpoint paths", () => {
     expect(endpoints.admin.eventSongSubmissions.path({ eventId: "e1" })).toBe(
       "/v1/admin/event-song-submissions?event_id=e1"
     );
+    expect(endpoints.admin.moveEventSongSubmission.path({ id: "s/1" })).toBe(
+      "/v1/admin/event-song-submissions/s%2F1"
+    );
+    expect(endpoints.admin.moveEventSongSubmission.method).toBe("PATCH");
+    expect(endpoints.admin.moveEventSongSubmission.access).toBe("admin");
   });
 
   it("builds the event-scoped staff paths, encoding each segment", () => {

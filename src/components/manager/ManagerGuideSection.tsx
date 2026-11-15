@@ -243,7 +243,12 @@ export default function ManagerGuideSection() {
           </li>
           <li>
             <Link to="/manager/event-songs">Event Songs</Link> — Every submission for an event,
-            grouped by division. Use to verify who submitted what before check-in.
+            grouped by division. Use to verify who submitted what before check-in.{" "}
+            <strong>Move</strong> on a song puts that entry in another division of the same event,
+            when it was submitted under the wrong one: the song keeps its own division, its Drive
+            copy moves to the new division&apos;s folder, and the dancer is not notified. It is
+            refused while the entry is checked in under its division, or when the partnership already
+            has a song in the new one.
           </li>
         </ul>
       </Section>

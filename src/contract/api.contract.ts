@@ -49,6 +49,8 @@ import {
 
 const RUN_PREFIX = "Contract Suite";
 const DIVISION = "Classic";
+/** Where the dancer's entry is moved by the admin. */
+const MOVED_DIVISION = "Showcase";
 const TIMEZONE = "America/Chicago";
 const logger = createLogger("deejaytools-contract-suite");
 /** The API's scheduler ticks every 30 s; allow three ticks. */
@@ -620,6 +622,12 @@ describe("contract", () => {
     expect(checkin).toMatchObject({ sessionId, divisionName: DIVISION, initialQueue: "non_priority" });
     // One live entry per entity per session.
     await expect(api.post(endpoints.checkins.create.path(), body)).rejects.toMatchObject({ status: 409 });
+    // An entry checked in under its division is not moved out of it.
+    const movePath = endpoints.admin.moveEventSongSubmission.path({ id: submission.id });
+    await expect(api.patch(movePath, { division: MOVED_DIVISION })).rejects.toMatchObject({
+      status: 409,
+      code: "SUBMISSION_CHECKED_IN",
+    });
 
     const mine = (await ledger.hit(endpoints.checkins.mine)).find((c) => c.id === checkin.id);
     expect(mine).toMatchObject({
@@ -647,6 +655,20 @@ describe("contract", () => {
     await waitForDriveJobs(
       "event copy",
       (jobs) => jobs.filter((j) => j.kind === "copy" && j.submission_id === submission.id),
+      1
+    );
+
+    // The admin moves the entry to another division of the event: the same
+    // submission, its copy moved into the new division's folder and renamed
+    // by one move job.
+    const moved = await ledger.hit(endpoints.admin.moveEventSongSubmission, {
+      params: { id: submission.id },
+      body: { division: MOVED_DIVISION },
+    });
+    expect(moved).toMatchObject({ id: submission.id, song_id: songId, division: MOVED_DIVISION });
+    await waitForDriveJobs(
+      "event copy move",
+      (jobs) => jobs.filter((j) => j.kind === "move" && j.submission_id === submission.id),
       1
     );
 

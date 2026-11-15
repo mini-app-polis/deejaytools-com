@@ -5865,6 +5865,127 @@
         }
       }
     },
+    "/v1/admin/event-song-submissions/{id}": {
+      "patch": {
+        "tags": [
+          "admin-event-submissions"
+        ],
+        "summary": "Move a submission to another division",
+        "description": "Moves one song submission to another division of the same event, in place: its per-event division (and round) change, the song's own division does not, and one move drive job puts its Drive copy in the new division's folder under the new name. Refused while the song is checked in to a session of the event in its old division, or when the entity already has a song in the new division (for Classic at The Open, in an overlapping round). Drops the hide a scratched registration entry put on it. The dancer is not notified. Requires deejaytools.entries.write.",
+        "operationId": "move_event_submission_v1_admin_event_song_submissions__id__patch",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Submission id.",
+              "title": "Id"
+            },
+            "description": "Submission id."
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminSubmissionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Lacks the scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Already in that division, or round not allowed there.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such submission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Checked in, or the entity's slot there is taken.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The update failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveSubmissionBody"
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/admin/events/{id}/registrations": {
       "get": {
         "tags": [
@@ -8363,6 +8484,25 @@
         "title": "AdminSubmissionListResponse",
         "description": "An event's submissions, newest first."
       },
+      "AdminSubmissionResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/AdminSubmissionData",
+            "description": "The submission."
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta",
+            "description": "Semantic value for meta."
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "AdminSubmissionResponse",
+        "description": "One submission."
+      },
       "AdminUserData": {
         "properties": {
           "id": {
@@ -8984,7 +9124,7 @@
           "kind": {
             "type": "string",
             "title": "Kind",
-            "description": "copy, rename, trash, share_event_folder, unshare_event_folder or share_song."
+            "description": "copy, rename, move, trash, share_event_folder, unshare_event_folder or share_song."
           },
           "status": {
             "type": "string",
@@ -9033,7 +9173,7 @@
               }
             ],
             "title": "Submission Id",
-            "description": "Set for copy and rename."
+            "description": "Set for copy, rename and move."
           },
           "file_id": {
             "anyOf": [
@@ -13691,6 +13831,39 @@
           "role"
         ],
         "title": "UpdateRoleBody",
+        "type": "object"
+      },
+      "MoveSubmissionBody": {
+        "description": "Body of ``PATCH /v1/admin/event-song-submissions/{id}``.",
+        "properties": {
+          "division": {
+            "description": "The division of the same event to move it to.",
+            "title": "Division",
+            "type": "string"
+          },
+          "round": {
+            "anyOf": [
+              {
+                "enum": [
+                  "prelims_and_finals",
+                  "prelims_only",
+                  "finals_only"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Classic at The Open only: the rounds it is entered for in the new division. Default prelims_and_finals.",
+            "title": "Round"
+          }
+        },
+        "required": [
+          "division"
+        ],
+        "title": "MoveSubmissionBody",
         "type": "object"
       },
       "CreateCheckinBody": {

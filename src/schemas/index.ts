@@ -636,6 +636,18 @@ export const ApiAdminEventSongSubmissionSchema = z.object({
 export type ApiAdminEventSongSubmission = z.infer<typeof ApiAdminEventSongSubmissionSchema>;
 
 /**
+ * PATCH /v1/admin/event-song-submissions/:id (admin only): move the entry to
+ * another division of the same event. Only this event's entry moves (its
+ * per-event division); the song keeps its own. `division` is a name from
+ * GET /v1/divisions.
+ */
+export const moveEventSongSubmissionBodySchema = z.object({
+  division: z.string().min(1),
+  /** Classic at The Open only; rejected elsewhere. Defaults to prelims_and_finals. */
+  round: z.enum(SUBMISSION_ROUNDS).optional(),
+});
+
+/**
  * One entry on an event's registration list, as an admin imported it from the
  * event's own registration export (GET /v1/admin/events/:id/registrations).
  * `division` is the registration's own name for it, not one of /v1/divisions.
