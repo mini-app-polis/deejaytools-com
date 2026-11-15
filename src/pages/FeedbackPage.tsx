@@ -1,3 +1,4 @@
+import { useAuth } from "@clerk/clerk-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useCallback, useId, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -47,6 +48,7 @@ const TYPE_OPTIONS: { value: FeedbackType; label: string }[] = [
 ];
 
 export default function FeedbackPage() {
+  const { getToken } = useAuth();
   const form = useForm<FeedbackForm>({
     resolver: zodResolver(feedbackSchema),
     defaultValues: {
@@ -150,9 +152,15 @@ export default function FeedbackPage() {
       if (openToContact && contactName.trim()) body.contactName = contactName.trim();
       if (screenshotDataUrl) body.screenshot = screenshotDataUrl;
 
+      // Feedback is public, but a signed-in sender's token lets the API keep
+      // who sent it with the feedback. Without one it is simply anonymous.
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      const token = await getToken().catch(() => null);
+      if (token) headers.Authorization = `Bearer ${token}`;
+
       const res = await fetch(`${API_BASE}${endpoints.feedback.submit.path()}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(body),
       });
 
