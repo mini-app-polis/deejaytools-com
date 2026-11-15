@@ -1,3 +1,15 @@
+# [2.41.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.40.2...v2.41.0) (2026-11-15)
+
+
+### Bug Fixes
+
+* **deps:** bump the minor-and-patch group across 1 directory with 12 updates ([032ff1f](https://github.com/mini-app-polis/deejaytools-com/commit/032ff1f9695afcad9732cac669fdc89c93543b4b))
+
+
+### Features
+
+* **manager:** move an event entry to another division ([8907f0d](https://github.com/mini-app-polis/deejaytools-com/commit/8907f0d032c8f95a3ff2fe7355c8a95b44b887eb))
+
 ## [2.40.2](https://github.com/mini-app-polis/deejaytools-com/compare/v2.40.1...v2.40.2) (2026-11-14)
 
 
