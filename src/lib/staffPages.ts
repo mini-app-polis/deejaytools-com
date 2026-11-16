@@ -36,6 +36,21 @@ export function staffPagesFor(roles: readonly ApiEventRole[]): PortalSectionLink
   return ALL_STAFF_PAGES.filter((page) => held.some((role) => roleHasSection(role, page.slug)));
 }
 
+/** The staff pages `role` opens, in its portal's order. */
+export function staffPagesForRole(role: EventStaffRole): readonly PortalSectionLink[] {
+  return PORTAL_SECTION_LINKS[role];
+}
+
+/**
+ * The role whose pages the Event staff bar shows: `chosen` when `roles` holds
+ * it on some event, else the richest role held; null when none is held.
+ */
+export function staffBarRole(roles: readonly ApiEventRole[], chosen: EventStaffRole | null): EventStaffRole | null {
+  const held = rolesHeld(roles);
+  if (chosen && held.includes(chosen)) return chosen;
+  return held.at(-1) ?? null;
+}
+
 /** The events on which `roles` opens the staff page `slug`: each event's richest role has it. */
 export function eventsForStaffPage(roles: readonly ApiEventRole[], slug: string): string[] {
   const ids = [...new Set(roles.map((r) => r.event_id))];

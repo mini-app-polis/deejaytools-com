@@ -12,7 +12,8 @@ import { useAuthMe } from "@/hooks/useAuthMe";
 import { EVENT_ROLE_LABELS } from "@/lib/eventRoles";
 import { viewAsDestination } from "@/lib/adminViewAs";
 import { setViewAs, VIEW_AS_ROLES, type ViewAs, type ViewAsRole } from "@/lib/viewAs";
-import { rolesHeld, staffPagePath, staffPagesFor } from "@/lib/staffPages";
+import { rolesHeld, staffBarRole, staffPagePath, staffPagesForRole } from "@/lib/staffPages";
+import type { EventStaffRole } from "@/schemas";
 import pkg from "../../package.json";
 
 type NavItem = { to: string; label: string };
@@ -42,10 +43,15 @@ const buildSha = import.meta.env.VITE_COMMIT_SHA ?? "";
 
 export default function NavBar() {
   const { isAdmin, eventRoles, realIsAdmin, viewAs } = useAuthMe();
-  // The Event staff bar: the roles held on any event, and the staff pages
-  // they open; each page picks one of the caller's events, as admin pages do.
-  const staffRoles = rolesHeld(eventRoles).map((r) => EVENT_ROLE_LABELS[r]);
-  const staffLinks: NavItem[] = staffPagesFor(eventRoles).map((p) => ({ to: staffPagePath(p.slug), label: p.label }));
+  // The Event staff bar, for anyone holding a staff role on any event: the
+  // roles held, one of them selected, and the staff pages the selected role
+  // opens. Each page picks one of the caller's events, as admin pages do.
+  const heldRoles = rolesHeld(eventRoles);
+  const [chosenRole, chooseRole] = useStaffBarChoice();
+  const staffRole = staffBarRole(eventRoles, chosenRole);
+  const staffLinks: NavItem[] = staffRole
+    ? staffPagesForRole(staffRole).map((p) => ({ to: staffPagePath(p.slug), label: p.label }))
+    : [];
   // Dev and preview hosts show the commit instead of the semver version: the
   // version only moves on release, so it cannot identify a dev build.
   const showSha = !isProdHost() && buildSha !== "";
@@ -206,9 +212,7 @@ export default function NavBar() {
         {staffLinks.length > 0 && (
           <nav aria-label="Event staff" className="hidden sm:block border-t border-white/[0.07] bg-black/30">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 min-h-11 py-1.5 flex flex-wrap items-center gap-1">
-              <Badge variant="outline" className="mr-2 shrink-0 border-primary/40 text-primary">
-                {staffRoles.join(" · ")}
-              </Badge>
+              <StaffRolePicker held={heldRoles} selected={staffRole} onSelect={chooseRole} className="mr-2" />
               <NavLink to={MY_EVENTS_ITEM.to} end className={subBarLinkClass}>
                 {MY_EVENTS_ITEM.label}
               </NavLink>
@@ -266,8 +270,9 @@ export default function NavBar() {
             {staffLinks.length > 0 && (
               <>
                 <div className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Event staff · {staffRoles.join(" · ")}
+                  Event staff
                 </div>
+                <StaffRolePicker held={heldRoles} selected={staffRole} onSelect={chooseRole} className="px-4 pb-1" />
                 <NavLink to={MY_EVENTS_ITEM.to} end onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
                   {MY_EVENTS_ITEM.label}
                 </NavLink>
@@ -297,7 +302,85 @@ export default function NavBar() {
   );
 }
 
-const VIEW_AS_LABELS: Record<ViewAsRole, string> = { ...EVENT_ROLE_LABELS, dancer: "Dancer" };
+const VIEW_AS_LABELS: Record<ViewAsRole, string> = { ...EVENT_ROLE_LABELS, dancer: "User" };
+
+const STAFF_ROLE_KEY = "deejaytools.staffBarRole";
+
+/**
+ * The staff role picked in the Event staff bar, kept in this browser
+ * (localStorage) so it lasts across pages and visits. Storage that fails
+ * leaves it in memory only. A role the caller no longer holds is ignored
+ * (staffBarRole).
+ */
+function useStaffBarChoice(): [EventStaffRole | null, (role: EventStaffRole) => void] {
+  const [role, setRole] = useState<EventStaffRole | null>(() => {
+    try {
+      const raw = localStorage.getItem(STAFF_ROLE_KEY);
+      return raw && raw in EVENT_ROLE_LABELS ? (raw as EventStaffRole) : null;
+    } catch {
+      return null;
+    }
+  });
+  const choose = (next: EventStaffRole) => {
+    setRole(next);
+    try {
+      localStorage.setItem(STAFF_ROLE_KEY, next);
+    } catch {
+      // Kept in memory for this page load only.
+    }
+  };
+  return [role, choose];
+}
+
+/**
+ * The staff roles the caller holds, at the start of the Event staff bar: one
+ * role is a plain badge; several are buttons, the selected one pressed, and
+ * the bar shows the selected role's pages.
+ */
+function StaffRolePicker({
+  held,
+  selected,
+  onSelect,
+  className,
+}: {
+  held: readonly EventStaffRole[];
+  selected: EventStaffRole | null;
+  onSelect: (role: EventStaffRole) => void;
+  className?: string;
+}) {
+  if (held.length <= 1) {
+    return (
+      <div className={className}>
+        <Badge variant="outline" className="shrink-0 border-primary/40 text-primary">
+          {selected ? EVENT_ROLE_LABELS[selected] : ""}
+        </Badge>
+      </div>
+    );
+  }
+  return (
+    <div role="group" aria-label="Staff role" className={cn("flex flex-wrap items-center gap-1", className)}>
+      {held.map((role) => {
+        const active = role === selected;
+        return (
+          <button
+            key={role}
+            type="button"
+            aria-pressed={active}
+            className={cn(
+              "rounded-full border px-2.5 py-0.5 text-xs font-medium whitespace-nowrap transition-colors",
+              active
+                ? "border-primary/40 bg-primary/10 text-primary"
+                : "border-white/10 text-muted-foreground hover:text-foreground"
+            )}
+            onClick={() => onSelect(role)}
+          >
+            {EVENT_ROLE_LABELS[role]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 /** Start, switch or end a view-as, landing on the page that role would see in place of this one. */
 function useStartViewAs() {

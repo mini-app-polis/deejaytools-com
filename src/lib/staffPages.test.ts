@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eventsForStaffPage, rolesHeld, staffPagePath, staffPagesFor } from "./staffPages";
+import { eventsForStaffPage, rolesHeld, staffBarRole, staffPagePath, staffPagesFor, staffPagesForRole } from "./staffPages";
 
 describe("staffPages", () => {
   const roles = [
@@ -25,6 +25,17 @@ describe("staffPages", () => {
       "drive",
     ]);
     expect(staffPagesFor([])).toEqual([]);
+  });
+
+  it("lists one role's pages in its portal's order", () => {
+    expect(staffPagesForRole("coordinator").map((p) => p.slug)).toEqual(["registrations", "submissions"]);
+  });
+
+  it("picks the bar's role: the chosen one when held, else the richest held", () => {
+    expect(staffBarRole(roles, "coordinator")).toBe("coordinator");
+    expect(staffBarRole(roles, null)).toBe("dj");
+    expect(staffBarRole(roles, "event-manager")).toBe("dj");
+    expect(staffBarRole([], "dj")).toBeNull();
   });
 
   it("offers a page on each event whose richest role has it", () => {
