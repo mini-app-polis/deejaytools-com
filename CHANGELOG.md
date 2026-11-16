@@ -1,3 +1,10 @@
+# [2.42.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.41.1...v2.42.0) (2026-11-16)
+
+
+### Features
+
+* **nav:** pick a held staff role in the Event staff bar; label view-as dancer as User ([2510ccf](https://github.com/mini-app-polis/deejaytools-com/commit/2510ccf75d8ba9312ce08c70f46734ccd8cf830a))
+
 ## [2.41.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.41.0...v2.41.1) (2026-11-16)
 
 
