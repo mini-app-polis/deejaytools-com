@@ -6,7 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import FeedbackPage from "./FeedbackPage";
 import { expectFieldError } from "@/test/fieldErrors";
 
-// Feedback is public and posts with a bare fetch (no API client, no Clerk).
+// Feedback is public and posts with a bare fetch (no API client). Clerk is
+// read only for the signed-in sender's token, which is optional.
+const { getToken } = vi.hoisted(() => ({ getToken: vi.fn() }));
+vi.mock("@clerk/clerk-react", () => ({
+  useAuth: () => ({ getToken }),
+}));
+
 const fetchMock = vi.fn();
 const createObjectURL = vi.fn(() => "blob:preview-1");
 const revokeObjectURL = vi.fn();
@@ -40,6 +46,8 @@ async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
 
 describe("FeedbackPage", () => {
   beforeEach(() => {
+    getToken.mockReset();
+    getToken.mockResolvedValue(null);
     fetchMock.mockReset();
     globalThis.fetch = fetchMock as unknown as typeof fetch;
     createObjectURL.mockClear();
@@ -67,11 +75,45 @@ describe("FeedbackPage", () => {
     expect(url).toMatch(/\/v1\/feedback$/);
     expect(init.method).toBe("POST");
     expect(new Headers(init.headers).get("Content-Type")).toBe("application/json");
+    // Signed out: no token is sent.
+    expect(new Headers(init.headers).has("Authorization")).toBe(false);
     expect(postedBody()).toEqual({
       type: "general",
       subject: "Queue froze",
       message: "It stopped updating.",
     });
+  });
+
+  it("sends the signed-in sender's token so the API knows who sent it", async () => {
+    getToken.mockResolvedValue("jwt-123");
+    fetchMock.mockResolvedValue(jsonResponse({ data: null, meta: { version: "v1" } }));
+    const user = userEvent.setup();
+    render(<FeedbackPage />);
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: "Submit feedback" }));
+
+    expect(
+      await screen.findByRole("heading", { name: /thanks for the feedback/i })
+    ).toBeInTheDocument();
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(new Headers(init.headers).get("Authorization")).toBe("Bearer jwt-123");
+  });
+
+  it("still sends the feedback anonymously when the token cannot be read", async () => {
+    getToken.mockRejectedValue(new Error("clerk not loaded"));
+    fetchMock.mockResolvedValue(jsonResponse({ data: null, meta: { version: "v1" } }));
+    const user = userEvent.setup();
+    render(<FeedbackPage />);
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: "Submit feedback" }));
+
+    expect(
+      await screen.findByRole("heading", { name: /thanks for the feedback/i })
+    ).toBeInTheDocument();
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(new Headers(init.headers).has("Authorization")).toBe(false);
   });
 
   it("sends the chosen type and contact details when the user opts in", async () => {

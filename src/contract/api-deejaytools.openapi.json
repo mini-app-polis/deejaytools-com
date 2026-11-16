@@ -5192,7 +5192,7 @@
           "feedback"
         ],
         "summary": "Send site feedback",
-        "description": "Intentionally public. Emails the feedback through Brevo when a key and both feedback addresses are configured, with the screenshot attached; accepted without email otherwise.",
+        "description": "Intentionally public. Saves the feedback, with the sender's user id when a valid token is sent, then emails it through Brevo when a key and both feedback addresses are configured, with the screenshot attached. Accepted once saved: an email Brevo refuses is retried later.",
         "operationId": "send_feedback_v1_feedback_post",
         "responses": {
           "201": {
@@ -5207,16 +5207,6 @@
           },
           "400": {
             "description": "Invalid body or screenshot.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "Brevo refused the email.",
             "content": {
               "application/json": {
                 "schema": {
