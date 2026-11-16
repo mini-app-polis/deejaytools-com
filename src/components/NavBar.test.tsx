@@ -52,6 +52,7 @@ afterEach(() => {
   viewing = null;
   try {
     sessionStorage.clear();
+    localStorage.clear();
   } catch {
     // jsdom always has it.
   }
@@ -174,13 +175,13 @@ describe("NavBar — admin view as", () => {
   const stored = () => JSON.parse(sessionStorage.getItem("deejaytools.viewAs") ?? "null") as unknown;
   const row = () => screen.getByRole("navigation", { name: "View as" });
 
-  it("offers the admin's own view, every role and dancer, with no event to pick", () => {
+  it("offers the admin's own view, every role and a plain user, with no event to pick", () => {
     signedIn = true;
     isAdmin = true;
     renderNav("/my-content");
     expect(within(row()).queryByRole("combobox")).toBeNull();
     expect(within(row()).getByRole("button", { name: "Admin (normal)" })).toHaveAttribute("aria-pressed", "true");
-    for (const name of ["Coordinator", "DJ", "Event manager", "Dancer"]) {
+    for (const name of ["Coordinator", "DJ", "Event manager", "User"]) {
       expect(within(row()).getByRole("button", { name })).toHaveAttribute("aria-pressed", "false");
     }
   });
@@ -507,16 +508,46 @@ describe("NavBar — event staff", () => {
     expect(within(bar).getByRole("link", { name: "Staff" })).toHaveAttribute("href", "/staff/staff");
   });
 
-  it("names every role held and links each page once, across events", () => {
+  it("offers each role held, opens on the richest, and shows only the selected role's pages", async () => {
     signInAsStaff([
       { event_id: "ev-1", role: "coordinator" },
       { event_id: "ev-2", role: "dj" },
     ]);
+    const user = userEvent.setup();
     renderNav();
     const bar = screen.getByRole("navigation", { name: "Event staff" });
-    expect(within(bar).getByText("Coordinator · DJ")).toBeInTheDocument();
+    const picker = within(bar).getByRole("group", { name: "Staff role" });
+    expect(within(picker).getByRole("button", { name: "DJ" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(picker).getByRole("button", { name: "Coordinator" })).toHaveAttribute("aria-pressed", "false");
     expect(within(bar).getAllByRole("link", { name: "Registrations" })).toHaveLength(1);
     expect(within(bar).getByRole("link", { name: "Live queue" })).toHaveAttribute("href", "/staff/queue");
+
+    await user.click(within(picker).getByRole("button", { name: "Coordinator" }));
+    expect(within(picker).getByRole("button", { name: "Coordinator" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(bar).queryByRole("link", { name: "Live queue" })).toBeNull();
+    expect(within(bar).getByRole("link", { name: "Registrations" })).toHaveAttribute("href", "/staff/registrations");
+    expect(within(bar).getByRole("link", { name: "My events" })).toHaveAttribute("href", "/my-events");
+    expect(localStorage.getItem("deejaytools.staffBarRole")).toBe("coordinator");
+  });
+
+  it("keeps the selected role across visits, and ignores one no longer held", () => {
+    localStorage.setItem("deejaytools.staffBarRole", "coordinator");
+    signInAsStaff([
+      { event_id: "ev-1", role: "coordinator" },
+      { event_id: "ev-2", role: "event-manager" },
+    ]);
+    const { unmount } = renderNav();
+    let bar = screen.getByRole("navigation", { name: "Event staff" });
+    expect(within(bar).getByRole("button", { name: "Coordinator" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(bar).queryByRole("link", { name: "Staff" })).toBeNull();
+    unmount();
+
+    signInAsStaff([{ event_id: "ev-2", role: "event-manager" }]);
+    renderNav();
+    bar = screen.getByRole("navigation", { name: "Event staff" });
+    expect(within(bar).queryByRole("group", { name: "Staff role" })).toBeNull();
+    expect(within(bar).getByText("Event manager")).toBeInTheDocument();
+    expect(within(bar).getByRole("link", { name: "Staff" })).toHaveAttribute("href", "/staff/staff");
   });
 
   it("lists My events and the staff pages in the mobile menu", async () => {
