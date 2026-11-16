@@ -1,3 +1,10 @@
+## [2.41.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.41.0...v2.41.1) (2026-11-16)
+
+
+### Bug Fixes
+
+* **feedback:** send the signed-in sender's token with feedback ([0236697](https://github.com/mini-app-polis/deejaytools-com/commit/02366972efe39c7360c8f9a7b7bbf26632b50909))
+
 # [2.41.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.40.2...v2.41.0) (2026-11-15)
 
 
