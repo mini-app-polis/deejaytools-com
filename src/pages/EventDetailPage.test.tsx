@@ -738,6 +738,54 @@ describe("EventDetailPage — missing music counts", () => {
     expect(within(row).getByText("Possible match")).toBeInTheDocument();
   });
 
+  it("marks an entered Classic couple at The Open with the round still to come, on its own row", async () => {
+    authMe = { isAdmin: true, eventRoles: [] };
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({ name: "The Open 2026" }));
+      if (path === "/v1/events/ev-1/entities") {
+        return Promise.resolve([makeDivision("Classic", [makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz" })])]);
+      }
+      if (path === "/v1/events/ev-1/registrations") return Promise.resolve([registration("Classic", "Alex Kim", "Jo Ruiz")]);
+      if (path === "/v1/events/ev-1/song-submissions") {
+        return Promise.resolve([{ ...submission("s1", "Alex Kim & Jo Ruiz", "Classic"), round: "prelims_only" }]);
+      }
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    await waitFor(() => expect(screen.getAllByText(/1 missing/).length).toBeGreaterThan(0));
+    await expandDivisions("Classic");
+    // One row: the entered couple, flagged, not a second registered row.
+    expect(screen.getAllByText("Alex Kim & Jo Ruiz")).toHaveLength(1);
+    const row = screen.getByText("Alex Kim & Jo Ruiz").parentElement!;
+    expect(within(row).getByText("Finals missing")).toBeInTheDocument();
+  });
+
+  it("names registrations whose division is not recognised under their own line", async () => {
+    authMe = { isAdmin: true, eventRoles: [] };
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (path === "/v1/events/ev-1/entities") {
+        return Promise.resolve([makeDivision("Classic", [makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz" })])]);
+      }
+      if (path === "/v1/events/ev-1/registrations") {
+        return Promise.resolve([
+          registration("Classic", "Alex Kim", "Jo Ruiz"),
+          registration("Mystery Mixer", "Quinn Odd", "Remy Rare"),
+        ]);
+      }
+      if (path === "/v1/events/ev-1/song-submissions") {
+        return Promise.resolve([submission("s1", "Alex Kim & Jo Ruiz", "Classic")]);
+      }
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    expect(await screen.findByText(/Registrations in divisions not recognised/)).toBeInTheDocument();
+    const item = screen.getByText("Quinn Odd & Remy Rare").closest("li")!;
+    expect(within(item).getByText("Missing music")).toBeInTheDocument();
+  });
+
   it("shows no registered names to anyone but the event's staff and admins", async () => {
     authMe = { isAdmin: false, eventRoles: [] };
     mockRegistrationApi();
