@@ -50,7 +50,7 @@ export type StaffBarChoice = EventStaffRole | "user";
 /**
  * The role whose pages the Event staff bar shows: `chosen` when `roles` holds
  * it on some event; null for the User view (`chosen` "user"). With nothing
- * chosen, or a role no longer held, it is `fallback` when held, else null:
+ * chosen, or a role not held, it is `fallback` when held, else null:
  * the User view.
  */
 export function staffBarRole(

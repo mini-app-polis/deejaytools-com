@@ -84,6 +84,7 @@ export type FloorTrialSection = "active" | "soon" | "scheduled";
 
 export const FLOOR_TRIAL_SECTIONS: readonly FloorTrialSection[] = ["active", "soon", "scheduled"];
 
+/** The section a session is listed in (FloorTrialSection), or null when the page leaves it out. */
 export function floorTrialSection(
   status: string,
   eventStatus: string | null | undefined
