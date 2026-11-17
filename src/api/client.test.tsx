@@ -187,6 +187,32 @@ describe("useApiClient.get", () => {
     await expect(result.current.get("/v1/foo")).rejects.toThrow("couldn't read");
     expect(captureException).toHaveBeenCalledOnce();
   });
+
+  /** A response whose body fails partway, as when the page goes away mid-read. */
+  function brokenBody(status: number) {
+    const body = new ReadableStream({
+      start(controller) {
+        controller.error(new TypeError("network error"));
+      },
+    });
+    return new Response(body, { status });
+  }
+
+  it("passes on a success whose body never finished arriving, without reporting it", async () => {
+    fetchMock.mockResolvedValue(brokenBody(200));
+    const { result } = renderHook(() => useApiClient());
+    const err = await result.current.get("/v1/foo").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(TypeError);
+    expect((err as Error).message).toBe("network error");
+    expect(captureException).not.toHaveBeenCalled();
+  });
+
+  it("still reads a 5xx whose body never finished arriving as the server failing", async () => {
+    fetchMock.mockResolvedValue(brokenBody(502));
+    const { result } = renderHook(() => useApiClient());
+    await expect(result.current.get("/v1/foo")).rejects.toThrow(SERVER_UNAVAILABLE_MESSAGE);
+    expect(captureException).toHaveBeenCalledOnce();
+  });
 });
 
 describe("useApiClient.post", () => {
