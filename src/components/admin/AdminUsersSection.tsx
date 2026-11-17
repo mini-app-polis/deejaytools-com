@@ -19,10 +19,27 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TabsContent } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
+import type { ApiAdminUser } from "@/schemas";
+
+type CountKey = keyof Pick<
+  ApiAdminUser,
+  "song_count" | "partner_count" | "event_count" | "managed_partnership_count" | "team_count"
+>;
+
+/** The per-user counts, one column each, in the order shown. */
+const COUNT_COLUMNS: readonly { key: CountKey; label: string; title: string }[] = [
+  { key: "song_count", label: "Songs", title: "Songs uploaded, not deleted" },
+  { key: "partner_count", label: "Partners", title: "Partners they have added" },
+  { key: "event_count", label: "Events", title: "Events their songs are submitted to" },
+  { key: "managed_partnership_count", label: "Managed", title: "Managed partnerships they run" },
+  { key: "team_count", label: "Teams", title: "Teams they compete as" },
+];
 
 /**
- * The admin Users section: every user, searchable, with a toggle to grant
- * or revoke the admin role. It renders its own TabsContent so it stays
+ * The admin Users section: every user, searchable, with how much each has
+ * in deejaytools (songs, partners, events entered, managed partnerships,
+ * teams) and a toggle to grant or revoke the admin role. It renders its own TabsContent so it stays
  * mounted while another admin section is shown, keeping the search as it
  * was when the admin comes back.
  */
@@ -120,8 +137,11 @@ export default function AdminUsersSection({ open }: { open: boolean }) {
                 <TableHead>Role</TableHead>
                 {/* Numeric columns are right-aligned and use tabular-nums
                     on the cells below so digits line up between rows. */}
-                <TableHead className="text-right">Songs</TableHead>
-                <TableHead className="text-right">Partners</TableHead>
+                {COUNT_COLUMNS.map((c) => (
+                  <TableHead key={c.key} className="text-right" title={c.title}>
+                    {c.label}
+                  </TableHead>
+                ))}
                 <TableHead className="text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
@@ -149,12 +169,17 @@ export default function AdminUsersSection({ open }: { open: boolean }) {
                         <Badge variant="secondary">user</Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm">
-                      {u.song_count}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm">
-                      {u.partner_count}
-                    </TableCell>
+                    {COUNT_COLUMNS.map((c) => (
+                      <TableCell
+                        key={c.key}
+                        className={cn(
+                          "text-right tabular-nums text-sm",
+                          u[c.key] === 0 && "text-muted-foreground"
+                        )}
+                      >
+                        {u[c.key]}
+                      </TableCell>
+                    ))}
                     <TableCell className="text-right">
                       {isSelf ? (
                         <span className="text-xs text-muted-foreground">

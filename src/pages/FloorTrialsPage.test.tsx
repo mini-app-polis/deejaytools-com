@@ -66,6 +66,18 @@ function makeSession(opts: {
   });
 }
 
+/** The session cards: links to a session page. */
+function sessionLinks(): HTMLElement[] {
+  return screen.queryAllByRole("link").filter((l) => l.getAttribute("href")?.startsWith("/sessions/"));
+}
+
+/** The one session card on the page. */
+function sessionLink(): HTMLElement {
+  const links = sessionLinks();
+  if (links.length !== 1) throw new Error(`expected one session card, found ${links.length}`);
+  return links[0];
+}
+
 function renderPage() {
   return renderWithQueryClient(
     <MemoryRouter>
@@ -82,7 +94,7 @@ describe("FloorTrialsPage", () => {
     renderPage();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load floor trials: sessions down");
-    expect(screen.queryByText(/no upcoming sessions right now/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/no floor trials are open or running right now/i)).not.toBeInTheDocument();
   });
 
   it("shows scheduled, checkin_open, and in_progress sessions", async () => {
@@ -101,7 +113,7 @@ describe("FloorTrialsPage", () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.queryAllByRole("link", { name: /open session/i })).toHaveLength(3);
+      expect(sessionLinks()).toHaveLength(3);
     });
   });
 
@@ -121,11 +133,11 @@ describe("FloorTrialsPage", () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.queryAllByRole("link", { name: /open session/i })).toHaveLength(1);
+      expect(sessionLinks()).toHaveLength(1);
     });
 
     // Only s1 (scheduled) should appear
-    expect(screen.getByRole("link", { name: /open session/i })).toHaveAttribute(
+    expect(sessionLink()).toHaveAttribute(
       "href",
       "/sessions/s1"
     );
@@ -147,11 +159,11 @@ describe("FloorTrialsPage", () => {
     renderPage();
 
     await waitFor(() => {
-      const links = screen.queryAllByRole("link", { name: /open session/i });
+      const links = sessionLinks();
       expect(links).toHaveLength(3);
     });
 
-    const links = screen.getAllByRole("link", { name: /open session/i });
+    const links = sessionLinks();
     expect(links[0].getAttribute("href")).toBe("/sessions/first");
     expect(links[1].getAttribute("href")).toBe("/sessions/middle");
     expect(links[2].getAttribute("href")).toBe("/sessions/last");
@@ -199,7 +211,7 @@ describe("FloorTrialsPage", () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText(/no upcoming sessions right now/i)).toBeInTheDocument();
+      expect(screen.getByText(/no floor trials are open or running right now/i)).toBeInTheDocument();
     });
   });
 
@@ -217,7 +229,7 @@ describe("FloorTrialsPage", () => {
     renderPage();
 
     await waitFor(() => {
-      const link = screen.getByRole("link", { name: /open session/i });
+      const link = sessionLink();
       expect(link.getAttribute("href")).toBe("/sessions/abc-123");
     });
   });
@@ -241,7 +253,7 @@ describe("FloorTrialsPage", () => {
 
     await waitFor(() => {
       // "Wednesday - 7:30 PM - April 29, 2026"
-      const card = screen.getByRole("link", { name: /open session/i }).closest("div")!;
+      const card = sessionLink().closest("div")!;
       const titleText = within(card.parentElement!).getByText(/Wednesday - 7:30 PM - April 29, 2026/);
       expect(titleText).toBeInTheDocument();
     });
@@ -261,7 +273,7 @@ describe("FloorTrialsPage", () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByRole("link", { name: /open session/i })).toBeInTheDocument();
+      expect(sessionLink()).toBeInTheDocument();
     });
 
     expect(apiGet).toHaveBeenCalledWith("/v1/sessions", { anonymous: true });
@@ -288,10 +300,10 @@ describe("FloorTrialsPage — check-in flow", () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getAllByRole("link", { name: /open session/i }).length).toBe(3);
+      expect(sessionLinks().length).toBe(3);
     });
 
-    expect(screen.getByText("Scheduled")).toBeInTheDocument();
+    expect(screen.getByText("Scheduled", { selector: "div" })).toBeInTheDocument();
     expect(screen.getByText("Check-in open")).toBeInTheDocument();
     expect(screen.getByText("In progress")).toBeInTheDocument();
   });
@@ -310,7 +322,7 @@ describe("FloorTrialsPage — check-in flow", () => {
     renderPage();
 
     await waitFor(() => {
-      const link = screen.getByRole("link", { name: /open session/i });
+      const link = sessionLink();
       expect(link).toHaveAttribute("href", "/sessions/session-123");
     });
   });
@@ -380,7 +392,7 @@ describe("FloorTrialsPage — queue state", () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText(/open session/i)).toBeInTheDocument();
+      expect(sessionLink()).toBeInTheDocument();
     });
 
     expect(screen.getByText("Check-in open")).toBeInTheDocument();
@@ -403,12 +415,12 @@ describe("FloorTrialsPage — queue state", () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText("Scheduled")).toBeInTheDocument();
+      expect(screen.getByText("Scheduled", { selector: "div" })).toBeInTheDocument();
     });
 
     expect(screen.getByText("Check-in open")).toBeInTheDocument();
 
-    const badges = screen.getAllByText(/^(scheduled|check-in open)$/i);
+    const badges = screen.getAllByText(/^(scheduled|check-in open)$/i, { selector: "div" });
     expect(badges).toHaveLength(2);
   });
 
@@ -459,5 +471,71 @@ describe("FloorTrialsPage — queue state", () => {
 
     const timezoneElements = screen.queryAllByText(/[A-Z]{2,3}/);
     expect(timezoneElements.length).toBeGreaterThan(0);
+  });
+});
+
+describe("FloorTrialsPage — sections", () => {
+  const sectionOf = (name: string) => screen.getByRole("region", { name: new RegExp(`^${name}`) });
+
+  it("sorts sessions into Active, Soon (event on now) and Scheduled (event to come)", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/sessions") {
+        return Promise.resolve([
+          makeSession({ id: "live", status: "in_progress", startsAt: "2026-04-29T09:00:00", eventId: "now" }),
+          makeSession({ id: "open", status: "checkin_open", startsAt: "2026-04-29T11:00:00", eventId: "now" }),
+          makeSession({ id: "later", status: "scheduled", startsAt: "2026-04-29T15:00:00", eventId: "now" }),
+          makeSession({ id: "next", status: "scheduled", startsAt: "2026-06-01T09:00:00", eventId: "future" }),
+          makeSession({ id: "done", status: "completed", startsAt: "2026-04-29T07:00:00", eventId: "now" }),
+        ]);
+      }
+      if (path === "/v1/events") {
+        return Promise.resolve([
+          fx.event({ id: "now", name: "On Now", status: "active" }),
+          fx.event({ id: "future", name: "Later On", status: "upcoming" }),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    await waitFor(() => expect(sessionLinks()).toHaveLength(4));
+    const hrefs = (name: string) =>
+      within(sectionOf(name))
+        .queryAllByRole("link")
+        .map((l) => l.getAttribute("href"));
+    expect(hrefs("Active")).toEqual(["/sessions/live", "/sessions/open"]);
+    expect(hrefs("Soon")).toEqual(["/sessions/later"]);
+    expect(hrefs("Scheduled")).toEqual(["/sessions/next"]);
+  });
+
+  it("keeps every section, saying when one is empty", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/sessions") {
+        return Promise.resolve([
+          makeSession({ id: "next", status: "scheduled", startsAt: "2026-06-01T09:00:00", eventId: "future" }),
+        ]);
+      }
+      if (path === "/v1/events") return Promise.resolve([fx.event({ id: "future", status: "upcoming" })]);
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    await waitFor(() => expect(sessionLinks()).toHaveLength(1));
+    expect(within(sectionOf("Active")).getByText(/no floor trials are open or running right now/i)).toBeInTheDocument();
+    expect(within(sectionOf("Soon")).getByText(/nothing else is coming up/i)).toBeInTheDocument();
+    expect(within(sectionOf("Scheduled")).queryByText(/no floor trials are scheduled/i)).toBeNull();
+  });
+
+  it("shows no 'Open session' line on the cards, just the arrow", async () => {
+    apiGet.mockImplementation((path: string) =>
+      path === "/v1/sessions"
+        ? Promise.resolve([makeSession({ id: "s1", status: "checkin_open", startsAt: "2026-04-29T09:00:00" })])
+        : Promise.resolve([])
+    );
+    renderPage();
+
+    await waitFor(() => expect(sessionLinks()).toHaveLength(1));
+    expect(screen.queryByText(/open session/i)).toBeNull();
+    expect(within(sessionLink()).getByText("→")).toHaveAttribute("aria-hidden", "true");
   });
 });

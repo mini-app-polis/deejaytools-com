@@ -5256,7 +5256,7 @@
           "admin-users"
         ],
         "summary": "List every user",
-        "description": "Every account with song and partner counts, oldest first. Optional q searches email and names (case-insensitive); optional role filters on the role derived from the identity store. Requires deejaytools.users.read.",
+        "description": "Every account with counts of its songs, partners, events entered, managed partnerships and teams, oldest first. Optional q searches email and names (case-insensitive); optional role filters on the role derived from the identity store. Requires deejaytools.users.read.",
         "operationId": "list_users_v1_admin_users_get",
         "parameters": [
           {
@@ -8552,6 +8552,21 @@
             "type": "integer",
             "title": "Partner Count",
             "description": "Partners of kind 'partner'."
+          },
+          "event_count": {
+            "type": "integer",
+            "title": "Event Count",
+            "description": "Events with a submission of one of their songs."
+          },
+          "managed_partnership_count": {
+            "type": "integer",
+            "title": "Managed Partnership Count",
+            "description": "Managed partnerships not soft-deleted."
+          },
+          "team_count": {
+            "type": "integer",
+            "title": "Team Count",
+            "description": "Teams they own."
           }
         },
         "type": "object",
@@ -8561,7 +8576,10 @@
           "role",
           "created_at",
           "song_count",
-          "partner_count"
+          "partner_count",
+          "event_count",
+          "managed_partnership_count",
+          "team_count"
         ],
         "title": "AdminUserData",
         "description": "A user as the admin directory returns it."

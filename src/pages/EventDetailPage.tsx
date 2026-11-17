@@ -1,17 +1,18 @@
 import { SignedIn, SignedOut, SignInButton, useAuth } from "@clerk/clerk-react";
-import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointQuery } from "@/api/queries";
+import CardArrow from "@/components/CardArrow";
 import QueryError from "@/components/QueryError";
 import SessionStatusBadge from "@/components/SessionStatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import { useDivisions } from "@/hooks/useDivisions";
+import { useEventSlugs } from "@/hooks/useEventSlugs";
 import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
 import { EVENT_ROLE_LABELS, eventPortalPath, richestEventRole } from "@/lib/eventRoles";
 import {
@@ -19,18 +20,50 @@ import {
   percentComplete,
   progressByDivision,
   reconcileRegistrations,
+  registrationName,
+  sameLabel,
   type MissingCount,
   type Progress,
+  type ReconciledRegistration,
 } from "@/lib/eventRegistrations";
+import { eventPagePath, looksLikeEventId, resolveEventSegment } from "@/lib/eventSlug";
 import { countFloorTrials, floorTrialBucket, formatFloorTrials } from "@/lib/floorTrials";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareSessionChrono } from "@/lib/chronoSort";
 import { cn } from "@/lib/utils";
 import { isOpenEvent } from "@/schemas";
 
+/**
+ * The event a URL segment names, and whether it is still being worked out.
+ * The segment is a readable slug (lib/eventSlug) or the event's id: an id
+ * is used at once; anything else waits for the event list, and is used as
+ * an id when no event has it as its slug (or the list cannot load).
+ */
+function useEventFromSegment(segment: string | undefined) {
+  const { slugs, loading } = useEventSlugs();
+  if (!segment) return { eventId: null, slugs, resolving: false };
+  if (looksLikeEventId(segment)) return { eventId: segment, slugs, resolving: false };
+  if (loading) return { eventId: null, slugs, resolving: true };
+  const eventId = (slugs && resolveEventSegment(segment, slugs)) ?? segment;
+  return { eventId, slugs, resolving: false };
+}
+
 export default function EventDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const { id: segment } = useParams<{ id: string }>();
   const { isSignedIn } = useAuth();
+  const { eventId: id, slugs, resolving } = useEventFromSegment(segment);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // An event opened by id (or by an older slug) moves to its readable URL,
+  // in place, so the address bar and anything shared from it read well.
+  useEffect(() => {
+    if (!id || !slugs) return;
+    const slug = slugs.get(id);
+    if (slug && slug !== segment) {
+      navigate(`${eventPagePath(id, slugs)}${location.search}${location.hash}`, { replace: true });
+    }
+  }, [id, slugs, segment, navigate, location.search, location.hash]);
 
   // The event and its sessions load independently: a sessions failure keeps
   // the event on screen and shows the error in the sessions section. Each is
@@ -45,11 +78,11 @@ export default function EventDetailPage() {
   const sessionsError = sessionsQuery.error && !sessions ? sessionsQuery.error.message : null;
   const loading = eventQuery.isFetching || sessionsQuery.isFetching;
 
-  if (!id) {
+  if (!segment) {
     return <p className="text-muted-foreground">Missing event id.</p>;
   }
 
-  if (eventQuery.isLoading) {
+  if (resolving || !id || eventQuery.isLoading) {
     return (
       <div className="space-y-3">
         <Skeleton className="h-6 w-40" />
@@ -81,26 +114,35 @@ export default function EventDetailPage() {
         <Button variant="ghost" size="sm" className="mb-2 px-0" asChild>
           <Link to="/events">← Events</Link>
         </Button>
-        <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="page-title text-2xl">{event.name}</h1>
-            <p className="text-sm text-muted-foreground">
-              {event.start_date === event.end_date
-                ? event.start_date
-                : `${event.start_date} – ${event.end_date}`}
-            </p>
-            <PortalLinks eventId={event.id} />
-          </div>
-          <div className="flex items-center gap-2">
-            {event.status === "upcoming" && <Badge variant="default">upcoming</Badge>}
-            {event.status === "active" && (
-              <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 border-transparent">
-                active
-              </Badge>
-            )}
-            {event.status === "completed" && <Badge variant="secondary">completed</Badge>}
+        {/* The event's name, dates and status stay in view while the page
+            scrolls, just under the site header (whose height NavBar keeps
+            in --app-header-height: it grows with the staff and admin bars). */}
+        <div
+          data-testid="event-header"
+          className="sticky z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 border-b border-white/[0.07] bg-background/90 backdrop-blur-md"
+          style={{ top: "var(--app-header-height, 3.5rem)" }}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+            <div className="min-w-0">
+              <h1 className="page-title text-2xl leading-tight">{event.name}</h1>
+              <p className="text-sm text-muted-foreground">
+                {event.start_date === event.end_date
+                  ? event.start_date
+                  : `${event.start_date} – ${event.end_date}`}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {event.status === "upcoming" && <Badge variant="default">upcoming</Badge>}
+              {event.status === "active" && (
+                <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 border-transparent">
+                  active
+                </Badge>
+              )}
+              {event.status === "completed" && <Badge variant="secondary">completed</Badge>}
+            </div>
           </div>
         </div>
+        <PortalLinks eventId={event.id} />
       </div>
 
       <div className="space-y-4">
@@ -130,8 +172,8 @@ export default function EventDetailPage() {
         )}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {listedSessions?.map((sess) => (
-            // Whole-card click target — same card treatment as FloorTrialsPage.
-            // The inner "Open session →" line stays as a visual affordance.
+            // Whole-card click target — same card treatment as FloorTrialsPage,
+            // with the arrow in the bottom-right corner as its affordance.
             <Link
               key={sess.id}
               to={`/sessions/${sess.id}`}
@@ -156,16 +198,18 @@ export default function EventDetailPage() {
                   {formatTimeOnly(sess.floor_trial_ends_at, event.timezone)}
                 </p>
               </div>
-              <div className="mt-auto pt-1">
-                <Separator className="mb-2" />
-                <p className="text-sm font-medium text-primary">Open session →</p>
-              </div>
+              <CardArrow />
             </Link>
           ))}
         </div>
       </div>
 
-      <EnteredEntities eventId={id} eventName={event.name} isSignedIn={Boolean(isSignedIn)} />
+      <EnteredEntities
+        eventId={id}
+        eventName={event.name}
+        isSignedIn={Boolean(isSignedIn)}
+        signInPath={location.pathname}
+      />
     </div>
   );
 }
@@ -192,20 +236,51 @@ function PortalLinks({ eventId }: { eventId: string }) {
   );
 }
 
+/** A registered entry still without its music, named for the event's staff. */
+type Outstanding = {
+  key: string;
+  /** The entry's dancers as the registration list has them. */
+  name: string;
+  status: "missing" | "possible" | "missing-round";
+  /** For "missing-round": the round with no song yet. */
+  missingRound?: "prelims" | "finals";
+  /** For "missing-round": the labels of the songs it has in, to mark its entered row. */
+  labels: string[];
+};
+
 type RegistrationCounts = {
   missing: ReadonlyMap<string | null, MissingCount>;
   /** Null when the counts are not shown: not staff, or no registration list. */
   progress: ReadonlyMap<string | null, Progress> | null;
+  /** Entries still without music, by deejaytools division (null: not recognised). */
+  outstanding: ReadonlyMap<string | null, Outstanding[]>;
 };
 
-const NO_COUNTS: RegistrationCounts = { missing: new Map(), progress: null };
+const NO_COUNTS: RegistrationCounts = { missing: new Map(), progress: null, outstanding: new Map() };
+
+function outstandingByDivision(rows: readonly ReconciledRegistration[]): Map<string | null, Outstanding[]> {
+  const byDivision = new Map<string | null, Outstanding[]>();
+  for (const r of rows) {
+    if (r.status !== "missing" && r.status !== "possible" && r.status !== "missing-round") continue;
+    const list = byDivision.get(r.division) ?? [];
+    list.push({
+      key: r.entry.id,
+      name: registrationName(r.entry),
+      status: r.status,
+      ...(r.missingRound ? { missingRound: r.missingRound } : {}),
+      labels: r.status === "missing-round" ? r.matches.map((m) => m.partnership_label) : [],
+    });
+    byDivision.set(r.division, list);
+  }
+  return byDivision;
+}
 
 /**
- * Admins and this event's staff only: how many registered entries per
- * division have no music in yet, and how far each division is from all
- * having it, from the event's registration list (imported on the admin
- * Registrations page) against its submissions. Counts, never names. Empty
- * for everyone else, and for an event with no registration list.
+ * Admins and this event's staff only: who on the event's registration list
+ * (imported on the Registrations page) has no music in yet, per division,
+ * and how far each division is from all having it, against the event's
+ * submissions. Empty for everyone else, and for an event with no
+ * registration list.
  */
 function useMissingCounts(eventId: string, eventName: string, enabled: boolean) {
   const { isAdmin, eventRoles } = useAuthMe();
@@ -225,7 +300,11 @@ function useMissingCounts(eventId: string, eventName: string, enabled: boolean) 
   return useMemo(() => {
     if (!registrations || !submissions || registrations.length === 0) return NO_COUNTS;
     const { rows, unregistered } = reconcileRegistrations(registrations, submissions, divisions, roundsSplit);
-    return { missing: missingByDivision(rows), progress: progressByDivision(rows, unregistered) };
+    return {
+      missing: missingByDivision(rows),
+      progress: progressByDivision(rows, unregistered),
+      outstanding: outstandingByDivision(rows),
+    };
   }, [registrations, submissions, divisions, roundsSplit]);
 }
 
@@ -252,6 +331,52 @@ function MissingLabel({ count }: { count: MissingCount | undefined }) {
   );
 }
 
+const OUTSTANDING_BADGE: Record<Outstanding["status"], { label: (o: Outstanding) => string; className: string }> = {
+  missing: { label: () => "Missing music", className: "border-destructive/50 text-destructive" },
+  "missing-round": {
+    label: (o) => (o.missingRound === "prelims" ? "Prelims missing" : "Finals missing"),
+    className: "border-destructive/50 text-destructive",
+  },
+  possible: { label: () => "Possible match", className: "border-amber-500/50 text-amber-500 dark:text-amber-300" },
+};
+
+function OutstandingBadge({ entry }: { entry: Outstanding }) {
+  const badge = OUTSTANDING_BADGE[entry.status];
+  return (
+    <Badge variant="outline" className={cn("shrink-0 text-xs font-normal", badge.className)}>
+      {badge.label(entry)}
+    </Badge>
+  );
+}
+
+/** One row of a division's list: an entered competitor, or a registered one still missing music. */
+type DivisionRow =
+  | { kind: "entered"; key: string; label: string; flag?: Outstanding }
+  | { kind: "outstanding"; key: string; label: string; entry: Outstanding };
+
+/**
+ * A division's rows, by name: everyone entered, and for the event's staff
+ * everyone registered whose music is not in yet. An entry with only one of
+ * its rounds in is its entered row, marked with the round still to come.
+ */
+function divisionRows(
+  entities: readonly { entity_key: string; label: string }[],
+  outstanding: readonly Outstanding[]
+): DivisionRow[] {
+  const flagged = new Set<string>();
+  const rows: DivisionRow[] = entities.map((e) => {
+    const flag = outstanding.find(
+      (o) => o.status === "missing-round" && !flagged.has(o.key) && o.labels.some((l) => sameLabel(l, e.label))
+    );
+    if (flag) flagged.add(flag.key);
+    return { kind: "entered", key: e.entity_key, label: e.label, ...(flag ? { flag } : {}) };
+  });
+  for (const o of outstanding) {
+    if (!flagged.has(o.key)) rows.push({ kind: "outstanding", key: `reg:${o.key}`, label: o.name, entry: o });
+  }
+  return rows.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+}
+
 /**
  * Who has music in for this event, grouped by division.
  *
@@ -259,16 +384,19 @@ function MissingLabel({ count }: { count: MissingCount | undefined }) {
  * one row per competitor — but where that view names the song, this one names
  * only the competitor. Multiple songs from the same entity in the same
  * division are one row: enough to see the field, never enough to learn a
- * routine.
+ * routine. The event's staff (and admins) also see everyone on the
+ * registration list still without music, by name, marked as missing.
  */
 function EnteredEntities({
   eventId,
   eventName,
   isSignedIn,
+  signInPath,
 }: {
   eventId: string;
   eventName: string;
   isSignedIn: boolean;
+  signInPath: string;
 }) {
   // The endpoint is requireAuth — signed out there is nothing to fetch.
   const entitiesQuery = useEndpointQuery(endpoints.events.entities, {
@@ -277,7 +405,7 @@ function EnteredEntities({
   });
   const entered = isSignedIn ? (entitiesQuery.data ?? null) : null;
   const loading = entitiesQuery.isFetching;
-  const { missing, progress } = useMissingCounts(eventId, eventName, isSignedIn);
+  const { missing, progress, outstanding } = useMissingCounts(eventId, eventName, isSignedIn);
   const { divisions: divisionOrder } = useDivisions();
 
   // Divisions on the registration list are listed even when nobody in them
@@ -305,6 +433,10 @@ function EnteredEntities({
   // division opens to its rows.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
+  const allDivisions = divisions?.map((d) => d.division) ?? [];
+  const allExpanded = allDivisions.length > 0 && allDivisions.every((d) => expanded.has(d));
+  const noneExpanded = allDivisions.every((d) => !expanded.has(d));
+
   const toggleDivision = (division: string) =>
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -328,25 +460,41 @@ function EnteredEntities({
           { complete: 0, total: 0 }
         );
 
+  const unrecognisedNames = outstanding.get(null) ?? [];
+
   return (
     <div className="space-y-4">
-      <h2 className="text-base font-semibold">
-        Entered{" "}
-        {totalEntries !== null && (
-          <span className="ml-2 text-sm font-normal text-muted-foreground">
-            {entriesLabel(totalEntries)}
-            <ProgressLabel progress={progressTotal} />
-            <MissingLabel count={missingTotal} />
-          </span>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-base font-semibold">
+          Entered{" "}
+          {totalEntries !== null && (
+            <span className="ml-2 text-sm font-normal text-muted-foreground">
+              {entriesLabel(totalEntries)}
+              <ProgressLabel progress={progressTotal} />
+              <MissingLabel count={missingTotal} />
+            </span>
+          )}
+        </h2>
+        {isSignedIn && allDivisions.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={allExpanded}
+              onClick={() => setExpanded(new Set(allDivisions))}
+            >
+              Expand all
+            </Button>
+            <Button variant="outline" size="sm" disabled={noneExpanded} onClick={() => setExpanded(new Set())}>
+              Collapse all
+            </Button>
+          </div>
         )}
-      </h2>
+      </div>
 
       <SignedOut>
         <div className="flex flex-wrap items-center gap-3">
-          <SignInButton
-            forceRedirectUrl={`/events/${eventId}`}
-            signUpForceRedirectUrl={`/events/${eventId}`}
-          >
+          <SignInButton forceRedirectUrl={signInPath} signUpForceRedirectUrl={signInPath}>
             <Button size="sm">Sign in to see who&apos;s entered</Button>
           </SignInButton>
           <p className="text-sm text-muted-foreground">
@@ -373,6 +521,7 @@ function EnteredEntities({
           <div className={cn("md:columns-2 md:gap-6", loading && "opacity-60")}>
             {divisions.map(({ division, entities }) => {
               const isCollapsed = !expanded.has(division);
+              const rows = divisionRows(entities, outstanding.get(division) ?? []);
               return (
                 <section key={division} className="mb-6 space-y-2 break-inside-avoid">
                   <button
@@ -398,30 +547,58 @@ function EnteredEntities({
                       <MissingLabel count={missing.get(division)} />
                     </span>
                   </button>
-                  {!isCollapsed && entities.length === 0 && (
+                  {!isCollapsed && rows.length === 0 && (
                     <p className="px-4 text-sm text-muted-foreground">Nothing submitted yet.</p>
                   )}
-                  {!isCollapsed && entities.length > 0 && (
+                  {!isCollapsed && rows.length > 0 && (
                     <div className="space-y-2">
-                      {entities.map((entity) => (
-                        <div
-                          key={entity.entity_key}
-                          className="rounded-lg bg-white/[0.06] px-4 py-3 text-sm"
-                        >
-                          <span className="block font-medium min-w-0 truncate">{entity.label}</span>
-                        </div>
-                      ))}
+                      {rows.map((row) => {
+                        const flag = row.kind === "outstanding" ? row.entry : row.flag;
+                        return (
+                          <div
+                            key={row.key}
+                            className={cn(
+                              "flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-sm",
+                              row.kind === "outstanding"
+                                ? "border border-dashed border-white/15 bg-transparent"
+                                : "bg-white/[0.06]"
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "block min-w-0 truncate font-medium",
+                                row.kind === "outstanding" && "text-muted-foreground"
+                              )}
+                            >
+                              {row.label}
+                            </span>
+                            {flag && <OutstandingBadge entry={flag} />}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </section>
               );
             })}
             {unrecognised && (
-              <p className="mb-6 break-inside-avoid text-xs text-muted-foreground">
-                Registrations in divisions not recognised
-                <ProgressLabel progress={progress?.get(null)} />
-                <MissingLabel count={unrecognised} />
-              </p>
+              <div className="mb-6 break-inside-avoid space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Registrations in divisions not recognised
+                  <ProgressLabel progress={progress?.get(null)} />
+                  <MissingLabel count={unrecognised} />
+                </p>
+                {unrecognisedNames.length > 0 && (
+                  <ul className="space-y-1">
+                    {unrecognisedNames.map((o) => (
+                      <li key={o.key} className="flex items-center justify-between gap-2 px-4 text-sm text-muted-foreground">
+                        <span className="min-w-0 truncate">{o.name}</span>
+                        <OutstandingBadge entry={o} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
           </div>
         )}

@@ -91,6 +91,7 @@ export const fx = {
   adminUser: factory(ApiAdminUserSchema, {
     id: "user_1", email: "user@example.com", first_name: null, last_name: null,
     role: "user", created_at: T, song_count: 0, partner_count: 0,
+    event_count: 0, managed_partnership_count: 0, team_count: 0,
   }),
   adminSong: factory(ApiAdminSongSchema, {
     id: "song-1", song_label: "Song", display_name: null, division: null,

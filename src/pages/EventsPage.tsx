@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import type { EventStatus } from "@/schemas";
 import { endpoints } from "@/api/endpoints";
@@ -9,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { compareEventChrono } from "@/lib/chronoSort";
 import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
 import { formatEventDateRange, parseCalendarDate } from "@/lib/eventDates";
+import { eventPagePath, eventSlugs } from "@/lib/eventSlug";
 import { countFloorTrialsByEvent, formatFloorTrials } from "@/lib/floorTrials";
 import { formatTimezoneAbbr } from "@/lib/sessionFormat";
 import type { FloorTrialCounts } from "@/lib/floorTrials";
@@ -43,6 +45,8 @@ export default function EventsPage() {
   const eventsQuery = useEndpointQuery(endpoints.events.list);
   const sessionsQuery = useEndpointQuery(endpoints.sessions.list);
   const events = eventsQuery.data ?? null;
+  // Readable /events/<name-year> links (lib/eventSlug).
+  const slugs = useMemo(() => eventSlugs(events ?? []), [events]);
   const sessions = sessionsQuery.data ?? null;
   const sessionsError = sessionsQuery.error && !sessions ? sessionsQuery.error.message : null;
   const loading = eventsQuery.isFetching || sessionsQuery.isFetching;
@@ -117,7 +121,7 @@ export default function EventsPage() {
             // and "copy link address" all work, and the whole card is the target.
             <Link
               key={ev.id}
-              to={`/events/${ev.id}`}
+              to={eventPagePath(ev.id, slugs)}
               className={cn(
                 "flex h-full flex-col gap-2 rounded-lg border bg-card p-4 shadow-sm",
                 CLICKABLE_CARD_CLASS

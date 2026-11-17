@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
+import { Link, MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
@@ -695,7 +695,7 @@ describe("EventDetailPage — missing music counts", () => {
     });
   }
 
-  it("shows the event's staff missing counts per division, without names", async () => {
+  it("lists every registered competitor to the event's staff, marking who is missing music", async () => {
     authMe = { isAdmin: false, eventRoles: [{ event_id: "ev-1", role: "coordinator" }] };
     mockRegistrationApi();
     renderPage();
@@ -704,10 +704,49 @@ describe("EventDetailPage — missing music counts", () => {
     // A division nobody has submitted to is still listed, so its missing
     // entries show.
     expect(screen.getByText("Masters")).toBeInTheDocument();
-    await expandDivisions("Masters");
-    expect(screen.getByText("Nothing submitted yet.")).toBeInTheDocument();
     expect(screen.getByText(/2 missing/)).toBeInTheDocument();
+    await expandDivisions("Masters");
+    expect(screen.queryByText("Nothing submitted yet.")).toBeNull();
+
+    // Classic: the entered couple, then the registered one without music, by name.
+    const alex = screen.getByText("Alex Kim & Jo Ruiz").parentElement!;
+    expect(within(alex).queryByText("Missing music")).toBeNull();
+    const pat = screen.getByText("Pat Long & Sam Short").parentElement!;
+    expect(within(pat).getByText("Missing music")).toBeInTheDocument();
+    const gina = screen.getByText("Gina White & Hank Green").parentElement!;
+    expect(within(gina).getByText("Missing music")).toBeInTheDocument();
+  });
+
+  it("marks a near-name registration as a possible match", async () => {
+    authMe = { isAdmin: true, eventRoles: [] };
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (path === "/v1/events/ev-1/entities") {
+        return Promise.resolve([makeDivision("Classic", [makeEntity({ key: "pt:p1", label: "Alex Kim & Jo Ruiz" })])]);
+      }
+      if (path === "/v1/events/ev-1/registrations") return Promise.resolve([registration("Classic", "Alexx Kim", "Jo Ruiz")]);
+      if (path === "/v1/events/ev-1/song-submissions") {
+        return Promise.resolve([submission("s1", "Alex Kim & Jo Ruiz", "Classic")]);
+      }
+      return Promise.resolve([]);
+    });
+    renderPage();
+
+    await waitFor(() => expect(screen.getAllByText(/1 possible/).length).toBeGreaterThan(0));
+    await expandDivisions("Classic");
+    const row = screen.getByText("Alexx Kim & Jo Ruiz").parentElement!;
+    expect(within(row).getByText("Possible match")).toBeInTheDocument();
+  });
+
+  it("shows no registered names to anyone but the event's staff and admins", async () => {
+    authMe = { isAdmin: false, eventRoles: [] };
+    mockRegistrationApi();
+    renderPage();
+
+    await expandDivisions("Classic");
+    expect(screen.getByText("Alex Kim & Jo Ruiz")).toBeInTheDocument();
     expect(screen.queryByText(/Pat Long|Gina White/)).toBeNull();
+    expect(screen.queryByText("Missing music")).toBeNull();
   });
 
   it("shows the event's staff the percent complete per division and in total", async () => {
@@ -812,5 +851,129 @@ describe("EventDetailPage — staff portal links", () => {
 
     await screen.findByRole("heading", { name: /spring swing/i });
     expect(screen.queryByRole("link", { name: /portal|coordinator/i })).toBeNull();
+  });
+});
+
+describe("EventDetailPage — readable URLs", () => {
+  const ID = "d4b20af5-045b-47b2-a9c3-34214dbaeca2";
+  const OPEN = fx.event({
+    id: ID,
+    name: "The Open",
+    start_date: "2026-11-26",
+    end_date: "2026-11-29",
+    status: "upcoming",
+    timezone: "America/Los_Angeles",
+  });
+
+  function Where() {
+    const location = useLocation();
+    return <output data-testid="where">{location.pathname}</output>;
+  }
+
+  function renderAt(path: string) {
+    return renderWithQueryClient(
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/events/:id" element={<EventDetailPage />} />
+        </Routes>
+        <Where />
+      </MemoryRouter>
+    );
+  }
+
+  function mockOpen() {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events") return Promise.resolve([OPEN]);
+      if (path === `/v1/events/${ID}`) return Promise.resolve(OPEN);
+      return Promise.resolve([]);
+    });
+  }
+
+  it("opens an event by its name-year slug", async () => {
+    mockOpen();
+    renderAt("/events/the-open-2026");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "The Open" })).toBeInTheDocument();
+    expect(apiGet).toHaveBeenCalledWith(`/v1/events/${ID}`, expect.anything());
+    expect(screen.getByTestId("where")).toHaveTextContent("/events/the-open-2026");
+  });
+
+  it("moves an id URL to the event's readable one", async () => {
+    mockOpen();
+    renderAt(`/events/${ID}`);
+
+    expect(await screen.findByRole("heading", { level: 1, name: "The Open" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/events/the-open-2026"));
+  });
+
+  it("says the event was not found for a slug no event has", async () => {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events") return Promise.resolve([OPEN]);
+      return Promise.reject(Object.assign(new Error("Event not found"), { status: 404 }));
+    });
+    renderAt("/events/no-such-event-2026");
+
+    expect(await screen.findByText("Event not found.")).toBeInTheDocument();
+  });
+});
+
+describe("EventDetailPage — layout", () => {
+  function mockEventWithDivisions() {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({ name: "Swing Fling", status: "active" }));
+      if (path.startsWith("/v1/sessions")) return Promise.resolve([makeSession({ id: "s1" })]);
+      if (path === "/v1/events/ev-1/entities") {
+        return Promise.resolve([
+          makeDivision("Classic", [makeEntity({ key: "us:a", label: "Ann" })]),
+          makeDivision("Showcase", [makeEntity({ key: "us:b", label: "Bea" })]),
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+  }
+
+  it("keeps the title, dates and status in a bar that sticks under the site header", async () => {
+    mockEventWithDivisions();
+    renderPage();
+
+    const bar = await screen.findByTestId("event-header");
+    expect(bar.className).toContain("sticky");
+    expect(bar.style.top).toBe("var(--app-header-height, 3.5rem)");
+    expect(within(bar).getByRole("heading", { level: 1, name: "Swing Fling" })).toBeInTheDocument();
+    expect(within(bar).getByText("2026-06-01 – 2026-06-05")).toBeInTheDocument();
+    expect(within(bar).getByText("active")).toBeInTheDocument();
+  });
+
+  it("expands and collapses every division at once", async () => {
+    mockEventWithDivisions();
+    const user = userEvent.setup();
+    renderPage();
+
+    const expandAll = await screen.findByRole("button", { name: "Expand all" });
+    const collapseAll = screen.getByRole("button", { name: "Collapse all" });
+    expect(collapseAll).toBeDisabled();
+    expect(screen.queryByText("Ann")).toBeNull();
+
+    await user.click(expandAll);
+    expect(screen.getByText("Ann")).toBeInTheDocument();
+    expect(screen.getByText("Bea")).toBeInTheDocument();
+    expect(expandAll).toBeDisabled();
+
+    await user.click(collapseAll);
+    expect(screen.queryByText("Ann")).toBeNull();
+    expect(screen.queryByText("Bea")).toBeNull();
+  });
+
+  it("shows the session cards' arrow without an 'Open session' line, the whole card still a link", async () => {
+    mockEventWithDivisions();
+    renderPage();
+
+    const link = await waitFor(() => {
+      const found = screen.getAllByRole("link").find((l) => l.getAttribute("href") === "/sessions/s1");
+      if (!found) throw new Error("no session card yet");
+      return found;
+    });
+    expect(screen.queryByText(/open session/i)).toBeNull();
+    expect(within(link).getByText("→")).toHaveAttribute("aria-hidden", "true");
   });
 });

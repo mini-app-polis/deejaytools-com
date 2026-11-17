@@ -17,9 +17,9 @@ export default function ManagerGuideSection() {
       <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
         <p className="text-foreground font-medium">Floor trial operations guide</p>
         <p className="text-muted-foreground mt-1">
-          For the person running the booth. These tools require admin access — there is no separate
-          manager login today; grant admin on the{" "}
-          <Link to="/admin/users">Users</Link> screen if someone else needs in.
+          For event staff — coordinators, DJs and event managers — and whoever runs the booth.
+          Staff open their tools from the Event staff bar, picking the event on each page; the
+          links below into Admin screens open for admins only.
         </p>
       </div>
 

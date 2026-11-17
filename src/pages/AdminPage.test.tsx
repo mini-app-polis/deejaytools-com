@@ -517,7 +517,8 @@ describe("AdminPage — Events section", () => {
     renderWithDetailRoutes("/admin/events");
 
     const link = await screen.findByRole("link", { name: "Swing Fling" });
-    expect(link).toHaveAttribute("href", `/events/${EV_ACTIVE.id}`);
+    // The readable URL: name and start year (lib/eventSlug).
+    expect(link).toHaveAttribute("href", "/events/swing-fling-2026");
     expect(link.closest("tr")).not.toBeNull();
     await tabToAndEnter(user, link);
     expect(await screen.findByText("event detail page")).toBeInTheDocument();
@@ -1605,6 +1606,22 @@ describe("AdminPage — Users section", () => {
     expect(bobRow).toHaveTextContent("—");
     expect(within(bobRow).getByRole("button", { name: "Revoke admin" })).toBeInTheDocument();
     expect(screen.getByText("3 users")).toBeInTheDocument();
+  });
+
+  it("shows each user's songs, partners, events, managed partnerships and teams", async () => {
+    const CARA = fx.adminUser({
+      id: "u4", email: "cara@example.com", song_count: 4, partner_count: 2,
+      event_count: 3, managed_partnership_count: 1, team_count: 5,
+    });
+    routeGets({ "/v1/admin/users": [ME, CARA] });
+    renderPage("/admin/users");
+
+    const caraRow = (await screen.findByText("cara@example.com")).closest("tr")!;
+    const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
+    expect(headers).toEqual(expect.arrayContaining(["Songs", "Partners", "Events", "Managed", "Teams"]));
+    const cells = within(caraRow).getAllByRole("cell").map((c) => c.textContent);
+    const at = (label: string) => cells[headers.indexOf(label)];
+    expect([at("Songs"), at("Partners"), at("Events"), at("Managed"), at("Teams")]).toEqual(["4", "2", "3", "1", "5"]);
   });
 
   it("promotes a user and shows the refetched role", async () => {

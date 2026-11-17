@@ -3,6 +3,7 @@ import {
   countFloorTrials,
   countFloorTrialsByEvent,
   floorTrialBucket,
+  floorTrialSection,
   formatFloorTrials,
 } from "./floorTrials";
 
@@ -95,5 +96,24 @@ describe("formatFloorTrials", () => {
     expect(formatFloorTrials({ active: 0, upcoming: 0, completed: 0, cancelled: 0 })).toBe(
       "none scheduled yet"
     );
+  });
+});
+
+describe("floorTrialSection", () => {
+  it("puts running and check-in-open sessions in Active, whatever the event", () => {
+    expect(floorTrialSection("checkin_open", "active")).toBe("active");
+    expect(floorTrialSection("in_progress", "upcoming")).toBe("active");
+  });
+
+  it("puts a session not started yet in Soon during its event, else in Scheduled", () => {
+    expect(floorTrialSection("scheduled", "active")).toBe("soon");
+    expect(floorTrialSection("scheduled", "upcoming")).toBe("scheduled");
+    expect(floorTrialSection("scheduled", null)).toBe("scheduled");
+  });
+
+  it("lists no completed, cancelled or unknown session", () => {
+    expect(floorTrialSection("completed", "active")).toBeNull();
+    expect(floorTrialSection("cancelled", "active")).toBeNull();
+    expect(floorTrialSection("mystery", "active")).toBeNull();
   });
 });

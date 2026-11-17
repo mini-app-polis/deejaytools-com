@@ -285,7 +285,7 @@ describe("ManagerPage — Active Sessions", () => {
     expect(
       await screen.findByText(/no floor-trial sessions scheduled for today/i)
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /open guide/i })).toHaveAttribute("href", "/manager/guide");
+    expect(screen.getByRole("link", { name: /open guide/i })).toHaveAttribute("href", "/guide");
   });
 
   it("picks today's sessions by the event's date, including one that runs past midnight", async () => {
@@ -989,29 +989,17 @@ describe("ManagerPage — CheckIn For", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Guide
+// Unknown sections
 // ---------------------------------------------------------------------------
 
-describe("ManagerPage — Guide", () => {
+describe("ManagerPage — unknown section", () => {
   beforeEach(resetAll);
 
-  it("renders the operations guide with links into the admin and manager tools", async () => {
-    routeGets({});
-    renderPage("/manager/guide");
-
-    expect(await screen.findAllByRole("heading", { level: 2 })).not.toHaveLength(0);
-    expect(screen.getAllByRole("link", { name: "Run History" })[0]).toHaveAttribute("href", "/admin/runs");
-    expect(screen.getAllByRole("link", { name: "CheckIn For" })[0]).toHaveAttribute("href", "/manager/checkin-for");
-    expect(screen.getAllByRole("link", { name: "Active Sessions" })[0]).toHaveAttribute(
-      "href",
-      "/manager/active-sessions"
-    );
-  });
-
-  it("falls back to Active Sessions for an unknown slug", async () => {
+  it("falls back to Active Sessions for an unknown slug, and the guide is no longer a section", async () => {
     routeGets({});
     renderPage("/manager/nope");
     expect(await screen.findByRole("link", { name: /open guide/i })).toBeInTheDocument();
+    expect(screen.queryByText("Floor trial operations guide")).not.toBeInTheDocument();
   });
 });
 

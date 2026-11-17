@@ -37,6 +37,7 @@ const CoordinatorPortalPage = lazy(() => import("./CoordinatorPortalPage"));
 const DjPortalPage = lazy(() => import("./DjPortalPage"));
 const EventManagerPortalPage = lazy(() => import("./EventManagerPortalPage"));
 const StaffSectionPage = lazy(() => import("./StaffSectionPage"));
+const GuidePage = lazy(() => import("./GuidePage"));
 
 function Lazy({ children }: { children: ReactNode }) {
   return <Suspense fallback={<RouteFallback />}>{children}</Suspense>;
@@ -161,6 +162,19 @@ export default function App() {
               picks one of their events, as an admin does on an admin page.
               The Event staff bar links these. */}
           <Route path="staff" element={<Navigate to="/my-events" replace />} />
+          {/* The operations guide, linked from the Event staff bar. Its old
+              home under /manager forwards here. */}
+          <Route
+            path="guide"
+            element={
+              <RequireAuth>
+                <Lazy>
+                  <GuidePage />
+                </Lazy>
+              </RequireAuth>
+            }
+          />
+          <Route path="manager/guide" element={<Navigate to="/guide" replace />} />
           <Route
             path="staff/:section"
             element={

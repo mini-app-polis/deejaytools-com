@@ -31,10 +31,14 @@ describe("staffPages", () => {
     expect(staffPagesForRole("coordinator").map((p) => p.slug)).toEqual(["registrations", "submissions"]);
   });
 
-  it("picks the bar's role: the chosen one when held, else the richest held", () => {
+  it("picks the bar's role: the chosen one when held, else the fallback when held, else the User view", () => {
     expect(staffBarRole(roles, "coordinator")).toBe("coordinator");
-    expect(staffBarRole(roles, null)).toBe("dj");
-    expect(staffBarRole(roles, "event-manager")).toBe("dj");
+    expect(staffBarRole(roles, null)).toBeNull();
+    expect(staffBarRole(roles, "event-manager")).toBeNull();
+    expect(staffBarRole(roles, "user", "dj")).toBeNull();
+    expect(staffBarRole(roles, null, "dj")).toBe("dj");
+    expect(staffBarRole(roles, "event-manager", "dj")).toBe("dj");
+    expect(staffBarRole(roles, null, "event-manager")).toBeNull();
     expect(staffBarRole([], "dj")).toBeNull();
   });
 

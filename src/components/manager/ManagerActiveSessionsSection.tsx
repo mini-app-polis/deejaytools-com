@@ -25,7 +25,7 @@ export default function ManagerActiveSessionsSection({
           </span>
         </p>
         <Link
-          to="/manager/guide"
+          to="/guide"
           className="text-sm font-medium text-primary hover:underline shrink-0"
         >
           Open guide →

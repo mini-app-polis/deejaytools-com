@@ -1,5 +1,5 @@
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/clerk-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,13 @@ import { useAuthMe } from "@/hooks/useAuthMe";
 import { EVENT_ROLE_LABELS } from "@/lib/eventRoles";
 import { viewAsDestination } from "@/lib/adminViewAs";
 import { setViewAs, VIEW_AS_ROLES, type ViewAs, type ViewAsRole } from "@/lib/viewAs";
-import { rolesHeld, staffBarRole, staffPagePath, staffPagesForRole } from "@/lib/staffPages";
+import {
+  rolesHeld,
+  staffBarRole,
+  staffPagePath,
+  staffPagesForRole,
+  type StaffBarChoice,
+} from "@/lib/staffPages";
 import type { EventStaffRole } from "@/schemas";
 import pkg from "../../package.json";
 
@@ -37,21 +43,35 @@ const ADMIN_ITEMS: NavItem[] = [
 // First in the Event staff bar: every event the caller is on the staff of.
 const MY_EVENTS_ITEM: NavItem = { to: "/my-events", label: "My events" };
 
+// Last in the Event staff bar, for every staff role: the operations guide.
+const GUIDE_ITEM: NavItem = { to: "/guide", label: "Guide" };
+
 // Stamped at build time by vite.config.ts. Empty when the sha could not be
 // resolved (no git, no CF_PAGES_COMMIT_SHA), in which case we show the version.
 const buildSha = import.meta.env.VITE_COMMIT_SHA ?? "";
 
 export default function NavBar() {
   const { isAdmin, eventRoles, realIsAdmin, viewAs } = useAuthMe();
-  // The Event staff bar, for anyone holding a staff role on any event: the
-  // roles held, one of them selected, and the staff pages the selected role
-  // opens. Each page picks one of the caller's events, as admin pages do.
+  // The Event staff bar, for anyone holding a staff role on any event: a
+  // User choice and the roles held, one of them selected, and the staff
+  // pages the selected role opens (none for User). Each page picks one of
+  // the caller's events, as admin pages do. Staff start on User; an admin
+  // starts on their richest role, and an admin viewing as a role is on it.
   const heldRoles = rolesHeld(eventRoles);
   const [chosenRole, chooseRole] = useStaffBarChoice();
-  const staffRole = staffBarRole(eventRoles, chosenRole);
+  const staffRole = viewAs
+    ? staffBarRole(eventRoles, null, heldRoles.at(-1) ?? null)
+    : staffBarRole(eventRoles, chosenRole, realIsAdmin ? (heldRoles.at(-1) ?? null) : null);
   const staffLinks: NavItem[] = staffRole
-    ? staffPagesForRole(staffRole).map((p) => ({ to: staffPagePath(p.slug), label: p.label }))
+    ? [
+        ...staffPagesForRole(staffRole).map((p) => ({ to: staffPagePath(p.slug), label: p.label })),
+        GUIDE_ITEM,
+      ]
     : [];
+  const showStaffBar = heldRoles.length > 0;
+  // While viewing as a role, the bar shows only that role: the view-as row
+  // is where it is switched.
+  const offerUser = !viewAs;
   // Dev and preview hosts show the commit instead of the semver version: the
   // version only moves on release, so it cannot identify a dev build.
   const showSha = !isProdHost() && buildSha !== "";
@@ -67,6 +87,22 @@ export default function NavBar() {
     : null;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuToggleRef = useRef<HTMLButtonElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+
+  // The header's height as --app-header-height on the page, kept current as
+  // its bars come and go, so a page's own sticky bar (the event page's
+  // title) can sit just under it.
+  useLayoutEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const update = () => root.style.setProperty("--app-header-height", `${el.offsetHeight}px`);
+    update();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   // Escape closes the open mobile menu and puts focus back on its toggle.
   useEffect(() => {
@@ -101,7 +137,7 @@ export default function NavBar() {
     );
 
   return (
-    <header className="border-b border-white/[0.07] bg-black/50 backdrop-blur-md sticky top-0 z-40">
+    <header ref={headerRef} className="border-b border-white/[0.07] bg-black/50 backdrop-blur-md sticky top-0 z-40">
       <SignedIn>{realIsAdmin && <ViewAsRow view={viewAs} />}</SignedIn>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
         <a href="/" className="flex items-center gap-2 shrink-0 group">
@@ -209,13 +245,21 @@ export default function NavBar() {
 
       {/* Event staff bar — desktop: the roles the caller holds, and the staff pages they open */}
       <SignedIn>
-        {staffLinks.length > 0 && (
+        {showStaffBar && (
           <nav aria-label="Event staff" className="hidden sm:block border-t border-white/[0.07] bg-black/30">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 min-h-11 py-1.5 flex flex-wrap items-center gap-1">
-              <StaffRolePicker held={heldRoles} selected={staffRole} onSelect={chooseRole} className="mr-2" />
-              <NavLink to={MY_EVENTS_ITEM.to} end className={subBarLinkClass}>
-                {MY_EVENTS_ITEM.label}
-              </NavLink>
+              <StaffRolePicker
+                held={heldRoles}
+                selected={staffRole}
+                offerUser={offerUser}
+                onSelect={chooseRole}
+                className="mr-2"
+              />
+              {staffRole && (
+                <NavLink to={MY_EVENTS_ITEM.to} end className={subBarLinkClass}>
+                  {MY_EVENTS_ITEM.label}
+                </NavLink>
+              )}
               {staffLinks.map((item) => (
                 <NavLink key={item.to} to={item.to} className={subBarLinkClass}>
                   {item.label}
@@ -267,15 +311,23 @@ export default function NavBar() {
             Contact
           </NavLink>
           <SignedIn>
-            {staffLinks.length > 0 && (
+            {showStaffBar && (
               <>
                 <div className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                   Event staff
                 </div>
-                <StaffRolePicker held={heldRoles} selected={staffRole} onSelect={chooseRole} className="px-4 pb-1" />
-                <NavLink to={MY_EVENTS_ITEM.to} end onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
-                  {MY_EVENTS_ITEM.label}
-                </NavLink>
+                <StaffRolePicker
+                  held={heldRoles}
+                  selected={staffRole}
+                  offerUser={offerUser}
+                  onSelect={chooseRole}
+                  className="px-4 pb-1"
+                />
+                {staffRole && (
+                  <NavLink to={MY_EVENTS_ITEM.to} end onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
+                    {MY_EVENTS_ITEM.label}
+                  </NavLink>
+                )}
                 {staffLinks.map((item) => (
                   <NavLink key={item.to} to={item.to} onClick={() => setMenuOpen(false)} className={mobileLinkClass}>
                     {item.label}
@@ -307,21 +359,22 @@ const VIEW_AS_LABELS: Record<ViewAsRole, string> = { ...EVENT_ROLE_LABELS, dance
 const STAFF_ROLE_KEY = "deejaytools.staffBarRole";
 
 /**
- * The staff role picked in the Event staff bar, kept in this browser
- * (localStorage) so it lasts across pages and visits. Storage that fails
- * leaves it in memory only. A role the caller no longer holds is ignored
- * (staffBarRole).
+ * The choice made in the Event staff bar (a staff role, or User), kept in
+ * this browser (localStorage) so it lasts across pages and visits. Storage
+ * that fails leaves it in memory only. A role the caller no longer holds is
+ * ignored (staffBarRole). Nothing chosen yet is the User view for staff.
  */
-function useStaffBarChoice(): [EventStaffRole | null, (role: EventStaffRole) => void] {
-  const [role, setRole] = useState<EventStaffRole | null>(() => {
+function useStaffBarChoice(): [StaffBarChoice | null, (choice: StaffBarChoice) => void] {
+  const [role, setRole] = useState<StaffBarChoice | null>(() => {
     try {
       const raw = localStorage.getItem(STAFF_ROLE_KEY);
+      if (raw === "user") return "user";
       return raw && raw in EVENT_ROLE_LABELS ? (raw as EventStaffRole) : null;
     } catch {
       return null;
     }
   });
-  const choose = (next: EventStaffRole) => {
+  const choose = (next: StaffBarChoice) => {
     setRole(next);
     try {
       localStorage.setItem(STAFF_ROLE_KEY, next);
@@ -333,22 +386,25 @@ function useStaffBarChoice(): [EventStaffRole | null, (role: EventStaffRole) => 
 }
 
 /**
- * The staff roles the caller holds, at the start of the Event staff bar: one
- * role is a plain badge; several are buttons, the selected one pressed, and
- * the bar shows the selected role's pages.
+ * At the start of the Event staff bar: User and the staff roles the caller
+ * holds, as buttons, the selected one pressed; the bar shows the selected
+ * role's pages, and none for User. Without the User choice (an admin
+ * viewing as a role) a single role is a plain badge.
  */
 function StaffRolePicker({
   held,
   selected,
+  offerUser,
   onSelect,
   className,
 }: {
   held: readonly EventStaffRole[];
   selected: EventStaffRole | null;
-  onSelect: (role: EventStaffRole) => void;
+  offerUser: boolean;
+  onSelect: (choice: StaffBarChoice) => void;
   className?: string;
 }) {
-  if (held.length <= 1) {
+  if (!offerUser && held.length <= 1) {
     return (
       <div className={className}>
         <Badge variant="outline" className="shrink-0 border-primary/40 text-primary">
@@ -357,13 +413,16 @@ function StaffRolePicker({
       </div>
     );
   }
+  const choices: { key: StaffBarChoice; label: string; active: boolean }[] = [
+    ...(offerUser ? [{ key: "user" as const, label: VIEW_AS_LABELS.dancer, active: selected === null }] : []),
+    ...held.map((role) => ({ key: role, label: EVENT_ROLE_LABELS[role], active: role === selected })),
+  ];
   return (
     <div role="group" aria-label="Staff role" className={cn("flex flex-wrap items-center gap-1", className)}>
-      {held.map((role) => {
-        const active = role === selected;
+      {choices.map(({ key, label, active }) => {
         return (
           <button
-            key={role}
+            key={key}
             type="button"
             aria-pressed={active}
             className={cn(
@@ -372,9 +431,9 @@ function StaffRolePicker({
                 ? "border-primary/40 bg-primary/10 text-primary"
                 : "border-white/10 text-muted-foreground hover:text-foreground"
             )}
-            onClick={() => onSelect(role)}
+            onClick={() => onSelect(key)}
           >
-            {EVENT_ROLE_LABELS[role]}
+            {label}
           </button>
         );
       })}
@@ -406,7 +465,7 @@ function ViewAsRow({ view }: { view: ViewAs | null }) {
   const start = useStartViewAs();
   const current = view?.role ?? null;
   const choices: { key: string; label: string; view: ViewAs | null }[] = [
-    { key: "admin", label: "Admin (normal)", view: null },
+    { key: "admin", label: "Admin", view: null },
     ...VIEW_AS_ROLES.map((role) => ({ key: role, label: VIEW_AS_LABELS[role], view: { role } })),
   ];
   return (

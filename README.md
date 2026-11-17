@@ -67,7 +67,7 @@ pnpm test:e2e       # Playwright end-to-end suite against a deployed dev site (s
 | `/open-submissions` | Redirects to The Open's event page | RequireAuth |
 | `/sessions` | Session list | RequireAuth |
 | `/events` | Event list | public |
-| `/events/:id` | Event detail | public read; entity roster signed-in only |
+| `/events/:slug` | Event detail (`:slug` is name and year, e.g. `the-open-2026`; an id still works) | public read; entity roster signed-in only |
 | `/my-events` | The events the caller is on the staff of, each linking to its portal | RequireAuth |
 | `/events/:eventId/coordinator`, `/events/:eventId/coordinator/:section` | Coordinator portal: the event's registration list (import, add, remove, link, mark handled or scratched; who is still missing music) and its submissions, read-only | EventRoleGuard (coordinator or richer, or an admin) |
 | `/events/:eventId/dj`, `/events/:eventId/dj/:section` | DJ portal: live queue, sessions, run history, check in and upload for a dancer, registrations, submissions, Drive folder | EventRoleGuard (DJ or richer, or an admin) |

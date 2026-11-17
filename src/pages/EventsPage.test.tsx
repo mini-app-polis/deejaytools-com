@@ -223,14 +223,14 @@ describe("EventsPage", () => {
 
     expect(await screen.findByRole("link", { name: /summer nationals/i })).toHaveAttribute(
       "href",
-      "/events/ev1"
+      "/events/summer-nationals-2026"
     );
     expect(await screen.findByRole("alert")).toHaveTextContent(/sessions unavailable/i);
     expect(screen.queryByText(/floor trials:/i)).not.toBeInTheDocument();
     expect(toast.error).not.toHaveBeenCalled();
   });
 
-  it("renders each event as a card link to /events/:id, with no table", async () => {
+  it("renders each event as a card link to its readable /events/<name-year> URL, with no table", async () => {
     apiGet.mockImplementation((path: string) => {
       if (path === "/v1/events") {
         return Promise.resolve([
@@ -250,7 +250,7 @@ describe("EventsPage", () => {
 
     await waitFor(() => {
       const link = screen.getByRole("link", { name: /summer nationals/i });
-      expect(link.getAttribute("href")).toBe("/events/ev1");
+      expect(link.getAttribute("href")).toBe("/events/summer-nationals-2026");
     });
     // Card view: the old desktop table markup is gone entirely, so there is
     // one card per event rather than a duplicated mobile + desktop pair.

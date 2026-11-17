@@ -1,29 +1,35 @@
 import { Link } from "react-router-dom";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointQuery } from "@/api/queries";
+import CardArrow from "@/components/CardArrow";
 import QueryError from "@/components/QueryError";
 import SessionStatusBadge from "@/components/SessionStatusBadge";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
-import { floorTrialBucket } from "@/lib/floorTrials";
+import { FLOOR_TRIAL_SECTIONS, floorTrialSection, type FloorTrialSection } from "@/lib/floorTrials";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { cn } from "@/lib/utils";
+import type { ApiSession } from "@/schemas";
 
 /**
- * This page lists what a competitor can still turn up to: sessions that are
- * running now or yet to start. Completed and cancelled trials are excluded —
- * they are still counted on the events page, which summarises an event's whole
- * schedule rather than listing what to do next.
+ * This page lists what a competitor can still turn up to, in three sections
+ * that are always shown, so an empty one says so rather than disappearing:
  *
- * Sourced from floorTrialBucket so the two pages cannot drift: a status added
- * server-side is either mapped there once, or it is ignored by both.
+ * - Active: check-in open or running now.
+ * - Soon: not started yet, at an event that is on now.
+ * - Scheduled: not started, at an event still to come.
+ *
+ * Completed and cancelled trials are excluded — they are still counted on
+ * the events page, which summarises an event's whole schedule rather than
+ * listing what to do next. Sourced from floorTrialSection, built on the same
+ * floorTrialBucket the events pages use, so the pages cannot drift.
  */
-function isListable(status: string): boolean {
-  const bucket = floorTrialBucket(status);
-  return bucket === "active" || bucket === "upcoming";
-}
+const SECTION_TEXT: Record<FloorTrialSection, { title: string; empty: string }> = {
+  active: { title: "Active", empty: "No floor trials are open or running right now." },
+  soon: { title: "Soon", empty: "Nothing else is coming up at the events on now." },
+  scheduled: { title: "Scheduled", empty: "No floor trials are scheduled at upcoming events." },
+};
 
 export default function FloorTrialsPage() {
   const sessionsQuery = useEndpointQuery(endpoints.sessions.list);
@@ -31,19 +37,20 @@ export default function FloorTrialsPage() {
   const sessions = sessionsQuery.data ?? null;
   const events = eventsQuery.data ?? [];
   const loading = sessionsQuery.isFetching || eventsQuery.isFetching;
-  // The list needs both: the sessions, and their events' names and timezones.
+  // The list needs both: the sessions, and their events' names, timezones
+  // and status (which decides Soon from Scheduled).
   const loadError =
     (!sessionsQuery.data && sessionsQuery.error) || (!eventsQuery.data && eventsQuery.error) || null;
 
-  // Show active and upcoming sessions only — completed and cancelled sessions
-  // are not relevant to regular users. Sort by start time ascending.
-  const todaySessions = (sessions ?? [])
-    .filter((s) => isListable(s.status))
-    .slice()
-    .sort((a, b) => a.floor_trial_starts_at - b.floor_trial_starts_at);
-
-  const eventNameById = new Map(events.map((e) => [e.id, e.name]));
-  const eventTimezoneById = new Map(events.map((e) => [e.id, e.timezone]));
+  const eventById = new Map(events.map((e) => [e.id, e]));
+  const bySection = new Map<FloorTrialSection, ApiSession[]>(FLOOR_TRIAL_SECTIONS.map((s) => [s, []]));
+  for (const s of sessions ?? []) {
+    const event = s.event_id ? eventById.get(s.event_id) : undefined;
+    const section = floorTrialSection(s.status, event?.status);
+    if (section) bySection.get(section)!.push(s);
+  }
+  for (const list of bySection.values()) list.sort((a, b) => a.floor_trial_starts_at - b.floor_trial_starts_at);
+  const nothingListed = [...bySection.values()].every((l) => l.length === 0);
 
   if (sessionsQuery.isLoading || eventsQuery.isLoading) {
     return (
@@ -55,13 +62,13 @@ export default function FloorTrialsPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div>
         <h1 className="page-title text-2xl">Floor Trials</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Upcoming and active sessions, sorted by start time. Check-in opening
-          times vary by session — tap a session to check in or watch its
-          queue.{" "}
+          Active, starting soon and scheduled sessions, sorted by start time.
+          Check-in opening times vary by session — tap a session to check in or
+          watch its queue.{" "}
           <Link to="/how-it-works" className="text-primary underline underline-offset-2">
             How this works →
           </Link>
@@ -77,72 +84,95 @@ export default function FloorTrialsPage() {
             if (eventsQuery.error) void eventsQuery.refetch();
           }}
         />
-      ) : todaySessions.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-8 text-center">
-          No upcoming sessions right now.{" "}
-          <Link to="/how-it-works/floor-trials" className="text-primary underline underline-offset-2">
-            Learn when sessions appear →
-          </Link>
-        </p>
       ) : (
-        /* Same card grid as the events list: one column on mobile, two from
-           sm, three from lg. The cards carry a resting border and surface
-           rather than only showing their edges on hover — in a grid the
-           boundary between neighbouring cards has to be visible without the
-           cursor. */
-        <div className={cn("grid gap-3 sm:grid-cols-2 lg:grid-cols-3", loading && "opacity-60")}>
-          {todaySessions.map((s) => {
-            const eventName = s.event_id ? eventNameById.get(s.event_id) ?? null : null;
-            const eventTz = s.event_id ? eventTimezoneById.get(s.event_id) ?? null : null;
+        <div className={cn("space-y-8", loading && "opacity-60")}>
+          {FLOOR_TRIAL_SECTIONS.map((section) => {
+            const list = bySection.get(section)!;
+            const headingId = `floor-trials-${section}`;
             return (
-              // The whole card is the click target, matching the "Tap a
-              // session…" instruction in the page subtitle. The inner
-              // "Open session →" element is kept as a visual affordance.
-              <Link
-                key={s.id}
-                to={`/sessions/${s.id}`}
-                className={cn(
-                  "flex h-full flex-col gap-2 rounded-lg border bg-card p-4 shadow-sm",
-                  CLICKABLE_CARD_CLASS
+              <section key={section} aria-labelledby={headingId} className="space-y-3">
+                <h2 id={headingId} className="text-base font-semibold">
+                  {SECTION_TEXT[section].title}
+                  <span className="ml-2 text-sm font-normal text-muted-foreground">{list.length}</span>
+                </h2>
+                {list.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">{SECTION_TEXT[section].empty}</p>
+                ) : (
+                  /* Same card grid as the events list: one column on mobile,
+                     two from sm, three from lg. The cards carry a resting
+                     border and surface rather than only showing their edges
+                     on hover — in a grid the boundary between neighbouring
+                     cards has to be visible without the cursor. */
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {list.map((s) => {
+                      const event = s.event_id ? eventById.get(s.event_id) : undefined;
+                      return (
+                        <SessionCard
+                          key={s.id}
+                          session={s}
+                          eventName={event?.name ?? null}
+                          eventTz={event?.timezone ?? null}
+                        />
+                      );
+                    })}
+                  </div>
                 )}
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  {eventName && (
-                    <Badge
-                      variant="outline"
-                      className="border-primary/40 bg-primary/10 text-primary font-medium"
-                    >
-                      {eventName}
-                    </Badge>
-                  )}
-                  <SessionStatusBadge status={s.status} />
-                </div>
-                <p className="flex flex-wrap items-center gap-2 font-medium text-base leading-snug transition-colors group-hover:text-primary">
-                  {formatSessionTitle(s, eventTz)}
-                  {eventTz && (
-                    <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
-                      {formatTimezoneAbbr(eventTz, s.floor_trial_starts_at)}
-                    </Badge>
-                  )}
-                </p>
-                <div className="text-sm text-muted-foreground space-y-1">
-                  <p>Check-in opens: {formatTimeOnly(s.checkin_opens_at, eventTz)}</p>
-                  <p>
-                    Floor trial: {formatTimeOnly(s.floor_trial_starts_at, eventTz)} –{" "}
-                    {formatTimeOnly(s.floor_trial_ends_at, eventTz)}
-                  </p>
-                </div>
-                {/* Pushed to the bottom so the affordance lines up across a row
-                    of cards whose titles wrap to different heights. */}
-                <div className="mt-auto pt-1">
-                  <Separator className="mb-2" />
-                  <p className="text-sm font-medium text-primary">Open session →</p>
-                </div>
-              </Link>
+              </section>
             );
           })}
+          {nothingListed && (
+            <p className="text-sm text-muted-foreground text-center">
+              <Link to="/how-it-works/floor-trials" className="text-primary underline underline-offset-2">
+                Learn when sessions appear →
+              </Link>
+            </p>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+function SessionCard({
+  session: s,
+  eventName,
+  eventTz,
+}: {
+  session: ApiSession;
+  eventName: string | null;
+  eventTz: string | null;
+}) {
+  return (
+    // The whole card is the click target, matching the "Tap a session…"
+    // instruction in the page subtitle; the arrow is its affordance.
+    <Link
+      to={`/sessions/${s.id}`}
+      className={cn("flex h-full flex-col gap-2 rounded-lg border bg-card p-4 shadow-sm", CLICKABLE_CARD_CLASS)}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        {eventName && (
+          <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary font-medium">
+            {eventName}
+          </Badge>
+        )}
+        <SessionStatusBadge status={s.status} />
+      </div>
+      <p className="flex flex-wrap items-center gap-2 font-medium text-base leading-snug transition-colors group-hover:text-primary">
+        {formatSessionTitle(s, eventTz)}
+        {eventTz && (
+          <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+            {formatTimezoneAbbr(eventTz, s.floor_trial_starts_at)}
+          </Badge>
+        )}
+      </p>
+      <div className="text-sm text-muted-foreground space-y-1">
+        <p>Check-in opens: {formatTimeOnly(s.checkin_opens_at, eventTz)}</p>
+        <p>
+          Floor trial: {formatTimeOnly(s.floor_trial_starts_at, eventTz)} –{" "}
+          {formatTimeOnly(s.floor_trial_ends_at, eventTz)}
+        </p>
+      </div>
+      <CardArrow />
+    </Link>
   );
 }

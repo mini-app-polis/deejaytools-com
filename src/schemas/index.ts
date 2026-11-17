@@ -445,6 +445,12 @@ export const ApiAdminUserSchema = z.object({
   song_count: z.number(),
   /** Total partner records owned by this user. */
   partner_count: z.number(),
+  /** Distinct events their songs are submitted to. */
+  event_count: z.number(),
+  /** Managed partnerships they own, not deleted. */
+  managed_partnership_count: z.number(),
+  /** Teams they own. */
+  team_count: z.number(),
 });
 export type ApiAdminUser = z.infer<typeof ApiAdminUserSchema>;
 
