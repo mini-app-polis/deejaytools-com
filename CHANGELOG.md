@@ -1,3 +1,10 @@
+## [2.45.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.45.0...v2.45.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* **api:** treat a success whose body never finished arriving as a network failure, not a contract break ([5622e7f](https://github.com/mini-app-polis/deejaytools-com/commit/5622e7f60fc52968d38ac6b237e19389bdd890c7))
+
 # [2.45.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.44.0...v2.45.0) (2026-11-17)
 
 
