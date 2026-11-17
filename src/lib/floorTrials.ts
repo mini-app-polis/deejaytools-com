@@ -73,3 +73,23 @@ export function formatFloorTrials(counts: FloorTrialCounts): string {
   if (counts.completed > 0) parts.push(`${counts.completed} completed`);
   return parts.length > 0 ? parts.join(" · ") : "none scheduled yet";
 }
+
+/**
+ * The Floor Trials page's sections: "active" (check-in open or running),
+ * "soon" (not started yet, but its event is on now) and "scheduled" (not
+ * started, at an event still to come). Null for a session the page does not
+ * list: completed, cancelled or unrecognised.
+ */
+export type FloorTrialSection = "active" | "soon" | "scheduled";
+
+export const FLOOR_TRIAL_SECTIONS: readonly FloorTrialSection[] = ["active", "soon", "scheduled"];
+
+export function floorTrialSection(
+  status: string,
+  eventStatus: string | null | undefined
+): FloorTrialSection | null {
+  const bucket = floorTrialBucket(status);
+  if (bucket === "active") return "active";
+  if (bucket !== "upcoming") return null;
+  return eventStatus === "active" ? "soon" : "scheduled";
+}

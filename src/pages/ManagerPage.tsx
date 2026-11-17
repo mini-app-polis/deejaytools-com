@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { Tabs } from "@/components/ui/tabs";
 import ManagerActiveSessionsSection from "@/components/manager/ManagerActiveSessionsSection";
 import ManagerCheckinForSection from "@/components/manager/ManagerCheckinForSection";
 import ManagerEventSongsSection from "@/components/manager/ManagerEventSongsSection";
-import ManagerGuideSection from "@/components/manager/ManagerGuideSection";
 import ManagerUploadForSection from "@/components/manager/ManagerUploadForSection";
 import { MANAGER_SECTIONS, type ManagerSection } from "@/lib/managerSections";
 
@@ -32,9 +31,6 @@ export default function ManagerPage() {
           their own TabsContent and stay mounted, so their state holds across
           a switch to another section and back. */}
       <Tabs value={section}>
-        <TabsContent value="guide" className="mt-4">
-          <ManagerGuideSection />
-        </TabsContent>
         <ManagerActiveSessionsSection sessionId={lqSessionId} onSessionIdChange={setLqSessionId} />
         <ManagerEventSongsSection open={section === "event-songs"} />
         <ManagerUploadForSection />

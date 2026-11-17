@@ -42,13 +42,26 @@ export function staffPagesForRole(role: EventStaffRole): readonly PortalSectionL
 }
 
 /**
- * The role whose pages the Event staff bar shows: `chosen` when `roles` holds
- * it on some event, else the richest role held; null when none is held.
+ * What the Event staff bar has selected: one of the staff roles held, or
+ * "user" for the site as a user with no staff role sees it.
  */
-export function staffBarRole(roles: readonly ApiEventRole[], chosen: EventStaffRole | null): EventStaffRole | null {
+export type StaffBarChoice = EventStaffRole | "user";
+
+/**
+ * The role whose pages the Event staff bar shows: `chosen` when `roles` holds
+ * it on some event; null for the User view (`chosen` "user"). With nothing
+ * chosen, or a role no longer held, it is `fallback` when held, else null:
+ * the User view.
+ */
+export function staffBarRole(
+  roles: readonly ApiEventRole[],
+  chosen: StaffBarChoice | null,
+  fallback: EventStaffRole | null = null
+): EventStaffRole | null {
+  if (chosen === "user") return null;
   const held = rolesHeld(roles);
   if (chosen && held.includes(chosen)) return chosen;
-  return held.at(-1) ?? null;
+  return fallback && held.includes(fallback) ? fallback : null;
 }
 
 /** The events on which `roles` opens the staff page `slug`: each event's richest role has it. */

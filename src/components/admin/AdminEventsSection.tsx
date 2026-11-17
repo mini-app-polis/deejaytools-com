@@ -9,6 +9,7 @@ import { endpoints } from "@/api/endpoints";
 import { useEndpointMutation, useEndpointQuery } from "@/api/queries";
 import QueryError from "@/components/QueryError";
 import { CLICKABLE_ROW_CLASS, ROW_LINK_CLASS } from "@/lib/clickable";
+import { eventPagePath, eventSlugs } from "@/lib/eventSlug";
 import { toastFirstError } from "@/lib/formErrors";
 import { seasonYearFromDateString } from "@/lib/seasonYear";
 import { Badge } from "@/components/ui/badge";
@@ -95,6 +96,8 @@ export default function AdminEventsSection({ open }: { open: boolean }) {
 
   const eventsQuery = useEndpointQuery(endpoints.events.list, { enabled: open });
   const events = eventsQuery.data ?? null;
+  // Readable /events/<name-year> links (lib/eventSlug).
+  const slugs = useMemo(() => eventSlugs(events ?? []), [events]);
   const loadingEvents = eventsQuery.isFetching;
 
   const createEvent = useEndpointMutation(endpoints.events.create, { invalidates: [endpoints.events.list] });
@@ -194,11 +197,11 @@ export default function AdminEventsSection({ open }: { open: boolean }) {
     <TableRow
       key={ev.id}
       className={CLICKABLE_ROW_CLASS}
-      onClick={() => navigate(`/events/${ev.id}`)}
+      onClick={() => navigate(eventPagePath(ev.id, slugs))}
     >
       <TableCell className="font-medium">
         <Link
-          to={`/events/${ev.id}`}
+          to={eventPagePath(ev.id, slugs)}
           className={ROW_LINK_CLASS}
           onClick={(e) => e.stopPropagation()}
         >
