@@ -1,3 +1,10 @@
+# [2.47.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.46.1...v2.47.0) (2026-11-17)
+
+
+### Features
+
+* **events:** music submissions chart on the event page, compared across a series ([2b94879](https://github.com/mini-app-polis/deejaytools-com/commit/2b9487916de5c370936cc9e834a4176f34865fbf))
+
 ## [2.46.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.46.0...v2.46.1) (2026-11-17)
 
 
