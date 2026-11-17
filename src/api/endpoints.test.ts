@@ -221,7 +221,7 @@ describe("call", () => {
   it("refuses an event status the API never sends, and accepts a null creator", async () => {
     const event = {
       id: "e1", name: "E", start_date: "2026-06-01", end_date: "2026-06-02",
-      timezone: "America/Chicago", season_year: "2026", status: "active",
+      timezone: "America/Chicago", season_year: "2026", series: null, status: "active",
       created_by: null, created_at: 1, updated_at: 1,
     };
     await expect(call(fakeTransport(event), endpoints.events.get, { params: { id: "e1" } }))

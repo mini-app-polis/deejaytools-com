@@ -802,6 +802,9 @@ describe("contract", () => {
     const forStaff = await ledger.hit(endpoints.events.registrations, { params: { id: eventId } });
     expect(forStaff).toHaveLength(1);
     expect(forStaff[0]).toMatchObject({ id: imported[0].id, note: "contract suite" });
+    // The event's submissions by day, counted against the list just imported.
+    const timeline = await ledger.hit(endpoints.events.submissionTimeline, { params: { id: eventId } });
+    expect(timeline.events[0]).toMatchObject({ id: eventId, registrations: 1 });
     // The event-scoped writes, as an admin: import keeps the marks, then one
     // entry is added, marked and removed.
     const reimported = await ledger.hit(endpoints.events.importRegistrations, {

@@ -1025,3 +1025,75 @@ describe("EventDetailPage — layout", () => {
     expect(within(link).getByText("→")).toHaveAttribute("aria-hidden", "true");
   });
 });
+
+describe("EventDetailPage — submissions chart", () => {
+  const timeline = {
+    series: "The Open",
+    today: -8,
+    events: [
+      {
+        id: "ev-1", name: "The Open 2026", start_date: "2026-06-01", end_date: "2026-06-05",
+        registrations: 4, submissions: 1, days: [{ day: -10, count: 1 }],
+      },
+      {
+        id: "ev-0", name: "The Open 2025", start_date: "2025-06-02", end_date: "2025-06-06",
+        registrations: 2, submissions: 2, days: [{ day: -9, count: 1 }, { day: -7, count: 1 }],
+      },
+    ],
+  };
+
+  function mockTimeline(body: unknown = timeline) {
+    apiGet.mockImplementation((path: string) => {
+      if (path === "/v1/events/ev-1") return Promise.resolve(makeEvent({}));
+      if (path === "/v1/events/ev-1/submission-timeline") return Promise.resolve(body);
+      return Promise.resolve([]);
+    });
+  }
+
+  it("shows the event's staff today's share beside last edition's on the same day", async () => {
+    authMe = { isAdmin: false, eventRoles: [{ event_id: "ev-1", role: "coordinator" }] };
+    mockTimeline();
+    renderPage();
+
+    const section = await screen.findByRole("region", { name: /music submissions/i });
+    expect(within(section).getByText(/share of registrations by day · against last edition/)).toBeInTheDocument();
+    const readout = within(section).getByRole("list");
+    expect(within(readout).getByText("Day −8 (today)")).toBeInTheDocument();
+    expect(within(readout).getByText("The Open 2026").nextSibling).toHaveTextContent("25%");
+    expect(within(readout).getByText("The Open 2025").nextSibling).toHaveTextContent("50%");
+    expect(within(section).getByRole("img")).toHaveAccessibleName(
+      /Day −8: The Open 2026: 25%; The Open 2025: 50%/
+    );
+  });
+
+  it("shows admins the chart", async () => {
+    authMe = { isAdmin: true, eventRoles: [] };
+    mockTimeline();
+    renderPage();
+
+    expect(await screen.findByRole("region", { name: /music submissions/i })).toBeInTheDocument();
+  });
+
+  it("shows nothing while no edition has a submission", async () => {
+    authMe = { isAdmin: true, eventRoles: [] };
+    mockTimeline({
+      ...timeline,
+      events: timeline.events.map((e) => ({ ...e, submissions: 0, days: [] })),
+    });
+    renderPage();
+
+    await waitFor(() => expect(apiGet).toHaveBeenCalledWith("/v1/events/ev-1/submission-timeline"));
+    await screen.findByRole("heading", { name: /test event/i });
+    expect(screen.queryByRole("region", { name: /music submissions/i })).toBeNull();
+  });
+
+  it("does not load it for anyone else", async () => {
+    authMe = { isAdmin: false, eventRoles: [{ event_id: "other-event", role: "dj" }] };
+    mockTimeline();
+    renderPage();
+
+    await screen.findByRole("heading", { name: /test event/i });
+    expect(apiGet).not.toHaveBeenCalledWith("/v1/events/ev-1/submission-timeline");
+    expect(screen.queryByRole("region", { name: /music submissions/i })).toBeNull();
+  });
+});

@@ -47,6 +47,7 @@ const eventFormSchema = z
     endDate: z.string(),
     seasonYear: z.string(),
     timezone: z.string(),
+    series: z.string(),
   })
   .superRefine((v, ctx) => {
     const fail = (path: string, message: string) => ctx.addIssue({ code: "custom", path: [path], message });
@@ -55,11 +56,19 @@ const eventFormSchema = z
     if (!v.endDate) return fail("endDate", "End date is required");
     if (v.endDate < v.startDate) return fail("endDate", "End date must be on or after start date");
     const season = v.seasonYear.trim();
-    if (season && !/^\d{4}$/.test(season)) fail("seasonYear", "Season year must be four digits");
+    if (season && !/^\d{4}$/.test(season)) return fail("seasonYear", "Season year must be four digits");
+    if (v.series.trim().length > 100) fail("series", "Series must be 100 characters or fewer");
   });
 type EventForm = z.infer<typeof eventFormSchema>;
 
-const EMPTY_EVENT: EventForm = { name: "", startDate: "", endDate: "", seasonYear: "", timezone: "America/Chicago" };
+const EMPTY_EVENT: EventForm = {
+  name: "",
+  startDate: "",
+  endDate: "",
+  seasonYear: "",
+  timezone: "America/Chicago",
+  series: "",
+};
 
 /**
  * The admin Events section: events bucketed by status, with create, edit
@@ -142,6 +151,7 @@ export default function AdminEventsSection({ open }: { open: boolean }) {
       endDate: ev.end_date,
       seasonYear: ev.season_year,
       timezone: ev.timezone,
+      series: ev.series ?? "",
     });
     setEvSeasonTouched(true);
     setEvDialogOpen(true);
@@ -153,6 +163,7 @@ export default function AdminEventsSection({ open }: { open: boolean }) {
     const evEndDate = v.endDate;
     const evTimezone = v.timezone;
     const trimmedSeason = v.seasonYear.trim();
+    const trimmedSeries = v.series.trim();
     try {
       if (evEditId) {
         // Edit mode — PATCH the existing event; the lists refetch.
@@ -162,6 +173,8 @@ export default function AdminEventsSection({ open }: { open: boolean }) {
           end_date: evEndDate,
           timezone: evTimezone,
           season_year: trimmedSeason || undefined,
+          // Empty takes the event out of its series.
+          series: trimmedSeries,
         } });
         toast.success("Event updated");
       } else {
@@ -172,6 +185,7 @@ export default function AdminEventsSection({ open }: { open: boolean }) {
           end_date: evEndDate,
           timezone: evTimezone,
           season_year: trimmedSeason || undefined,
+          series: trimmedSeries || undefined,
         } });
         toast.success("Event created");
       }
@@ -478,6 +492,27 @@ export default function AdminEventsSection({ open }: { open: boolean }) {
                           </optgroup>
                         </select>
                       </FormControl>
+                      <FormMessage className="mt-1" />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="series"
+                  render={({ field }) => (
+                    <FormItem className="space-y-0">
+                      <label htmlFor="ev-series" className={FIELD_LABEL_CLASS}>Series</label>
+                      <FormControl>
+                        <input id="ev-series"
+                          className={FIELD_INPUT_CLASS}
+                          placeholder="The Open"
+                          maxLength={100}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription className="text-xs mt-1">
+                        Optional. Give each year&apos;s edition the same series to compare its music submissions with earlier years on the event page.
+                      </FormDescription>
                       <FormMessage className="mt-1" />
                     </FormItem>
                   )}
