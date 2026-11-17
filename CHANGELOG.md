@@ -1,3 +1,16 @@
+# [2.44.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.43.0...v2.44.0) (2026-11-17)
+
+
+### Bug Fixes
+
+* **events:** keep the event header sticky for the whole page; share one compact card across event and session lists ([3e50b02](https://github.com/mini-app-polis/deejaytools-com/commit/3e50b02d399fe9b4fe0ea0575965a39b5e973cbd))
+* **events:** keep the event header sticky for the whole page; share one compact card across event and session lists ([5bebe34](https://github.com/mini-app-polis/deejaytools-com/commit/5bebe3429a3743b97dc22604af23a19e6e9b8f34))
+
+
+### Features
+
+* **admin-users:** show per-event staff roles and sort the users table by any column ([445fdbc](https://github.com/mini-app-polis/deejaytools-com/commit/445fdbc016c8056d113b9849068ad4ca832948c1))
+
 # [2.43.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.42.0...v2.43.0) (2026-11-17)
 
 
