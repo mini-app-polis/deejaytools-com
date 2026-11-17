@@ -1,3 +1,10 @@
+# [2.43.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.42.0...v2.43.0) (2026-11-17)
+
+
+### Features
+
+* **events:** readable event URLs, sticky event header, missing competitors by name, collapse/expand all ([c94c742](https://github.com/mini-app-polis/deejaytools-com/commit/c94c74227aa6131ee88950b5c20f110505bb15d0))
+
 # [2.42.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.41.1...v2.42.0) (2026-11-16)
 
 
