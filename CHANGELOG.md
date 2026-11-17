@@ -1,3 +1,10 @@
+# [2.46.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.45.1...v2.46.0) (2026-11-17)
+
+
+### Features
+
+* **staff:** show each song's length on the event Submissions page ([76b72b4](https://github.com/mini-app-polis/deejaytools-com/commit/76b72b49cd9931d60a6800d40cbbb28e30cad69d))
+
 ## [2.45.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.45.0...v2.45.1) (2026-11-17)
 
 
