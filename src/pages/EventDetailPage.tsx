@@ -3,8 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointQuery } from "@/api/queries";
-import CardArrow from "@/components/CardArrow";
 import QueryError from "@/components/QueryError";
+import SessionCard from "@/components/SessionCard";
 import SessionStatusBadge from "@/components/SessionStatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -110,40 +110,41 @@ export default function EventDetailPage() {
 
   return (
     <div className={`space-y-6 ${loading ? "opacity-60" : ""}`}>
-      <div>
-        <Button variant="ghost" size="sm" className="mb-2 px-0" asChild>
-          <Link to="/events">← Events</Link>
-        </Button>
-        {/* The event's name, dates and status stay in view while the page
-            scrolls, just under the site header (whose height NavBar keeps
-            in --app-header-height: it grows with the staff and admin bars). */}
-        <div
-          data-testid="event-header"
-          className="sticky z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 border-b border-white/[0.07] bg-background/90 backdrop-blur-md"
-          style={{ top: "var(--app-header-height, 3.5rem)" }}
-        >
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-            <div className="min-w-0">
-              <h1 className="page-title text-2xl leading-tight">{event.name}</h1>
-              <p className="text-sm text-muted-foreground">
-                {event.start_date === event.end_date
-                  ? event.start_date
-                  : `${event.start_date} – ${event.end_date}`}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {event.status === "upcoming" && <Badge variant="default">upcoming</Badge>}
-              {event.status === "active" && (
-                <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 border-transparent">
-                  active
-                </Badge>
-              )}
-              {event.status === "completed" && <Badge variant="secondary">completed</Badge>}
-            </div>
+      <Button variant="ghost" size="sm" className="-mb-4 px-0" asChild>
+        <Link to="/events">← Events</Link>
+      </Button>
+      {/* The event's name, dates and status stay in view while the page
+          scrolls, just under the site header (whose height NavBar keeps in
+          --app-header-height: it grows with the staff and admin bars). A
+          direct child of the page's own container: a sticky element sticks
+          only within its parent, so inside a small wrapper it would scroll
+          away with it. */}
+      <div
+        data-testid="event-header"
+        className="sticky z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 border-b border-white/[0.07] bg-background/90 backdrop-blur-md"
+        style={{ top: "var(--app-header-height, 3.5rem)" }}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+          <div className="min-w-0">
+            <h1 className="page-title text-2xl leading-tight">{event.name}</h1>
+            <p className="text-sm text-muted-foreground">
+              {event.start_date === event.end_date
+                ? event.start_date
+                : `${event.start_date} – ${event.end_date}`}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {event.status === "upcoming" && <Badge variant="default">upcoming</Badge>}
+            {event.status === "active" && (
+              <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 border-transparent">
+                active
+              </Badge>
+            )}
+            {event.status === "completed" && <Badge variant="secondary">completed</Badge>}
           </div>
         </div>
-        <PortalLinks eventId={event.id} />
       </div>
+      <PortalLinks eventId={event.id} />
 
       <div className="space-y-4">
         <h2 className="text-base font-semibold">
@@ -172,34 +173,7 @@ export default function EventDetailPage() {
         )}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {listedSessions?.map((sess) => (
-            // Whole-card click target — same card treatment as FloorTrialsPage,
-            // with the arrow in the bottom-right corner as its affordance.
-            <Link
-              key={sess.id}
-              to={`/sessions/${sess.id}`}
-              className={cn(
-                "flex h-full flex-col gap-2 rounded-lg border bg-card p-4 shadow-sm",
-                CLICKABLE_CARD_CLASS
-              )}
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <SessionStatusBadge status={sess.status} />
-              </div>
-              <p className="flex flex-wrap items-center gap-2 font-medium text-base leading-snug transition-colors group-hover:text-primary">
-                {formatSessionTitle(sess, event.timezone)}
-                <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
-                  {formatTimezoneAbbr(event.timezone, sess.floor_trial_starts_at)}
-                </Badge>
-              </p>
-              <div className="text-sm text-muted-foreground space-y-1">
-                <p>Check-in opens: {formatTimeOnly(sess.checkin_opens_at, event.timezone)}</p>
-                <p>
-                  Floor trial: {formatTimeOnly(sess.floor_trial_starts_at, event.timezone)} –{" "}
-                  {formatTimeOnly(sess.floor_trial_ends_at, event.timezone)}
-                </p>
-              </div>
-              <CardArrow />
-            </Link>
+            <SessionCard key={sess.id} session={sess} eventTz={event.timezone} />
           ))}
         </div>
       </div>
@@ -228,7 +202,7 @@ function PortalLinks({ eventId }: { eventId: string }) {
   const own = richestEventRole(eventRoles, eventId);
   if (!own) return null;
   return (
-    <p className="mt-1 text-sm">
+    <p className="-mt-3 text-sm">
       <Link to={eventPortalPath(eventId, own)} className="text-primary hover:underline">
         Open your {EVENT_ROLE_LABELS[own]} portal →
       </Link>

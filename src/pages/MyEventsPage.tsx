@@ -1,13 +1,12 @@
-import { Link } from "react-router-dom";
 import AuthMeError from "@/components/AuthMeError";
+import LinkCard from "@/components/LinkCard";
 import QueryError from "@/components/QueryError";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import { useStaffEvents } from "@/hooks/useStaffEvents";
-import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
 import { formatEventDateRange } from "@/lib/eventDates";
 import { EVENT_ROLE_LABELS, eventPortalPath } from "@/lib/eventRoles";
-import { cn } from "@/lib/utils";
 
 /**
  * The events the caller is on the staff of, each linking to the portal of
@@ -41,19 +40,18 @@ export default function MyEventsPage() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {items.map((s) => (
-            <Link
+            // The shared card (LinkCard), as on the events and Floor Trials pages.
+            <LinkCard
               key={s.eventId}
               to={eventPortalPath(s.eventId, s.role)}
-              className={cn(CLICKABLE_CARD_CLASS, "block rounded-lg border px-4 py-3")}
-            >
-              <p className="font-medium">{s.event?.name ?? "Event"}</p>
-              {s.event && (
-                <p className="text-sm text-muted-foreground">
-                  {formatEventDateRange(s.event.start_date, s.event.end_date)}
-                </p>
-              )}
-              <p className="text-xs text-primary mt-1">{EVENT_ROLE_LABELS[s.role]} portal →</p>
-            </Link>
+              badges={
+                <Badge variant="outline" className="border-primary/40 text-primary">
+                  {EVENT_ROLE_LABELS[s.role]} portal
+                </Badge>
+              }
+              title={s.event?.name ?? "Event"}
+              details={s.event && <p>{formatEventDateRange(s.event.start_date, s.event.end_date)}</p>}
+            />
           ))}
         </div>
       )}

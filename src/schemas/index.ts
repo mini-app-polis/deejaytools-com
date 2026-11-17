@@ -451,6 +451,16 @@ export const ApiAdminUserSchema = z.object({
   managed_partnership_count: z.number(),
   /** Teams they own. */
   team_count: z.number(),
+  /** Their per-event staff roles, newest event first. */
+  staff_roles: z.array(
+    z.object({
+      event_id: z.string(),
+      event_name: z.string(),
+      event_start_date: z.string(),
+      // Spelled out: EventStaffRoleSchema is declared further down this file.
+      role: z.enum(["coordinator", "dj", "event-manager"]),
+    })
+  ),
 });
 export type ApiAdminUser = z.infer<typeof ApiAdminUserSchema>;
 

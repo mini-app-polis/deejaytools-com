@@ -3,12 +3,11 @@ import { Link } from "react-router-dom";
 import type { EventStatus } from "@/schemas";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointQuery } from "@/api/queries";
+import LinkCard from "@/components/LinkCard";
 import QueryError from "@/components/QueryError";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { compareEventChrono } from "@/lib/chronoSort";
-import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
 import { formatEventDateRange, parseCalendarDate } from "@/lib/eventDates";
 import { eventPagePath, eventSlugs } from "@/lib/eventSlug";
 import { countFloorTrialsByEvent, formatFloorTrials } from "@/lib/floorTrials";
@@ -117,41 +116,29 @@ export default function EventsPage() {
           // zone's DST abbreviation without touching a neighbouring day.
           const tzAnchor = parseCalendarDate(ev.start_date)?.getTime();
           return (
-            // A real <Link>, not a button + navigate: middle-click, cmd-click
-            // and "copy link address" all work, and the whole card is the target.
-            <Link
+            // The shared card (LinkCard): the same layout as the session cards
+            // on Floor Trials and the event page, so the listings read as one design.
+            <LinkCard
               key={ev.id}
               to={eventPagePath(ev.id, slugs)}
-              className={cn(
-                "flex h-full flex-col gap-2 rounded-lg border bg-card p-4 shadow-sm",
-                CLICKABLE_CARD_CLASS
-              )}
-            >
-              {/* Badge row, then title, then label: value detail lines — the
-                  same rhythm as the session cards on Floor Trials, so the two
-                  public listings read as one design. */}
-              <div className="flex flex-wrap items-center gap-2">{eventStatusBadge(ev.status)}</div>
-              <p className="flex flex-wrap items-center gap-2 font-medium text-base leading-snug transition-colors group-hover:text-primary">
-                {ev.name}
-                {ev.timezone && (
+              badges={eventStatusBadge(ev.status)}
+              title={ev.name}
+              titleAside={
+                ev.timezone && (
                   <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
                     {formatTimezoneAbbr(ev.timezone, tzAnchor)}
                   </Badge>
-                )}
-              </p>
-              <div className="text-sm text-muted-foreground space-y-1">
-                <p>Dates: {formatEventDateRange(ev.start_date, ev.end_date)}</p>
-                {/* Held back until sessions land, so no card flashes "none
-                    scheduled yet" on its way to the real numbers. */}
-                {sessions !== null && <p>Floor trials: {formatFloorTrials(trials)}</p>}
-              </div>
-              {/* Pushed to the bottom so the affordance lines up across a row of
-                  cards whose names wrap to different heights. */}
-              <div className="mt-auto pt-1">
-                <Separator className="mb-2" />
-                <p className="text-sm font-medium text-primary">Open event →</p>
-              </div>
-            </Link>
+                )
+              }
+              details={
+                <>
+                  <p>{formatEventDateRange(ev.start_date, ev.end_date)}</p>
+                  {/* Held back until sessions land, so no card flashes "none
+                      scheduled yet" on its way to the real numbers. */}
+                  {sessions !== null && <p>Floor trials: {formatFloorTrials(trials)}</p>}
+                </>
+              }
+            />
           );
         })}
       </div>

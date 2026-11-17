@@ -288,9 +288,9 @@ describe("EventsPage", () => {
     });
 
     // Human dates, not the raw YYYY-MM-DD the API returns.
-    expect(screen.getByText("Dates: June 15, 2026")).toBeInTheDocument();
+    expect(screen.getByText("June 15, 2026")).toBeInTheDocument();
     // Inside one month the month is stated once.
-    expect(screen.getByText("Dates: July 1 – 5, 2026")).toBeInTheDocument();
+    expect(screen.getByText("July 1 – 5, 2026")).toBeInTheDocument();
   });
 
   it("breaks each event's floor trials into active, upcoming and completed", async () => {

@@ -54,7 +54,7 @@ describe("MyEventsPage", () => {
     expect((await screen.findByText("Spring Swing")).closest("a")).toHaveAttribute("href", "/events/ev-1/coordinator");
     expect(screen.getByText("Fall Fling").closest("a")).toHaveAttribute("href", "/events/ev-2/dj");
     expect(screen.getByText("Winter Ball").closest("a")).toHaveAttribute("href", "/events/ev-3/manage");
-    expect(screen.getByText("Event manager portal →")).toBeInTheDocument();
+    expect(screen.getByText("Event manager portal")).toBeInTheDocument();
     expect(screen.queryByText("Not Mine")).toBeNull();
     expect(apiGet).toHaveBeenCalledWith("/v1/events", { anonymous: true });
   });

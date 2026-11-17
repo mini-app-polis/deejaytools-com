@@ -2,6 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointQuery } from "@/api/queries";
 import QueryError from "@/components/QueryError";
+import SessionCard from "@/components/SessionCard";
 import SessionStatusBadge from "@/components/SessionStatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { CLICKABLE_CARD_CLASS, CLICKABLE_ROW_CLASS, ROW_LINK_CLASS } from "@/lib/clickable";
+import { CLICKABLE_ROW_CLASS, ROW_LINK_CLASS } from "@/lib/clickable";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareSessionChrono } from "@/lib/chronoSort";
 import { cn } from "@/lib/utils";
@@ -53,33 +54,7 @@ export default function SessionsPage() {
           <p className="text-sm text-muted-foreground py-4 text-center">No sessions yet.</p>
         )}
         {sortedSessions?.map((s) => (
-          <Link
-            key={s.id}
-            to={`/sessions/${s.id}`}
-            className={cn(
-              "block rounded-lg border bg-card p-4 space-y-2 shadow-sm",
-              CLICKABLE_CARD_CLASS
-            )}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <p className="font-medium text-base leading-snug flex flex-wrap items-center gap-2">
-                {formatSessionTitle(s, s.event_timezone)}
-                {s.event_timezone && (
-                  <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
-                    {formatTimezoneAbbr(s.event_timezone, s.floor_trial_starts_at)}
-                  </Badge>
-                )}
-              </p>
-              <SessionStatusBadge status={s.status} />
-            </div>
-            <div className="text-sm text-muted-foreground space-y-0.5">
-              <p>Open {formatTimeOnly(s.checkin_opens_at, s.event_timezone)}</p>
-              <p>
-                Floor trial {formatTimeOnly(s.floor_trial_starts_at, s.event_timezone)} – {formatTimeOnly(s.floor_trial_ends_at, s.event_timezone)}
-              </p>
-            </div>
-            <p className="text-sm font-medium text-primary pt-1">Open →</p>
-          </Link>
+          <SessionCard key={s.id} session={s} eventTz={s.event_timezone} />
         ))}
       </div>
 
