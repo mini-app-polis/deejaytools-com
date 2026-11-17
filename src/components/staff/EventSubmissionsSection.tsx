@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDivisions } from "@/hooks/useDivisions";
+import { formatSongLength } from "@/lib/songLength";
 import { classicRoundLabel } from "@/lib/submissionRounds";
 import { isOpenEvent, type ApiAdminEventSongSubmission, type ApiEvent } from "@/schemas";
 
@@ -30,7 +31,8 @@ function compareDivisions(order: readonly string[], a: string, b: string): numbe
 
 /**
  * The event's song submissions, read-only, filterable by division: each
- * song's label and who it belongs to. Reads the event-scoped
+ * song's label, its length and who it belongs to. A length the API has not
+ * read yet shows as a dash. Reads the event-scoped
  * GET /v1/events/:id/song-submissions, which the event's coordinator, DJ and
  * event manager may all call.
  */
@@ -84,15 +86,27 @@ export default function EventSubmissionsSection({ event }: { event: ApiEvent }) 
                 </h3>
                 {g.rows.map((row) => {
                   const round = classicRoundLabel(row, roundsAllowed);
+                  const length = formatSongLength(row.duration_ms);
                   return (
                     <div
                       key={row.id}
                       className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1 sm:gap-4 rounded-lg bg-white/[0.06] px-4 py-3 text-sm"
                     >
                       <span className="font-medium min-w-0 truncate">{row.partnership_label}</span>
-                      <span className="text-muted-foreground sm:text-right break-all">
-                        {row.song_label}
-                        {round && <span className="block text-xs font-medium text-foreground">{round}</span>}
+                      <span className="flex items-baseline gap-3 sm:justify-end min-w-0">
+                        <span className="text-muted-foreground sm:text-right break-all min-w-0">
+                          {row.song_label}
+                          {round && <span className="block text-xs font-medium text-foreground">{round}</span>}
+                        </span>
+                        {length ? (
+                          <span className="shrink-0 tabular-nums font-medium" aria-label={`Length ${length}`}>
+                            {length}
+                          </span>
+                        ) : (
+                          <span className="shrink-0 text-muted-foreground" aria-label="Length not known yet" title="Length not known yet">
+                            —
+                          </span>
+                        )}
                       </span>
                     </div>
                   );

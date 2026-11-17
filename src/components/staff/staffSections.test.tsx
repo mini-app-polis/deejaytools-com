@@ -830,6 +830,22 @@ describe("EventStaffSection", () => {
 });
 
 describe("EventSubmissionsSection", () => {
+  it("shows each song's length, and a dash for one not read yet", async () => {
+    apiGet.mockImplementation((p: string) =>
+      Promise.resolve(
+        p === `/v1/events/${event.id}/song-submissions`
+          ? [
+              fx.adminEventSongSubmission({ id: "sub-a", song_label: "Song A", duration_ms: 185_000 }),
+              fx.adminEventSongSubmission({ id: "sub-b", song_label: "Song B", duration_ms: null }),
+            ]
+          : []
+      )
+    );
+    inRouter(<EventSubmissionsSection event={event} />);
+    expect(await screen.findByLabelText("Length 3:05")).toHaveTextContent("3:05");
+    expect(screen.getByLabelText("Length not known yet")).toHaveTextContent("—");
+  });
+
   it("shows a failed load inline, not as no submissions", async () => {
     apiGet.mockRejectedValue(new Error("Admin access required"));
     inRouter(<EventSubmissionsSection event={event} />);

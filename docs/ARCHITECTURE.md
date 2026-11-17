@@ -146,6 +146,7 @@ One default-export component per route. Pages orchestrate fetching, local state,
 | `sessionForm.ts` | The session form's schema (one rule set for admin and staff), its starting values and the API payload built from it |
 | `sessionFormat.ts` | Session title and time formatting with optional IANA timezone |
 | `songLabel.ts` | A song's display label and version |
+| `songLength.ts` | A song's length as `m:ss` (`h:mm:ss` from an hour on), or null when the API has not read it |
 | `submittableSongs.ts` | Which of a user's songs may be submitted to an event |
 | `utils.ts` | `cn()` — `twMerge(clsx(...))` for class merging |
 | `zonedTime.ts` | Wall-clock ↔ epoch conversions in an IANA timezone (session editor) |
