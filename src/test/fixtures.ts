@@ -43,7 +43,7 @@ const T = 1_750_000_000_000;
 export const fx = {
   event: factory(ApiEventSchema, {
     id: "ev-1", name: "Test Event", start_date: "2026-06-01", end_date: "2026-06-03",
-    timezone: "America/Chicago", season_year: "2026", status: "upcoming",
+    timezone: "America/Chicago", season_year: "2026", series: null, status: "upcoming",
     created_by: "user_admin", created_at: T, updated_at: T,
   }),
   session: factory(ApiSessionListItemSchema, {

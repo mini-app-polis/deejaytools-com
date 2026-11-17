@@ -30,6 +30,7 @@ import {
   ApiSessionSchema,
   ApiSongSchema,
   ApiSongUploadChunkSchema,
+  ApiSubmissionTimelineSchema,
   ApiTeamSchema,
   ApiTestInjectionCreatedSchema,
   ApiTestInjectionSchema,
@@ -167,6 +168,12 @@ export const endpoints = {
       id: "events.songSubmissions", method: "GET", access: "event-staff",
       path: (p) => `/v1/events/${id(p)}/song-submissions`,
       response: z.array(ApiAdminEventSongSubmissionSchema),
+    }),
+    /** Submissions by day from the start, beside earlier editions of its series, for its staff. */
+    submissionTimeline: endpoint<{ id: string }, void, z.infer<typeof ApiSubmissionTimelineSchema>>({
+      id: "events.submissionTimeline", method: "GET", access: "event-staff",
+      path: (p) => `/v1/events/${id(p)}/submission-timeline`,
+      response: ApiSubmissionTimelineSchema,
     }),
     /** The event's imported registration list, for its staff (note is admin-only). */
     registrations: endpoint<{ id: string }, void, z.infer<typeof ApiEventRegistrationSchema>[]>({

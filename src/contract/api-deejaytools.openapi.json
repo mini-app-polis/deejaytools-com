@@ -2020,6 +2020,107 @@
         }
       }
     },
+    "/v1/events/{id}/submission-timeline": {
+      "get": {
+        "tags": [
+          "event-entries"
+        ],
+        "summary": "An event's submissions by day, beside its series",
+        "description": "How many submissions the event has had on each day, counted from its start_date (day 0) in its timezone, with the size of its registration list; and the same for the latest earlier events of its series, so staff can see how far along it is against past editions. Each entry counts once, on the day of its current submission. Counts only, never who. Requires deejaytools.entries.read on the event.",
+        "operationId": "get_submission_timeline_v1_events__id__submission_timeline_get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Event id.",
+              "title": "Id"
+            },
+            "description": "Event id."
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionTimelineResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Lacks the scope on this event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The query failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is refused (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/events/{id}/people/by-email": {
       "get": {
         "tags": [
@@ -9426,6 +9527,18 @@
             "title": "Season Year",
             "description": "Competitive season."
           },
+          "series": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series",
+            "description": "The run of events this is an edition of; null: none."
+          },
           "status": {
             "type": "string",
             "title": "Status",
@@ -12077,6 +12190,61 @@
         "title": "SubmissionResponse",
         "description": "One submission."
       },
+      "SubmissionTimeline": {
+        "properties": {
+          "series": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series",
+            "description": "The event's series; null: none."
+          },
+          "today": {
+            "type": "integer",
+            "title": "Today",
+            "description": "Today, in days from the event's start_date, in its timezone."
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/TimelineEvent"
+            },
+            "type": "array",
+            "title": "Events",
+            "description": "The event first, then the latest earlier events of its series, newest first."
+          }
+        },
+        "type": "object",
+        "required": [
+          "today",
+          "events"
+        ],
+        "title": "SubmissionTimeline",
+        "description": "An event's submissions by day, beside the earlier events of its series."
+      },
+      "SubmissionTimelineResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SubmissionTimeline",
+            "description": "The timeline."
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta",
+            "description": "Semantic value for meta."
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "SubmissionTimelineResponse",
+        "description": "An event's submission timeline."
+      },
       "SummaryData": {
         "properties": {
           "by_status": {
@@ -12354,6 +12522,81 @@
         "type": "object",
         "title": "Ticked",
         "description": "What a finished pass reports."
+      },
+      "TimelineDay": {
+        "properties": {
+          "day": {
+            "type": "integer",
+            "title": "Day",
+            "description": "Days from the event's start_date (day 0), in its timezone."
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count",
+            "description": "Submissions made that day."
+          }
+        },
+        "type": "object",
+        "required": [
+          "day",
+          "count"
+        ],
+        "title": "TimelineDay",
+        "description": "Submissions made on one day, counted from the event's first day."
+      },
+      "TimelineEvent": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Event id."
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Event name."
+          },
+          "start_date": {
+            "type": "string",
+            "title": "Start Date",
+            "description": "Day 0, YYYY-MM-DD, local."
+          },
+          "end_date": {
+            "type": "string",
+            "title": "End Date",
+            "description": "Last day, YYYY-MM-DD, local."
+          },
+          "registrations": {
+            "type": "integer",
+            "title": "Registrations",
+            "description": "Entries on its registration list, not scratched; 0: no list."
+          },
+          "submissions": {
+            "type": "integer",
+            "title": "Submissions",
+            "description": "Its submissions, every day together."
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/TimelineDay"
+            },
+            "type": "array",
+            "title": "Days",
+            "description": "Days with submissions, in order."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "start_date",
+          "end_date",
+          "registrations",
+          "submissions",
+          "days"
+        ],
+        "title": "TimelineEvent",
+        "description": "One event's submissions by day."
       },
       "UserData": {
         "properties": {
@@ -12853,6 +13096,19 @@
             "default": null,
             "description": "Season; omit to derive from start_date.",
             "title": "Season Year"
+          },
+          "series": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The run of events this is an edition of (e.g. The Open); omit or empty for none.",
+            "title": "Series"
           }
         },
         "required": [
@@ -12930,6 +13186,19 @@
             "default": null,
             "description": "Season year.",
             "title": "Season Year"
+          },
+          "series": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Series; empty takes the event out of its series.",
+            "title": "Series"
           }
         },
         "title": "PatchEventBody",

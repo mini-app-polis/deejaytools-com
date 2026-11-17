@@ -653,6 +653,8 @@ describe("AdminPage — Events section", () => {
     expect(field("Season year")).toHaveValue("2026");
 
     await user.type(field("Name"), " 2026");
+    expect(field("Series")).toHaveValue("");
+    await user.type(field("Series"), "  Swing Fling ");
     await user.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() =>
@@ -662,6 +664,7 @@ describe("AdminPage — Events section", () => {
         end_date: "2026-05-24",
         timezone: "America/Chicago",
         season_year: "2026",
+        series: "Swing Fling",
       })
     );
     expect(apiPost).not.toHaveBeenCalled();

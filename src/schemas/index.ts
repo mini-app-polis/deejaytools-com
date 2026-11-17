@@ -203,6 +203,8 @@ export const ApiEventSchema = z.object({
   end_date: z.string(),
   timezone: z.string(),
   season_year: z.string(),
+  /** The run of events this one is an edition of (e.g. "The Open"); null: none. */
+  series: z.string().nullable(),
   status: EventStatusSchema,
   created_by: z.string().nullable(),
   created_at: z.number(),
@@ -706,6 +708,29 @@ export const putEventRegistrationsBodySchema = z.object({
 
 /** POST /v1/events/:id/registrations: one entry added at the end of the list. */
 /** POST /v1/events/:id/registrations/append: how many pasted entries were new. */
+/** One event's submissions by day, counted from its start_date (day 0). */
+export const ApiTimelineEventSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  start_date: z.string(),
+  end_date: z.string(),
+  /** Entries on its registration list, not scratched; 0 when it has none. */
+  registrations: z.number(),
+  submissions: z.number(),
+  /** Days with submissions, in order. */
+  days: z.array(z.object({ day: z.number(), count: z.number() })),
+});
+export type ApiTimelineEvent = z.infer<typeof ApiTimelineEventSchema>;
+
+/** GET /v1/events/:id/submission-timeline: the event, then earlier editions of its series. */
+export const ApiSubmissionTimelineSchema = z.object({
+  series: z.string().nullable(),
+  /** Today, in days from the event's start_date. */
+  today: z.number(),
+  events: z.array(ApiTimelineEventSchema),
+});
+export type ApiSubmissionTimeline = z.infer<typeof ApiSubmissionTimelineSchema>;
+
 export const ApiAppendedRegistrationsSchema = z.object({
   /** Entries added at the end of the list, in the paste's order. */
   added: z.number().int(),

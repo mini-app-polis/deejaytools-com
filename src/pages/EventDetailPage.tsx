@@ -5,6 +5,7 @@ import { endpoints } from "@/api/endpoints";
 import { useEndpointQuery } from "@/api/queries";
 import QueryError from "@/components/QueryError";
 import SessionCard from "@/components/SessionCard";
+import SubmissionTimelineChart from "@/components/staff/SubmissionTimelineChart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -27,6 +28,7 @@ import {
 import { eventPagePath, looksLikeEventId, resolveEventSegment } from "@/lib/eventSlug";
 import { countFloorTrials, floorTrialBucket, formatFloorTrials } from "@/lib/floorTrials";
 import { compareSessionChrono } from "@/lib/chronoSort";
+import { buildTimelineChart } from "@/lib/submissionTimeline";
 import { cn } from "@/lib/utils";
 import { isOpenEvent } from "@/schemas";
 
@@ -175,6 +177,8 @@ export default function EventDetailPage() {
         </div>
       </div>
 
+      <SubmissionTimeline eventId={id} isSignedIn={Boolean(isSignedIn)} />
+
       <EnteredEntities
         eventId={id}
         eventName={event.name}
@@ -204,6 +208,47 @@ function PortalLinks({ eventId }: { eventId: string }) {
         Open your {EVENT_ROLE_LABELS[own]} portal →
       </Link>
     </p>
+  );
+}
+
+/**
+ * Admins and this event's staff only: how much of the event's music is in,
+ * day by day to the start, against earlier editions of its series (the
+ * event's series is set on the admin Events page). Nothing for anyone else,
+ * or while there is nothing to draw.
+ */
+function SubmissionTimeline({ eventId, isSignedIn }: { eventId: string; isSignedIn: boolean }) {
+  const { isAdmin, eventRoles } = useAuthMe();
+  const ready = isSignedIn && (isAdmin || richestEventRole(eventRoles, eventId) !== null);
+  const timelineQuery = useEndpointQuery(endpoints.events.submissionTimeline, {
+    params: { id: eventId },
+    enabled: ready,
+  });
+  const timeline = ready ? timelineQuery.data : undefined;
+  const chart = useMemo(() => (timeline ? buildTimelineChart(timeline) : null), [timeline]);
+  if (!ready) return null;
+  if (timelineQuery.error && !timeline) {
+    return (
+      <QueryError
+        what="the submissions chart"
+        error={timelineQuery.error}
+        onRetry={() => void timelineQuery.refetch()}
+      />
+    );
+  }
+  if (!chart || !timeline || timeline.events.every((e) => e.submissions === 0)) return null;
+  const earlier = chart.curves.length - 1;
+  return (
+    <section className="space-y-3" aria-labelledby="submission-timeline-heading">
+      <h2 id="submission-timeline-heading" className="text-base font-semibold">
+        Music submissions
+        <span className="ml-2 text-sm font-normal text-muted-foreground">
+          {chart.unit === "percent" ? "share of registrations" : "entries"} by day
+          {earlier > 0 && ` · against ${earlier === 1 ? "last edition" : `${earlier} earlier editions`}`}
+        </span>
+      </h2>
+      <SubmissionTimelineChart chart={chart} />
+    </section>
   );
 }
 
