@@ -35,9 +35,21 @@ export class ApiError extends Error {
 /**
  * The response body as JSON, or undefined when it isn't JSON — an HTML error
  * page from Cloudflare or Railway, a proxy's plain-text 413, an empty body.
+ *
+ * A success whose body never finished arriving (the connection dropped, or
+ * the page was closed or navigated away while it was being read) rethrows
+ * the read's own error, as a fetch that never connects does: it is a
+ * network failure, not a response the page couldn't read, and is not
+ * reported. A failed read of an error response still reads as no body.
  */
 async function readJsonBody(res: Response): Promise<unknown> {
-  const text = await res.text().catch(() => "");
+  let text: string;
+  try {
+    text = await res.text();
+  } catch (e) {
+    if (res.ok) throw e;
+    return undefined;
+  }
   if (!text) return undefined;
   try {
     return JSON.parse(text) as unknown;
