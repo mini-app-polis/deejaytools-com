@@ -396,7 +396,7 @@ describe("FloorTrialsPage — queue state", () => {
     });
 
     expect(screen.getByText("Check-in open")).toBeInTheDocument();
-    expect(screen.getByText(/Check-in opens:/i)).toBeInTheDocument();
+    expect(screen.getByText(/Check-in .* · Floor trial/i)).toBeInTheDocument();
     expect(screen.getByText(/Floor trial:/i)).toBeInTheDocument();
   });
 

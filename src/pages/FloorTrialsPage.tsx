@@ -1,14 +1,10 @@
 import { Link } from "react-router-dom";
 import { endpoints } from "@/api/endpoints";
 import { useEndpointQuery } from "@/api/queries";
-import CardArrow from "@/components/CardArrow";
 import QueryError from "@/components/QueryError";
-import SessionStatusBadge from "@/components/SessionStatusBadge";
-import { Badge } from "@/components/ui/badge";
+import SessionCard from "@/components/SessionCard";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
 import { FLOOR_TRIAL_SECTIONS, floorTrialSection, type FloorTrialSection } from "@/lib/floorTrials";
-import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { cn } from "@/lib/utils";
 import type { ApiSession } from "@/schemas";
 
@@ -130,49 +126,5 @@ export default function FloorTrialsPage() {
         </div>
       )}
     </div>
-  );
-}
-
-function SessionCard({
-  session: s,
-  eventName,
-  eventTz,
-}: {
-  session: ApiSession;
-  eventName: string | null;
-  eventTz: string | null;
-}) {
-  return (
-    // The whole card is the click target, matching the "Tap a session…"
-    // instruction in the page subtitle; the arrow is its affordance.
-    <Link
-      to={`/sessions/${s.id}`}
-      className={cn("flex h-full flex-col gap-2 rounded-lg border bg-card p-4 shadow-sm", CLICKABLE_CARD_CLASS)}
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        {eventName && (
-          <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary font-medium">
-            {eventName}
-          </Badge>
-        )}
-        <SessionStatusBadge status={s.status} />
-      </div>
-      <p className="flex flex-wrap items-center gap-2 font-medium text-base leading-snug transition-colors group-hover:text-primary">
-        {formatSessionTitle(s, eventTz)}
-        {eventTz && (
-          <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
-            {formatTimezoneAbbr(eventTz, s.floor_trial_starts_at)}
-          </Badge>
-        )}
-      </p>
-      <div className="text-sm text-muted-foreground space-y-1">
-        <p>Check-in opens: {formatTimeOnly(s.checkin_opens_at, eventTz)}</p>
-        <p>
-          Floor trial: {formatTimeOnly(s.floor_trial_starts_at, eventTz)} –{" "}
-          {formatTimeOnly(s.floor_trial_ends_at, eventTz)}
-        </p>
-      </div>
-      <CardArrow />
-    </Link>
   );
 }
