@@ -99,7 +99,30 @@ async function pickPerson(label: string, query: string, name: RegExp) {
 
 describe("EventSessionsSection", () => {
   beforeEach(() => {
+    // The event's manager: the one staff role that changes its sessions.
+    me.eventRoles = [{ event_id: "ev-1", role: "event-manager" }];
     apiGet.mockImplementation((p: string) => Promise.resolve(p === "/v1/sessions?event_id=ev-1" ? [live("s-1")] : []));
+  });
+
+  it.each(["dj", "coordinator"])("shows a %s the sessions with nothing to change", async (role) => {
+    me.eventRoles = [{ event_id: "ev-1", role }];
+    inRouter(<EventSessionsSection event={event} />);
+    expect(await screen.findByText(/event manager sets up and changes/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Priority divisions: none/)).toBeInTheDocument();
+    for (const name of ["New session", "Edit", "Delete"]) {
+      expect(screen.queryByRole("button", { name })).toBeNull();
+    }
+    expect(screen.queryByRole("combobox", { name: /^Status of/ })).toBeNull();
+  });
+
+  it("lets a DJ who also manages the event change its sessions", async () => {
+    me.eventRoles = [
+      { event_id: "ev-1", role: "dj" },
+      { event_id: "ev-1", role: "event-manager" },
+    ];
+    inRouter(<EventSessionsSection event={event} />);
+    expect(await screen.findByRole("button", { name: "New session" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Edit" })).toBeInTheDocument();
   });
 
   async function openCreate() {

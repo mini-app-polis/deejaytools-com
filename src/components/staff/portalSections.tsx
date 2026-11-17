@@ -15,8 +15,8 @@ import type { ApiEvent } from "@/schemas";
 
 /** What each portal section renders, by slug. */
 const RENDER: Record<string, PortalSection["render"]> = {
-  // The registration list, which every staff role keeps; the admin's notes
-  // on it stay with the admin.
+  // The registration list: its coordinator and event manager keep it, its
+  // DJ reads it; the admin's notes on it stay with the admin.
   registrations: (event) => <RegistrationsPanel event={event} showNotes={false} />,
   submissions: (event) => <EventSubmissionsSection event={event} />,
   queue: (event) => <LiveQueueSection event={event} />,

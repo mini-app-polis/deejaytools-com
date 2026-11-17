@@ -17,7 +17,6 @@ import {
 import { CLICKABLE_ROW_CLASS, ROW_LINK_CLASS } from "@/lib/clickable";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareSessionChrono } from "@/lib/chronoSort";
-import { cn } from "@/lib/utils";
 
 export default function SessionsPage() {
   const navigate = useNavigate();

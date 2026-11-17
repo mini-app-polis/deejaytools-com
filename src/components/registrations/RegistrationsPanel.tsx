@@ -17,6 +17,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useCanChangeOnEvent } from "@/hooks/useCanChangeOnEvent";
 import { useDivisions } from "@/hooks/useDivisions";
 import {
   NEEDS_ATTENTION,
@@ -28,6 +29,7 @@ import {
   type ReconciledRegistration,
   type RegistrationStatus,
 } from "@/lib/eventRegistrations";
+import { REGISTRATION_EDITOR_ROLES } from "@/lib/eventRoles";
 import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "@/lib/formFields";
 import { classicRoundLabel } from "@/lib/submissionRounds";
 import { cn } from "@/lib/utils";
@@ -84,7 +86,8 @@ function submissionLine(s: ApiAdminEventSongSubmission, roundsSplit: boolean): s
  * rest of the list, and removed one at a time.
  *
  * Reads and writes the event-scoped /v1/events/:id/registrations routes,
- * which an admin may call on any event and the event's staff on theirs. An
+ * which an admin may call on any event and the event's coordinator and
+ * event manager on theirs; its DJ reads the list but does not change it. An
  * entry's note is the admin's: `showNotes` shows and edits it.
  */
 export default function RegistrationsPanel({ event, showNotes }: { event: ApiEvent; showNotes: boolean }) {
@@ -92,6 +95,7 @@ export default function RegistrationsPanel({ event, showNotes }: { event: ApiEve
   const registrationsQuery = useEndpointQuery(endpoints.events.registrations, { params: { id: event.id } });
   const submissionsQuery = useEndpointQuery(endpoints.events.songSubmissions, { params: { id: event.id } });
   const { divisions } = useDivisions();
+  const canChange = useCanChangeOnEvent(event.id, REGISTRATION_EDITOR_ROLES);
 
   const registrations = registrationsQuery.data ?? null;
   const submissions = submissionsQuery.data ?? null;
@@ -162,9 +166,11 @@ export default function RegistrationsPanel({ event, showNotes }: { event: ApiEve
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={() => setImporting(true)}>
-          {registrations && registrations.length > 0 ? "Import entries" : "Import list"}
-        </Button>
+        {canChange && (
+          <Button variant="outline" size="sm" onClick={() => setImporting(true)}>
+            {registrations && registrations.length > 0 ? "Import entries" : "Import list"}
+          </Button>
+        )}
         <Button
           variant="outline"
           size="sm"
@@ -191,8 +197,10 @@ export default function RegistrationsPanel({ event, showNotes }: { event: ApiEve
         <Skeleton className="h-32 w-full" />
       ) : reconciled.rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          No registration list for {event.name}. Import one to see who is missing music; events without one
-          need nothing here.
+          No registration list for {event.name}.{" "}
+          {canChange
+            ? "Import one to see who is missing music; events without one need nothing here."
+            : "The coordinator or event manager imports it."}
         </p>
       ) : (
         <>
@@ -286,9 +294,11 @@ export default function RegistrationsPanel({ event, showNotes }: { event: ApiEve
                         <p className="text-xs text-muted-foreground">Division not recognised: matched in any division.</p>
                       )}
                     </div>
-                    <Button variant="outline" size="sm" className="shrink-0" onClick={() => setEditing(r)}>
-                      Edit
-                    </Button>
+                    {canChange && (
+                      <Button variant="outline" size="sm" className="shrink-0" onClick={() => setEditing(r)}>
+                        Edit
+                      </Button>
+                    )}
                   </div>
                 ))}
               </section>
