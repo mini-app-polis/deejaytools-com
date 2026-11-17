@@ -48,6 +48,7 @@ function routeGet(path: string): Promise<unknown> {
   if (path === "/v1/events/ev-1/people/user_42/partners") {
     return Promise.resolve([fx.partner({ id: "p-1", first_name: "Bob", last_name: "Byron" })]);
   }
+  if (path === "/v1/events/ev-1/registrations") return Promise.resolve([]);
   if (path === "/v1/events/ev-1/song-submissions") {
     return Promise.resolve([
       fx.adminEventSongSubmission({ id: "sub-1", song_id: "song-9", owner_user_id: "user_42", division: "Classic", partnership_label: "Ada & Bob" }),
@@ -113,50 +114,23 @@ describe("DjPortalPage", () => {
     expect(allPaths().some((p) => p.startsWith("/v1/admin"))).toBe(false);
   });
 
-  it("creates a session for this event", async () => {
-    apiPost.mockResolvedValue(fx.session({ id: "s-2", event_id: "ev-1" }));
+  it("shows the event's sessions without letting the DJ change them", async () => {
     renderAt("sessions");
-    await screen.findByRole("button", { name: "New session" });
-    fireEvent.click(screen.getByRole("button", { name: "New session" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Create session" }));
-    await waitFor(() => expect(apiPost).toHaveBeenCalled());
-    const [path, body] = apiPost.mock.calls[0]!;
-    expect(path).toBe("/v1/sessions");
-    expect(body).toMatchObject({ event_id: "ev-1", active_priority_max: 6, active_non_priority_max: 4 });
-    expect((body as { divisions: unknown[] }).divisions.length).toBeGreaterThan(0);
+    expect(await screen.findByText(/event manager sets up and changes/i)).toBeInTheDocument();
+    for (const name of ["New session", "Edit", "Delete"]) {
+      expect(screen.queryByRole("button", { name })).toBeNull();
+    }
+    expect(screen.queryByRole("combobox", { name: /^Status of/ })).toBeNull();
+    expect(apiPost).not.toHaveBeenCalled();
+    expect(apiPatch).not.toHaveBeenCalled();
+    expect(apiDel).not.toHaveBeenCalled();
   });
 
-  it("sets a session's status and deletes a session", async () => {
-    apiPatch.mockResolvedValue({ ...liveSession, status: "cancelled" });
-    apiDel.mockResolvedValue({ deleted: true });
-    renderAt("sessions");
-    const status = await screen.findByRole("combobox", { name: /^Status of/ });
-    fireEvent.change(status, { target: { value: "cancelled" } });
-    fireEvent.click(screen.getByRole("button", { name: /^Apply status of/ }));
-    const confirm = await screen.findByRole("dialog", { name: "Cancel this session?" });
-    fireEvent.click(within(confirm).getByRole("button", { name: "Cancel session" }));
-    await waitFor(() => expect(apiPatch).toHaveBeenCalledWith("/v1/sessions/s-1/status", { status: "cancelled" }));
-
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
-    await waitFor(() => expect(apiDel).toHaveBeenCalledWith("/v1/sessions/s-1"));
-  });
-
-  it("edits a session: patches its fields, then its divisions", async () => {
-    apiPatch.mockResolvedValue(liveSession);
-    apiPut.mockResolvedValue(liveSession);
-    renderAt("sessions");
-    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Save changes" }));
-    await waitFor(() => expect(apiPut).toHaveBeenCalled());
-    expect(apiPatch.mock.calls[0]![0]).toBe("/v1/sessions/s-1");
-    expect(apiPatch.mock.calls[0]![1]).toMatchObject({ event_id: "ev-1" });
-    const [putPath, putBody] = apiPut.mock.calls[0]!;
-    expect(putPath).toBe("/v1/sessions/s-1/divisions");
-    const classic = (putBody as { divisions: { division_name: string; is_priority: boolean; priority_run_limit: number }[] })
-      .divisions.find((d) => d.division_name === "Classic");
-    expect(classic).toMatchObject({ is_priority: true, priority_run_limit: 2 });
+  it("shows the registration list without letting the DJ change it", async () => {
+    renderAt("registrations");
+    expect(await screen.findByText(/coordinator or event manager imports it/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Import/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
   });
 
   it("reads run history filtered to this event, never unfiltered", async () => {

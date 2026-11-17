@@ -16,7 +16,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useCanChangeOnEvent } from "@/hooks/useCanChangeOnEvent";
 import { compareSessionChrono } from "@/lib/chronoSort";
+import { SESSION_EDITOR_ROLES } from "@/lib/eventRoles";
 import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import type { ApiEvent, ApiZonedSession } from "@/schemas";
 
@@ -25,10 +27,12 @@ import type { ApiEvent, ApiZonedSession } from "@/schemas";
  * divisions), set status (an explicit apply; cancelling asks first), and
  * delete. The same form as the admin Sessions page, with the event fixed, so
  * every call names a session of this event (or, on create, this event's id)
- * and the API decides it against the event.
+ * and the API decides it against the event. Only the event manager (and an
+ * admin) changes sessions; anyone else, its DJ among them, sees them only.
  */
 export default function EventSessionsSection({ event }: { event: ApiEvent }) {
   const tz = event.timezone;
+  const canChange = useCanChangeOnEvent(event.id, SESSION_EDITOR_ROLES);
   const sessionsQuery = useEndpointQuery(endpoints.sessions.list, {
     params: { eventId: event.id },
     withToken: true,
@@ -65,9 +69,15 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
 
   return (
     <div className="space-y-4">
-      <Button onClick={() => setFormFor("new")} className="w-full sm:w-auto">
-        New session
-      </Button>
+      {canChange ? (
+        <Button onClick={() => setFormFor("new")} className="w-full sm:w-auto">
+          New session
+        </Button>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          The event manager sets up and changes this event&apos;s sessions.
+        </p>
+      )}
 
       {sessionsQuery.error && sessions === null ? (
         <QueryError what="sessions" error={sessionsQuery.error} onRetry={() => void sessionsQuery.refetch()} />
@@ -94,6 +104,7 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
                 <p className="text-xs text-muted-foreground">
                   Priority divisions: {priority.length > 0 ? priority.join(", ") : "none"}
                 </p>
+                {canChange && (
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                   <SessionStatusControl
                     session={s}
@@ -114,6 +125,7 @@ export default function EventSessionsSection({ event }: { event: ApiEvent }) {
                     Delete
                   </Button>
                 </div>
+                )}
               </div>
             );
           })}

@@ -5,7 +5,6 @@ import { endpoints } from "@/api/endpoints";
 import { useEndpointQuery } from "@/api/queries";
 import QueryError from "@/components/QueryError";
 import SessionCard from "@/components/SessionCard";
-import SessionStatusBadge from "@/components/SessionStatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -13,7 +12,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthMe } from "@/hooks/useAuthMe";
 import { useDivisions } from "@/hooks/useDivisions";
 import { useEventSlugs } from "@/hooks/useEventSlugs";
-import { CLICKABLE_CARD_CLASS } from "@/lib/clickable";
 import { EVENT_ROLE_LABELS, eventPortalPath, richestEventRole } from "@/lib/eventRoles";
 import {
   missingByDivision,
@@ -28,7 +26,6 @@ import {
 } from "@/lib/eventRegistrations";
 import { eventPagePath, looksLikeEventId, resolveEventSegment } from "@/lib/eventSlug";
 import { countFloorTrials, floorTrialBucket, formatFloorTrials } from "@/lib/floorTrials";
-import { formatSessionTitle, formatTimeOnly, formatTimezoneAbbr } from "@/lib/sessionFormat";
 import { compareSessionChrono } from "@/lib/chronoSort";
 import { cn } from "@/lib/utils";
 import { isOpenEvent } from "@/schemas";

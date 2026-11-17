@@ -64,3 +64,26 @@ export function eventPortalPath(eventId: string, role: EventStaffRole): string {
       return `${base}/manage`;
   }
 }
+
+/**
+ * The staff roles that change an event's sessions (create, edit, status,
+ * divisions, delete) on it. Not the DJ: not every DJ on an event works its
+ * floor trials. An admin changes them on every event.
+ */
+export const SESSION_EDITOR_ROLES: readonly EventStaffRole[] = ["event-manager"];
+
+/** The staff roles that change an event's registration list on it. Not the DJ, who reads it. */
+export const REGISTRATION_EDITOR_ROLES: readonly EventStaffRole[] = ["coordinator", "event-manager"];
+
+/**
+ * True when `roles` holds one of `wanted` on `eventId`. Unlike
+ * holdsEventRole, a richer role does not stand in for a lesser one: a DJ is
+ * richer than a coordinator but does not change the registration list.
+ */
+export function holdsAnyRoleOn(
+  roles: readonly ApiEventRole[],
+  eventId: string,
+  wanted: readonly EventStaffRole[]
+): boolean {
+  return roles.some((r) => r.event_id === eventId && wanted.includes(r.role));
+}
