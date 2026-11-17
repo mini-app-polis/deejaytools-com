@@ -1,0 +1,18 @@
+# Time-boxed ignores for advisories that cannot be fixed from this repo.
+# Give every entry an `ignoreUntil` date so the scan fails again if nobody
+# revisits it, and a comment explaining why the advisory doesn't apply here.
+
+# picomatch: every version through 4.0.7, the newest published, can be made
+# to backtrack exponentially by a glob pattern like +(*) (GHSA-fc5q-39xc-vjpf,
+# 2026-11). It arrives only through vite and its tooling (tinyglobby, fdir),
+# which match this repository's files against globs written in its own config
+# while building and testing. The app ships as a static bundle on Cloudflare
+# Pages; picomatch is not in that bundle and never sees user input.
+#
+# To clear: once picomatch publishes a fix, run `pnpm update picomatch` and
+# delete the entry. `ignoreUntil` makes the scan fail again on that date.
+
+[[IgnoredVulns]]
+id = "GHSA-fc5q-39xc-vjpf"
+ignoreUntil = 2027-01-17
+reason = "picomatch <=4.0.7, no fixed release; build and test time only via vite tooling matching the repository's own globs, never on user input or in the shipped bundle"
