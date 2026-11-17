@@ -646,6 +646,8 @@ export const ApiAdminEventSongSubmissionSchema = z.object({
   owner_user_id: z.string(),
   song_label: z.string(),
   partnership_label: z.string(),
+  /** How long the song's file plays, in ms; null until the API has read it from the file, or when it cannot. */
+  duration_ms: z.number().nullish(),
   submitter_email: z.string(),
   created_at: z.number(),
 });

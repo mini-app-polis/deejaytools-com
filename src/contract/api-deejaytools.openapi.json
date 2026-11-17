@@ -8424,6 +8424,18 @@
             "title": "Partnership Label",
             "description": "Who the song belongs to."
           },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms",
+            "description": "How long the song's file plays, in milliseconds; null until it has been read from the file, or when it cannot be."
+          },
           "submitter_email": {
             "type": "string",
             "title": "Submitter Email",
