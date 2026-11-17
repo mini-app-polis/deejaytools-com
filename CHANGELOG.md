@@ -1,3 +1,10 @@
+# [2.45.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.44.0...v2.45.0) (2026-11-17)
+
+
+### Features
+
+* **staff:** show DJs an event's sessions and registrations read-only ([1458a4d](https://github.com/mini-app-polis/deejaytools-com/commit/1458a4d3caf24bc8c395df4e4c533e7ceef027d5))
+
 # [2.44.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.43.0...v2.44.0) (2026-11-17)
 
 
