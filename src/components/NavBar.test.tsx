@@ -569,7 +569,7 @@ describe("NavBar — event staff", () => {
     expect(within(bar).queryByRole("link", { name: "Staff" })).toBeNull();
     unmount();
 
-    // Coordinator is no longer held: back to the User view.
+    // Coordinator is not held: the User view.
     signInAsStaff([{ event_id: "ev-2", role: "event-manager" }]);
     renderNav();
     bar = screen.getByRole("navigation", { name: "Event staff" });

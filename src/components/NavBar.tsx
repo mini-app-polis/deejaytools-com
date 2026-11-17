@@ -361,7 +361,7 @@ const STAFF_ROLE_KEY = "deejaytools.staffBarRole";
 /**
  * The choice made in the Event staff bar (a staff role, or User), kept in
  * this browser (localStorage) so it lasts across pages and visits. Storage
- * that fails leaves it in memory only. A role the caller no longer holds is
+ * that fails leaves it in memory only. A role the caller does not hold is
  * ignored (staffBarRole). Nothing chosen yet is the User view for staff.
  */
 function useStaffBarChoice(): [StaffBarChoice | null, (choice: StaffBarChoice) => void] {

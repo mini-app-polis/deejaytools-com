@@ -54,6 +54,7 @@ export function nextUserSort(current: UserSort, key: UserSortKey): UserSort {
   return { key, direction: firstDirection(key) };
 }
 
+/** A user's first and last name, or an empty string when they have neither. */
 export function fullName(user: Pick<ApiAdminUser, "first_name" | "last_name">): string {
   return [user.first_name, user.last_name].filter(Boolean).join(" ").trim();
 }
