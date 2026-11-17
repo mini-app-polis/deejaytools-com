@@ -5256,7 +5256,7 @@
           "admin-users"
         ],
         "summary": "List every user",
-        "description": "Every account with counts of its songs, partners, events entered, managed partnerships and teams, oldest first. Optional q searches email and names (case-insensitive); optional role filters on the role derived from the identity store. Requires deejaytools.users.read.",
+        "description": "Every account with counts of its songs, partners, events entered, managed partnerships and teams, and its per-event staff roles, oldest first. Optional q searches email and names (case-insensitive); optional role filters on the role derived from the identity store. Requires deejaytools.users.read.",
         "operationId": "list_users_v1_admin_users_get",
         "parameters": [
           {
@@ -8567,6 +8567,14 @@
             "type": "integer",
             "title": "Team Count",
             "description": "Teams they own."
+          },
+          "staff_roles": {
+            "items": {
+              "$ref": "#/components/schemas/StaffRoleData"
+            },
+            "type": "array",
+            "title": "Staff Roles",
+            "description": "Their per-event staff roles, newest event first, then by role. Empty when they hold none."
           }
         },
         "type": "object",
@@ -8579,7 +8587,8 @@
           "partner_count",
           "event_count",
           "managed_partnership_count",
-          "team_count"
+          "team_count",
+          "staff_roles"
         ],
         "title": "AdminUserData",
         "description": "A user as the admin directory returns it."
@@ -11900,6 +11909,44 @@
         ],
         "title": "StaffListResponse",
         "description": "An event's staff, by role, then oldest grant first."
+      },
+      "StaffRoleData": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "title": "Event Id",
+            "description": "Event id."
+          },
+          "event_name": {
+            "type": "string",
+            "title": "Event Name",
+            "description": "The event's name."
+          },
+          "event_start_date": {
+            "type": "string",
+            "title": "Event Start Date",
+            "description": "The event's first day, YYYY-MM-DD."
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "coordinator",
+              "dj",
+              "event-manager"
+            ],
+            "title": "Role",
+            "description": "coordinator, dj or event-manager."
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "event_name",
+          "event_start_date",
+          "role"
+        ],
+        "title": "StaffRoleData",
+        "description": "One staff role a user holds on one event (ADR-0012)."
       },
       "SubmissionData": {
         "properties": {

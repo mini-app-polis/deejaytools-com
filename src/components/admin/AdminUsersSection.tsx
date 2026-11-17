@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { endpoints } from "@/api/endpoints";
@@ -19,6 +19,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TabsContent } from "@/components/ui/tabs";
+import {
+  DEFAULT_USER_SORT,
+  fullName,
+  nextUserSort,
+  rolesByEvent,
+  sortUsers,
+  type UserSort,
+  type UserSortKey,
+} from "@/lib/adminUsers";
+import { EVENT_ROLE_LABELS } from "@/lib/eventRoles";
 import { cn } from "@/lib/utils";
 import type { ApiAdminUser } from "@/schemas";
 
@@ -36,10 +46,88 @@ const COUNT_COLUMNS: readonly { key: CountKey; label: string; title: string }[] 
   { key: "team_count", label: "Teams", title: "Teams they compete as" },
 ];
 
+/** Events shown in a user's Roles cell before the rest fold into "+N more". */
+const ROLE_EVENTS_SHOWN = 2;
+
 /**
- * The admin Users section: every user, searchable, with how much each has
- * in deejaytools (songs, partners, events entered, managed partnerships,
- * teams) and a toggle to grant or revoke the admin role. It renders its own TabsContent so it stays
+ * A column header that sorts the table: pressed once, the column's natural
+ * direction; again, the other way. `aria-sort` says which column and way.
+ */
+function SortableHead({
+  label,
+  sortKey,
+  sort,
+  onSort,
+  title,
+  className,
+}: {
+  label: string;
+  sortKey: UserSortKey;
+  sort: UserSort;
+  onSort: (key: UserSortKey) => void;
+  title?: string;
+  className?: string;
+}) {
+  const active = sort.key === sortKey;
+  return (
+    <TableHead
+      className={className}
+      aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}
+    >
+      <button
+        type="button"
+        title={title}
+        onClick={() => onSort(sortKey)}
+        className={cn(
+          "inline-flex items-center gap-1 rounded hover:text-foreground",
+          active && "text-foreground"
+        )}
+      >
+        {label}
+        <span aria-hidden="true" className={cn("text-[10px]", !active && "opacity-0")}>
+          {active && sort.direction === "asc" ? "▲" : "▼"}
+        </span>
+      </button>
+    </TableHead>
+  );
+}
+
+/**
+ * What a user can do: "admin" across the site, and each event they are on
+ * the staff of with their roles there. Plain "user" when neither.
+ */
+function RolesCell({ user }: { user: ApiAdminUser }) {
+  const events = rolesByEvent(user);
+  const shown = events.slice(0, ROLE_EVENTS_SHOWN);
+  const hidden = events.slice(ROLE_EVENTS_SHOWN);
+  const describe = (e: (typeof events)[number]) =>
+    `${e.eventName}: ${e.roles.map((r) => EVENT_ROLE_LABELS[r]).join(", ")}`;
+  return (
+    <div className="flex flex-col items-start gap-1">
+      {user.role === "admin" && (
+        <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 border-transparent">admin</Badge>
+      )}
+      {shown.map((e) => (
+        <span key={e.eventId} className="text-xs leading-snug" title={describe(e)}>
+          <span className="text-foreground">{e.roles.map((r) => EVENT_ROLE_LABELS[r]).join(", ")}</span>
+          <span className="text-muted-foreground"> · {e.eventName}</span>
+        </span>
+      ))}
+      {hidden.length > 0 && (
+        <span className="text-xs text-muted-foreground" title={hidden.map(describe).join("\n")}>
+          +{hidden.length} more {hidden.length === 1 ? "event" : "events"}
+        </span>
+      )}
+      {user.role !== "admin" && events.length === 0 && <Badge variant="secondary">user</Badge>}
+    </div>
+  );
+}
+
+/**
+ * The admin Users section: every user, searchable and sortable by any
+ * column, with how much each has in deejaytools (songs, partners, events
+ * entered, managed partnerships, teams), what each can do (admin, and their
+ * staff roles per event) and a toggle to grant or revoke the admin role. It renders its own TabsContent so it stays
  * mounted while another admin section is shown, keeping the search as it
  * was when the admin comes back.
  */
@@ -62,7 +150,10 @@ export default function AdminUsersSection({ open }: { open: boolean }) {
     placeholderData: keepPreviousData,
     enabled: open,
   });
-  const users = usersQueryResult.data ?? null;
+  const [sort, setSort] = useState<UserSort>(DEFAULT_USER_SORT);
+  const loaded = usersQueryResult.data;
+  const users = useMemo(() => (loaded ? sortUsers(loaded, sort) : null), [loaded, sort]);
+  const onSort = (key: UserSortKey) => setSort((current) => nextUserSort(current, key));
   const usersLoading = usersQueryResult.isFetching;
 
   const setRole = useEndpointMutation(endpoints.admin.setUserRole, { invalidates: [endpoints.admin.users] });
@@ -132,42 +223,46 @@ export default function AdminUsersSection({ open }: { open: boolean }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
+                <SortableHead label="Name" sortKey="name" sort={sort} onSort={onSort} />
+                <SortableHead label="Email" sortKey="email" sort={sort} onSort={onSort} />
+                <SortableHead
+                  label="Roles"
+                  sortKey="roles"
+                  sort={sort}
+                  onSort={onSort}
+                  title="Admin, and staff roles per event"
+                />
                 {/* Numeric columns are right-aligned and use tabular-nums
                     on the cells below so digits line up between rows. */}
                 {COUNT_COLUMNS.map((c) => (
-                  <TableHead key={c.key} className="text-right" title={c.title}>
-                    {c.label}
-                  </TableHead>
+                  <SortableHead
+                    key={c.key}
+                    label={c.label}
+                    sortKey={c.key}
+                    sort={sort}
+                    onSort={onSort}
+                    title={c.title}
+                    className="text-right"
+                  />
                 ))}
                 <TableHead className="text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {users.map((u) => {
-                const fullName =
-                  [u.first_name, u.last_name].filter(Boolean).join(" ").trim() ||
-                  "—";
+                const name = fullName(u) || "—";
                 const isSelf = me?.id === u.id;
                 const isSubmitting = !!userRoleSubmitting[u.id];
                 const nextRole: "user" | "admin" =
                   u.role === "admin" ? "user" : "admin";
                 return (
                   <TableRow key={u.id}>
-                    <TableCell className="font-medium">{fullName}</TableCell>
+                    <TableCell className="font-medium">{name}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {u.email}
                     </TableCell>
                     <TableCell>
-                      {u.role === "admin" ? (
-                        <Badge className="bg-primary text-primary-foreground hover:bg-primary/90 border-transparent">
-                          admin
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary">user</Badge>
-                      )}
+                      <RolesCell user={u} />
                     </TableCell>
                     {COUNT_COLUMNS.map((c) => (
                       <TableCell

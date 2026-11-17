@@ -1617,11 +1617,71 @@ describe("AdminPage — Users section", () => {
     renderPage("/admin/users");
 
     const caraRow = (await screen.findByText("cara@example.com")).closest("tr")!;
-    const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
+    // The header text without its sort arrow.
+    const headers = screen.getAllByRole("columnheader").map((h) => h.textContent?.replace(/[▲▼]/g, ""));
     expect(headers).toEqual(expect.arrayContaining(["Songs", "Partners", "Events", "Managed", "Teams"]));
     const cells = within(caraRow).getAllByRole("cell").map((c) => c.textContent);
     const at = (label: string) => cells[headers.indexOf(label)];
     expect([at("Songs"), at("Partners"), at("Events"), at("Managed"), at("Teams")]).toEqual(["4", "2", "3", "1", "5"]);
+  });
+
+  it("shows each user's staff roles per event beside admin, and 'user' for neither", async () => {
+    const role = (event_id: string, event_name: string, r: "coordinator" | "dj" | "event-manager") => ({
+      event_id, event_name, event_start_date: "2026-11-26", role: r,
+    });
+    const STAFF = fx.adminUser({
+      id: "u5", email: "staff@example.com",
+      staff_roles: [
+        role("open", "The Open", "dj"), role("open", "The Open", "event-manager"),
+        role("dcsx", "DCSX", "coordinator"), role("fling", "Fling", "dj"),
+      ],
+    });
+    routeGets({ "/v1/admin/users": [ME, ALICE, STAFF] });
+    renderPage("/admin/users");
+
+    const staffRow = (await screen.findByText("staff@example.com")).closest("tr")!;
+    expect(within(staffRow).getByText("DJ, Event manager")).toBeInTheDocument();
+    expect(within(staffRow).getByText(/· The Open/)).toBeInTheDocument();
+    expect(within(staffRow).getByText("Coordinator")).toBeInTheDocument();
+    // Two events shown; the rest folded, named in its tooltip.
+    const more = within(staffRow).getByText("+1 more event");
+    expect(more).toHaveAttribute("title", "Fling: DJ");
+    expect(within(staffRow).queryByText("user")).toBeNull();
+
+    const meRow = screen.getByText("admin@example.com").closest("tr")!;
+    expect(within(meRow).getByText("admin")).toBeInTheDocument();
+    const aliceRow = screen.getByText("alice@example.com").closest("tr")!;
+    expect(within(aliceRow).getByText("user")).toBeInTheDocument();
+  });
+
+  it("sorts by a column header, the other way on a second press", async () => {
+    const ZED = fx.adminUser({ id: "u6", email: "zed@example.com", first_name: "Zed", created_at: 1, song_count: 1 });
+    const AMY = fx.adminUser({ id: "u7", email: "amy@example.com", first_name: "Amy", created_at: 2, song_count: 9 });
+    routeGets({ "/v1/admin/users": [ZED, AMY] });
+    const user = userEvent.setup();
+    renderPage("/admin/users");
+
+    const emails = () =>
+      screen.getAllByRole("row").slice(1).map((r) => within(r).getByText(/@example\.com$/).textContent);
+    expect(await screen.findByText("zed@example.com")).toBeInTheDocument();
+    // As the API lists them: oldest account first.
+    expect(emails()).toEqual(["zed@example.com", "amy@example.com"]);
+
+    const nameHeader = () => screen.getByRole("columnheader", { name: /Name/ });
+    await user.click(within(nameHeader()).getByRole("button"));
+    expect(emails()).toEqual(["amy@example.com", "zed@example.com"]);
+    expect(nameHeader()).toHaveAttribute("aria-sort", "ascending");
+
+    await user.click(within(nameHeader()).getByRole("button"));
+    expect(emails()).toEqual(["zed@example.com", "amy@example.com"]);
+    expect(nameHeader()).toHaveAttribute("aria-sort", "descending");
+
+    // A count starts with the most.
+    const songs = screen.getByRole("columnheader", { name: /Songs/ });
+    await user.click(within(songs).getByRole("button"));
+    expect(emails()).toEqual(["amy@example.com", "zed@example.com"]);
+    expect(songs).toHaveAttribute("aria-sort", "descending");
+    expect(nameHeader()).toHaveAttribute("aria-sort", "none");
   });
 
   it("promotes a user and shows the refetched role", async () => {
