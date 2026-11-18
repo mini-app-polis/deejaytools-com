@@ -2119,7 +2119,7 @@ describe("AdminPage — Registrations section", () => {
         fx.adminEventSongSubmission({ id: "s1", event_id: "open", division: "Classic", partnership_label: "Ada Lovelace & Bob Jones" }),
       ],
       "/v1/admin/events/open/registrations/songs-on-file": [
-        { registration_id: "r2", candidates: [onFile({}), onFile({ song_id: "song-2", match: "possible", song_label: "Cy Dee & Zed Classic", submitted_this_season: [] })] },
+        { registration_id: "r2", candidates: [onFile({}), onFile({ song_id: "song-2", match: "possible", song_label: "Cy Dee & Eve Ef Classic", submitted_this_season: [] })] },
         // Ada & Bob have music in: a stale answer for them is not shown.
         { registration_id: "r1", candidates: [onFile({ song_id: "song-3", song_label: "Ada Old Song" })] },
       ],
@@ -2127,8 +2127,9 @@ describe("AdminPage — Registrations section", () => {
     renderPage("/admin/registrations");
 
     expect(await screen.findByText("Likely has music on file")).toBeInTheDocument();
+    expect(screen.getByText("1 likely on file")).toBeInTheDocument();
     expect(screen.getByText("Cy Dee & Eve Eff Classic 2026 (same names, sent to DCSX 2026)")).toBeInTheDocument();
-    expect(screen.getByText("Cy Dee & Zed Classic (one name matches)")).toBeInTheDocument();
+    expect(screen.getByText("Cy Dee & Eve Ef Classic (close names)")).toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole("radio", { name: /^All/ }));
     expect(screen.queryByText(/Ada Old Song/)).not.toBeInTheDocument();
     expect(screen.getAllByText("Likely has music on file")).toHaveLength(1);

@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { ApiAdminEventSongSubmission, ApiEventRegistration } from "@/schemas";
+import type { ApiAdminEventSongSubmission, ApiEventRegistration, ApiSongOnFile } from "@/schemas";
 import { TEST_DIVISIONS } from "@/test/divisions";
 import {
   divisionForRegistration,
+  likelyOnFile,
   missingByDivision,
   parseRegistrationPaste,
   percentComplete,
@@ -13,6 +14,18 @@ import {
 } from "./eventRegistrations";
 
 const row = (...cells: string[]) => cells.join("\t");
+
+const onFileSong = (over: Partial<ApiSongOnFile>): ApiSongOnFile => ({
+  song_id: "song-1",
+  match: "strong",
+  song_label: "Cara Smith & Dan Brown Classic 2026",
+  partnership_label: "Cara Smith & Dan Brown",
+  division: "Classic",
+  season_year: "2026",
+  same_division: true,
+  submitted_this_season: [],
+  ...over,
+});
 
 // The Open's export, abridged: section headings, a header row, "Countries"
 // rows, a missing location, a row with no number, a team.
@@ -261,10 +274,30 @@ describe("missingByDivision", () => {
     const subs = [sub("Ada Lovelace & Bob Jones", "Classic"), sub("Kara Smith & Dan Brown", "Classic")];
     const { rows } = reconcileRegistrations(entries, subs, TEST_DIVISIONS, false);
     const counts = missingByDivision(rows);
-    expect(counts.get("Classic")).toEqual({ missing: 1, possible: 1 });
-    expect(counts.get("Masters")).toEqual({ missing: 1, possible: 0 });
-    expect(counts.get(null)).toEqual({ missing: 1, possible: 0 });
+    expect(counts.get("Classic")).toEqual({ missing: 1, possible: 1, onFile: 0 });
+    expect(counts.get("Masters")).toEqual({ missing: 1, possible: 0, onFile: 0 });
+    expect(counts.get(null)).toEqual({ missing: 1, possible: 0, onFile: 0 });
     expect(counts.size).toBe(3);
+  });
+
+  it("counts the entries likely on file among them", () => {
+    const entries = [
+      entry({ id: "a", division: "Classic", dancer_1: "Ada Lovelace", dancer_2: "Bob Jones" }),
+      entry({ id: "c", division: "Classic", dancer_1: "Cara Smith", dancer_2: "Dan Brown" }),
+      entry({ id: "g", division: "Masters", dancer_1: "Gina White", dancer_2: "Hank Green" }),
+    ];
+    const { rows } = reconcileRegistrations(entries, [sub("Ada Lovelace & Bob Jones", "Classic")], TEST_DIVISIONS, false);
+    const song = onFileSong({});
+    // "a" has music in: the API's stale answer for it is dropped.
+    const onFile = likelyOnFile(rows, [
+      { registration_id: "a", candidates: [song] },
+      { registration_id: "c", candidates: [song] },
+      { registration_id: "g", candidates: [] },
+    ]);
+    expect([...onFile.keys()]).toEqual(["c"]);
+    const counts = missingByDivision(rows, onFile);
+    expect(counts.get("Classic")).toEqual({ missing: 1, possible: 0, onFile: 1 });
+    expect(counts.get("Masters")).toEqual({ missing: 1, possible: 0, onFile: 0 });
   });
 });
 

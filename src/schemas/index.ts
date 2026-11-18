@@ -696,7 +696,7 @@ export type ApiEventRegistration = z.infer<typeof ApiEventRegistrationSchema>;
 /** A song on file that looks like a registration entry's, not submitted to its event. */
 export const ApiSongOnFileSchema = z.object({
   song_id: z.string(),
-  /** strong: names the entry's dancers exactly, either order; possible: only one of them. */
+  /** strong: names the entry's dancers exactly, either order; possible: one exactly, the other closely, in a related division. */
   match: z.enum(["strong", "possible"]),
   song_label: z.string(),
   partnership_label: z.string(),

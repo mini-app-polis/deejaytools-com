@@ -20,6 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useCanChangeOnEvent } from "@/hooks/useCanChangeOnEvent";
 import { useDivisions } from "@/hooks/useDivisions";
 import {
+  likelyOnFile,
   NEEDS_ATTENTION,
   parseRegistrationPaste,
   reconcileRegistrations,
@@ -70,13 +71,10 @@ function statusBadge(r: ReconciledRegistration) {
   }
 }
 
-/** Statuses with no music in, where a song on file is worth showing. */
-const NO_MUSIC_IN: readonly RegistrationStatus[] = ["missing", "possible"];
-
 /** A song on file as one line: its label, how it matched, and where it already went this season. */
 function songOnFileLine(s: ApiSongOnFile): string {
   const where = s.submitted_this_season.length > 0 ? `, sent to ${s.submitted_this_season.join(", ")}` : "";
-  return `${s.song_label} (${s.match === "strong" ? "same names" : "one name matches"}${where})`;
+  return `${s.song_label} (${s.match === "strong" ? "same names" : "close names"}${where})`;
 }
 
 function submissionLine(s: ApiAdminEventSongSubmission, roundsSplit: boolean): string {
@@ -120,10 +118,6 @@ export default function RegistrationsPanel({
     params: { eventId: event.id },
     enabled: showSongsOnFile,
   });
-  const songsOnFile = useMemo(
-    () => new Map((showSongsOnFile ? (songsOnFileQuery.data ?? []) : []).map((r) => [r.registration_id, r.candidates])),
-    [showSongsOnFile, songsOnFileQuery.data]
-  );
   const { divisions } = useDivisions();
   const canChange = useCanChangeOnEvent(event.id, REGISTRATION_EDITOR_ROLES);
 
@@ -135,6 +129,11 @@ export default function RegistrationsPanel({
         ? reconcileRegistrations(registrations, submissions, divisions, roundsSplit)
         : null,
     [registrations, submissions, divisions, roundsSplit]
+  );
+
+  const songsOnFile = useMemo(
+    () => likelyOnFile(reconciled?.rows ?? [], showSongsOnFile ? (songsOnFileQuery.data ?? []) : []),
+    [reconciled, showSongsOnFile, songsOnFileQuery.data]
   );
 
   const [filter, setFilter] = useState<Filter>("attention");
@@ -237,6 +236,11 @@ export default function RegistrationsPanel({
         <>
           <p className="text-sm">
             <span className="font-semibold">{attention}</span> of {reconciled.rows.length} entries need attention ·{" "}
+            {songsOnFile.size > 0 && (
+              <>
+                <span className="text-sky-300">{songsOnFile.size} likely on file</span> ·{" "}
+              </>
+            )}
             {submissions?.length ?? 0} songs submitted
           </p>
           <div className="flex flex-wrap items-center gap-3">
@@ -287,7 +291,7 @@ export default function RegistrationsPanel({
                   </span>
                 </h3>
                 {g.rows.map((r) => {
-                  const onFile = NO_MUSIC_IN.includes(r.status) ? (songsOnFile.get(r.entry.id) ?? []) : [];
+                  const onFile = songsOnFile.get(r.entry.id) ?? [];
                   return (
                   <div
                     key={r.entry.id}

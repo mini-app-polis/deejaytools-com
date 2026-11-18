@@ -12062,7 +12062,7 @@
               "possible"
             ],
             "title": "Match",
-            "description": "strong: the song names the entry's dancers exactly, in either order; possible: only one of them."
+            "description": "strong: the song names the entry's dancers exactly, in either order; possible: one exactly and the other closely (a typo or a shortened first name), in a division sharing a word with the entry's."
           },
           "song_label": {
             "type": "string",

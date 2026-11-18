@@ -15,6 +15,7 @@ import { useDivisions } from "@/hooks/useDivisions";
 import { useEventSlugs } from "@/hooks/useEventSlugs";
 import { EVENT_ROLE_LABELS, eventPortalPath, richestEventRole } from "@/lib/eventRoles";
 import {
+  likelyOnFile,
   missingByDivision,
   percentComplete,
   progressByDivision,
@@ -262,6 +263,8 @@ type Outstanding = {
   missingRound?: "prelims" | "finals";
   /** For "missing-round": the labels of the songs it has in, to mark its entered row. */
   labels: string[];
+  /** Admins only: no music in, but likely has a song on file. */
+  onFile: boolean;
 };
 
 type RegistrationCounts = {
@@ -274,7 +277,10 @@ type RegistrationCounts = {
 
 const NO_COUNTS: RegistrationCounts = { missing: new Map(), progress: null, outstanding: new Map() };
 
-function outstandingByDivision(rows: readonly ReconciledRegistration[]): Map<string | null, Outstanding[]> {
+function outstandingByDivision(
+  rows: readonly ReconciledRegistration[],
+  onFile: ReadonlyMap<string, unknown>
+): Map<string | null, Outstanding[]> {
   const byDivision = new Map<string | null, Outstanding[]>();
   for (const r of rows) {
     if (r.status !== "missing" && r.status !== "possible" && r.status !== "missing-round") continue;
@@ -285,6 +291,7 @@ function outstandingByDivision(rows: readonly ReconciledRegistration[]): Map<str
       status: r.status,
       ...(r.missingRound ? { missingRound: r.missingRound } : {}),
       labels: r.status === "missing-round" ? r.matches.map((m) => m.partnership_label) : [],
+      onFile: onFile.has(r.entry.id),
     });
     byDivision.set(r.division, list);
   }
@@ -296,7 +303,8 @@ function outstandingByDivision(rows: readonly ReconciledRegistration[]): Map<str
  * (imported on the Registrations page) has no music in yet, per division,
  * and how far each division is from all having it, against the event's
  * submissions. Empty for everyone else, and for an event with no
- * registration list.
+ * registration list. Admins (not an admin viewing as a staff role) also get
+ * which of those entries likely have a song on file.
  */
 function useMissingCounts(eventId: string, eventName: string, enabled: boolean) {
   const { isAdmin, eventRoles } = useAuthMe();
@@ -309,19 +317,25 @@ function useMissingCounts(eventId: string, eventName: string, enabled: boolean) 
     params: { id: eventId },
     enabled: ready,
   });
+  const songsOnFileQuery = useEndpointQuery(endpoints.admin.registrationSongsOnFile, {
+    params: { eventId },
+    enabled: enabled && isAdmin,
+  });
   const { divisions } = useDivisions();
+  const songsOnFile = enabled && isAdmin ? songsOnFileQuery.data : undefined;
   const registrations = ready ? registrationsQuery.data : undefined;
   const submissions = ready ? submissionsQuery.data : undefined;
   const roundsSplit = isOpenEvent(eventName);
   return useMemo(() => {
     if (!registrations || !submissions || registrations.length === 0) return NO_COUNTS;
     const { rows, unregistered } = reconcileRegistrations(registrations, submissions, divisions, roundsSplit);
+    const onFile = likelyOnFile(rows, songsOnFile ?? []);
     return {
-      missing: missingByDivision(rows),
+      missing: missingByDivision(rows, onFile),
       progress: progressByDivision(rows, unregistered),
-      outstanding: outstandingByDivision(rows),
+      outstanding: outstandingByDivision(rows, onFile),
     };
-  }, [registrations, submissions, divisions, roundsSplit]);
+  }, [registrations, submissions, songsOnFile, divisions, roundsSplit]);
 }
 
 /**
@@ -336,13 +350,14 @@ function ProgressLabel({ progress }: { progress: Progress | undefined }) {
   return <>{` · ${progress.total} total · ${percent}% complete`}</>;
 }
 
-/** " · 2 missing · 1 possible", or nothing when nothing is outstanding. */
+/** " · 2 missing · 1 possible · 1 likely on file", or nothing when nothing is outstanding. */
 function MissingLabel({ count }: { count: MissingCount | undefined }) {
   if (!count) return null;
   return (
     <>
       {count.missing > 0 && <span className="text-destructive"> · {count.missing} missing</span>}
       {count.possible > 0 && <span className="text-amber-500 dark:text-amber-300"> · {count.possible} possible</span>}
+      {count.onFile > 0 && <span className="text-sky-600 dark:text-sky-300"> · {count.onFile} likely on file</span>}
     </>
   );
 }
@@ -359,9 +374,16 @@ const OUTSTANDING_BADGE: Record<Outstanding["status"], { label: (o: Outstanding)
 function OutstandingBadge({ entry }: { entry: Outstanding }) {
   const badge = OUTSTANDING_BADGE[entry.status];
   return (
-    <Badge variant="outline" className={cn("shrink-0 text-xs font-normal", badge.className)}>
-      {badge.label(entry)}
-    </Badge>
+    <span className="flex shrink-0 flex-wrap justify-end gap-1">
+      <Badge variant="outline" className={cn("text-xs font-normal", badge.className)}>
+        {badge.label(entry)}
+      </Badge>
+      {entry.onFile && (
+        <Badge variant="outline" className="text-xs font-normal border-sky-500/50 text-sky-600 dark:text-sky-300">
+          Likely on file
+        </Badge>
+      )}
+    </span>
   );
 }
 
@@ -442,8 +464,8 @@ function EnteredEntities({
   }, [entered, missing, progress, divisionOrder]);
   const unrecognised = missing.get(null);
   const missingTotal = [...missing.values()].reduce(
-    (t, c) => ({ missing: t.missing + c.missing, possible: t.possible + c.possible }),
-    { missing: 0, possible: 0 }
+    (t, c) => ({ missing: t.missing + c.missing, possible: t.possible + c.possible, onFile: t.onFile + c.onFile }),
+    { missing: 0, possible: 0, onFile: 0 }
   );
   // Divisions start collapsed: the headers' counts are the overview, and a
   // division opens to its rows.
