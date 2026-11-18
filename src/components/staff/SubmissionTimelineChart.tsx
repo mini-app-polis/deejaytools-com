@@ -40,13 +40,21 @@ function Swatch({ color, series }: { color: string; series: TimelineSeries }) {
 
 /**
  * Cumulative submissions by day from day 0, the current event against
- * earlier editions of its series: for each edition (one color) a solid line
- * for music submitted to the event and a dashed one for the same songs by
- * the day they were added to deejaytools. Hovering reads every line on one
- * day; otherwise the readout is today.
+ * earlier editions of its series, one color each, solid. The current event
+ * also has a dashed line: the music already in deejaytools for it (its
+ * songs by the day they were added, and for admins the entries likely on
+ * file). Hovering reads every line on one day; otherwise the readout is today.
  */
-export default function SubmissionTimelineChart({ chart }: { chart: TimelineChart }) {
+export default function SubmissionTimelineChart({
+  chart,
+  likelyOnFile = false,
+}: {
+  chart: TimelineChart;
+  /** The dashed line counts entries likely on file (admins): its key says so. */
+  likelyOnFile?: boolean;
+}) {
   const { unit, fromDay, toDay, today, curves } = chart;
+  const hasAdded = curves.some((c) => c.added.length > 0);
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverDay, setHoverDay] = useState<number | null>(null);
 
@@ -77,7 +85,11 @@ export default function SubmissionTimelineChart({ chart }: { chart: TimelineChar
 
   const read = (v: number | null) => (v === null ? "no data" : formatValue(v, unit));
   const summary = curves
-    .map((c) => `${c.name}: ${read(valueOn(c, readDay))} submitted, ${read(valueOn(c, readDay, "added"))} added`)
+    .map(
+      (c) =>
+        `${c.name}: ${read(valueOn(c, readDay))} submitted` +
+        (c.added.length > 0 ? `, ${read(valueOn(c, readDay, "added"))} in deejaytools` : "")
+    )
     .join("; ");
 
   return (
@@ -93,28 +105,36 @@ export default function SubmissionTimelineChart({ chart }: { chart: TimelineChar
               <Swatch color={color} series="submitted" />
               <span className={c.current ? "text-foreground" : undefined}>{c.name}</span>
               <span className="tabular-nums text-foreground">{v === null ? "–" : formatValue(v, unit)}</span>
-              <Swatch color={color} series="added" />
-              <span className="tabular-nums" title="Added to deejaytools">
-                {added === null ? "–" : formatValue(added, unit)} added
-              </span>
+              {c.added.length > 0 && (
+                <>
+                  <Swatch color={color} series="added" />
+                  <span className="tabular-nums">{added === null ? "–" : formatValue(added, unit)} in deejaytools</span>
+                </>
+              )}
             </li>
           );
         })}
       </ul>
-      <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        {(["submitted", "added"] as const).map((series) => (
-          <span key={series} className="flex items-center gap-1.5">
-            <Swatch color="currentColor" series={series} />
-            {series === "submitted" ? "Submitted to the event" : "Song added to deejaytools"}
+      {hasAdded && (
+        <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <Swatch color="currentColor" series="submitted" />
+            Submitted to the event
           </span>
-        ))}
-      </p>
+          <span className="flex items-center gap-1.5">
+            <Swatch color="currentColor" series="added" />
+            {likelyOnFile
+              ? "In deejaytools: songs by the day added, with entries likely on file"
+              : "In deejaytools: songs by the day added"}
+          </span>
+        </p>
+      )}
       <svg
         ref={svgRef}
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         className="w-full touch-none select-none"
         role="img"
-        aria-label={`Submissions by day from the start, and their songs by the day added to deejaytools, ${unit === "percent" ? "as a share of registrations" : "as counts"}. ${dayLabel(readDay)}: ${summary}.`}
+        aria-label={`Submissions by day from the start${hasAdded ? ", and the music already in deejaytools" : ""}, ${unit === "percent" ? "as a share of registrations" : "as counts"}. ${dayLabel(readDay)}: ${summary}.`}
         onPointerMove={onMove}
         onPointerLeave={() => setHoverDay(null)}
       >
@@ -139,7 +159,7 @@ export default function SubmissionTimelineChart({ chart }: { chart: TimelineChar
         )}
         {[...curves].reverse().flatMap((c) => {
           const i = curves.indexOf(c);
-          return (["added", "submitted"] as const).map((series) => (
+          return (["added", "submitted"] as const).filter((series) => series === "submitted" || c.added.length > 0).map((series) => (
             <path
               key={`${c.id}-${series}`}
               d={path(series === "added" ? c.added : c.points)}

@@ -712,6 +712,7 @@ describe("EventDetailPage — missing music counts", () => {
       partnership_label,
       division: "Classic",
       season_year: "2026",
+      added_at: 1,
       same_division: true,
       submitted_this_season: [],
     };
@@ -1075,11 +1076,13 @@ describe("EventDetailPage — submissions chart", () => {
         id: "ev-1", name: "The Open 2026", start_date: "2026-06-01", end_date: "2026-06-05",
         registrations: 4, submissions: 1, days: [{ day: -10, count: 1 }],
         song_added_days: [{ day: -60, count: 1 }],
+        likely_on_file_days: [{ day: -9, count: 1 }],
       },
       {
         id: "ev-0", name: "The Open 2025", start_date: "2025-06-02", end_date: "2025-06-06",
         registrations: 2, submissions: 2, days: [{ day: -9, count: 1 }, { day: -7, count: 1 }],
         song_added_days: [{ day: -9, count: 1 }, { day: -7, count: 1 }],
+        likely_on_file_days: [],
       },
     ],
   };
@@ -1103,27 +1106,32 @@ describe("EventDetailPage — submissions chart", () => {
     expect(within(readout).getByText("Day −8 (today)")).toBeInTheDocument();
     expect(within(readout).getByText("The Open 2026").nextSibling).toHaveTextContent("25%");
     expect(within(readout).getByText("The Open 2025").nextSibling).toHaveTextContent("50%");
-    // Beside each, its songs by the day they were added to deejaytools.
-    expect(within(readout).getAllByText(/added$/).map((el) => el.textContent)).toEqual(["25% added", "50% added"]);
-    expect(within(section).getByText("Song added to deejaytools")).toBeInTheDocument();
+    // This year only, its music already in deejaytools; staff never get entries likely on file.
+    expect(within(readout).getAllByText(/in deejaytools$/).map((el) => el.textContent)).toEqual(["25% in deejaytools"]);
+    expect(within(section).getByText("In deejaytools: songs by the day added")).toBeInTheDocument();
     expect(within(section).getByRole("img")).toHaveAccessibleName(
-      /Day −8: The Open 2026: 25% submitted, 25% added; The Open 2025: 50% submitted, 50% added/
+      /Day −8: The Open 2026: 25% submitted, 25% in deejaytools; The Open 2025: 50% submitted\./
     );
   });
 
-  it("shows admins the chart", async () => {
+  it("shows admins the chart, projecting the entries likely on file", async () => {
     authMe = { isAdmin: true, eventRoles: [] };
     mockTimeline();
     renderPage();
 
-    expect(await screen.findByRole("region", { name: /music submissions/i })).toBeInTheDocument();
+    const section = await screen.findByRole("region", { name: /music submissions/i });
+    const readout = within(section).getByRole("list");
+    expect(within(readout).getByText("50% in deejaytools")).toBeInTheDocument();
+    expect(
+      within(section).getByText("In deejaytools: songs by the day added, with entries likely on file")
+    ).toBeInTheDocument();
   });
 
   it("shows nothing while no edition has a submission", async () => {
     authMe = { isAdmin: true, eventRoles: [] };
     mockTimeline({
       ...timeline,
-      events: timeline.events.map((e) => ({ ...e, submissions: 0, days: [], song_added_days: [] })),
+      events: timeline.events.map((e) => ({ ...e, submissions: 0, days: [], song_added_days: [], likely_on_file_days: [] })),
     });
     renderPage();
 

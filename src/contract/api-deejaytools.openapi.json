@@ -2026,7 +2026,7 @@
           "event-entries"
         ],
         "summary": "An event's submissions by day, beside its series",
-        "description": "How many submissions the event has had on each day, counted from its start_date (day 0) in its timezone, with the size of its registration list; and the same for the latest earlier events of its series, so staff can see how far along it is against past editions. Each entry counts once, on the day of its current submission, and again in song_added_days on the day its song was added to deejaytools. Counts only, never who. Requires deejaytools.entries.read on the event.",
+        "description": "How many submissions the event has had on each day, counted from its start_date (day 0) in its timezone, with the size of its registration list; and the same for the latest earlier events of its series, so staff can see how far along it is against past editions. Each entry counts once, on the day of its current submission, and again in song_added_days on the day its song was added to deejaytools. For an admin, likely_on_file_days also counts the event's entries with no music in that likely have a song on file. Counts only, never who. Requires deejaytools.entries.read on the event.",
         "operationId": "get_submission_timeline_v1_events__id__submission_timeline_get",
         "parameters": [
           {
@@ -12098,6 +12098,11 @@
             "title": "Season Year",
             "description": "The song's season year."
           },
+          "added_at": {
+            "type": "integer",
+            "title": "Added At",
+            "description": "When it was added to deejaytools, epoch ms."
+          },
           "same_division": {
             "type": "boolean",
             "title": "Same Division",
@@ -12118,6 +12123,7 @@
           "match",
           "song_label",
           "partnership_label",
+          "added_at",
           "same_division",
           "submitted_this_season"
         ],
@@ -12815,6 +12821,14 @@
             "type": "array",
             "title": "Song Added Days",
             "description": "The same submissions counted by the day each one's song was added to deejaytools (uploaded), in order; days before day 0 included."
+          },
+          "likely_on_file_days": {
+            "items": {
+              "$ref": "#/components/schemas/TimelineDay"
+            },
+            "type": "array",
+            "title": "Likely On File Days",
+            "description": "Admins only, and only for the event itself (empty otherwise): its registration entries with no music in that likely have a song on file, each counted once by the day its best candidate song was added (as GET /v1/admin/events/{id}/registrations/songs-on-file finds them)."
           }
         },
         "type": "object",
@@ -12826,7 +12840,8 @@
           "registrations",
           "submissions",
           "days",
-          "song_added_days"
+          "song_added_days",
+          "likely_on_file_days"
         ],
         "title": "TimelineEvent",
         "description": "One event's submissions by day."

@@ -2105,7 +2105,7 @@ describe("AdminPage — Registrations section", () => {
   it("marks entries with no music in that likely have a song on file", async () => {
     const onFile = (over: Record<string, unknown>) => ({
       song_id: "song-1", match: "strong", song_label: "Cy Dee & Eve Eff Classic 2026", partnership_label: "Cy Dee & Eve Eff",
-      division: "Classic", season_year: "2026", same_division: true, submitted_this_season: ["DCSX 2026"],
+      division: "Classic", season_year: "2026", added_at: 1, same_division: true, submitted_this_season: ["DCSX 2026"],
       ...over,
     });
     routeGets({
