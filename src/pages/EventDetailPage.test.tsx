@@ -691,9 +691,46 @@ describe("EventDetailPage — missing music counts", () => {
       if (path === "/v1/events/ev-1/song-submissions") {
         return Promise.resolve([submission("s1", "Alex Kim & Jo Ruiz", "Classic")]);
       }
+      if (path === SONGS_ON_FILE) {
+        return Promise.resolve([
+          { registration_id: "Classic:Pat Long", candidates: [songOnFile("Pat Long & Sam Short")] },
+          // Alex & Jo have music in: a stale answer for them is not shown.
+          { registration_id: "Classic:Alex Kim", candidates: [songOnFile("Alex Kim & Jo Ruiz")] },
+        ]);
+      }
       return Promise.resolve([]);
     });
   }
+
+  const SONGS_ON_FILE = "/v1/admin/events/ev-1/registrations/songs-on-file";
+
+  function songOnFile(partnership_label: string) {
+    return {
+      song_id: `song-${partnership_label}`,
+      match: "strong",
+      song_label: `${partnership_label} Classic 2026`,
+      partnership_label,
+      division: "Classic",
+      season_year: "2026",
+      same_division: true,
+      submitted_this_season: [],
+    };
+  }
+
+  it("shows admins which entries missing music likely have a song on file, with counts", async () => {
+    authMe = { isAdmin: true, eventRoles: [] };
+    mockRegistrationApi();
+    renderPage();
+
+    await waitFor(() => expect(screen.getAllByText(/1 likely on file/).length).toBe(2));
+    await expandDivisions("Classic");
+    const pat = screen.getByText("Pat Long & Sam Short").parentElement!;
+    expect(within(pat).getByText("Missing music")).toBeInTheDocument();
+    expect(within(pat).getByText("Likely on file")).toBeInTheDocument();
+    const gina = screen.getByText("Gina White & Hank Green").parentElement!;
+    expect(within(gina).queryByText("Likely on file")).toBeNull();
+    expect(screen.getAllByText("Likely on file")).toHaveLength(1);
+  });
 
   it("lists every registered competitor to the event's staff, marking who is missing music", async () => {
     authMe = { isAdmin: false, eventRoles: [{ event_id: "ev-1", role: "coordinator" }] };
@@ -715,6 +752,9 @@ describe("EventDetailPage — missing music counts", () => {
     expect(within(pat).getByText("Missing music")).toBeInTheDocument();
     const gina = screen.getByText("Gina White & Hank Green").parentElement!;
     expect(within(gina).getByText("Missing music")).toBeInTheDocument();
+    // Songs on file are admins' only: the event's staff never ask for them.
+    expect(screen.queryByText(/likely on file/i)).toBeNull();
+    expect(apiGet.mock.calls.map(([p]) => p)).not.toContain(SONGS_ON_FILE);
   });
 
   it("marks a near-name registration as a possible match", async () => {

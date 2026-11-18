@@ -2,6 +2,8 @@ import {
   ROUND_SPLIT_DIVISION,
   type ApiAdminEventSongSubmission,
   type ApiEventRegistration,
+  type ApiRegistrationSongsOnFile,
+  type ApiSongOnFile,
 } from "@/schemas";
 
 /**
@@ -383,26 +385,56 @@ export function registrationName(entry: Pick<ApiEventRegistration, "dancer_1" | 
   return entryNames(entry).join(" & ");
 }
 
+/** Statuses with no music in at all, where a song on file is worth showing. */
+export const NO_MUSIC_IN: readonly RegistrationStatus[] = ["missing", "possible"];
+
+/**
+ * The songs on file (GET /v1/admin/events/:id/registrations/songs-on-file)
+ * of each entry with no music in, by entry id: "likely on file". An entry
+ * the web app counts as submitted, handled or scratched is left out, even
+ * when the API's answer still names it.
+ */
+export function likelyOnFile(
+  rows: readonly ReconciledRegistration[],
+  songsOnFile: readonly ApiRegistrationSongsOnFile[]
+): Map<string, ApiSongOnFile[]> {
+  const byEntry = new Map(songsOnFile.map((r) => [r.registration_id, r.candidates]));
+  const out = new Map<string, ApiSongOnFile[]>();
+  for (const r of rows) {
+    const candidates = byEntry.get(r.entry.id);
+    if (candidates && candidates.length > 0 && NO_MUSIC_IN.includes(r.status)) out.set(r.entry.id, candidates);
+  }
+  return out;
+}
+
 /** How many of a division's registered entries still have music to come. */
 export type MissingCount = {
   /** Nothing submitted, or (Classic at The Open) a round still to come. */
   missing: number;
   /** Not matched, but a submission looks like it: may be in already. */
   possible: number;
+  /** Of those, the ones likely to have a song on file (admins only; else 0). */
+  onFile: number;
 };
 
 /**
  * Missing and possible counts per deejaytools division, for the event page
- * staff view. Entries whose registration division is not recognised are
- * counted under `null`. Divisions with nothing outstanding are left out.
+ * staff view, with how many of them are likely on file (the ids in `onFile`,
+ * from `likelyOnFile`). Entries whose registration division is not
+ * recognised are counted under `null`. Divisions with nothing outstanding
+ * are left out.
  */
-export function missingByDivision(rows: readonly ReconciledRegistration[]): Map<string | null, MissingCount> {
+export function missingByDivision(
+  rows: readonly ReconciledRegistration[],
+  onFile: ReadonlySet<string> | ReadonlyMap<string, unknown> = new Set()
+): Map<string | null, MissingCount> {
   const counts = new Map<string | null, MissingCount>();
   for (const r of rows) {
     const key = r.status === "possible" ? "possible" : r.status === "missing" || r.status === "missing-round" ? "missing" : null;
     if (!key) continue;
-    const c = counts.get(r.division) ?? { missing: 0, possible: 0 };
+    const c = counts.get(r.division) ?? { missing: 0, possible: 0, onFile: 0 };
     c[key]++;
+    if (onFile.has(r.entry.id)) c.onFile++;
     counts.set(r.division, c);
   }
   return counts;
