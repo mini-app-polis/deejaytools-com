@@ -741,6 +741,8 @@ export const ApiTimelineEventSchema = z.object({
   submissions: z.number(),
   /** Days with submissions, in order. */
   days: z.array(z.object({ day: z.number(), count: z.number() })),
+  /** The same submissions by the day each one's song was added to deejaytools, in order. */
+  song_added_days: z.array(z.object({ day: z.number(), count: z.number() })),
 });
 export type ApiTimelineEvent = z.infer<typeof ApiTimelineEventSchema>;
 

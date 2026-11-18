@@ -4,12 +4,14 @@ import {
   formatValue,
   valueOn,
   type TimelineChart,
-  type TimelineCurve,
+  type TimelinePoint,
+  type TimelineSeries,
 } from "@/lib/submissionTimeline";
 
 /** The current event, then earlier editions, in a fixed order: color follows the edition. */
 const CURVE_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#6250d6"];
-const DASHES = [undefined, "6 4", "2 4", "8 3 2 3", "1 3", "10 4"];
+/** The line says which series: solid for submitted to the event, dashed for added to deejaytools. */
+const SERIES_DASH: Record<TimelineSeries, string | undefined> = { submitted: undefined, added: "5 4" };
 
 const WIDTH = 640;
 const HEIGHT = 260;
@@ -28,26 +30,20 @@ function dayTicks(from: number, to: number): number[] {
   return out.sort((a, b) => a - b);
 }
 
-function Swatch({ index }: { index: number }) {
+function Swatch({ color, series }: { color: string; series: TimelineSeries }) {
   return (
     <svg width="18" height="6" aria-hidden="true" className="shrink-0">
-      <line
-        x1="0"
-        y1="3"
-        x2="18"
-        y2="3"
-        stroke={CURVE_COLORS[index % CURVE_COLORS.length]}
-        strokeWidth="2"
-        strokeDasharray={DASHES[index % DASHES.length]}
-      />
+      <line x1="0" y1="3" x2="18" y2="3" stroke={color} strokeWidth="2" strokeDasharray={SERIES_DASH[series]} />
     </svg>
   );
 }
 
 /**
  * Cumulative submissions by day from day 0, the current event against
- * earlier editions of its series. Hovering reads every curve on one day;
- * otherwise the readout is today.
+ * earlier editions of its series: for each edition (one color) a solid line
+ * for music submitted to the event and a dashed one for the same songs by
+ * the day they were added to deejaytools. Hovering reads every line on one
+ * day; otherwise the readout is today.
  */
 export default function SubmissionTimelineChart({ chart }: { chart: TimelineChart }) {
   const { unit, fromDay, toDay, today, curves } = chart;
@@ -55,7 +51,7 @@ export default function SubmissionTimelineChart({ chart }: { chart: TimelineChar
   const [hoverDay, setHoverDay] = useState<number | null>(null);
 
   const maxValue = useMemo(() => {
-    const top = Math.max(1, ...curves.flatMap((c) => c.points.map((p) => p.value)));
+    const top = Math.max(1, ...curves.flatMap((c) => [...c.points, ...c.added].map((p) => p.value)));
     return unit === "percent" ? Math.max(100, top) : top;
   }, [curves, unit]);
   const yTicks = ticks(maxValue, unit);
@@ -65,8 +61,8 @@ export default function SubmissionTimelineChart({ chart }: { chart: TimelineChar
   const innerH = HEIGHT - PAD.top - PAD.bottom;
   const x = (day: number) => PAD.left + ((day - fromDay) / Math.max(1, toDay - fromDay)) * innerW;
   const y = (value: number) => PAD.top + innerH - (value / yMax) * innerH;
-  const path = (c: TimelineCurve) =>
-    c.points.map((p, i) => `${i === 0 ? "M" : "L"}${x(p.day).toFixed(1)},${y(p.value).toFixed(1)}`).join("");
+  const path = (points: TimelinePoint[]) =>
+    points.map((p, i) => `${i === 0 ? "M" : "L"}${x(p.day).toFixed(1)},${y(p.value).toFixed(1)}`).join("");
 
   const todayInRange = today >= fromDay && today <= toDay;
   const readDay = hoverDay ?? (todayInRange ? today : toDay);
@@ -79,11 +75,9 @@ export default function SubmissionTimelineChart({ chart }: { chart: TimelineChar
     setHoverDay(Math.min(toDay, Math.max(fromDay, day)));
   };
 
+  const read = (v: number | null) => (v === null ? "no data" : formatValue(v, unit));
   const summary = curves
-    .map((c) => {
-      const v = valueOn(c, readDay);
-      return `${c.name}: ${v === null ? "no data" : formatValue(v, unit)}`;
-    })
+    .map((c) => `${c.name}: ${read(valueOn(c, readDay))} submitted, ${read(valueOn(c, readDay, "added"))} added`)
     .join("; ");
 
   return (
@@ -91,22 +85,36 @@ export default function SubmissionTimelineChart({ chart }: { chart: TimelineChar
       <ul className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground" aria-live="polite">
         <li className="font-medium text-foreground">{dayLabel(readDay)}{readDay === today && " (today)"}</li>
         {curves.map((c, i) => {
+          const color = CURVE_COLORS[i % CURVE_COLORS.length];
           const v = valueOn(c, readDay);
+          const added = valueOn(c, readDay, "added");
           return (
             <li key={c.id} className="flex items-center gap-1.5">
-              <Swatch index={i} />
+              <Swatch color={color} series="submitted" />
               <span className={c.current ? "text-foreground" : undefined}>{c.name}</span>
               <span className="tabular-nums text-foreground">{v === null ? "–" : formatValue(v, unit)}</span>
+              <Swatch color={color} series="added" />
+              <span className="tabular-nums" title="Added to deejaytools">
+                {added === null ? "–" : formatValue(added, unit)} added
+              </span>
             </li>
           );
         })}
       </ul>
+      <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        {(["submitted", "added"] as const).map((series) => (
+          <span key={series} className="flex items-center gap-1.5">
+            <Swatch color="currentColor" series={series} />
+            {series === "submitted" ? "Submitted to the event" : "Song added to deejaytools"}
+          </span>
+        ))}
+      </p>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         className="w-full touch-none select-none"
         role="img"
-        aria-label={`Submissions by day from the start, ${unit === "percent" ? "as a share of registrations" : "as counts"}. ${dayLabel(readDay)}: ${summary}.`}
+        aria-label={`Submissions by day from the start, and their songs by the day added to deejaytools, ${unit === "percent" ? "as a share of registrations" : "as counts"}. ${dayLabel(readDay)}: ${summary}.`}
         onPointerMove={onMove}
         onPointerLeave={() => setHoverDay(null)}
       >
@@ -129,21 +137,21 @@ export default function SubmissionTimelineChart({ chart }: { chart: TimelineChar
         {fromDay <= 0 && toDay >= 0 && (
           <line x1={x(0)} x2={x(0)} y1={PAD.top} y2={PAD.top + innerH} className="stroke-muted-foreground/40" />
         )}
-        {[...curves].reverse().map((c) => {
+        {[...curves].reverse().flatMap((c) => {
           const i = curves.indexOf(c);
-          return (
+          return (["added", "submitted"] as const).map((series) => (
             <path
-              key={c.id}
-              d={path(c)}
+              key={`${c.id}-${series}`}
+              d={path(series === "added" ? c.added : c.points)}
               fill="none"
               stroke={CURVE_COLORS[i % CURVE_COLORS.length]}
               strokeWidth={c.current ? 2.5 : 2}
-              strokeDasharray={DASHES[i % DASHES.length]}
+              strokeDasharray={SERIES_DASH[series]}
               strokeLinejoin="round"
-              strokeLinecap="round"
+              strokeLinecap={series === "added" ? "butt" : "round"}
               opacity={c.current ? 1 : 0.85}
             />
-          );
+          ));
         })}
         <line
           x1={x(readDay)}
@@ -153,21 +161,25 @@ export default function SubmissionTimelineChart({ chart }: { chart: TimelineChar
           strokeDasharray="3 3"
           className="stroke-muted-foreground/70"
         />
-        {curves.map((c, i) => {
-          const v = valueOn(c, readDay);
-          if (v === null) return null;
-          return (
-            <circle
-              key={`dot-${c.id}`}
-              cx={x(readDay)}
-              cy={y(v)}
-              r={4}
-              fill={CURVE_COLORS[i % CURVE_COLORS.length]}
-              className="stroke-background"
-              strokeWidth={2}
-            />
-          );
-        })}
+        {curves.flatMap((c, i) =>
+          (["added", "submitted"] as const).map((series) => {
+            const v = valueOn(c, readDay, series);
+            if (v === null) return null;
+            const color = CURVE_COLORS[i % CURVE_COLORS.length];
+            return (
+              <circle
+                key={`dot-${c.id}-${series}`}
+                cx={x(readDay)}
+                cy={y(v)}
+                r={series === "added" ? 3 : 4}
+                fill={series === "added" ? undefined : color}
+                stroke={series === "added" ? color : undefined}
+                className={series === "added" ? "fill-background" : "stroke-background"}
+                strokeWidth={2}
+              />
+            );
+          })
+        )}
       </svg>
     </div>
   );

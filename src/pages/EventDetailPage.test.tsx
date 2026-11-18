@@ -1074,10 +1074,12 @@ describe("EventDetailPage — submissions chart", () => {
       {
         id: "ev-1", name: "The Open 2026", start_date: "2026-06-01", end_date: "2026-06-05",
         registrations: 4, submissions: 1, days: [{ day: -10, count: 1 }],
+        song_added_days: [{ day: -60, count: 1 }],
       },
       {
         id: "ev-0", name: "The Open 2025", start_date: "2025-06-02", end_date: "2025-06-06",
         registrations: 2, submissions: 2, days: [{ day: -9, count: 1 }, { day: -7, count: 1 }],
+        song_added_days: [{ day: -9, count: 1 }, { day: -7, count: 1 }],
       },
     ],
   };
@@ -1101,8 +1103,11 @@ describe("EventDetailPage — submissions chart", () => {
     expect(within(readout).getByText("Day −8 (today)")).toBeInTheDocument();
     expect(within(readout).getByText("The Open 2026").nextSibling).toHaveTextContent("25%");
     expect(within(readout).getByText("The Open 2025").nextSibling).toHaveTextContent("50%");
+    // Beside each, its songs by the day they were added to deejaytools.
+    expect(within(readout).getAllByText(/added$/).map((el) => el.textContent)).toEqual(["25% added", "50% added"]);
+    expect(within(section).getByText("Song added to deejaytools")).toBeInTheDocument();
     expect(within(section).getByRole("img")).toHaveAccessibleName(
-      /Day −8: The Open 2026: 25%; The Open 2025: 50%/
+      /Day −8: The Open 2026: 25% submitted, 25% added; The Open 2025: 50% submitted, 50% added/
     );
   });
 
@@ -1118,7 +1123,7 @@ describe("EventDetailPage — submissions chart", () => {
     authMe = { isAdmin: true, eventRoles: [] };
     mockTimeline({
       ...timeline,
-      events: timeline.events.map((e) => ({ ...e, submissions: 0, days: [] })),
+      events: timeline.events.map((e) => ({ ...e, submissions: 0, days: [], song_added_days: [] })),
     });
     renderPage();
 
