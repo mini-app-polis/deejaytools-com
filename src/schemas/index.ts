@@ -693,6 +693,28 @@ export const ApiEventRegistrationSchema = z.object({
 });
 export type ApiEventRegistration = z.infer<typeof ApiEventRegistrationSchema>;
 
+/** A song on file that looks like a registration entry's, not submitted to its event. */
+export const ApiSongOnFileSchema = z.object({
+  song_id: z.string(),
+  /** strong: names the entry's dancers exactly, either order; possible: only one of them. */
+  match: z.enum(["strong", "possible"]),
+  song_label: z.string(),
+  partnership_label: z.string(),
+  division: z.string().nullable(),
+  season_year: z.string().nullable(),
+  same_division: z.boolean(),
+  /** Other events of this event's season the song is submitted to, by name. */
+  submitted_this_season: z.array(z.string()),
+});
+export type ApiSongOnFile = z.infer<typeof ApiSongOnFileSchema>;
+
+/** GET /v1/admin/events/:id/registrations/songs-on-file: one entry with no music in, and its look-alike songs, best first. */
+export const ApiRegistrationSongsOnFileSchema = z.object({
+  registration_id: z.string(),
+  candidates: z.array(ApiSongOnFileSchema),
+});
+export type ApiRegistrationSongsOnFile = z.infer<typeof ApiRegistrationSongsOnFileSchema>;
+
 /** PUT /v1/admin/events/:id/registrations: the whole list, in order. */
 export const putEventRegistrationsBodySchema = z.object({
   entries: z

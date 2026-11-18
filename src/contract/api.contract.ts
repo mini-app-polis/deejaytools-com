@@ -798,6 +798,9 @@ describe("contract", () => {
     expect(scratched).toMatchObject({ scratched: true, hidden_submission_ids: [] });
     await ledger.hit(endpoints.admin.updateEventRegistration, { params: { id: imported[0].id }, body: { scratched: false } });
     expect(await ledger.hit(endpoints.admin.eventRegistrations, { params: { eventId } })).toHaveLength(1);
+    // Songs on file for entries with no music in: read only, whatever it finds.
+    const onFile = await ledger.hit(endpoints.admin.registrationSongsOnFile, { params: { eventId } });
+    expect(onFile.every((r) => r.candidates.length > 0)).toBe(true);
     // The staff route answers the same list; an admin still sees the note.
     const forStaff = await ledger.hit(endpoints.events.registrations, { params: { id: eventId } });
     expect(forStaff).toHaveLength(1);

@@ -15,7 +15,8 @@ const NO_EVENTS: readonly ApiEvent[] = [];
 /**
  * The admin Registrations section: pick an event, then its registration list
  * against the songs submitted to it (RegistrationsPanel, which the event's
- * staff portals show too), with the admin's notes. Optional per event. It
+ * staff portals show too), with the admin's notes and the songs on file of
+ * entries with no music in. Optional per event. It
  * renders its own TabsContent so it stays mounted while another admin
  * section is shown; `open` holds its queries back until it is.
  */
@@ -54,7 +55,7 @@ export default function AdminRegistrationsSection({ open }: { open: boolean }) {
         eventsQuery.isLoading ? <Skeleton className="h-32 w-full" /> : <p className="text-sm text-muted-foreground">No events yet.</p>
       ) : open ? (
         // Keyed by event, so a filter or open dialog never carries over to another event.
-        <RegistrationsPanel key={event.id} event={event} showNotes />
+        <RegistrationsPanel key={event.id} event={event} showNotes showSongsOnFile />
       ) : null}
     </TabsContent>
   );
