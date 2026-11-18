@@ -11,6 +11,7 @@ function event(overrides: Partial<ApiTimelineEvent>): ApiTimelineEvent {
     registrations: 0,
     submissions: 0,
     days: [],
+    song_added_days: [],
     ...overrides,
   };
 }
@@ -55,6 +56,30 @@ describe("buildTimelineChart", () => {
     expect(valueOn(then, -8)).toBe(50);
     expect(then.points.at(-1)).toEqual({ day: 6, value: 100 });
     expect(chart.toDay).toBe(6);
+  });
+
+  it("draws when the songs were added beside when they were submitted, on the same days", () => {
+    const chart = buildTimelineChart(
+      {
+        series: null,
+        today: -8,
+        events: [
+          event({
+            registrations: 4,
+            days: [{ day: -9, count: 2 }],
+            // One uploaded a season ago, one the day before it was submitted.
+            song_added_days: [{ day: -300, count: 1 }, { day: -10, count: 1 }],
+          }),
+        ],
+      },
+      -10
+    )!;
+    const [now] = chart.curves;
+    expect(now.added.map((p) => p.day)).toEqual(now.points.map((p) => p.day));
+    expect(valueOn(now, -10, "added")).toBe(50);
+    expect(valueOn(now, -10)).toBe(0);
+    expect(valueOn(now, -8, "added")).toBe(50);
+    expect(valueOn(now, -8)).toBe(50);
   });
 
   it("counts when an event has no registration list", () => {
