@@ -226,7 +226,11 @@ function SubmissionTimeline({ eventId, isSignedIn }: { eventId: string; isSigned
     enabled: ready,
   });
   const timeline = ready ? timelineQuery.data : undefined;
-  const chart = useMemo(() => (timeline ? buildTimelineChart(timeline) : null), [timeline]);
+  // Entries likely on file are admins' only: not for staff, nor an admin viewing as staff.
+  const chart = useMemo(
+    () => (timeline ? buildTimelineChart(timeline, { likelyOnFile: isAdmin }) : null),
+    [timeline, isAdmin]
+  );
   if (!ready) return null;
   if (timelineQuery.error && !timeline) {
     return (
@@ -248,7 +252,7 @@ function SubmissionTimeline({ eventId, isSignedIn }: { eventId: string; isSigned
           {earlier > 0 && ` · against ${earlier === 1 ? "last edition" : `${earlier} earlier editions`}`}
         </span>
       </h2>
-      <SubmissionTimelineChart chart={chart} />
+      <SubmissionTimelineChart chart={chart} likelyOnFile={isAdmin} />
     </section>
   );
 }

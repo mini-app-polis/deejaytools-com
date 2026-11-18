@@ -702,6 +702,8 @@ export const ApiSongOnFileSchema = z.object({
   partnership_label: z.string(),
   division: z.string().nullable(),
   season_year: z.string().nullable(),
+  /** When it was added to deejaytools, epoch ms. */
+  added_at: z.number(),
   same_division: z.boolean(),
   /** Other events of this event's season the song is submitted to, by name. */
   submitted_this_season: z.array(z.string()),
@@ -743,6 +745,8 @@ export const ApiTimelineEventSchema = z.object({
   days: z.array(z.object({ day: z.number(), count: z.number() })),
   /** The same submissions by the day each one's song was added to deejaytools, in order. */
   song_added_days: z.array(z.object({ day: z.number(), count: z.number() })),
+  /** Admins only, the event itself only: entries likely on file, by the day their song was added. */
+  likely_on_file_days: z.array(z.object({ day: z.number(), count: z.number() })),
 });
 export type ApiTimelineEvent = z.infer<typeof ApiTimelineEventSchema>;
 

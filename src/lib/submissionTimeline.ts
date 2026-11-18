@@ -20,8 +20,20 @@ export type TimelineCurve = {
   base: number | null;
   /** Submissions, cumulative, one point per day from the chart's first day to its last. */
   points: TimelinePoint[];
-  /** The same submissions by the day their songs were added to deejaytools, on the same days. */
+  /**
+   * The current event only (empty for earlier editions, whose music is all
+   * in): its submissions by the day their songs were added to deejaytools,
+   * plus, when `likelyOnFile`, the entries likely on file by the day their
+   * song was added. On the same days as `points`.
+   */
   added: TimelinePoint[];
+};
+
+export type TimelineOptions = {
+  /** First day the chart shows. */
+  fromDay?: number;
+  /** Count the event's entries likely on file into its added line (admins only). */
+  likelyOnFile?: boolean;
 };
 
 export type TimelineChart = {
@@ -42,16 +54,18 @@ export function lastEventDay(event: Pick<ApiTimelineEvent, "start_date" | "end_d
 /**
  * The chart's curves: each event's submissions added up day by day, as a
  * share of its registration list when every event has one (so editions of
- * different sizes compare), else as counts; and beside them the same
- * submissions by the day their songs were added to deejaytools. Days before
- * the first day shown are in each line's starting value (a song uploaded a
- * season ago starts the added line above zero). The current event stops at
- * today; an earlier edition runs to its last day, or its last submission if
- * later.
+ * different sizes compare), else as counts. The current event also gets the
+ * music already in deejaytools for it: its submissions by the day their songs
+ * were added, plus (`likelyOnFile`, admins) the entries likely on file, a
+ * projection of how much is in. An earlier edition has one line: its music
+ * is all in. Days before the first day shown are in each line's starting
+ * value (a song uploaded a season ago starts the added line above zero). The
+ * current event stops at today; an earlier edition runs to its last day, or
+ * its last submission if later.
  */
 export function buildTimelineChart(
   timeline: ApiSubmissionTimeline,
-  fromDay: number = TIMELINE_FROM_DAY
+  { fromDay = TIMELINE_FROM_DAY, likelyOnFile = false }: TimelineOptions = {}
 ): TimelineChart | null {
   const [current, ...earlier] = timeline.events;
   if (!current) return null;
@@ -81,7 +95,9 @@ export function buildTimelineChart(
       current: isCurrent,
       base,
       points: cumulative(e.days),
-      added: cumulative(e.song_added_days),
+      added: isCurrent
+        ? cumulative([...e.song_added_days, ...(likelyOnFile ? e.likely_on_file_days : [])])
+        : [],
     };
   });
   const toDay = Math.max(lastEventDay(current), ...curves.map((c) => c.points.at(-1)?.day ?? fromDay));

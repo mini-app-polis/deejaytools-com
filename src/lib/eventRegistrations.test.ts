@@ -22,6 +22,7 @@ const onFileSong = (over: Partial<ApiSongOnFile>): ApiSongOnFile => ({
   partnership_label: "Cara Smith & Dan Brown",
   division: "Classic",
   season_year: "2026",
+  added_at: 1,
   same_division: true,
   submitted_this_season: [],
   ...over,
