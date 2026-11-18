@@ -1,3 +1,10 @@
+# [2.49.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.48.0...v2.49.0) (2026-11-18)
+
+
+### Features
+
+* **registrations:** likely-on-file badges and counts for admins on the Registrations and event pages ([ba4696a](https://github.com/mini-app-polis/deejaytools-com/commit/ba4696a3d21ca7c6a9cc3f3bcce066ec8ba030b4))
+
 # [2.48.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.47.0...v2.48.0) (2026-11-18)
 
 
