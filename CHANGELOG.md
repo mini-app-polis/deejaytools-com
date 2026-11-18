@@ -1,3 +1,10 @@
+# [2.51.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.50.0...v2.51.0) (2026-11-18)
+
+
+### Features
+
+* **events:** this year's music in deejaytools as a dashed line, projecting entries likely on file for admins ([0011192](https://github.com/mini-app-polis/deejaytools-com/commit/0011192cba401eb26d3304826fea7a9a02b5735b))
+
 # [2.50.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.49.0...v2.50.0) (2026-11-18)
 
 
