@@ -33,7 +33,7 @@ import { REGISTRATION_EDITOR_ROLES } from "@/lib/eventRoles";
 import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "@/lib/formFields";
 import { classicRoundLabel } from "@/lib/submissionRounds";
 import { cn } from "@/lib/utils";
-import { isOpenEvent, type ApiAdminEventSongSubmission, type ApiEvent } from "@/schemas";
+import { isOpenEvent, type ApiAdminEventSongSubmission, type ApiEvent, type ApiSongOnFile } from "@/schemas";
 
 const NO_LINK = "__none__";
 
@@ -70,6 +70,15 @@ function statusBadge(r: ReconciledRegistration) {
   }
 }
 
+/** Statuses with no music in, where a song on file is worth showing. */
+const NO_MUSIC_IN: readonly RegistrationStatus[] = ["missing", "possible"];
+
+/** A song on file as one line: its label, how it matched, and where it already went this season. */
+function songOnFileLine(s: ApiSongOnFile): string {
+  const where = s.submitted_this_season.length > 0 ? `, sent to ${s.submitted_this_season.join(", ")}` : "";
+  return `${s.song_label} (${s.match === "strong" ? "same names" : "one name matches"}${where})`;
+}
+
 function submissionLine(s: ApiAdminEventSongSubmission, roundsSplit: boolean): string {
   const round = classicRoundLabel(s, roundsSplit);
   return [s.song_label, round ? `(${round})` : null].filter(Boolean).join(" ");
@@ -89,11 +98,32 @@ function submissionLine(s: ApiAdminEventSongSubmission, roundsSplit: boolean): s
  * which an admin may call on any event and the event's coordinator and
  * event manager on theirs; its DJ reads the list but does not change it. An
  * entry's note is the admin's: `showNotes` shows and edits it.
+ *
+ * `showSongsOnFile` (the admin page only, never a staff portal or an admin
+ * viewing as a staff role) marks entries with no music in that look like
+ * they have a song in deejaytools already, with the candidate songs: a song
+ * someone has not submitted is theirs, not the event's.
  */
-export default function RegistrationsPanel({ event, showNotes }: { event: ApiEvent; showNotes: boolean }) {
+export default function RegistrationsPanel({
+  event,
+  showNotes,
+  showSongsOnFile = false,
+}: {
+  event: ApiEvent;
+  showNotes: boolean;
+  showSongsOnFile?: boolean;
+}) {
   const roundsSplit = isOpenEvent(event.name);
   const registrationsQuery = useEndpointQuery(endpoints.events.registrations, { params: { id: event.id } });
   const submissionsQuery = useEndpointQuery(endpoints.events.songSubmissions, { params: { id: event.id } });
+  const songsOnFileQuery = useEndpointQuery(endpoints.admin.registrationSongsOnFile, {
+    params: { eventId: event.id },
+    enabled: showSongsOnFile,
+  });
+  const songsOnFile = useMemo(
+    () => new Map((showSongsOnFile ? (songsOnFileQuery.data ?? []) : []).map((r) => [r.registration_id, r.candidates])),
+    [showSongsOnFile, songsOnFileQuery.data]
+  );
   const { divisions } = useDivisions();
   const canChange = useCanChangeOnEvent(event.id, REGISTRATION_EDITOR_ROLES);
 
@@ -178,6 +208,7 @@ export default function RegistrationsPanel({ event, showNotes }: { event: ApiEve
           onClick={() => {
             void registrationsQuery.refetch();
             void submissionsQuery.refetch();
+            if (showSongsOnFile) void songsOnFileQuery.refetch();
           }}
         >
           {fetching ? "Refreshing…" : "Refresh"}
@@ -255,7 +286,9 @@ export default function RegistrationsPanel({ event, showNotes }: { event: ApiEve
                     {g.attention} of {g.total} need attention
                   </span>
                 </h3>
-                {g.rows.map((r) => (
+                {g.rows.map((r) => {
+                  const onFile = NO_MUSIC_IN.includes(r.status) ? (songsOnFile.get(r.entry.id) ?? []) : [];
+                  return (
                   <div
                     key={r.entry.id}
                     className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 rounded-lg bg-white/[0.06] px-4 py-3 text-sm"
@@ -267,7 +300,19 @@ export default function RegistrationsPanel({ event, showNotes }: { event: ApiEve
                         </span>
                         {statusBadge(r)}
                         {r.entry.linked_label && <Badge variant="outline">Linked</Badge>}
+                        {onFile.length > 0 && (
+                          <Badge variant="outline" className="border-sky-400 text-sky-300">
+                            Likely has music on file
+                          </Badge>
+                        )}
                       </div>
+                      {onFile.length > 0 && (
+                        <ul className="text-xs text-muted-foreground break-all" aria-label="Songs on file">
+                          {onFile.map((s) => (
+                            <li key={s.song_id}>{songOnFileLine(s)}</li>
+                          ))}
+                        </ul>
+                      )}
                       {r.matches.map((s) => (
                         <p key={s.id} className="text-muted-foreground break-all">
                           {submissionLine(s, roundsSplit)}
@@ -300,7 +345,8 @@ export default function RegistrationsPanel({ event, showNotes }: { event: ApiEve
                       </Button>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </section>
             ))
           )}

@@ -6398,6 +6398,107 @@
         }
       }
     },
+    "/v1/admin/events/{id}/registrations/songs-on-file": {
+      "get": {
+        "tags": [
+          "admin-event-registrations"
+        ],
+        "summary": "Registrations that likely have a song on file",
+        "description": "The event's registration entries with no music submitted that look like they have a song in deejaytools already, each with up to 5 candidate songs not submitted to the event. Read only. Requires deejaytools.registrations.read (admin only).",
+        "operationId": "list_registration_songs_v1_admin_events__id__registrations_songs_on_file_get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Event id.",
+              "title": "Id"
+            },
+            "description": "Event id."
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistrationSongsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Lacks the scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The query failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is refused (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/admin/drive-jobs/summary": {
       "get": {
         "tags": [
@@ -10926,6 +11027,53 @@
         "title": "RegistrationResponse",
         "description": "One registration entry."
       },
+      "RegistrationSongsData": {
+        "properties": {
+          "registration_id": {
+            "type": "string",
+            "title": "Registration Id",
+            "description": "Registration entry id."
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/SongOnFileData"
+            },
+            "type": "array",
+            "title": "Candidates",
+            "description": "Best first: strong before possible, then same division, then the event's season year, then submitted elsewhere this season. At most 5."
+          }
+        },
+        "type": "object",
+        "required": [
+          "registration_id",
+          "candidates"
+        ],
+        "title": "RegistrationSongsData",
+        "description": "One entry with no music in, and the songs on file that look like its."
+      },
+      "RegistrationSongsResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/RegistrationSongsData"
+            },
+            "type": "array",
+            "title": "Data",
+            "description": "The entries."
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta",
+            "description": "Semantic value for meta."
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "RegistrationSongsResponse",
+        "description": "The entries that likely have a song on file, in list order."
+      },
       "RemovedData": {
         "properties": {
           "deleted": {
@@ -11899,6 +12047,82 @@
         ],
         "title": "SongListResponse",
         "description": "The caller's live songs and those shared with them, newest first."
+      },
+      "SongOnFileData": {
+        "properties": {
+          "song_id": {
+            "type": "string",
+            "title": "Song Id",
+            "description": "Song id."
+          },
+          "match": {
+            "type": "string",
+            "enum": [
+              "strong",
+              "possible"
+            ],
+            "title": "Match",
+            "description": "strong: the song names the entry's dancers exactly, in either order; possible: only one of them."
+          },
+          "song_label": {
+            "type": "string",
+            "title": "Song Label",
+            "description": "Structured song label."
+          },
+          "partnership_label": {
+            "type": "string",
+            "title": "Partnership Label",
+            "description": "Who the song is for."
+          },
+          "division": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Division",
+            "description": "The song's division."
+          },
+          "season_year": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season Year",
+            "description": "The song's season year."
+          },
+          "same_division": {
+            "type": "boolean",
+            "title": "Same Division",
+            "description": "The song's division is the entry's (case, accents, spacing and a trailing parenthetical ignored)."
+          },
+          "submitted_this_season": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Submitted This Season",
+            "description": "Names of the other events of this event's season the song is submitted to, in name order."
+          }
+        },
+        "type": "object",
+        "required": [
+          "song_id",
+          "match",
+          "song_label",
+          "partnership_label",
+          "same_division",
+          "submitted_this_season"
+        ],
+        "title": "SongOnFileData",
+        "description": "A song that looks like an entry's, not submitted to the event."
       },
       "SongResponse": {
         "properties": {

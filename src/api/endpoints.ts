@@ -24,6 +24,7 @@ import {
   ApiPartnerAssociationsSchema,
   ApiPartnerSchema,
   ApiQueueEntrySchema,
+  ApiRegistrationSongsOnFileSchema,
   ApiRunSchema,
   ApiSessionDetailSchema,
   ApiSessionListItemSchema,
@@ -546,6 +547,12 @@ export const endpoints = {
       id: "admin.eventRegistrations", method: "GET", access: "admin",
       path: (p) => `/v1/admin/events/${encodeURIComponent(p.eventId)}/registrations`,
       response: z.array(ApiEventRegistrationSchema),
+    }),
+    /** Entries with no music in that likely have a song on file, with the candidate songs (admin only). */
+    registrationSongsOnFile: endpoint<{ eventId: string }, void, z.infer<typeof ApiRegistrationSongsOnFileSchema>[]>({
+      id: "admin.registrationSongsOnFile", method: "GET", access: "admin",
+      path: (p) => `/v1/admin/events/${encodeURIComponent(p.eventId)}/registrations/songs-on-file`,
+      response: z.array(ApiRegistrationSongsOnFileSchema),
     }),
     importEventRegistrations: endpoint<
       { eventId: string },
