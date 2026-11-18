@@ -1,3 +1,10 @@
+# [2.50.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.49.0...v2.50.0) (2026-11-18)
+
+
+### Features
+
+* **events:** chart songs added to deejaytools beside submissions, dashed per edition ([17e2cbd](https://github.com/mini-app-polis/deejaytools-com/commit/17e2cbd8b6023d9d512edc8ac75defbdac14e9c1))
+
 # [2.49.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.48.0...v2.49.0) (2026-11-18)
 
 
