@@ -1,3 +1,10 @@
+# [2.48.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.47.0...v2.48.0) (2026-11-18)
+
+
+### Features
+
+* **registrations:** mark entries that likely have music on file on the admin Registrations page ([44cde8c](https://github.com/mini-app-polis/deejaytools-com/commit/44cde8ce444998602455fa3567829b8435c12f4c))
+
 # [2.47.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.46.1...v2.47.0) (2026-11-17)
 
 
