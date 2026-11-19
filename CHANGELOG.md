@@ -1,3 +1,10 @@
+## [2.51.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.51.0...v2.51.1) (2026-11-19)
+
+
+### Bug Fixes
+
+* **events:** add up the in-deejaytools line's counts when both lists share a day ([ec787d7](https://github.com/mini-app-polis/deejaytools-com/commit/ec787d79ae7c3c013b501eec9ba7b42554763e64))
+
 # [2.51.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.50.0...v2.51.0) (2026-11-18)
 
 
