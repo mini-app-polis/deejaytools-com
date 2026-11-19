@@ -114,6 +114,8 @@ describe("CoordinatorPortalPage", () => {
     expect(screen.queryByText("Cy & Di")).toBeNull();
     expect(apiGet).toHaveBeenCalledWith("/v1/events/ev-1/registrations");
     expect(apiGet.mock.calls.some(([p]) => String(p).startsWith("/v1/admin"))).toBe(false);
+    // Songs on file are the admin's: no filter for them here.
+    expect(screen.queryByRole("radio", { name: /likely on file/i })).toBeNull();
     // The admin's note stays the admin's.
     fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[0]);
     expect(await screen.findByRole("dialog")).toBeInTheDocument();

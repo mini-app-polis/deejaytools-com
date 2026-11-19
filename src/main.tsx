@@ -9,8 +9,13 @@ import AppErrorBoundary from "./components/AppErrorBoundary";
 import MaintenancePage from "./components/MaintenancePage";
 import QueryCacheReset from "./components/QueryCacheReset";
 import { queryClient } from "./api/queryClient";
+import { listenForNewBuild } from "./lib/staleBuild";
 import App from "./pages/App";
 import "./index.css";
+
+// A tab open across a deploy reloads into the new build when a page chunk
+// it asks for is gone, instead of showing the error screen.
+listenForNewBuild();
 
 const key = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 if (!key) {

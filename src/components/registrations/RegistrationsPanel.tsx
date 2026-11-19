@@ -38,7 +38,8 @@ import { isOpenEvent, type ApiAdminEventSongSubmission, type ApiEvent, type ApiS
 
 const NO_LINK = "__none__";
 
-type Filter = "attention" | "all" | RegistrationStatus;
+/** "on-file": entries with no music in that likely have a song on file (admin page only). */
+type Filter = "attention" | "all" | "on-file" | RegistrationStatus;
 /** Whether an import adds to the list or replaces it. */
 type ImportMode = "add" | "replace";
 
@@ -158,8 +159,9 @@ export default function RegistrationsPanel({
     const rows = reconciled?.rows ?? [];
     if (filter === "all") return rows;
     if (filter === "attention") return rows.filter((r) => NEEDS_ATTENTION.includes(r.status));
+    if (filter === "on-file") return rows.filter((r) => songsOnFile.has(r.entry.id));
     return rows.filter((r) => r.status === filter);
-  }, [reconciled, filter]);
+  }, [reconciled, filter, songsOnFile]);
 
   // Grouped under the registration's own division names, in list order.
   const groups = useMemo(() => {
@@ -248,6 +250,9 @@ export default function RegistrationsPanel({
               ariaLabel="Show"
               options={[
                 { value: "attention", label: `Needs attention (${attention})` },
+                ...(showSongsOnFile
+                  ? [{ value: "on-file" as const, label: `Likely on file (${songsOnFile.size})` }]
+                  : []),
                 ...STATUS_ORDER.map((s) => ({ value: s, label: `${STATUS_LABELS[s]} (${counts[s]})` })),
                 { value: "all", label: `All (${reconciled.rows.length})` },
               ]}

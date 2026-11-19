@@ -18,6 +18,10 @@ function BrokenPage(): never {
   throw new Error("render failed");
 }
 
+function StalePage(): never {
+  throw new TypeError("Failed to fetch dynamically imported module: https://deejaytools.com/assets/AdminPage-old.js");
+}
+
 function renderAt(path: string) {
   return render(
     <AppErrorBoundary>
@@ -25,6 +29,7 @@ function renderAt(path: string) {
         <Routes>
           <Route path="/" element={<p>Home</p>} />
           <Route path="/broken" element={<BrokenPage />} />
+          <Route path="/stale" element={<StalePage />} />
         </Routes>
       </MemoryRouter>
     </AppErrorBoundary>
@@ -49,6 +54,7 @@ describe("AppErrorBoundary", () => {
 
   beforeEach(() => {
     sent.length = 0;
+    sessionStorage.clear();
     vi.mocked(reloadPage).mockClear();
     vi.mocked(goHome).mockClear();
     // React logs every error a boundary catches; keep the test output clean.
@@ -80,5 +86,19 @@ describe("AppErrorBoundary", () => {
 
     await user.click(screen.getByRole("button", { name: "Go home" }));
     expect(goHome).toHaveBeenCalledOnce();
+  });
+
+  it("does not reload on its own for an ordinary error", () => {
+    renderAt("/broken");
+    expect(reloadPage).not.toHaveBeenCalled();
+  });
+
+  it("reloads once into the new build when a page chunk from an older one is gone", () => {
+    renderAt("/stale");
+    expect(reloadPage).toHaveBeenCalledOnce();
+    // Still missing right after reloading: the recovery screen stays, no loop.
+    renderAt("/stale");
+    expect(reloadPage).toHaveBeenCalledOnce();
+    expect(screen.getAllByRole("alert").length).toBeGreaterThan(0);
   });
 });
