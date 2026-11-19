@@ -3,7 +3,7 @@ import { reloadPage } from "@/lib/pageNavigation";
 /**
  * A tab left open across a deploy still runs the old build. The first time it
  * opens a page it has not loaded yet, it asks for that page's chunk by the old
- * build's file name, which the new deploy no longer serves, and the import
+ * build's file name, which the new deploy does not serve, and the import
  * fails. Loading the page again picks up the new build.
  */
 
