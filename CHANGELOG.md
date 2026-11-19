@@ -1,3 +1,10 @@
+# [2.52.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.51.1...v2.52.0) (2026-11-19)
+
+
+### Features
+
+* **registrations:** likely-on-file filter on the admin Registrations page; reload into a new build when a page chunk is gone ([d3af3e2](https://github.com/mini-app-polis/deejaytools-com/commit/d3af3e21613d1f93de46c924ea9ba4e8ff9bbc61))
+
 ## [2.51.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.51.0...v2.51.1) (2026-11-19)
 
 
