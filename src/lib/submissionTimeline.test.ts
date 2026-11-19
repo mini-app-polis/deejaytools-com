@@ -69,8 +69,8 @@ describe("buildTimelineChart", () => {
         days: [{ day: -9, count: 2 }],
         // One uploaded a season ago, one the day before it was submitted.
         song_added_days: [{ day: -300, count: 1 }, { day: -10, count: 1 }],
-        // One entry likely on file, its song uploaded on day -9.
-        likely_on_file_days: [{ day: -9, count: 1 }],
+        // One entry likely on file, its song uploaded on day -10, the same day as a submitted song's.
+        likely_on_file_days: [{ day: -10, count: 1 }],
       }),
       event({
         id: "then",
@@ -98,8 +98,11 @@ describe("buildTimelineChart", () => {
   it("adds the entries likely on file to the current event's added line when asked (admins)", () => {
     const chart = buildTimelineChart(withAdded, { fromDay: -10, likelyOnFile: true })!;
     const [now] = chart.curves;
-    expect(valueOn(now, -10, "added")).toBe(50);
+    // Both counts on day -10 add up: the season-old song, the day -10 one, and the likely one.
+    expect(valueOn(now, -10, "added")).toBe(75);
     expect(valueOn(now, -8, "added")).toBe(75);
+    // Never below what is submitted.
+    for (const p of now.points) expect(valueOn(now, p.day, "added")!).toBeGreaterThanOrEqual(p.value);
     // The submitted line is the same either way.
     expect(valueOn(now, -8)).toBe(50);
   });
