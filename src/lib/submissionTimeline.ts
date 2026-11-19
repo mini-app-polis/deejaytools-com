@@ -81,7 +81,9 @@ export function buildTimelineChart(
     const base = unit === "percent" ? e.registrations : null;
     const cumulative = (days: ApiTimelineEvent["days"]): TimelinePoint[] => {
       let total = days.filter((d) => d.day < fromDay).reduce((t, d) => t + d.count, 0);
-      const byDay = new Map(days.map((d) => [d.day, d.count]));
+      // Sum, not overwrite: the added line merges two lists that can share a day.
+      const byDay = new Map<number, number>();
+      for (const d of days) byDay.set(d.day, (byDay.get(d.day) ?? 0) + d.count);
       const points: TimelinePoint[] = [];
       for (let day = fromDay; day <= end; day++) {
         total += byDay.get(day) ?? 0;
