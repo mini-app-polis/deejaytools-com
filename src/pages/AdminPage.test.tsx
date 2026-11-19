@@ -2135,6 +2135,30 @@ describe("AdminPage — Registrations section", () => {
     expect(screen.getAllByText("Likely has music on file")).toHaveLength(1);
   });
 
+  it("filters to the entries likely on file", async () => {
+    const onFile = {
+      song_id: "song-1", match: "strong", song_label: "Cy Dee & Eve Eff Classic 2026", partnership_label: "Cy Dee & Eve Eff",
+      division: "Classic", season_year: "2026", added_at: 1, same_division: true, submitted_this_season: [],
+    };
+    routeGets({
+      "/v1/events": [OPEN],
+      "/v1/divisions": divisions,
+      "/v1/events/open/registrations": [
+        reg({ id: "r1", dancer_1: "Gina White", dancer_2: "Hank Green" }),
+        reg({ id: "r2", position: 1, dancer_1: "Cy Dee", dancer_2: "Eve Eff" }),
+      ],
+      "/v1/events/open/song-submissions": [],
+      "/v1/admin/events/open/registrations/songs-on-file": [{ registration_id: "r2", candidates: [onFile] }],
+    });
+    renderPage("/admin/registrations");
+
+    // Both missing by default; the filter shows only the one likely on file.
+    expect(await screen.findByText("Gina White & Hank Green")).toBeInTheDocument();
+    await userEvent.setup().click(await screen.findByRole("radio", { name: "Likely on file (1)" }));
+    expect(screen.getByText("Cy Dee & Eve Eff")).toBeInTheDocument();
+    expect(screen.queryByText("Gina White & Hank Green")).not.toBeInTheDocument();
+  });
+
   it("imports a pasted list for the event", async () => {
     const user = userEvent.setup();
     routeGets({ "/v1/events": [OPEN], "/v1/divisions": divisions, "/v1/events/open/registrations": [] });
