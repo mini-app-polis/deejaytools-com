@@ -9,6 +9,7 @@ import {
   percentComplete,
   progressByDivision,
   reconcileRegistrations,
+  PROAM_EITHER,
   registrationLines,
   nameCloseness,
 } from "./eventRegistrations";
@@ -181,6 +182,27 @@ describe("reconcileRegistrations", () => {
     const { rows, unregistered } = reconcileRegistrations(entries, subs, TEST_DIVISIONS, false);
     expect(rows.map((r) => r.status)).toEqual(["submitted", "missing"]);
     expect(rows[1].candidates).toEqual([]);
+    expect(unregistered.map((s) => s.id)).toEqual([subs[1].id]);
+  });
+
+  it("files a ProAm entry that names no role under its song's ProAm division", () => {
+    const division = "ProAm Spotlight - Int/Adv";
+    const entries = [
+      entry({ division, dancer_1: "Ava Berinstein", dancer_2: "Markus Smith" }),
+      entry({ division, dancer_1: "Brandon Li", dancer_2: "Laureen Baldovi" }),
+      entry({ division: "ProAm Spotlight - Newcomer/Nov", dancer_1: "Karin Riechenberg", dancer_2: "Markus Smith" }),
+    ];
+    const subs = [
+      sub("Ava Berinstein & Markus Smith", "ProAm FollowerAm"),
+      sub("Brandon Li & Laureen Baldovi", "Showcase"),
+    ];
+    const { rows, unregistered } = reconcileRegistrations(entries, subs, TEST_DIVISIONS, false);
+    expect(rows.map((r) => [r.status, r.division])).toEqual([
+      ["submitted", "ProAm FollowerAm"],
+      // Only a ProAm song covers it: one in Showcase is a possible match.
+      ["possible", PROAM_EITHER],
+      ["missing", PROAM_EITHER],
+    ]);
     expect(unregistered.map((s) => s.id)).toEqual([subs[1].id]);
   });
 
