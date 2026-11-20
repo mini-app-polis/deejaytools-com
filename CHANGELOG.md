@@ -1,3 +1,10 @@
+## [2.53.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.53.0...v2.53.1) (2026-11-20)
+
+
+### Bug Fixes
+
+* **registrations:** file ProAm entries that name no role under their song's ProAm division ([7e5bc7d](https://github.com/mini-app-polis/deejaytools-com/commit/7e5bc7dd5876ebf681dcf45487c3bcd1ee7a5a84))
+
 # [2.53.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.52.0...v2.53.0) (2026-11-20)
 
 
