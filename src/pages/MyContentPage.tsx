@@ -11,6 +11,7 @@ import QueryError from "@/components/QueryError";
 import SessionStatusBadge from "@/components/SessionStatusBadge";
 import SongCard from "@/components/SongCard";
 import MyCheckinsSection from "@/components/dancer/MyCheckinsSection";
+import MusicNeededSection from "@/components/dancer/MusicNeededSection";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -235,6 +236,9 @@ export default function MyContentPage() {
       {checkins && checkins.length > 0 && (
         <MyCheckinsSection checkins={checkins} onWithdraw={setPendingWithdrawId} />
       )}
+
+      {/* ── Registrations with no music in yet (only when there are some) ── */}
+      <MusicNeededSection songs={songs} />
 
       {/* ── Events section ── */}
       <div className="rounded-lg border bg-card">

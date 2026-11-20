@@ -6,9 +6,10 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
 const apiGet = vi.fn();
 const apiDel = vi.fn();
+const apiPost = vi.fn();
 const apiClient = {
   get: apiGet,
-  post: vi.fn(),
+  post: apiPost,
   patch: vi.fn(),
   del: apiDel,
   postForm: vi.fn(),
@@ -691,5 +692,112 @@ describe("MyContentPage — retrying a failed load", () => {
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
     // Every query that failed is fetched again.
     expect(paths.map(calls)).toEqual(before.map((n) => n + 1));
+  });
+});
+
+describe("MyContentPage — Music needed notice", () => {
+  const ON_FILE = {
+    song_id: "song-1",
+    match: "strong" as const,
+    song_label: "Pat Dancer & Pat Partner Classic 2027 Routine v01",
+    partnership_label: "Pat Dancer & Pat Partner",
+    division: "Classic",
+    season_year: "2027",
+    added_at: 1,
+    same_division: true,
+    submitted_this_season: ["DCSX 2026"],
+  };
+  const MY_SONG = fx.song({
+    id: "song-1",
+    partnership_label: "Pat Dancer & Pat Partner",
+    division: "Classic",
+    routine_name: "Midnight",
+    season_year: "2027",
+  });
+
+  beforeEach(() => {
+    resetMocks();
+    apiPost.mockReset();
+  });
+
+  it("shows nothing when there are no reminders", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: /^songs$/i });
+    expect(screen.queryByRole("heading", { name: /music needed/i })).toBeNull();
+  });
+
+  it("offers the song on file, without its season year, and submits it", async () => {
+    const reminder = fx.registrationReminder({ event_id: "ev1", event_name: "The Open 2026", song: ON_FILE });
+    withGets({ "/v1/registration-reminders": [reminder], "/v1/songs": [MY_SONG] });
+    apiPost.mockResolvedValue(
+      fx.eventSongSubmission({ event_id: "ev1", song_id: "song-1", event_name: "The Open 2026" })
+    );
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Music needed for 1 of your registrations" });
+    const card = screen.getByRole("article", { name: "The Open 2026, Classic" });
+    expect(within(card).getByText("Pat Dancer & Pat Partner")).toBeInTheDocument();
+    expect(within(card).getByText("Pat Dancer & Pat Partner - Classic - Midnight")).toBeInTheDocument();
+    expect(within(card).getByText(/also submitted to dcsx 2026 this season/i)).toBeInTheDocument();
+    expect(within(card).getByRole("link", { name: "Choose a different song" })).toHaveAttribute(
+      "href",
+      "/event-submissions/ev1"
+    );
+
+    await user.click(within(card).getByRole("button", { name: "Submit this song" }));
+    await waitFor(() =>
+      expect(apiPost).toHaveBeenCalledWith("/v1/event-song-submissions", { event_id: "ev1", song_id: "song-1" })
+    );
+    expect(toast.success).toHaveBeenCalledWith("Submitted to The Open 2026.");
+  });
+
+  it("sends a song in another division to the event's page rather than submitting it", async () => {
+    const reminder = fx.registrationReminder({ song: { ...ON_FILE, same_division: false } });
+    withGets({ "/v1/registration-reminders": [reminder] });
+    renderPage();
+
+    const card = await screen.findByRole("article", { name: "Test Event, Classic" });
+    expect(within(card).queryByRole("button", { name: "Submit this song" })).toBeNull();
+    expect(within(card).getByRole("link", { name: "Submit a song" })).toHaveAttribute(
+      "href",
+      "/event-submissions/ev-1"
+    );
+  });
+
+  it("points to upload when nothing is on file", async () => {
+    withGets({ "/v1/registration-reminders": [fx.registrationReminder()] });
+    renderPage();
+
+    const card = await screen.findByRole("article", { name: "Test Event, Classic" });
+    expect(within(card).getByText(/don't have a song on file/i)).toBeInTheDocument();
+    expect(within(card).getByRole("link", { name: "Upload a song" })).toHaveAttribute("href", "/songs/add");
+  });
+
+  it("hides an entry with Not me", async () => {
+    let reminders = [fx.registrationReminder(), fx.registrationReminder({ registration_id: "reg-2", division: "Novice" })];
+    withGets({ "/v1/registration-reminders": () => Promise.resolve(reminders) });
+    apiPost.mockImplementation(() => {
+      reminders = reminders.filter((r) => r.registration_id !== "reg-1");
+      return Promise.resolve(undefined);
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Music needed for 2 of your registrations" });
+    const card = screen.getByRole("article", { name: "Test Event, Classic" });
+    await user.click(within(card).getByRole("button", { name: "Not me" }));
+
+    expect(apiPost).toHaveBeenCalledWith("/v1/registration-reminders/reg-1/dismiss", undefined);
+    await screen.findByRole("heading", { name: "Music needed for 1 of your registrations" });
+    expect(screen.queryByRole("article", { name: "Test Event, Classic" })).toBeNull();
+  });
+
+  it("stays out of the way when the reminders fail to load", async () => {
+    withGets({ "/v1/registration-reminders": () => Promise.reject(new Error("down")) });
+    renderPage();
+    await screen.findByRole("heading", { name: /^songs$/i });
+    expect(screen.queryByRole("heading", { name: /music needed/i })).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });

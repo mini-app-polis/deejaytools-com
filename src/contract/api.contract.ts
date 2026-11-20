@@ -801,6 +801,14 @@ describe("contract", () => {
     // Songs on file for entries with no music in: read only, whatever it finds.
     const onFile = await ledger.hit(endpoints.admin.registrationSongsOnFile, { params: { eventId } });
     expect(onFile.every((r) => r.candidates.length > 0)).toBe(true);
+    // The admin's own reminders, whatever they find, then "Not me" on an
+    // entry (it goes with the entry when the suite's event is deleted).
+    const reminders = await ledger.hit(endpoints.registrationReminders.list);
+    expect(reminders.every((r) => r.event_status !== "completed")).toBe(true);
+    await ledger.hit(endpoints.registrationReminders.dismiss, { params: { id: imported[0].id } });
+    expect(
+      (await ledger.hit(endpoints.registrationReminders.list)).some((r) => r.registration_id === imported[0].id)
+    ).toBe(false);
     // The staff route answers the same list; an admin still sees the note.
     const forStaff = await ledger.hit(endpoints.events.registrations, { params: { id: eventId } });
     expect(forStaff).toHaveLength(1);

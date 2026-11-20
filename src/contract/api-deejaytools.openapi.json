@@ -6499,6 +6499,180 @@
         }
       }
     },
+    "/v1/registration-reminders": {
+      "get": {
+        "tags": [
+          "registration-reminders"
+        ],
+        "summary": "The caller's registrations with no music in",
+        "description": "Entries on registration lists of events not yet completed whose dancers are exactly one of the caller's pairs (the caller and a partner, a managed partnership, or the names of one of their songs), with no song submitted to the event naming them, not scratched, handled or linked by hand, and not dismissed by the caller. Each carries the caller's best strongly matching song not yet submitted to the event, or null. Requires deejaytools.submissions.read.",
+        "operationId": "list_registration_reminders_v1_registration_reminders_get",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistrationRemindersResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Lacks the scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The query failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is refused (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/registration-reminders/{id}/dismiss": {
+      "post": {
+        "tags": [
+          "registration-reminders"
+        ],
+        "summary": "Dismiss a registration reminder (not me)",
+        "description": "The caller says the entry is not theirs: it is left out of their reminders from now on (other people's are unaffected). Idempotent. Requires deejaytools.submissions.write.",
+        "operationId": "dismiss_registration_reminder_v1_registration_reminders__id__dismiss_post",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Registration entry id.",
+              "title": "Id"
+            },
+            "description": "Registration entry id."
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing or invalid token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Lacks the scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such entry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The write failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is refused (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/admin/drive-jobs/summary": {
       "get": {
         "tags": [
@@ -11007,6 +11181,103 @@
         ],
         "title": "RegistrationListResponse",
         "description": "An event's registration list, in imported order."
+      },
+      "RegistrationReminderData": {
+        "properties": {
+          "registration_id": {
+            "type": "string",
+            "title": "Registration Id",
+            "description": "Registration entry id."
+          },
+          "event_id": {
+            "type": "string",
+            "title": "Event Id",
+            "description": "Event id."
+          },
+          "event_name": {
+            "type": "string",
+            "title": "Event Name",
+            "description": "Event name."
+          },
+          "event_start_date": {
+            "type": "string",
+            "title": "Event Start Date",
+            "description": "Event's first day."
+          },
+          "event_status": {
+            "type": "string",
+            "title": "Event Status",
+            "description": "upcoming or active."
+          },
+          "division": {
+            "type": "string",
+            "title": "Division",
+            "description": "The division as the registration names it."
+          },
+          "dancer_1": {
+            "type": "string",
+            "title": "Dancer 1",
+            "description": "First dancer, as registered."
+          },
+          "dancer_2": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dancer 2",
+            "description": "Second dancer, as registered."
+          },
+          "song": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SongOnFileData"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The caller's best song for it (a strong match, not yet submitted to the event), or null when they have none on file."
+          }
+        },
+        "type": "object",
+        "required": [
+          "registration_id",
+          "event_id",
+          "event_name",
+          "event_start_date",
+          "event_status",
+          "division",
+          "dancer_1"
+        ],
+        "title": "RegistrationReminderData",
+        "description": "One of the caller's registration entries with no music in yet."
+      },
+      "RegistrationRemindersResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/RegistrationReminderData"
+            },
+            "type": "array",
+            "title": "Data",
+            "description": "The entries."
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta",
+            "description": "Semantic value for meta."
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "RegistrationRemindersResponse",
+        "description": "The caller's entries with no music in, by event start then list order."
       },
       "RegistrationResponse": {
         "properties": {
