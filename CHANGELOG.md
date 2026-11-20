@@ -1,3 +1,11 @@
+# [2.53.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.52.0...v2.53.0) (2026-11-20)
+
+
+### Features
+
+* **my-content:** ask dancers to confirm near-name registration entries ([623b7e1](https://github.com/mini-app-polis/deejaytools-com/commit/623b7e13e83f4339edc5f7cdf87153f17d47cab2))
+* **my-content:** show a Music needed notice for registrations with no music in ([c8da831](https://github.com/mini-app-polis/deejaytools-com/commit/c8da83152eca2394c4f618780cd18a8cbd125349))
+
 # [2.52.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.51.1...v2.52.0) (2026-11-19)
 
 
