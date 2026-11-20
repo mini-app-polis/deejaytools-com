@@ -11,7 +11,7 @@
  * events. The `enabled` flag mirrors the API-side pattern.
  */
 import * as Sentry from "@sentry/react";
-import { sentryEnvironment, tracePropagationTargets } from "./sentryOptions";
+import { dropOfflineClerkLoadFailure, sentryEnvironment, tracePropagationTargets } from "./sentryOptions";
 
 const propagationTargets = tracePropagationTargets(import.meta.env.VITE_API_URL);
 
@@ -46,6 +46,7 @@ Sentry.init({
   // Tag every event with the deployed release. VITE_APP_VERSION is injected
   // at build time by vite.config.ts from the repo-root package.json.
   release: import.meta.env.VITE_APP_VERSION,
+  beforeSend: (event, hint) => dropOfflineClerkLoadFailure(event, hint, import.meta.env.VITE_API_URL),
 });
 
 export { Sentry };
