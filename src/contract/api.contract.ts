@@ -801,6 +801,23 @@ describe("contract", () => {
     // Songs on file for entries with no music in: read only, whatever it finds.
     const onFile = await ledger.hit(endpoints.admin.registrationSongsOnFile, { params: { eventId } });
     expect(onFile.every((r) => r.candidates.length > 0)).toBe(true);
+    // The admin's own reminders, whatever they find, then "Not me" on an
+    // entry (it goes with the entry when the suite's event is deleted).
+    const reminders = await ledger.hit(endpoints.registrationReminders.list);
+    expect(reminders.every((r) => r.event_status !== "completed")).toBe(true);
+    await ledger.hit(endpoints.registrationReminders.dismiss, { params: { id: imported[0].id } });
+    expect(
+      (await ledger.hit(endpoints.registrationReminders.list)).some((r) => r.registration_id === imported[0].id)
+    ).toBe(false);
+    // "That's me" only takes one of the caller's possible matches: a dismissed
+    // entry is not one, so the live API answers 404 (the success path is the
+    // API's own integration tests).
+    const notPossible = await ledger
+      .hit(endpoints.registrationReminders.confirm, { params: { id: imported[0].id } })
+      .catch((e: unknown) => e);
+    expect(notPossible).toBeInstanceOf(ApiStatusError);
+    expect((notPossible as ApiStatusError).status).toBe(404);
+    ledger.mark(endpoints.registrationReminders.confirm);
     // The staff route answers the same list; an admin still sees the note.
     const forStaff = await ledger.hit(endpoints.events.registrations, { params: { id: eventId } });
     expect(forStaff).toHaveLength(1);

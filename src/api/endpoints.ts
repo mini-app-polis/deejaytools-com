@@ -24,6 +24,7 @@ import {
   ApiPartnerAssociationsSchema,
   ApiPartnerSchema,
   ApiQueueEntrySchema,
+  ApiRegistrationReminderSchema,
   ApiRegistrationSongsOnFileSchema,
   ApiRunSchema,
   ApiSessionDetailSchema,
@@ -484,6 +485,24 @@ export const endpoints = {
     remove: endpoint<{ id: string }, void, void>({
       id: "eventSongSubmissions.remove", method: "DELETE", access: "user",
       path: (p) => `/v1/event-song-submissions/${id(p)}`, response: null,
+    }),
+  },
+
+  registrationReminders: {
+    /** The caller's own registrations with no music in yet (My Content). */
+    list: endpoint<void, void, z.infer<typeof ApiRegistrationReminderSchema>[]>({
+      id: "registrationReminders.list", method: "GET", access: "user",
+      path: () => "/v1/registration-reminders", response: z.array(ApiRegistrationReminderSchema),
+    }),
+    /** "That's me": link a possible match to the caller's partnership. */
+    confirm: endpoint<{ id: string }, void, void>({
+      id: "registrationReminders.confirm", method: "POST", access: "user",
+      path: (p) => `/v1/registration-reminders/${id(p)}/confirm`, response: null,
+    }),
+    /** "Not me": leave this entry out of the caller's reminders from now on. */
+    dismiss: endpoint<{ id: string }, void, void>({
+      id: "registrationReminders.dismiss", method: "POST", access: "user",
+      path: (p) => `/v1/registration-reminders/${id(p)}/dismiss`, response: null,
     }),
   },
 

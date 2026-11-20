@@ -717,6 +717,36 @@ export const ApiRegistrationSongsOnFileSchema = z.object({
 });
 export type ApiRegistrationSongsOnFile = z.infer<typeof ApiRegistrationSongsOnFileSchema>;
 
+/**
+ * GET /v1/registration-reminders: one of the caller's own entries on an
+ * event's registration list with no music in yet, or one that only nearly
+ * names them, and the song of theirs it most likely wants (a strong match
+ * only), or null when none is on file.
+ */
+export const ApiRegistrationReminderSchema = z.object({
+  registration_id: z.string(),
+  event_id: z.string(),
+  event_name: z.string(),
+  event_start_date: z.string(),
+  /** upcoming or active: completed events are left out. */
+  event_status: z.string(),
+  /** The division as the registration names it. */
+  division: z.string(),
+  dancer_1: z.string(),
+  dancer_2: z.string().nullable(),
+  /**
+   * exact: names one of the caller's pairs (or is linked to their label);
+   * possible: one name exactly and the other closely, for them to confirm.
+   */
+  match: z.enum(["exact", "possible"]),
+  /** The caller's partnership it matched, as their songs are labelled. */
+  partnership_label: z.string(),
+  /** possible only: that partnership already has a song in the event. */
+  has_music: z.boolean(),
+  song: ApiSongOnFileSchema.nullable(),
+});
+export type ApiRegistrationReminder = z.infer<typeof ApiRegistrationReminderSchema>;
+
 /** PUT /v1/admin/events/:id/registrations: the whole list, in order. */
 export const putEventRegistrationsBodySchema = z.object({
   entries: z
