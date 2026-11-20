@@ -148,6 +148,19 @@ export function divisionForRegistration(name: string, divisions: readonly string
   return null;
 }
 
+/**
+ * Where a ProAm entry goes when its registration does not say whether the
+ * amateur leads or follows ("ProAm Spotlight - Int/Adv") and it has no music
+ * in yet to tell: either ProAm division could be its.
+ */
+export const PROAM_EITHER = "ProAm (lead or follow not given)";
+
+/** The ProAm divisions a registration naming ProAm without a role could be. */
+function proAmDivisions(name: string, divisions: readonly string[]): string[] {
+  if (!/\bpro ?am\b/.test(plain(name))) return [];
+  return divisions.filter((d) => /\bpro ?am\b/.test(plain(d)));
+}
+
 // ---------------------------------------------------------------------------
 // Names
 // ---------------------------------------------------------------------------
@@ -322,8 +335,10 @@ function roundGap(subs: readonly ApiAdminEventSongSubmission[]): "prelims" | "fi
  *
  * An entry linked by hand (`linked_label`) is covered by every submission
  * with that partnership label, in any division. Otherwise it is covered by
- * submissions in its division (any, when its division is not recognised)
- * whose label names all its dancers exactly. It looks like a submission whose
+ * submissions in its division (any, when its division is not recognised;
+ * either ProAm division, when it names ProAm without saying who leads)
+ * whose label names all its dancers exactly. Such a ProAm entry takes its
+ * matched song's division, else `PROAM_EITHER`. It looks like a submission whose
  * label almost names them (any division) or names them in another division. `roundsSplit` (The Open) checks a
  * Classic entry's songs cover both prelims and finals.
  */
@@ -335,9 +350,14 @@ export function reconcileRegistrations(
 ): Reconciliation {
   const accounted = new Set<string>();
   const rows = entries.map((entry): ReconciledRegistration => {
-    const division = divisionForRegistration(entry.division, divisions);
+    let division = divisionForRegistration(entry.division, divisions);
     const isTeam = division === "Teams" || division === "Cabaret";
-    const inDivision = (s: ApiAdminEventSongSubmission) => division === null || s.division?.trim() === division;
+    // ProAm without a role: either ProAm division, decided by the song.
+    const proAm = division === null ? proAmDivisions(entry.division, divisions) : [];
+    const inDivision = (s: ApiAdminEventSongSubmission) =>
+      proAm.length > 0
+        ? proAm.includes(s.division?.trim() ?? "")
+        : division === null || s.division?.trim() === division;
 
     let matches: ApiAdminEventSongSubmission[];
     let candidates: ApiAdminEventSongSubmission[] = [];
@@ -354,6 +374,10 @@ export function reconcileRegistrations(
     }
     for (const s of matches) accounted.add(s.id);
     if (matches.length > 0) candidates = [];
+    if (proAm.length > 0) {
+      const songDivision = matches.map((s) => s.division?.trim() ?? "").find((d) => proAm.includes(d));
+      division = songDivision ?? PROAM_EITHER;
+    }
 
     let status: RegistrationStatus;
     let missingRound: "prelims" | "finals" | undefined;

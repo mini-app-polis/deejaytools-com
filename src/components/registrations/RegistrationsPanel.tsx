@@ -21,6 +21,7 @@ import { useCanChangeOnEvent } from "@/hooks/useCanChangeOnEvent";
 import { useDivisions } from "@/hooks/useDivisions";
 import {
   likelyOnFile,
+  PROAM_EITHER,
   NEEDS_ATTENTION,
   parseRegistrationPaste,
   reconcileRegistrations,
@@ -346,6 +347,11 @@ export default function RegistrationsPanel({
                       )}
                       {!r.division && (
                         <p className="text-xs text-muted-foreground">Division not recognised: matched in any division.</p>
+                      )}
+                      {r.division === PROAM_EITHER && (
+                        <p className="text-xs text-muted-foreground">
+                          Lead or follow not given: matched in either ProAm division.
+                        </p>
                       )}
                     </div>
                     {canChange && (
