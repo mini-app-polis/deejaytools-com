@@ -809,6 +809,15 @@ describe("contract", () => {
     expect(
       (await ledger.hit(endpoints.registrationReminders.list)).some((r) => r.registration_id === imported[0].id)
     ).toBe(false);
+    // "That's me" only takes one of the caller's possible matches: a dismissed
+    // entry is not one, so the live API answers 404 (the success path is the
+    // API's own integration tests).
+    const notPossible = await ledger
+      .hit(endpoints.registrationReminders.confirm, { params: { id: imported[0].id } })
+      .catch((e: unknown) => e);
+    expect(notPossible).toBeInstanceOf(ApiStatusError);
+    expect((notPossible as ApiStatusError).status).toBe(404);
+    ledger.mark(endpoints.registrationReminders.confirm);
     // The staff route answers the same list; an admin still sees the note.
     const forStaff = await ledger.hit(endpoints.events.registrations, { params: { id: eventId } });
     expect(forStaff).toHaveLength(1);

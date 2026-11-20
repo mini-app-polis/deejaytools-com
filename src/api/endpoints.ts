@@ -494,6 +494,11 @@ export const endpoints = {
       id: "registrationReminders.list", method: "GET", access: "user",
       path: () => "/v1/registration-reminders", response: z.array(ApiRegistrationReminderSchema),
     }),
+    /** "That's me": link a possible match to the caller's partnership. */
+    confirm: endpoint<{ id: string }, void, void>({
+      id: "registrationReminders.confirm", method: "POST", access: "user",
+      path: (p) => `/v1/registration-reminders/${id(p)}/confirm`, response: null,
+    }),
     /** "Not me": leave this entry out of the caller's reminders from now on. */
     dismiss: endpoint<{ id: string }, void, void>({
       id: "registrationReminders.dismiss", method: "POST", access: "user",

@@ -148,6 +148,7 @@ export const fx = {
   registrationReminder: factory(ApiRegistrationReminderSchema, {
     registration_id: "reg-1", event_id: "ev-1", event_name: "Test Event",
     event_start_date: "2026-06-01", event_status: "upcoming", division: "Classic",
-    dancer_1: "Pat Dancer", dancer_2: "Pat Partner", song: null,
+    dancer_1: "Pat Dancer", dancer_2: "Pat Partner", match: "exact",
+    partnership_label: "Pat Dancer & Pat Partner", has_music: false, song: null,
   }),
 };

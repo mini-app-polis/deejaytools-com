@@ -6504,8 +6504,8 @@
         "tags": [
           "registration-reminders"
         ],
-        "summary": "The caller's registrations with no music in",
-        "description": "Entries on registration lists of events not yet completed whose dancers are exactly one of the caller's pairs (the caller and a partner, a managed partnership, or the names of one of their songs), with no song submitted to the event naming them, not scratched, handled or linked by hand, and not dismissed by the caller. Each carries the caller's best strongly matching song not yet submitted to the event, or null. Requires deejaytools.submissions.read.",
+        "summary": "The caller's registrations with no music in, or to confirm",
+        "description": "Entries on registration lists of events not yet completed that are the caller's: exact when they name one of the caller's pairs (the caller and a partner, a managed partnership, or the names of one of their songs) or are linked to one of their labels, with no music in yet; possible when one name is exact and the other close (a typo or a shortened first name), for the caller to confirm. Left out: scratched, handled, linked to someone else, or dismissed by the caller. Each carries the caller's best strongly matching song not yet submitted to the event, or null. Requires deejaytools.submissions.read.",
         "operationId": "list_registration_reminders_v1_registration_reminders_get",
         "parameters": [
           {
@@ -6558,6 +6558,100 @@
           },
           "500": {
             "description": "The query failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is refused (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/registration-reminders/{id}/confirm": {
+      "post": {
+        "tags": [
+          "registration-reminders"
+        ],
+        "summary": "Confirm a possible registration match (that's me)",
+        "description": "The caller says an entry that only nearly names them is theirs: it is linked to their partnership label, as an admin's link would, so their music counts for it. Only an entry the caller's reminders list as a possible match. Requires deejaytools.submissions.write.",
+        "operationId": "confirm_registration_reminder_v1_registration_reminders__id__confirm_post",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Registration entry id.",
+              "title": "Id"
+            },
+            "description": "Registration entry id."
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing or invalid token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Lacks the scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not one of the caller's possible matches.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The write failed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -11231,6 +11325,25 @@
             "title": "Dancer 2",
             "description": "Second dancer, as registered."
           },
+          "match": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "possible"
+            ],
+            "title": "Match",
+            "description": "exact: the entry names one of the caller's pairs, or is linked to their label; possible: one name exactly and the other closely, for the caller to confirm or dismiss."
+          },
+          "partnership_label": {
+            "type": "string",
+            "title": "Partnership Label",
+            "description": "The caller's partnership it matched, as their songs are labelled; confirming links the entry to it."
+          },
+          "has_music": {
+            "type": "boolean",
+            "title": "Has Music",
+            "description": "possible only: that partnership already has a song in the event, so confirming settles the entry. Always false for exact."
+          },
           "song": {
             "anyOf": [
               {
@@ -11240,7 +11353,7 @@
                 "type": "null"
               }
             ],
-            "description": "The caller's best song for it (a strong match, not yet submitted to the event), or null when they have none on file."
+            "description": "The caller's best song for it (a strong match, not yet submitted to the event), or null when they have none on file or music is already in."
           }
         },
         "type": "object",
@@ -11251,10 +11364,13 @@
           "event_start_date",
           "event_status",
           "division",
-          "dancer_1"
+          "dancer_1",
+          "match",
+          "partnership_label",
+          "has_music"
         ],
         "title": "RegistrationReminderData",
-        "description": "One of the caller's registration entries with no music in yet."
+        "description": "One of the caller's registration entries: no music in, or not yet confirmed."
       },
       "RegistrationRemindersResponse": {
         "properties": {
@@ -11277,7 +11393,7 @@
           "meta"
         ],
         "title": "RegistrationRemindersResponse",
-        "description": "The caller's entries with no music in, by event start then list order."
+        "description": "The caller's entries, by event start then list order."
       },
       "RegistrationResponse": {
         "properties": {

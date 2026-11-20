@@ -793,6 +793,51 @@ describe("MyContentPage — Music needed notice", () => {
     expect(screen.queryByRole("article", { name: "Test Event, Classic" })).toBeNull();
   });
 
+  it("asks about a near-name entry, and confirms it", async () => {
+    let reminders = [
+      fx.registrationReminder({
+        dancer_2: "Pat Partnr",
+        match: "possible",
+        partnership_label: "Pat Dancer & Pat Partner",
+      }),
+    ];
+    withGets({ "/v1/registration-reminders": () => Promise.resolve(reminders) });
+    apiPost.mockImplementation(() => {
+      reminders = [{ ...reminders[0], match: "exact" }];
+      return Promise.resolve(undefined);
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Is this you? 1 registration to confirm" });
+    const card = screen.getByRole("article", { name: "Test Event, Classic" });
+    expect(within(card).getByText("Possible match")).toBeInTheDocument();
+    expect(within(card).getByText("Pat Dancer & Pat Partnr")).toBeInTheDocument();
+    expect(within(card).queryByRole("link", { name: "Upload a song" })).toBeNull();
+
+    await user.click(within(card).getByRole("button", { name: "Yes, that's me" }));
+    expect(apiPost).toHaveBeenCalledWith("/v1/registration-reminders/reg-1/confirm", undefined);
+    expect(toast.success).toHaveBeenCalledWith("Thanks. That entry at Test Event is yours.");
+    // Confirmed with no music in: it now asks for a song.
+    await screen.findByRole("heading", { name: "Music needed for 1 of your registrations" });
+    expect(screen.getByRole("link", { name: "Upload a song" })).toBeInTheDocument();
+  });
+
+  it("says when a near-name entry's music is already in", async () => {
+    withGets({
+      "/v1/registration-reminders": [
+        fx.registrationReminder({ match: "possible", has_music: true }),
+        fx.registrationReminder({ registration_id: "reg-2", division: "Novice" }),
+      ],
+    });
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Music needed for 1 of your registrations" });
+    const card = screen.getByRole("article", { name: "Test Event, Classic" });
+    expect(within(card).getByText(/already in as pat dancer & pat partner/i)).toBeInTheDocument();
+    expect(screen.getByText(/spelled a little differently/i)).toBeInTheDocument();
+  });
+
   it("stays out of the way when the reminders fail to load", async () => {
     withGets({ "/v1/registration-reminders": () => Promise.reject(new Error("down")) });
     renderPage();

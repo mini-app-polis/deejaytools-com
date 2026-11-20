@@ -719,8 +719,9 @@ export type ApiRegistrationSongsOnFile = z.infer<typeof ApiRegistrationSongsOnFi
 
 /**
  * GET /v1/registration-reminders: one of the caller's own entries on an
- * event's registration list with no music in yet, and the song of theirs it
- * most likely wants (a strong match only), or null when none is on file.
+ * event's registration list with no music in yet, or one that only nearly
+ * names them, and the song of theirs it most likely wants (a strong match
+ * only), or null when none is on file.
  */
 export const ApiRegistrationReminderSchema = z.object({
   registration_id: z.string(),
@@ -733,6 +734,15 @@ export const ApiRegistrationReminderSchema = z.object({
   division: z.string(),
   dancer_1: z.string(),
   dancer_2: z.string().nullable(),
+  /**
+   * exact: names one of the caller's pairs (or is linked to their label);
+   * possible: one name exactly and the other closely, for them to confirm.
+   */
+  match: z.enum(["exact", "possible"]),
+  /** The caller's partnership it matched, as their songs are labelled. */
+  partnership_label: z.string(),
+  /** possible only: that partnership already has a song in the event. */
+  has_music: z.boolean(),
   song: ApiSongOnFileSchema.nullable(),
 });
 export type ApiRegistrationReminder = z.infer<typeof ApiRegistrationReminderSchema>;

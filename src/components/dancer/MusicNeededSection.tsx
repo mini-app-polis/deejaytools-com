@@ -32,7 +32,9 @@ function suggestedSongLabel(song: ApiSongOnFile, songs: readonly ApiSong[]): str
  * The notice at the top of My Content: events whose registration list names
  * the signed-in dancer (with a partner of theirs) where no music is in yet.
  * With a song of theirs that fits, one tap submits it; with none on file, it
- * points to upload. "Not me" hides an entry for this person only. Shows
+ * points to upload. An entry that only nearly names them (a misspelling, a
+ * short first name) asks "Is this you?": confirming links it to their
+ * partnership. "Not me" hides an entry for this person only. Shows
  * nothing while loading, on a failed load, or when there is nothing to say.
  */
 export default function MusicNeededSection({ songs }: { songs: readonly ApiSong[] }) {
@@ -46,14 +48,17 @@ export default function MusicNeededSection({ songs }: { songs: readonly ApiSong[
   const dismiss = useEndpointMutation(endpoints.registrationReminders.dismiss, {
     invalidates: [endpoints.registrationReminders.list],
   });
+  const confirm = useEndpointMutation(endpoints.registrationReminders.confirm, {
+    invalidates: [endpoints.registrationReminders.list],
+  });
 
-  const heading = useMemo(
-    () =>
-      reminders.length === 1
-        ? "Music needed for 1 of your registrations"
-        : `Music needed for ${reminders.length} of your registrations`,
-    [reminders.length]
-  );
+  const possible = useMemo(() => reminders.filter((r) => r.match === "possible").length, [reminders]);
+  const exact = reminders.length - possible;
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  const heading =
+    exact > 0
+      ? `Music needed for ${exact} of your registrations`
+      : `Is this you? ${plural(possible, "registration")} to confirm`;
 
   if (reminders.length === 0) return null;
 
@@ -64,6 +69,22 @@ export default function MusicNeededSection({ songs }: { songs: readonly ApiSong[
       toast.success(`Submitted to ${r.event_name}.`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to submit the song.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleConfirm = async (r: ApiRegistrationReminder) => {
+    setBusyId(r.registration_id);
+    try {
+      await confirm.mutateAsync({ params: { id: r.registration_id } });
+      toast.success(
+        r.has_music
+          ? `Thanks. Your music for ${r.event_name} now counts for that entry.`
+          : `Thanks. That entry at ${r.event_name} is yours.`
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to confirm it.");
     } finally {
       setBusyId(null);
     }
@@ -93,29 +114,88 @@ export default function MusicNeededSection({ songs }: { songs: readonly ApiSong[
         </h2>
       </div>
       <div className="p-4 space-y-3">
-        <p className="text-sm text-yellow-50">
-          We found you on these events&apos; registration lists, but no song has been submitted for you yet.
-        </p>
+        {exact > 0 && (
+          <p className="text-sm text-yellow-50">
+            We found you on these events&apos; registration lists, but no song has been submitted for you yet.
+          </p>
+        )}
+        {possible > 0 && (
+          <p className="text-sm text-yellow-50">
+            {exact > 0 ? "Some entries" : "These entries"} are spelled a little differently from your name.
+            Confirm the ones that are you, so your music counts for them.
+          </p>
+        )}
         {reminders.map((r) => {
           const busy = busyId === r.registration_id;
           const when = whenLine(r);
           const names = [r.dancer_1, r.dancer_2].filter(Boolean).join(" & ");
-          return (
-            <article
-              key={r.registration_id}
-              aria-label={`${r.event_name}, ${r.division}`}
-              className="rounded-lg border bg-card px-4 py-3 text-sm space-y-2"
-            >
+          const header = (
+            <>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="font-semibold">{r.event_name}</p>
                   <Badge variant="outline">{r.division}</Badge>
+                  {r.match === "possible" && (
+                    <Badge variant="outline" className="border-yellow-400/60 text-yellow-300">
+                      Possible match
+                    </Badge>
+                  )}
                 </div>
                 {when && <p className="text-xs text-muted-foreground">{when}</p>}
               </div>
               <p className="text-muted-foreground">
                 Registered as <span className="font-medium text-foreground">{names}</span>
               </p>
+            </>
+          );
+          if (r.match === "possible") {
+            return (
+              <article
+                key={r.registration_id}
+                aria-label={`${r.event_name}, ${r.division}`}
+                className="rounded-lg border bg-card px-4 py-3 text-sm space-y-2"
+              >
+                {header}
+                <p>
+                  Is this you, <span className="font-medium break-words">{r.partnership_label}</span>?
+                </p>
+                {r.has_music && (
+                  <p className="text-xs text-muted-foreground">
+                    Your music for this event is already in as {r.partnership_label}. Confirming connects it to
+                    this entry.
+                  </p>
+                )}
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={busy}
+                    className="w-full sm:w-auto text-muted-foreground"
+                    onClick={() => void handleDismiss(r)}
+                  >
+                    Not me
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={busy}
+                    className="w-full sm:w-auto"
+                    onClick={() => void handleConfirm(r)}
+                  >
+                    {busy && confirm.isPending ? "Confirming…" : "Yes, that's me"}
+                  </Button>
+                </div>
+              </article>
+            );
+          }
+          return (
+            <article
+              key={r.registration_id}
+              aria-label={`${r.event_name}, ${r.division}`}
+              className="rounded-lg border bg-card px-4 py-3 text-sm space-y-2"
+            >
+              {header}
               {r.song ? (
                 <div className="rounded-md border bg-background/40 px-3 py-2">
                   <p className="text-xs text-muted-foreground">Looks like you already have this song for it</p>
