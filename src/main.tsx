@@ -6,6 +6,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import AppErrorBoundary from "./components/AppErrorBoundary";
+import ClerkLoadError from "./components/ClerkLoadError";
 import MaintenancePage from "./components/MaintenancePage";
 import QueryCacheReset from "./components/QueryCacheReset";
 import { queryClient } from "./api/queryClient";
@@ -48,6 +49,7 @@ createRoot(container, {
         <ClerkProvider publishableKey={key}>
           <QueryClientProvider client={queryClient}>
             <QueryCacheReset />
+            <ClerkLoadError />
             <App />
           </QueryClientProvider>
         </ClerkProvider>
