@@ -1,3 +1,10 @@
+## [2.54.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.54.0...v2.54.1) (2026-11-23)
+
+
+### Bug Fixes
+
+* **api:** treat a 204 from any method as success, so confirming or dismissing a registration reminder stops showing an error ([3a73a19](https://github.com/mini-app-polis/deejaytools-com/commit/3a73a199c40eea97fbbee4e463c05596eec6df6d))
+
 # [2.54.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.53.1...v2.54.0) (2026-11-23)
 
 
