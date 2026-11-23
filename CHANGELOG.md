@@ -1,3 +1,16 @@
+# [2.54.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.53.1...v2.54.0) (2026-11-23)
+
+
+### Bug Fixes
+
+* **deps:** bump the minor-and-patch group with 12 updates ([ffcc2a1](https://github.com/mini-app-polis/deejaytools-com/commit/ffcc2a1a0201bca9b64e5d6d32310f7a598162f8))
+* **sentry:** drop Clerk script-load failures from offline devices ([45802cd](https://github.com/mini-app-polis/deejaytools-com/commit/45802cda10e1d1ec8951c84311e9fa82e652a044))
+
+
+### Features
+
+* **auth:** show a retry message when Clerk's script fails to load ([e6aaa5d](https://github.com/mini-app-polis/deejaytools-com/commit/e6aaa5d01e4a4dd4ca363f12862fdde718b964fb))
+
 ## [2.53.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.53.0...v2.53.1) (2026-11-20)
 
 
