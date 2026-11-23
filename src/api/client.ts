@@ -74,6 +74,9 @@ function retryAfterMs(res: Response): number | undefined {
 }
 
 async function parseEnvelope<T>(res: Response): Promise<T> {
+  // 204 No Content is a success with nothing to unwrap, whatever the method
+  // (a DELETE, or a POST such as confirming a registration reminder).
+  if (res.status === 204) return undefined as T;
   const body = await readJsonBody(res);
   const parsed = body !== undefined;
   if (res.ok && parsed && !isErrorEnvelope(body)) {
@@ -197,7 +200,6 @@ export function useApiClient() {
   const del = useCallback(
     async (path: string): Promise<unknown> => {
       const res = await fetch(`${base}${path}`, await withAuth({ method: "DELETE" }));
-      if (res.status === 204) return undefined;
       return parseEnvelope<unknown>(res);
     },
     [withAuth]

@@ -237,6 +237,13 @@ describe("useApiClient.post", () => {
     const r = fetchMock.mock.calls[0][1] as RequestInit;
     expect(r.body).toBeUndefined();
   });
+
+  it("returns undefined on 204 No Content without reporting it", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    const { result } = renderHook(() => useApiClient());
+    await expect(result.current.post("/v1/registration-reminders/r1/confirm")).resolves.toBeUndefined();
+    expect(captureException).not.toHaveBeenCalled();
+  });
 });
 
 describe("useApiClient.postForm", () => {
