@@ -1,3 +1,10 @@
+# [2.55.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.54.1...v2.55.0) (2026-11-24)
+
+
+### Features
+
+* **uploads:** send the file's size as total_bytes with every chunk ([98618c4](https://github.com/mini-app-polis/deejaytools-com/commit/98618c4009bedb836f1de497256c7e2d9aa9a37b))
+
 ## [2.54.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.54.0...v2.54.1) (2026-11-23)
 
 
