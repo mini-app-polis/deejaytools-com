@@ -81,6 +81,16 @@ Related refusals from the same route: `Chunk exceeds 10 MB limit` (one chunk; th
 
 ---
 
+## `The uploaded file didn't arrive complete. Please retry the upload.`
+
+**Symptom:** API **400** on the final chunk with that message.
+
+**Cause:** The app sends the whole file's size as `total_bytes` with every chunk (`src/lib/chunkedSongUpload.ts`), and the assembled file on the server came out a different size: a chunk was cut short on the way in. Nothing is saved, and the staged chunks are dropped.
+
+**Fix:** Retry the upload. If it keeps happening on one connection, try another network.
+
+---
+
 ## `That file doesn't look like a supported audio format. Please upload an MP3, WAV, FLAC, or M4A.`
 
 **Symptom:** API **400** with `error.code` **`UNSUPPORTED_FORMAT`** and the message above.

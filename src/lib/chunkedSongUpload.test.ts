@@ -290,6 +290,20 @@ describe("uploadSongInChunks", () => {
     };
   }
 
+  it("sends the whole file's size as total_bytes with every chunk", async () => {
+    const file = new File([new Uint8Array(2 * CHUNK_SIZE + 7)], "three.mp3", { type: "audio/mpeg" });
+    const fetchMock = vi.fn().mockResolvedValue(okFetchResponse());
+    vi.stubGlobal("fetch", fetchMock);
+
+    await uploadSongInChunks({ file, getToken, buildFormFields, retryDelayMs: 0 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    for (const call of fetchMock.mock.calls) {
+      const form = (call[1] as RequestInit).body as FormData;
+      expect(form.get("total_bytes")).toBe(String(2 * CHUNK_SIZE + 7));
+    }
+  });
+
   it("resumes an interrupted upload from the chunk that failed, under the same upload_id", async () => {
     const file = new File([new Uint8Array(3 * CHUNK_SIZE)], "three.mp3", { type: "audio/mpeg" });
     const failing = vi
