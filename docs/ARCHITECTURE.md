@@ -412,7 +412,7 @@ Built for slow mobile uplinks. DevTools' Slow 4G is about 400 kbps up (~50 KB/s)
 
 1. Check the file can be read (first and last byte) — an empty file or an unread cloud placeholder fails here, before any request.
 2. Generate `uploadId` (`crypto.randomUUID()`).
-3. Slice file into chunks; POST each to `/v1/songs/upload/chunk` as `FormData` (`chunk`, `upload_id`, `chunk_index`, `total_chunks`, `original_filename`, `mime_type`, plus caller fields from `buildFormFields()`).
+3. Slice file into chunks; POST each to `/v1/songs/upload/chunk` as `FormData` (`chunk`, `upload_id`, `chunk_index`, `total_chunks`, `total_bytes` (the whole file's size, so the API refuses an assembled file that came out shorter), `original_filename`, `mime_type`, plus caller fields from `buildFormFields()`).
 4. **Fresh Clerk token** on every attempt (`getToken()` passed in from the form).
 5. Each chunk runs under an `AbortController` with its `chunkTimeoutMs`; a timed-out chunk is retried.
 6. **Retryable refusals** — 5xx, 408, 499, and 429 other than `TOO_MANY_UPLOADS` (`isRetryableRefusal`) — retry with **exponential backoff and jitter** (`retryDelay`: 1, 2, 4 s, each scaled by a random 50–100%). Every other refusal, 401 included, throws `UploadRefused` at once with the server's `error.message` (or `Upload failed (<status>)`).

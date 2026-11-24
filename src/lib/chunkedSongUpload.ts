@@ -258,6 +258,10 @@ export async function uploadSongInChunks({
       form.set("upload_id", uploadId);
       form.set("chunk_index", String(i));
       form.set("total_chunks", String(totalChunks));
+      // The whole file's size, on every chunk: the API refuses the final one
+      // when the assembled file comes out a different size, so a chunk cut
+      // short on the way in can't quietly shorten the song.
+      form.set("total_bytes", String(file.size));
       form.set("original_filename", file.name);
       form.set("mime_type", file.type || "audio/mpeg");
       for (const [key, value] of Object.entries(buildFormFields())) {
