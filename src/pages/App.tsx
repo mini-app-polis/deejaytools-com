@@ -6,7 +6,7 @@ import EventRoleGuard from "@/components/EventRoleGuard";
 import Layout from "@/components/Layout";
 import RequireAuth from "@/components/RequireAuth";
 import RouteFallback from "@/components/RouteFallback";
-import LandingPage from "./LandingPage";
+import HomePage from "./HomePage";
 import FloorTrialsPage from "./FloorTrialsPage";
 import EventDetailPage from "./EventDetailPage";
 import EventsPage from "./EventsPage";
@@ -48,8 +48,8 @@ export default function App() {
     <BrowserRouter>
       <Toaster richColors closeButton position="top-center" />
       <Routes>
-        {/* Public landing page — always accessible */}
-        <Route path="/" element={<LandingPage />} />
+        {/* Root: the public landing page, or My Content when signed in */}
+        <Route path="/" element={<HomePage />} />
 
         {/* Shared layout. Floor Trials is public; everything else is gated below. */}
         <Route element={<Layout />}>

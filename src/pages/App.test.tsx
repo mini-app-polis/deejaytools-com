@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // Every page is a stub that prints its name, and every guard renders a
 // marker around its children, so these tests pin the route table: which
 // page each path renders, behind which guard, and the redirects.
-vi.mock("./LandingPage", () => ({ default: () => <p>LandingPage</p> }));
+vi.mock("./HomePage", () => ({ default: () => <p>HomePage</p> }));
 vi.mock("./FloorTrialsPage", () => ({ default: () => <p>FloorTrialsPage</p> }));
 vi.mock("./EventDetailPage", () => ({ default: () => <p>EventDetailPage</p> }));
 vi.mock("./EventsPage", () => ({ default: () => <p>EventsPage</p> }));
@@ -71,9 +71,9 @@ afterEach(() => {
 });
 
 describe("App routes", () => {
-  it("renders the landing page at / outside the shared layout", () => {
+  it("renders the home page at / outside the shared layout", () => {
     renderAt("/");
-    expect(screen.getByText("LandingPage")).toBeInTheDocument();
+    expect(screen.getByText("HomePage")).toBeInTheDocument();
     expect(screen.queryByTestId("layout")).toBeNull();
   });
 
