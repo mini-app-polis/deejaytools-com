@@ -674,7 +674,7 @@ describe("SessionDetailPage — check-in button", () => {
     expect(await screen.findByText(/no songs uploaded/i)).toBeInTheDocument();
   });
 
-  it("loads pairs, songs and event submissions only when the check-in form opens", async () => {
+  it("loads pairs and songs only when the check-in form opens, and event submissions with the page", async () => {
     signedIn = true;
     stubGets({
       session: openCheckinWindowSession(),
@@ -691,7 +691,8 @@ describe("SessionDetailPage — check-in button", () => {
     expect(requested("/v1/checkins/mine")).toBe(true);
     expect(requested("/v1/partners/leading-pairs")).toBe(false);
     expect(requested("/v1/songs")).toBe(false);
-    expect(requested("/v1/event-song-submissions")).toBe(false);
+    // The no-song notice needs them whether or not the form opens.
+    expect(requested("/v1/event-song-submissions")).toBe(true);
 
     fireEvent.click(screen.getAllByRole("button", { name: /^check in$/i })[0]!);
 
@@ -701,6 +702,61 @@ describe("SessionDetailPage — check-in button", () => {
     expect(requested("/v1/partners/leading-pairs")).toBe(true);
     expect(requested("/v1/songs")).toBe(true);
     expect(requested("/v1/event-song-submissions")).toBe(true);
+  });
+});
+
+describe("SessionDetailPage — no song submitted to the event", () => {
+  // Check-in opens tomorrow: the notice does not wait for the window.
+  function laterSession() {
+    const nowMs = Date.now();
+    return makeSession({
+      eventName: "GNDC",
+      checkinOpensAt: new Date(nowMs + 24 * 3_600_000).toISOString(),
+      floorTrialStartsAt: new Date(nowMs + 25 * 3_600_000).toISOString(),
+      floorTrialEndsAt: new Date(nowMs + 28 * 3_600_000).toISOString(),
+    });
+  }
+
+  it("tells a signed-in dancer with nothing submitted, before check-in opens, and links to submitting", async () => {
+    signedIn = true;
+    stubGets({ session: laterSession(), eventSubmissions: [] });
+    renderAt();
+
+    const notice = await screen.findByTestId("no-event-submission");
+    expect(notice).toHaveTextContent(/haven't submitted a song to this event/i);
+    expect(within(notice).getByRole("link", { name: /submit a song/i })).toHaveAttribute(
+      "href",
+      "/event-submissions/event-1"
+    );
+  });
+
+  it("says nothing once a song is submitted, or when submissions fail to load", async () => {
+    signedIn = true;
+    apiGet.mockClear();
+    stubGets({ session: laterSession(), eventSubmissions: [makeSubmission("song1")] });
+    const { unmount } = renderAt();
+    await waitFor(() =>
+      expect(apiGet.mock.calls.some(([p]) => String(p).startsWith("/v1/event-song-submissions"))).toBe(true)
+    );
+    expect(await screen.findAllByRole("button", { name: "Check in" })).not.toHaveLength(0);
+    expect(screen.queryByTestId("no-event-submission")).toBeNull();
+    unmount();
+
+    stubGets({ session: laterSession(), eventSubmissions: "reject" });
+    renderAt();
+    expect(await screen.findAllByRole("button", { name: "Check in" })).not.toHaveLength(0);
+    expect(screen.queryByTestId("no-event-submission")).toBeNull();
+  });
+
+  it("is not shown to a signed-out visitor, and their submissions are not requested", async () => {
+    signedIn = false;
+    apiGet.mockClear();
+    stubGets({ session: laterSession(), eventSubmissions: [] });
+    renderAt();
+
+    expect(await screen.findAllByRole("button", { name: /sign in to check in/i })).not.toHaveLength(0);
+    expect(screen.queryByTestId("no-event-submission")).toBeNull();
+    expect(apiGet.mock.calls.some(([p]) => String(p).startsWith("/v1/event-song-submissions"))).toBe(false);
   });
 });
 
