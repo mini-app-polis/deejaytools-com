@@ -431,7 +431,7 @@ export default function ApiSessionPage() {
       {noSubmissionToEvent && (
         <p
           data-testid="no-event-submission"
-          className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300"
+          className="rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white"
         >
           You haven&apos;t submitted a song to this event yet — you&apos;ll need one to check in.{" "}
           <Link to={submitSongsHref} className="font-medium underline underline-offset-2">

@@ -99,11 +99,21 @@ export async function expectApiReachable(page: Page): Promise<void> {
 
 /** Sign the test user in through Clerk (a Backend-API sign-in token: no
  * password, no verification step), from the root, which then sends them on
- * to My Content. */
+ * to My Content.
+ *
+ * Returns once My Content has synced the account and loaded its data. A
+ * test's next page.goto would otherwise cut those requests off mid-flight,
+ * and each one cut off reports to Sentry as a failed fetch. */
 export async function signIn(page: Page, email: string): Promise<void> {
+  const { apiUrl } = e2eConfig();
   await page.goto("/");
   await expectApiReachable(page);
+  const synced = page.waitForResponse((r) => r.url() === `${apiUrl}/v1/auth/sync`);
   await clerk.signIn({ page, emailAddress: email });
+  await page.waitForURL("**/my-content");
+  const sync = await synced;
+  if (!sync.ok()) throw new Error(`POST /v1/auth/sync → ${sync.status()} after sign-in`);
+  await page.waitForLoadState("networkidle");
 }
 
 /** Expect a signed-in user to have been sent home, as the app's guards do
