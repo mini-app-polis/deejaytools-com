@@ -76,8 +76,9 @@ export default function ApiSessionPage() {
 
   // /v1/partners/leading-pairs, /v1/songs and /v1/checkins/mine all require
   // auth — skipped for a signed-out visitor. The session info and queues stay visible.
-  // Pairs, songs and event submissions only feed the check-in form, so they
-  // load when it opens.
+  // Pairs and songs only feed the check-in form, so they load when it opens.
+  // The caller's submissions to the event load with the page: they also
+  // decide the no-song notice, which shows whether or not check-in is open.
   const signedIn = !!isSignedIn;
   const formData = signedIn && checkinOpen;
   const pairsQuery = useEndpointQuery(endpoints.partners.leadingPairs, { enabled: formData });
@@ -86,7 +87,7 @@ export default function ApiSessionPage() {
   const eventId = session?.event_id ?? null;
   const submissionsQuery = useEndpointQuery(endpoints.eventSongSubmissions.list, {
     params: { eventId: eventId ?? "" },
-    enabled: formData && eventId !== null,
+    enabled: signedIn && eventId !== null,
   });
   const pairs = (signedIn && pairsQuery.data) || NO_ROWS;
   const songs = (signedIn && songsQuery.data) || NO_ROWS;
@@ -157,6 +158,11 @@ export default function ApiSessionPage() {
 
   const noEventSongs =
     !!session?.event_id && eventSubmissions !== null && checkinSongs.length === 0;
+
+  // The caller has nothing submitted to this session's event (theirs or a
+  // linked partner's shared song), so they could not check in. Unknown —
+  // loading or failed — shows nothing.
+  const noSubmissionToEvent = eventSubmissions !== null && eventSubmissions.length === 0;
 
   // Where "Submit songs to this event" goes: this session's event page, falling
   // back to the picker for event-less sessions.
@@ -421,6 +427,18 @@ export default function ApiSessionPage() {
 
         <SessionInfoHeader session={session} />
       </div>
+
+      {noSubmissionToEvent && (
+        <p
+          data-testid="no-event-submission"
+          className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300"
+        >
+          You haven&apos;t submitted a song to this event yet — you&apos;ll need one to check in.{" "}
+          <Link to={submitSongsHref} className="font-medium underline underline-offset-2">
+            Submit a song →
+          </Link>
+        </p>
+      )}
 
       {/* ── Check-in action (top) ── */}
       {checkInBlock}
