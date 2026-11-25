@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { reloadPage } from "@/lib/pageNavigation";
-import { RELOAD_GUARD_MS, isStaleBuildError, listenForNewBuild, reloadForNewBuild } from "./staleBuild";
+import { RELOAD_GUARD_MS, isStaleBuildError, listenForNewBuild, loadPageChunk, reloadForNewBuild } from "./staleBuild";
 
 vi.mock("@/lib/pageNavigation", () => ({ reloadPage: vi.fn() }));
 
@@ -52,5 +52,24 @@ describe("staleBuild", () => {
     target.dispatchEvent(again);
     expect(again.defaultPrevented).toBe(false);
     expect(reloadPage).toHaveBeenCalledOnce();
+  });
+
+  describe("loadPageChunk", () => {
+    const settled = <T,>(promise: Promise<T>) =>
+      Promise.race([promise.then(() => true), new Promise((resolve) => setTimeout(() => resolve(false), 20))]);
+
+    it("resolves with the chunk's module", async () => {
+      const module = { default: () => null };
+      await expect(loadPageChunk(() => Promise.resolve(module))).resolves.toBe(module);
+    });
+
+    it("never settles when the reload swallowed the import, so React.lazy keeps its fallback", async () => {
+      // What Vite resolves with after a prevented vite:preloadError.
+      expect(await settled(loadPageChunk(() => Promise.resolve(undefined)))).toBe(false);
+    });
+
+    it("still rejects when the import fails outright", async () => {
+      await expect(loadPageChunk(() => Promise.reject(new Error("boom")))).rejects.toThrow("boom");
+    });
   });
 });

@@ -1,3 +1,4 @@
+import { lazy } from "react";
 import { reloadPage } from "@/lib/pageNavigation";
 
 /**
@@ -58,3 +59,17 @@ export function listenForNewBuild(target: Window = window): void {
     if (reloadForNewBuild()) event.preventDefault();
   });
 }
+
+/**
+ * Loads a page chunk for React.lazy. When listenForNewBuild reloads for a new
+ * build it keeps Vite from throwing, and Vite then resolves the import with
+ * nothing instead of rejecting; React.lazy would throw reading `default` and
+ * show the error screen as the reload starts. This waits instead, so the
+ * loading fallback stays up until the reload lands.
+ */
+export function loadPageChunk<M>(load: () => Promise<M>): Promise<M> {
+  return load().then((module) => (module as M | undefined) ?? new Promise<never>(() => {}));
+}
+
+/** React.lazy over loadPageChunk, for the app's lazily loaded pages. */
+export const lazyPage: typeof lazy = (load) => lazy(() => loadPageChunk(load));

@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import AdminGuard from "@/components/AdminGuard";
@@ -6,6 +6,7 @@ import EventRoleGuard from "@/components/EventRoleGuard";
 import Layout from "@/components/Layout";
 import RequireAuth from "@/components/RequireAuth";
 import RouteFallback from "@/components/RouteFallback";
+import { lazyPage } from "@/lib/staleBuild";
 import HomePage from "./HomePage";
 import FloorTrialsPage from "./FloorTrialsPage";
 import EventDetailPage from "./EventDetailPage";
@@ -30,14 +31,16 @@ import MyEventsPage from "./MyEventsPage";
 
 // Admin, manager and per-event staff pages are split into their own chunks:
 // most visitors are dancers who never open them, so they stay out of the
-// main bundle and download on first visit to the route.
-const AdminPage = lazy(() => import("./AdminPage"));
-const ManagerPage = lazy(() => import("./ManagerPage"));
-const CoordinatorPortalPage = lazy(() => import("./CoordinatorPortalPage"));
-const DjPortalPage = lazy(() => import("./DjPortalPage"));
-const EventManagerPortalPage = lazy(() => import("./EventManagerPortalPage"));
-const StaffSectionPage = lazy(() => import("./StaffSectionPage"));
-const GuidePage = lazy(() => import("./GuidePage"));
+// main bundle and download on first visit to the route. lazyPage, not
+// React.lazy, so a chunk gone after a deploy reloads into the new build
+// rather than flashing the error screen.
+const AdminPage = lazyPage(() => import("./AdminPage"));
+const ManagerPage = lazyPage(() => import("./ManagerPage"));
+const CoordinatorPortalPage = lazyPage(() => import("./CoordinatorPortalPage"));
+const DjPortalPage = lazyPage(() => import("./DjPortalPage"));
+const EventManagerPortalPage = lazyPage(() => import("./EventManagerPortalPage"));
+const StaffSectionPage = lazyPage(() => import("./StaffSectionPage"));
+const GuidePage = lazyPage(() => import("./GuidePage"));
 
 function Lazy({ children }: { children: ReactNode }) {
   return <Suspense fallback={<RouteFallback />}>{children}</Suspense>;

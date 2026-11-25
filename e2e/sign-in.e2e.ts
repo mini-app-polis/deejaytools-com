@@ -10,13 +10,13 @@ test("a signed-in user reaches My Content, with sync and profile loading cleanly
   });
 
   try {
+    // Signing in lands on My Content, where AuthSync posts /auth/sync;
+    // signIn fails unless that succeeds. A fresh load then reads the profile.
     await signIn(page, api.session.user.email);
+    expect(new URL(page.url()).pathname).toBe("/my-content");
 
-    // AuthSync posts /auth/sync on sign-in; the page then loads the profile.
-    const synced = page.waitForResponse((r) => r.url() === `${apiUrl}/v1/auth/sync`);
     const me = page.waitForResponse((r) => r.url() === `${apiUrl}/v1/auth/me`);
     await page.goto("/my-content");
-    expect((await synced).status()).toBe(200);
     expect((await me).status()).toBe(200);
 
     await expect(page.getByRole("heading", { level: 1, name: "My Content" })).toBeVisible();
