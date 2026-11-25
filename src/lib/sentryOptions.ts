@@ -42,7 +42,17 @@ export function tracePropagationTargets(apiUrl: string | undefined): (string | R
   return [new RegExp(`^${escapeRegExp(origin)}(?:/|$)`)];
 }
 
-const CLERK_LOAD_CODES = ["failed_to_load_clerk_js", "failed_to_load_clerk_js_timeout"];
+/**
+ * Sentry's ignoreErrors: messages from code that isn't the site's, matched
+ * anywhere in the event message.
+ *
+ * - Microsoft's link scanner (Outlook Safe Links / Defender) opens links shared
+ *   in email or Teams in a headless Chrome whose automation bridge (CefSharp)
+ *   rejects a promise with a plain string. The Id number changes per scan.
+ */
+export const IGNORE_ERRORS: RegExp[] = [/Object Not Found Matching Id:\d+, MethodName:\w+, ParamCount:\d+/];
+
+const CLERK_LOAD_CODES =["failed_to_load_clerk_js", "failed_to_load_clerk_js_timeout"];
 
 function clerkLoadFailure(event: ErrorEvent, hint?: EventHint): boolean {
   const code = (hint?.originalException as { code?: unknown } | null | undefined)?.code;

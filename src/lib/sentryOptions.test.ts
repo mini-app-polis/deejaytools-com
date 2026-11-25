@@ -1,6 +1,27 @@
 import type { ErrorEvent } from "@sentry/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { dropOfflineClerkLoadFailure, sentryEnvironment, tracePropagationTargets } from "./sentryOptions";
+import {
+  dropOfflineClerkLoadFailure,
+  IGNORE_ERRORS,
+  sentryEnvironment,
+  tracePropagationTargets,
+} from "./sentryOptions";
+
+describe("IGNORE_ERRORS", () => {
+  const ignored = (message: string) => IGNORE_ERRORS.some((pattern) => pattern.test(message));
+
+  it("ignores the Microsoft link scanner's rejection, whatever its Id, and nothing else", () => {
+    for (const id of [4, 5, 123]) {
+      expect(
+        ignored(
+          `Non-Error promise rejection captured with value: Object Not Found Matching Id:${id}, MethodName:update, ParamCount:4`,
+        ),
+      ).toBe(true);
+    }
+    expect(ignored("Failed to fetch")).toBe(false);
+    expect(ignored("Object Not Found")).toBe(false);
+  });
+});
 
 describe("dropOfflineClerkLoadFailure", () => {
   const api = "https://api.deejaytools.com";
