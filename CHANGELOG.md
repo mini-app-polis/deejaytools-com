@@ -1,3 +1,10 @@
+# [2.56.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.55.1...v2.56.0) (2026-11-25)
+
+
+### Features
+
+* **routing:** send signed-in visitors from the root to My Content ([8a7bd4c](https://github.com/mini-app-polis/deejaytools-com/commit/8a7bd4cf6777e3de84d63dbe399791a46bf53cbf))
+
 ## [2.55.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.55.0...v2.55.1) (2026-11-25)
 
 
