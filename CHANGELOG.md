@@ -1,3 +1,10 @@
+# [2.57.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.56.0...v2.57.0) (2026-11-25)
+
+
+### Features
+
+* **sessions:** tell a dancer when they have no song submitted to the session's event ([867c775](https://github.com/mini-app-polis/deejaytools-com/commit/867c77540bcf79ff5733e6e4b9056ff8085c00e1))
+
 # [2.56.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.55.1...v2.56.0) (2026-11-25)
 
 
