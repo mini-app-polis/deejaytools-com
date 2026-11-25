@@ -1,3 +1,10 @@
+## [2.55.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.55.0...v2.55.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* **sentry:** ignore Microsoft link-scanner promise rejections ([852efff](https://github.com/mini-app-polis/deejaytools-com/commit/852efff751953728c6fc878cf700428eeb97d13a))
+
 # [2.55.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.54.1...v2.55.0) (2026-11-24)
 
 
