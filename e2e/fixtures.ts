@@ -98,17 +98,19 @@ export async function expectApiReachable(page: Page): Promise<void> {
 }
 
 /** Sign the test user in through Clerk (a Backend-API sign-in token: no
- * password, no verification step), landing on the home page. */
+ * password, no verification step), from the root, which then sends them on
+ * to My Content. */
 export async function signIn(page: Page, email: string): Promise<void> {
   await page.goto("/");
   await expectApiReachable(page);
   await clerk.signIn({ page, emailAddress: email });
 }
 
-/** Expect the page to have been sent to the landing page, as the app's
- * guards do for someone who may not see a route. */
+/** Expect a signed-in user to have been sent home, as the app's guards do
+ * for someone who may not see a route: to the root, which sends a signed-in
+ * user on to My Content. */
 export async function expectSentHome(page: Page): Promise<void> {
-  await expect.poll(() => new URL(page.url()).pathname).toBe("/");
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/my-content");
 }
 
 /**
