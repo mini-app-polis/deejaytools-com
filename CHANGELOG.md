@@ -1,3 +1,11 @@
+## [2.57.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.57.0...v2.57.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* **sessions:** show the no-song notice in bright red ([9c531ac](https://github.com/mini-app-polis/deejaytools-com/commit/9c531ac906c227df2ba3b86193ca263b241f921c))
+* wait out My Content after e2e sign-in, and hold lazy pages through a new-build reload ([6b94a2c](https://github.com/mini-app-polis/deejaytools-com/commit/6b94a2ce841b4b161addf37fd9d6247c0156a0e7))
+
 # [2.57.0](https://github.com/mini-app-polis/deejaytools-com/compare/v2.56.0...v2.57.0) (2026-11-25)
 
 
