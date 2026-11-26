@@ -1,3 +1,10 @@
+## [2.57.2](https://github.com/mini-app-polis/deejaytools-com/compare/v2.57.1...v2.57.2) (2026-11-26)
+
+
+### Bug Fixes
+
+* **timeline:** count entries off the list toward 100% so the chart never goes over ([1010e90](https://github.com/mini-app-polis/deejaytools-com/commit/1010e90e719f992d0057afb3ca697c0c22dc9379))
+
 ## [2.57.1](https://github.com/mini-app-polis/deejaytools-com/compare/v2.57.0...v2.57.1) (2026-11-25)
 
 
