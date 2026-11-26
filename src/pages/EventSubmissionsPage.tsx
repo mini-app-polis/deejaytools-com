@@ -283,7 +283,7 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
                   <SelectContent>
                     {songsForSelect.map((song) => (
                       <SelectItem key={song.id} value={song.id}>
-                        {songLabel(song)}
+                        <span translate="no">{songLabel(song)}</span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -306,7 +306,7 @@ function EventSubmissionForm({ eventId }: { eventId: string }) {
                   <SelectContent>
                     {divisions.map((d) => (
                       <SelectItem key={d} value={d}>
-                        {d}
+                        <span translate="no">{d}</span>
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -127,7 +127,9 @@ export default function EventDetailPage() {
       >
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
           <div className="min-w-0">
-            <h1 className="page-title text-2xl leading-tight">{event.name}</h1>
+            <h1 className="page-title text-2xl leading-tight" translate="no">
+              {event.name}
+            </h1>
             <p className="text-sm text-muted-foreground">
               {event.start_date === event.end_date
                 ? event.start_date

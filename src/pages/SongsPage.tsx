@@ -69,7 +69,7 @@ export default function SongsPage() {
             <DialogTitle>Delete this song?</DialogTitle>
             <DialogDescription>
               {pendingSong && songPieces(pendingSong)
-                ? <>This will permanently remove <span className="font-medium break-words">{songPieces(pendingSong)}</span>. This cannot be undone.</>
+                ? <>This will permanently remove <span className="font-medium break-words" translate="no">{songPieces(pendingSong)}</span>. This cannot be undone.</>
                 : "This will permanently remove the song. This cannot be undone."
               }
             </DialogDescription>

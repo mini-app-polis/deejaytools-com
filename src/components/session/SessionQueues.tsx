@@ -42,8 +42,8 @@ export default function SessionQueues({
                         : "border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5"
                     }
                   >
-                    <p className="font-medium">{renderEntityLabel(r)}</p>
-                    <p className="text-muted-foreground truncate">
+                    <p className="font-medium" translate="no">{renderEntityLabel(r)}</p>
+                    <p className="text-muted-foreground truncate" translate="no">
                       {r.divisionName}
                     </p>
                   </div>
@@ -70,8 +70,8 @@ export default function SessionQueues({
                     #{activeSorted.length + i + 1}
                   </span>
                   <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
-                    <p className="font-medium">{renderEntityLabel(r)}</p>
-                    <p className="text-muted-foreground truncate">
+                    <p className="font-medium" translate="no">{renderEntityLabel(r)}</p>
+                    <p className="text-muted-foreground truncate" translate="no">
                       {r.divisionName}
                     </p>
                   </div>
@@ -95,8 +95,8 @@ export default function SessionQueues({
                     #{activeSorted.length + priorityWaiting.length + i + 1}
                   </span>
                   <div className="border rounded-md px-3 py-2.5 text-sm flex-1 min-w-0 space-y-0.5">
-                    <p className="font-medium">{renderEntityLabel(r)}</p>
-                    <p className="text-muted-foreground truncate">
+                    <p className="font-medium" translate="no">{renderEntityLabel(r)}</p>
+                    <p className="text-muted-foreground truncate" translate="no">
                       {r.divisionName}
                     </p>
                   </div>

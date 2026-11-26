@@ -122,7 +122,7 @@ export default function EventsPage() {
               key={ev.id}
               to={eventPagePath(ev.id, slugs)}
               badges={eventStatusBadge(ev.status)}
-              title={ev.name}
+              title={<span translate="no">{ev.name}</span>}
               titleAside={
                 ev.timezone && (
                   <Badge variant="outline" className="text-xs font-normal text-muted-foreground">

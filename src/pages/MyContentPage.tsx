@@ -299,11 +299,11 @@ export default function MyContentPage() {
                     <ul className="space-y-1 border-t border-border pt-2">
                       {subs.map((s) => (
                         <li key={s.id} className="text-sm">
-                          <span className="font-medium">{s.song_label}</span>
+                          <span className="font-medium" translate="no">{s.song_label}</span>
                           {s.division && (
                             <span className="text-muted-foreground">
                               {" "}
-                              · {s.division}
+                              · <span translate="no">{s.division}</span>
                               {showRounds &&
                                 s.division === ROUND_SPLIT_DIVISION &&
                                 ` · ${roundDisplayLabel(s.round)}`}
@@ -386,7 +386,7 @@ export default function MyContentPage() {
                 <DialogTitle>Withdraw from queue?</DialogTitle>
                 <DialogDescription>
                   {pendingCheckin
-                    ? <>You will be removed from the <span className="font-medium">{pendingCheckin.divisionName}</span> queue. This cannot be undone.</>
+                    ? <>You will be removed from the <span className="font-medium" translate="no">{pendingCheckin.divisionName}</span> queue. This cannot be undone.</>
                     : "You will be removed from the queue. This cannot be undone."
                   }
                 </DialogDescription>
@@ -425,7 +425,7 @@ export default function MyContentPage() {
                 <DialogTitle>Delete this song?</DialogTitle>
                 <DialogDescription>
                   {pendingSong && songPieces(pendingSong)
-                    ? <>This will permanently remove <span className="font-medium break-words">{songPieces(pendingSong)}</span>. This cannot be undone.</>
+                    ? <>This will permanently remove <span className="font-medium break-words" translate="no">{songPieces(pendingSong)}</span>. This cannot be undone.</>
                     : "This will permanently remove the song. This cannot be undone."
                   }
                 </DialogDescription>

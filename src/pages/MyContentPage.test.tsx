@@ -834,7 +834,7 @@ describe("MyContentPage — Music needed notice", () => {
 
     await screen.findByRole("heading", { name: "Music needed for 1 of your registrations" });
     const card = screen.getByRole("article", { name: "Test Event, Classic" });
-    expect(within(card).getByText(/already in as pat dancer & pat partner/i)).toBeInTheDocument();
+    expect(card).toHaveTextContent(/already in as pat dancer & pat partner/i);
     expect(screen.getByText(/spelled a little differently/i)).toBeInTheDocument();
   });
 

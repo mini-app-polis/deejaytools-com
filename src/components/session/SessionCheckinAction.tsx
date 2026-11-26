@@ -45,10 +45,12 @@ export default function SessionCheckinAction({
                   <span className="font-medium">#{place.overallPosition} in queue</span>
                   <span className="text-muted-foreground">
                     {" "}({place.queueType === "non_priority" ? "standard" : place.queueType}
-                    {place.divisionName ? `, ${place.divisionName}` : ""}
-                    {myPlaces.length > 1 && place.entityLabel && place.entityLabel !== "—"
-                      ? ` · ${place.entityLabel}`
-                      : ""}
+                    {place.divisionName ? <>, <span translate="no">{place.divisionName}</span></> : ""}
+                    {myPlaces.length > 1 && place.entityLabel && place.entityLabel !== "—" ? (
+                      <> · <span translate="no">{place.entityLabel}</span></>
+                    ) : (
+                      ""
+                    )}
                     )
                   </span>
                   {!place.canWithdraw && (

@@ -13,6 +13,7 @@ export function ChoiceGroup<T extends string>({
   id,
   "aria-describedby": describedBy,
   "aria-invalid": invalid,
+  translate,
 }: {
   options?: ChoiceOption<T>[];
   /**
@@ -30,9 +31,12 @@ export function ChoiceGroup<T extends string>({
   id?: string;
   "aria-describedby"?: string;
   "aria-invalid"?: boolean;
+  /** "no" when the options are names (songs, divisions): browser translators leave them as they are. */
+  translate?: "yes" | "no";
 }) {
   const groupProps = {
     id,
+    translate,
     role: "radiogroup",
     "aria-label": ariaLabel,
     "aria-describedby": describedBy,

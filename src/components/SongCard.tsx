@@ -18,7 +18,9 @@ export default function SongCard({ song: s, onDelete, showFile = false }: SongCa
   return (
     <div className="rounded-lg border-2 border-primary/40 bg-card p-4 space-y-2 shadow-sm">
       <div className="flex items-start justify-between gap-2">
-        <p className="font-medium text-sm leading-snug break-words flex-1">{songLabel(s)}</p>
+        <p className="font-medium text-sm leading-snug break-words flex-1" translate="no">
+          {songLabel(s)}
+        </p>
         <p className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
           {new Date(s.created_at).toLocaleDateString()}
         </p>
@@ -34,19 +36,19 @@ export default function SongCard({ song: s, onDelete, showFile = false }: SongCa
         {s.division && (
           <span>
             <span className="text-muted-foreground text-xs">Division </span>
-            {s.division}
+            <span translate="no">{s.division}</span>
           </span>
         )}
         {partnerName && (
           <span>
             <span className="text-muted-foreground text-xs">Entered as </span>
-            {partnerName}
+            <span translate="no">{partnerName}</span>
           </span>
         )}
         {s.routine_name && (
           <span>
             <span className="text-muted-foreground text-xs">Routine </span>
-            {s.routine_name}
+            <span translate="no">{s.routine_name}</span>
           </span>
         )}
         {s.personal_descriptor && (

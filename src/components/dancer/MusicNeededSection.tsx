@@ -133,8 +133,8 @@ export default function MusicNeededSection({ songs }: { songs: readonly ApiSong[
             <>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-semibold">{r.event_name}</p>
-                  <Badge variant="outline">{r.division}</Badge>
+                  <p className="font-semibold" translate="no">{r.event_name}</p>
+                  <Badge variant="outline" translate="no">{r.division}</Badge>
                   {r.match === "possible" && (
                     <Badge variant="outline" className="border-yellow-400/60 text-yellow-300">
                       Possible match
@@ -144,7 +144,7 @@ export default function MusicNeededSection({ songs }: { songs: readonly ApiSong[
                 {when && <p className="text-xs text-muted-foreground">{when}</p>}
               </div>
               <p className="text-muted-foreground">
-                Registered as <span className="font-medium text-foreground">{names}</span>
+                Registered as <span className="font-medium text-foreground" translate="no">{names}</span>
               </p>
             </>
           );
@@ -157,11 +157,11 @@ export default function MusicNeededSection({ songs }: { songs: readonly ApiSong[
               >
                 {header}
                 <p>
-                  Is this you, <span className="font-medium break-words">{r.partnership_label}</span>?
+                  Is this you, <span className="font-medium break-words" translate="no">{r.partnership_label}</span>?
                 </p>
                 {r.has_music && (
                   <p className="text-xs text-muted-foreground">
-                    Your music for this event is already in as {r.partnership_label}. Confirming connects it to
+                    Your music for this event is already in as <span translate="no">{r.partnership_label}</span>. Confirming connects it to
                     this entry.
                   </p>
                 )}
@@ -199,7 +199,7 @@ export default function MusicNeededSection({ songs }: { songs: readonly ApiSong[
               {r.song ? (
                 <div className="rounded-md border bg-background/40 px-3 py-2">
                   <p className="text-xs text-muted-foreground">Looks like you already have this song for it</p>
-                  <p className="font-medium break-words">{suggestedSongLabel(r.song, songs)}</p>
+                  <p className="font-medium break-words" translate="no">{suggestedSongLabel(r.song, songs)}</p>
                   {r.song.submitted_this_season.length > 0 && (
                     <p className="text-xs text-muted-foreground">
                       Also submitted to {r.song.submitted_this_season.join(", ")} this season

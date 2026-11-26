@@ -46,7 +46,7 @@ export function SessionInfoHeader({
   return (
     <div className="space-y-3">
       {showTitle && session.event_name && (
-        <h2 className="page-title text-2xl">{session.event_name}</h2>
+        <h2 className="page-title text-2xl" translate="no">{session.event_name}</h2>
       )}
 
       {/* Status badge (+ title + timezone when showTitle) */}
@@ -110,6 +110,7 @@ export function SessionInfoHeader({
                       <Badge
                         key={d}
                         variant="outline"
+                        translate="no"
                         className="border-amber-500/30 text-amber-600 dark:text-amber-300 font-normal"
                       >
                         {d}
@@ -126,6 +127,7 @@ export function SessionInfoHeader({
                       <Badge
                         key={d}
                         variant="outline"
+                        translate="no"
                         className="border-sky-500/30 text-sky-600 dark:text-sky-300 font-normal"
                       >
                         {d}
