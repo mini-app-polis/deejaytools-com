@@ -883,12 +883,15 @@ describe("EventDetailPage — missing music counts", () => {
     );
   });
 
-  it("shows admins the counts", async () => {
+  it("shows admins the counts, a missing entry likely on file counted as on file only", async () => {
     authMe = { isAdmin: true, eventRoles: [] };
     mockRegistrationApi();
     renderPage();
 
-    await waitFor(() => expect(screen.getByText(/2 missing/)).toBeInTheDocument());
+    // Pat is missing but likely on file; Gina is missing.
+    await waitFor(() => expect(screen.getAllByText(/1 likely on file/).length).toBeGreaterThan(0));
+    expect(screen.getAllByText(/1 missing/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/2 missing/)).toBeNull();
   });
 
   it("does not load the registration list for anyone else", async () => {

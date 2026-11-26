@@ -433,20 +433,27 @@ export function likelyOnFile(
 
 /** How many of a division's registered entries still have music to come. */
 export type MissingCount = {
-  /** Nothing submitted, or (Classic at The Open) a round still to come. */
+  /**
+   * Nothing submitted, or (Classic at The Open) a round still to come; not
+   * counting those likely on file, which `onFile` has instead.
+   */
   missing: number;
   /** Not matched, but a submission looks like it: may be in already. */
   possible: number;
-  /** Of those, the ones likely to have a song on file (admins only; else 0). */
+  /**
+   * Missing or possible entries likely to have a song on file (admins only;
+   * else 0). A possible one stays in `possible` too; a missing one does not.
+   */
   onFile: number;
 };
 
 /**
  * Missing and possible counts per deejaytools division, for the event page
  * staff view, with how many of them are likely on file (the ids in `onFile`,
- * from `likelyOnFile`). Entries whose registration division is not
- * recognised are counted under `null`. Divisions with nothing outstanding
- * are left out.
+ * from `likelyOnFile`). A missing entry likely on file counts as on file
+ * only, so the counts read "1 missing · 2 likely on file" rather than
+ * counting it twice. Entries whose registration division is not recognised
+ * are counted under `null`. Divisions with nothing outstanding are left out.
  */
 export function missingByDivision(
   rows: readonly ReconciledRegistration[],
@@ -457,8 +464,9 @@ export function missingByDivision(
     const key = r.status === "possible" ? "possible" : r.status === "missing" || r.status === "missing-round" ? "missing" : null;
     if (!key) continue;
     const c = counts.get(r.division) ?? { missing: 0, possible: 0, onFile: 0 };
-    c[key]++;
-    if (onFile.has(r.entry.id)) c.onFile++;
+    const likely = onFile.has(r.entry.id);
+    if (likely) c.onFile++;
+    if (!(likely && key === "missing")) c[key]++;
     counts.set(r.division, c);
   }
   return counts;
