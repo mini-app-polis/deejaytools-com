@@ -36,7 +36,9 @@ export default function SessionCard({
               title={eventName}
               className="min-w-0 truncate border-primary/40 bg-primary/10 font-medium text-primary"
             >
-              <span className="truncate">{eventName}</span>
+              <span className="truncate" translate="no">
+                {eventName}
+              </span>
             </Badge>
           )}
           <span className="shrink-0">

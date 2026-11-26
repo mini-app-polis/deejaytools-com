@@ -443,7 +443,10 @@ describe("SessionDetailPage — check-in button", () => {
     await waitFor(() => {
       expect(screen.getAllByText("#7 in queue").length).toBeGreaterThan(0);
     });
-    expect(screen.getAllByText(/\(standard, Novice\)/).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText((_, el) => el?.tagName === "SPAN" && /^ ?\(standard, Novice\)$/.test(el.textContent ?? ""))
+        .length
+    ).toBeGreaterThan(0);
   });
 
   it("says when the caller's partner checked them in", async () => {
@@ -847,6 +850,11 @@ describe("SessionDetailPage — queue rendering", () => {
     expect(screen.getByText("Carol Lee & Dave Park")).toBeInTheDocument();
     expect(screen.getByText("Priority Pair")).toBeInTheDocument();
     expect(screen.getByText("Standard Pair")).toBeInTheDocument();
+    // Names and divisions are left alone by browser translators.
+    expect(screen.getByText("Alice Smith & Bob Jones")).toHaveAttribute("translate", "no");
+    for (const division of screen.getAllByText("Showcase")) {
+      expect(division.closest('[translate="no"]')).not.toBeNull();
+    }
 
     // Position numbers continue across groups: active = 1,2; priority = 3; standard = 4.
     expect(screen.getByText("#1")).toBeInTheDocument();
@@ -904,6 +912,9 @@ describe("SessionDetailPage — check-in song selector", () => {
     expect(labels).toContain("Classic - Song One");
     expect(labels).toContain("Classic - Song Two");
     expect(labels).not.toContain("Classic - Song Three");
+    // Song and division names are left alone by browser translators.
+    expect(songGroup).toHaveAttribute("translate", "no");
+    expect(screen.getByRole("radiogroup", { name: /^division$/i })).toHaveAttribute("translate", "no");
   });
 
   it("falls back to all songs when event submissions cannot be loaded", async () => {

@@ -124,6 +124,7 @@ export default function SessionCheckinDialog({
                     <FormControl>
                       <ChoiceGroup
                         ariaLabel="Song"
+                        translate="no"
                         options={checkinSongs.map((s) => ({
                           value: s.id,
                           label: songLabel(s),
@@ -143,7 +144,7 @@ export default function SessionCheckinDialog({
               <div className="rounded-md border bg-muted/40 px-3 py-3 text-sm space-y-1.5">
                 <div className="flex items-start gap-2">
                   <span className="text-muted-foreground w-16 shrink-0 pt-px">You</span>
-                  <span className="font-medium">
+                  <span className="font-medium" translate="no">
                     {dancerName}
                   </span>
                 </div>
@@ -151,13 +152,13 @@ export default function SessionCheckinDialog({
                   <span className="text-muted-foreground w-16 shrink-0 pt-px">Partner</span>
                   <span className="font-medium">
                     {isManaged || !isSolo
-                      ? selectedSong.partnership_label?.trim() || "—"
+                      ? <span translate="no">{selectedSong.partnership_label?.trim() || "—"}</span>
                       : <span className="text-muted-foreground italic">Solo</span>}
                   </span>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-muted-foreground w-16 shrink-0 pt-px">Song</span>
-                  <span className="font-medium break-all">
+                  <span className="font-medium break-all" translate="no">
                     {songLabel(selectedSong)}
                   </span>
                 </div>
@@ -187,6 +188,7 @@ export default function SessionCheckinDialog({
                   <FormControl>
                     <ChoiceGroup
                       ariaLabel="Division"
+                      translate="no"
                       options={sessionDivisions.map((d) => ({ value: d, label: d }))}
                       value={field.value}
                       onChange={field.onChange}
@@ -194,7 +196,7 @@ export default function SessionCheckinDialog({
                   </FormControl>
                   {selectedSong?.division && !divisionInSession && (
                     <p className="text-xs text-amber-600 mt-1">
-                      Your song's division ({selectedSong.division}) isn't offered in this session.
+                      Your song's division (<span translate="no">{selectedSong.division}</span>) isn't offered in this session.
                       Please pick the closest match above.
                     </p>
                   )}

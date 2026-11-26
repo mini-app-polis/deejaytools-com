@@ -299,7 +299,8 @@ describe("EventSubmissionsPage — event page", () => {
     renderAt("/event-submissions/ev1");
 
     expect(await screen.findByText("Your submissions")).toBeInTheDocument();
-    expect(screen.getByText("Division Classic")).toBeInTheDocument();
+    // The division is its own element, left alone by browser translators.
+    expect(screen.getByText((_, el) => el?.tagName === "P" && el.textContent === "Division Classic")).toBeInTheDocument();
 
     await user.click(await screen.findByRole("combobox", { name: /song/i }));
     expect(await screen.findByRole("option", { name: /Showcase - My Routine/ })).toBeInTheDocument();
