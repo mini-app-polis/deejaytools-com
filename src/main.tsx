@@ -11,12 +11,17 @@ import MaintenancePage from "./components/MaintenancePage";
 import QueryCacheReset from "./components/QueryCacheReset";
 import { queryClient } from "./api/queryClient";
 import { listenForNewBuild } from "./lib/staleBuild";
+import { guardAgainstTranslators } from "./lib/translationGuard";
 import App from "./pages/App";
 import "./index.css";
 
 // A tab open across a deploy reloads into the new build when a page chunk
 // it asks for is gone, instead of showing the error screen.
 listenForNewBuild();
+
+// A page a browser translator rewrote (Chrome's Google Translate, say) keeps
+// rendering instead of crashing to the error screen.
+guardAgainstTranslators();
 
 const key = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 if (!key) {
