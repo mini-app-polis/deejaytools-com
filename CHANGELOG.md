@@ -1,3 +1,10 @@
+## [2.57.3](https://github.com/mini-app-polis/deejaytools-com/compare/v2.57.2...v2.57.3) (2026-11-26)
+
+
+### Bug Fixes
+
+* **registrations:** count a missing entry likely on file as on file only in the summaries ([f21a150](https://github.com/mini-app-polis/deejaytools-com/commit/f21a15044cceccf50f30530afa79b52f3a2092a2))
+
 ## [2.57.2](https://github.com/mini-app-polis/deejaytools-com/compare/v2.57.1...v2.57.2) (2026-11-26)
 
 
