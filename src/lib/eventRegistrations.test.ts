@@ -320,8 +320,25 @@ describe("missingByDivision", () => {
     ]);
     expect([...onFile.keys()]).toEqual(["c"]);
     const counts = missingByDivision(rows, onFile);
-    expect(counts.get("Classic")).toEqual({ missing: 1, possible: 0, onFile: 1 });
+    // Missing but likely on file: counted as on file only.
+    expect(counts.get("Classic")).toEqual({ missing: 0, possible: 0, onFile: 1 });
     expect(counts.get("Masters")).toEqual({ missing: 1, possible: 0, onFile: 0 });
+  });
+
+  it("keeps a possible match likely on file as possible too", () => {
+    const entries = [
+      entry({ id: "c", division: "Classic", dancer_1: "Cara Smith", dancer_2: "Dan Brown" }),
+      entry({ id: "e", division: "Classic", dancer_1: "Eve Adams", dancer_2: "Fred Black" }),
+      entry({ id: "g", division: "Classic", dancer_1: "Gina White", dancer_2: "Hank Green" }),
+    ];
+    const { rows } = reconcileRegistrations(entries, [sub("Kara Smith & Dan Brown", "Classic")], TEST_DIVISIONS, false);
+    const song = onFileSong({});
+    const onFile = likelyOnFile(rows, [
+      { registration_id: "c", candidates: [song] },
+      { registration_id: "e", candidates: [song] },
+    ]);
+    // Cara is a possible match, Eve and Gina missing; Cara and Eve likely on file.
+    expect(missingByDivision(rows, onFile).get("Classic")).toEqual({ missing: 1, possible: 1, onFile: 2 });
   });
 });
 
