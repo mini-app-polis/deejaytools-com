@@ -41,8 +41,11 @@ export default function HelpPartnersPage() {
           </p>
           <p>
             Partners do not need their own DeejayTools account for you to upload on their behalf.
-            Each dancer checks in with their own uploaded song — if both partners need to check in,
-            each must upload their own copy.
+            If you give your partner the email they use on DeejayTools, your songs with them show up
+            in their <strong className="text-foreground">My Content</strong> too — they can submit
+            them to events and check in with them, so only one of you needs to upload. If they make
+            an account later with that email, the songs appear for them then. Only you can edit or
+            delete a song you uploaded.
           </p>
           <HelpSubheading>Removing a partner</HelpSubheading>
           <p>On My Profile, deleting a partner may show:</p>

@@ -131,10 +131,10 @@ export default function HelpCheckingInPage() {
             unclear.
           </li>
           <li>
-            <strong className="text-foreground">Your own song:</strong> each dancer checks in with a
-            song they uploaded themselves. If both partners need to check in, each must upload their
-            own copy — you cannot check in using your partner&apos;s file even if you linked them on
-            the upload form.
+            <strong className="text-foreground">Your partner&apos;s song:</strong> if your partner
+            uploaded the song and added you with the email you use on DeejayTools, it&apos;s in your
+            My Content and you can check in with it — there&apos;s no need to upload your own copy.
+            If it isn&apos;t there, ask them to check the email on their partner entry for you.
           </li>
         </ul>
       </HelpSection>
