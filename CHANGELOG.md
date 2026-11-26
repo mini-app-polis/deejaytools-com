@@ -1,3 +1,11 @@
+## [2.57.4](https://github.com/mini-app-polis/deejaytools-com/compare/v2.57.3...v2.57.4) (2026-11-26)
+
+
+### Bug Fixes
+
+* **app:** keep names, song titles, divisions and event names untranslated by browser translators ([8c5ed92](https://github.com/mini-app-polis/deejaytools-com/commit/8c5ed92eb80efb9a25f006101644f6876a6e2050))
+* **app:** keep pages rendering when a browser translator has rewritten their text ([dfa13f8](https://github.com/mini-app-polis/deejaytools-com/commit/dfa13f8e7b80d6c5f09d315fdea1e17773c76e77))
+
 ## [2.57.3](https://github.com/mini-app-polis/deejaytools-com/compare/v2.57.2...v2.57.3) (2026-11-26)
 
 
