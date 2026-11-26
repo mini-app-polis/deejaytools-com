@@ -107,6 +107,42 @@ describe("buildTimelineChart", () => {
     expect(valueOn(now, -8)).toBe(50);
   });
 
+  it("never goes over 100%: entries not on the list add to it, and a list is never smaller than its music", () => {
+    const timeline: ApiSubmissionTimeline = {
+      series: "The Open",
+      today: 0,
+      events: [
+        event({
+          id: "now",
+          registrations: 10,
+          days: [{ day: -1, count: 11 }],
+          song_added_days: [{ day: -2, count: 11 }],
+          likely_on_file_days: [{ day: -2, count: 1 }],
+        }),
+        event({
+          id: "then",
+          start_date: "2025-11-26",
+          end_date: "2025-11-30",
+          registrations: 4,
+          days: [{ day: -1, count: 5 }],
+        }),
+      ],
+    };
+    // Two entries with music in are not on the list: 100% is 12 entries.
+    const [now, then] = buildTimelineChart(timeline, { fromDay: -3, likelyOnFile: true, unregisteredEntries: 2 })!.curves;
+    expect(now.base).toBe(12);
+    expect(valueOn(now, 0)).toBeCloseTo((100 * 11) / 12);
+    expect(valueOn(now, 0, "added")).toBe(100);
+    // An earlier edition is not reconciled: its 5 entries make it 5, not 4.
+    expect(then.base).toBe(5);
+    expect(then.points.at(-1)!.value).toBe(100);
+
+    // Unknown entries off the list: still no higher than 100%.
+    const [unknown] = buildTimelineChart(timeline, { fromDay: -3, likelyOnFile: true })!.curves;
+    expect(unknown.base).toBe(12);
+    for (const p of [...unknown.points, ...unknown.added]) expect(p.value).toBeLessThanOrEqual(100);
+  });
+
   it("counts when an event has no registration list", () => {
     const chart = buildTimelineChart({
       series: null,
