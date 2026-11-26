@@ -513,6 +513,20 @@ export function progressByDivision(
   return counts;
 }
 
+/**
+ * Entries with music in that are not on the registration list, as
+ * progressByDivision counts them into its totals (one per couple and
+ * division, leaving out those that may be a listed entry's).
+ */
+export function unregisteredEntryCount(
+  rows: readonly ReconciledRegistration[],
+  unregistered: readonly ApiAdminEventSongSubmission[]
+): number {
+  let total = 0;
+  for (const progress of progressByDivision(rows, unregistered).values()) total += progress.total;
+  return total - rows.filter((r) => r.status !== "scratched").length;
+}
+
 /** The share complete as a whole percent, or null with nothing to count. */
 export function percentComplete(progress: Progress | undefined): number | null {
   if (!progress || progress.total === 0) return null;

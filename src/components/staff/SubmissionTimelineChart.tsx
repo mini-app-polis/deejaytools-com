@@ -134,7 +134,7 @@ export default function SubmissionTimelineChart({
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         className="w-full touch-none select-none"
         role="img"
-        aria-label={`Submissions by day from the start${hasAdded ? ", and the music already in deejaytools" : ""}, ${unit === "percent" ? "as a share of registrations" : "as counts"}. ${dayLabel(readDay)}: ${summary}.`}
+        aria-label={`Submissions by day from the start${hasAdded ? ", and the music already in deejaytools" : ""}, ${unit === "percent" ? "as a share of entries" : "as counts"}. ${dayLabel(readDay)}: ${summary}.`}
         onPointerMove={onMove}
         onPointerLeave={() => setHoverDay(null)}
       >

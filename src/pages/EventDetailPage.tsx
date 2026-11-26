@@ -22,6 +22,7 @@ import {
   reconcileRegistrations,
   registrationName,
   sameLabel,
+  unregisteredEntryCount,
   type MissingCount,
   type Progress,
   type ReconciledRegistration,
@@ -178,7 +179,7 @@ export default function EventDetailPage() {
         </div>
       </div>
 
-      <SubmissionTimeline eventId={id} isSignedIn={Boolean(isSignedIn)} />
+      <SubmissionTimeline eventId={id} eventName={event.name} isSignedIn={Boolean(isSignedIn)} />
 
       <EnteredEntities
         eventId={id}
@@ -218,8 +219,19 @@ function PortalLinks({ eventId }: { eventId: string }) {
  * event's series is set on the admin Events page). Nothing for anyone else,
  * or while there is nothing to draw.
  */
-function SubmissionTimeline({ eventId, isSignedIn }: { eventId: string; isSignedIn: boolean }) {
+function SubmissionTimeline({
+  eventId,
+  eventName,
+  isSignedIn,
+}: {
+  eventId: string;
+  eventName: string;
+  isSignedIn: boolean;
+}) {
   const { isAdmin, eventRoles } = useAuthMe();
+  // Entries with music in but not on the list count toward 100%, as in the
+  // Entered totals below (the same queries, shared).
+  const { unregisteredEntries } = useMissingCounts(eventId, eventName, isSignedIn);
   const ready = isSignedIn && (isAdmin || richestEventRole(eventRoles, eventId) !== null);
   const timelineQuery = useEndpointQuery(endpoints.events.submissionTimeline, {
     params: { id: eventId },
@@ -228,8 +240,8 @@ function SubmissionTimeline({ eventId, isSignedIn }: { eventId: string; isSigned
   const timeline = ready ? timelineQuery.data : undefined;
   // Entries likely on file are admins' only: not for staff, nor an admin viewing as staff.
   const chart = useMemo(
-    () => (timeline ? buildTimelineChart(timeline, { likelyOnFile: isAdmin }) : null),
-    [timeline, isAdmin]
+    () => (timeline ? buildTimelineChart(timeline, { likelyOnFile: isAdmin, unregisteredEntries }) : null),
+    [timeline, isAdmin, unregisteredEntries]
   );
   if (!ready) return null;
   if (timelineQuery.error && !timeline) {
@@ -248,7 +260,7 @@ function SubmissionTimeline({ eventId, isSignedIn }: { eventId: string; isSigned
       <h2 id="submission-timeline-heading" className="text-base font-semibold">
         Music submissions
         <span className="ml-2 text-sm font-normal text-muted-foreground">
-          {chart.unit === "percent" ? "share of registrations" : "entries"} by day
+          {chart.unit === "percent" ? "share of entries" : "entries"} by day
           {earlier > 0 && ` · against ${earlier === 1 ? "last edition" : `${earlier} earlier editions`}`}
         </span>
       </h2>
@@ -277,9 +289,16 @@ type RegistrationCounts = {
   progress: ReadonlyMap<string | null, Progress> | null;
   /** Entries still without music, by deejaytools division (null: not recognised). */
   outstanding: ReadonlyMap<string | null, Outstanding[]>;
+  /** Entries with music in that are not on the registration list. */
+  unregisteredEntries: number;
 };
 
-const NO_COUNTS: RegistrationCounts = { missing: new Map(), progress: null, outstanding: new Map() };
+const NO_COUNTS: RegistrationCounts = {
+  missing: new Map(),
+  progress: null,
+  outstanding: new Map(),
+  unregisteredEntries: 0,
+};
 
 function outstandingByDivision(
   rows: readonly ReconciledRegistration[],
@@ -338,6 +357,7 @@ function useMissingCounts(eventId: string, eventName: string, enabled: boolean) 
       missing: missingByDivision(rows, onFile),
       progress: progressByDivision(rows, unregistered),
       outstanding: outstandingByDivision(rows, onFile),
+      unregisteredEntries: unregisteredEntryCount(rows, unregistered),
     };
   }, [registrations, submissions, songsOnFile, divisions, roundsSplit]);
 }

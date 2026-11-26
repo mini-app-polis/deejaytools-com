@@ -16,7 +16,11 @@ export type TimelineCurve = {
   name: string;
   /** The event the page is for; the rest are earlier editions. */
   current: boolean;
-  /** What 100% is: its registration list; null when the chart counts instead. */
+  /**
+   * What 100% is, when the chart shows shares: its registration list plus its
+   * entries not on it, and never less than its line reaches; null when the
+   * chart counts instead.
+   */
   base: number | null;
   /** Submissions, cumulative, one point per day from the chart's first day to its last. */
   points: TimelinePoint[];
@@ -34,6 +38,12 @@ export type TimelineOptions = {
   fromDay?: number;
   /** Count the event's entries likely on file into its added line (admins only). */
   likelyOnFile?: boolean;
+  /**
+   * The current event's entries with music in that are not on its
+   * registration list (staff reconcile the two; earlier editions are not).
+   * Each is assumed to register, so it adds to what 100% is.
+   */
+  unregisteredEntries?: number;
 };
 
 export type TimelineChart = {
@@ -52,9 +62,13 @@ export function lastEventDay(event: Pick<ApiTimelineEvent, "start_date" | "end_d
 }
 
 /**
- * The chart's curves: each event's submissions added up day by day, as a
- * share of its registration list when every event has one (so editions of
- * different sizes compare), else as counts. The current event also gets the
+ * The chart's curves: each event's entries with music in added up day by
+ * day, as a share of its entries when every event has a registration list
+ * (so editions of different sizes compare), else as counts. An event's
+ * entries are its registration list plus, for the current event, its entries
+ * with music in that are not on the list (`unregisteredEntries`, assumed to
+ * register); an earlier edition's are never fewer than it had music for. So
+ * no line goes over 100%. The current event also gets the
  * music already in deejaytools for it: its submissions by the day their songs
  * were added, plus (`likelyOnFile`, admins) the entries likely on file, a
  * projection of how much is in. An earlier edition has one line: its music
@@ -65,7 +79,7 @@ export function lastEventDay(event: Pick<ApiTimelineEvent, "start_date" | "end_d
  */
 export function buildTimelineChart(
   timeline: ApiSubmissionTimeline,
-  { fromDay = TIMELINE_FROM_DAY, likelyOnFile = false }: TimelineOptions = {}
+  { fromDay = TIMELINE_FROM_DAY, likelyOnFile = false, unregisteredEntries = 0 }: TimelineOptions = {}
 ): TimelineChart | null {
   const [current, ...earlier] = timeline.events;
   if (!current) return null;
@@ -78,7 +92,11 @@ export function buildTimelineChart(
   const curves = [current, ...earlier].map((e, i) => {
     const isCurrent = i === 0;
     const end = lastDay(e, isCurrent);
-    const base = unit === "percent" ? e.registrations : null;
+    const addedDays = isCurrent ? [...e.song_added_days, ...(likelyOnFile ? e.likely_on_file_days : [])] : [];
+    const base =
+      unit === "percent"
+        ? Math.max(e.registrations + (isCurrent ? unregisteredEntries : 0), countOf(e.days), countOf(addedDays))
+        : null;
     const cumulative = (days: ApiTimelineEvent["days"]): TimelinePoint[] => {
       let total = days.filter((d) => d.day < fromDay).reduce((t, d) => t + d.count, 0);
       // Sum, not overwrite: the added line merges two lists that can share a day.
@@ -97,13 +115,16 @@ export function buildTimelineChart(
       current: isCurrent,
       base,
       points: cumulative(e.days),
-      added: isCurrent
-        ? cumulative([...e.song_added_days, ...(likelyOnFile ? e.likely_on_file_days : [])])
-        : [],
+      added: isCurrent ? cumulative(addedDays) : [],
     };
   });
   const toDay = Math.max(lastEventDay(current), ...curves.map((c) => c.points.at(-1)?.day ?? fromDay));
   return { unit, fromDay, toDay, today: timeline.today, curves };
+}
+
+/** How many a list of days counts in all. */
+function countOf(days: readonly { count: number }[]): number {
+  return days.reduce((total, d) => total + d.count, 0);
 }
 
 /** A curve's value on ``day`` (its submitted line, or its added line), or null when it has no point there. */

@@ -1101,7 +1101,7 @@ describe("EventDetailPage — submissions chart", () => {
     renderPage();
 
     const section = await screen.findByRole("region", { name: /music submissions/i });
-    expect(within(section).getByText(/share of registrations by day · against last edition/)).toBeInTheDocument();
+    expect(within(section).getByText(/share of entries by day · against last edition/)).toBeInTheDocument();
     const readout = within(section).getByRole("list");
     expect(within(readout).getByText("Day −8 (today)")).toBeInTheDocument();
     expect(within(readout).getByText("The Open 2026").nextSibling).toHaveTextContent("25%");

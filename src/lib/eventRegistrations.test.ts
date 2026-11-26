@@ -12,6 +12,7 @@ import {
   PROAM_EITHER,
   registrationLines,
   nameCloseness,
+  unregisteredEntryCount,
 } from "./eventRegistrations";
 
 const row = (...cells: string[]) => cells.join("\t");
@@ -368,6 +369,28 @@ describe("progressByDivision", () => {
     expect(progress.get("Masters")).toEqual({ complete: 0, total: 1 });
     expect(progress.get("Showcase")).toEqual({ complete: 1, total: 1 });
     expect(progress.has(null)).toBe(false);
+  });
+});
+
+describe("unregisteredEntryCount", () => {
+  it("counts the entries with music in that are not on the list, as the totals do", () => {
+    const entries = [
+      entry({ division: "Classic", dancer_1: "Ada Lovelace", dancer_2: "Bob Jones" }),
+      entry({ division: "Classic", dancer_1: "Cara Smith", dancer_2: "Dan Brown" }),
+      entry({ division: "Masters", dancer_1: "Gina White", dancer_2: "Hank Green", scratched: true }),
+    ];
+    const subs = [
+      sub("Ada Lovelace & Bob Jones", "Classic"),
+      // One entry, two rounds.
+      sub("Ivy Stone & Jack Frost", "Classic", "prelims_only"),
+      sub("Ivy Stone & Jack Frost", "Classic", "finals_only"),
+      // May be Cara's: not counted.
+      sub("Kara Smith & Dan Brown", "Classic"),
+      sub("Lena Hill & Max Wood", "Showcase"),
+    ];
+    const { rows, unregistered } = reconcileRegistrations(entries, subs, TEST_DIVISIONS, false);
+    expect(unregisteredEntryCount(rows, unregistered)).toBe(2);
+    expect(unregisteredEntryCount(rows, [])).toBe(0);
   });
 });
 
